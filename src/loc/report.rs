@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 pub struct LanguageReport {
     pub name: String,
     pub files: usize,
@@ -6,8 +8,38 @@ pub struct LanguageReport {
     pub code: usize,
 }
 
-pub fn print_report(mut reports: Vec<LanguageReport>) {
+pub struct VerboseStats {
+    pub total_files: usize,
+    pub unique_files: usize,
+    pub skipped_files: usize,
+    pub elapsed: Duration,
+}
+
+pub fn print_report(mut reports: Vec<LanguageReport>, verbose: Option<VerboseStats>) {
     reports.sort_by(|a, b| b.code.cmp(&a.code));
+
+    if let Some(stats) = &verbose {
+        let secs = stats.elapsed.as_secs_f64();
+        let files_per_sec = if secs > 0.0 {
+            stats.unique_files as f64 / secs
+        } else {
+            0.0
+        };
+        let total_lines: usize = reports.iter().map(|r| r.blank + r.comment + r.code).sum();
+        let lines_per_sec = if secs > 0.0 {
+            total_lines as f64 / secs
+        } else {
+            0.0
+        };
+        println!("{:>8} text files.", stats.total_files);
+        println!("{:>8} unique files.", stats.unique_files);
+        println!("{:>8} files skipped.", stats.skipped_files);
+        println!(
+            "T={:.2} s ({:.1} files/s, {:.1} lines/s)",
+            secs, files_per_sec, lines_per_sec
+        );
+        println!();
+    }
 
     let separator = "─".repeat(68);
 
@@ -66,7 +98,7 @@ mod tests {
             },
         ];
         // Should not panic
-        print_report(reports);
+        print_report(reports, None);
     }
 
     #[test]
@@ -78,12 +110,44 @@ mod tests {
             comment: 3,
             code: 4,
         }];
-        print_report(reports);
+        print_report(reports, None);
     }
 
     #[test]
     fn print_report_empty() {
         // Empty reports list — should just print headers and zero totals
-        print_report(vec![]);
+        print_report(vec![], None);
+    }
+
+    #[test]
+    fn print_report_with_verbose_stats() {
+        let reports = vec![LanguageReport {
+            name: "Rust".to_string(),
+            files: 2,
+            blank: 5,
+            comment: 3,
+            code: 42,
+        }];
+        let stats = VerboseStats {
+            total_files: 5,
+            unique_files: 2,
+            skipped_files: 3,
+            elapsed: Duration::from_millis(1234),
+        };
+        // Should not panic
+        print_report(reports, Some(stats));
+    }
+
+    #[test]
+    fn print_report_verbose_zero_elapsed() {
+        let reports = vec![];
+        let stats = VerboseStats {
+            total_files: 0,
+            unique_files: 0,
+            skipped_files: 0,
+            elapsed: Duration::from_secs(0),
+        };
+        // Division by zero guard should work
+        print_report(reports, Some(stats));
     }
 }

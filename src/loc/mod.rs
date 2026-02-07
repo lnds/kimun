@@ -6,6 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::hash::Hasher;
 use std::path::Path;
+use std::time::Instant;
 
 use ignore::WalkBuilder;
 
@@ -14,7 +15,7 @@ use std::io::{BufRead, BufReader, Read};
 
 use counter::{count_lines, FileStats};
 use language::{detect, detect_by_shebang};
-use report::{print_report, LanguageReport};
+use report::{print_report, LanguageReport, VerboseStats};
 
 fn hash_file(path: &Path) -> Option<u64> {
     let file = File::open(path).ok()?;
@@ -31,9 +32,12 @@ fn hash_file(path: &Path) -> Option<u64> {
     Some(hasher.finish())
 }
 
-pub fn run(path: &Path) -> Result<(), Box<dyn Error>> {
+pub fn run(path: &Path, verbose: bool) -> Result<(), Box<dyn Error>> {
+    let start = Instant::now();
     let mut stats_by_lang: HashMap<&'static str, (usize, FileStats)> = HashMap::new();
     let mut seen_hashes: HashSet<u64> = HashSet::new();
+    let mut total_files: usize = 0;
+    let mut unique_files: usize = 0;
 
     let walker = WalkBuilder::new(path)
         .hidden(false)
@@ -57,6 +61,7 @@ pub fn run(path: &Path) -> Result<(), Box<dyn Error>> {
             continue;
         }
 
+        total_files += 1;
         let file_path = entry.path();
         let spec = match detect(file_path) {
             Some(s) => s,
@@ -78,6 +83,7 @@ pub fn run(path: &Path) -> Result<(), Box<dyn Error>> {
 
         match count_lines(file_path, spec) {
             Ok(Some(file_stats)) => {
+                unique_files += 1;
                 let entry = stats_by_lang.entry(spec.name).or_insert_with(|| {
                     (0, FileStats::default())
                 });
@@ -107,7 +113,17 @@ pub fn run(path: &Path) -> Result<(), Box<dyn Error>> {
     if reports.is_empty() {
         println!("No recognized source files found.");
     } else {
-        print_report(reports);
+        let verbose_stats = if verbose {
+            Some(VerboseStats {
+                total_files,
+                unique_files,
+                skipped_files: total_files - unique_files,
+                elapsed: start.elapsed(),
+            })
+        } else {
+            None
+        };
+        print_report(reports, verbose_stats);
     }
 
     Ok(())
@@ -136,14 +152,14 @@ mod tests {
         .unwrap();
 
         // Should succeed without error
-        run(dir.path()).unwrap();
+        run(dir.path(), false).unwrap();
     }
 
     #[test]
     fn run_on_empty_dir() {
         let dir = tempfile::tempdir().unwrap();
         // Should succeed and print "No recognized source files found."
-        run(dir.path()).unwrap();
+        run(dir.path(), false).unwrap();
     }
 
     #[test]
@@ -151,7 +167,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         fs::write(dir.path().join("data.c"), b"hello\x00world").unwrap();
         // Should succeed — binary file silently skipped
-        run(dir.path()).unwrap();
+        run(dir.path(), false).unwrap();
     }
 
     #[test]
@@ -161,7 +177,7 @@ mod tests {
         fs::write(dir.path().join("a.c"), content).unwrap();
         fs::write(dir.path().join("b.c"), content).unwrap();
         // Should succeed — one of the duplicates skipped
-        run(dir.path()).unwrap();
+        run(dir.path(), false).unwrap();
     }
 
     #[test]
@@ -172,7 +188,32 @@ mod tests {
             "#!/usr/bin/env python3\nprint('hello')\n",
         )
         .unwrap();
-        run(dir.path()).unwrap();
+        run(dir.path(), false).unwrap();
+    }
+
+    #[test]
+    fn run_verbose_on_temp_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("main.rs"), "fn main() {}\n").unwrap();
+        fs::write(dir.path().join("lib.rs"), "pub fn x() {}\n").unwrap();
+        // Should succeed with verbose stats printed
+        run(dir.path(), true).unwrap();
+    }
+
+    #[test]
+    fn run_verbose_with_duplicates() {
+        let dir = tempfile::tempdir().unwrap();
+        let content = "int x = 1;\n";
+        fs::write(dir.path().join("a.c"), content).unwrap();
+        fs::write(dir.path().join("b.c"), content).unwrap();
+        // Should show skipped_files=1 (duplicate)
+        run(dir.path(), true).unwrap();
+    }
+
+    #[test]
+    fn run_verbose_empty_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        run(dir.path(), true).unwrap();
     }
 
     #[test]

@@ -17,6 +17,10 @@ enum Commands {
     Loc {
         /// Directory to analyze (default: current directory)
         path: Option<PathBuf>,
+
+        /// Show summary stats (files read, unique, ignored, elapsed time)
+        #[arg(short, long)]
+        verbose: bool,
     },
 }
 
@@ -24,9 +28,9 @@ fn main() {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Loc { path } => {
+        Commands::Loc { path, verbose } => {
             let target = path.unwrap_or_else(|| PathBuf::from("."));
-            if let Err(err) = loc::run(&target) {
+            if let Err(err) = loc::run(&target, verbose) {
                 eprintln!("error: {err}");
                 std::process::exit(1);
             }
