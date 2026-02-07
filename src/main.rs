@@ -48,6 +48,10 @@ enum Commands {
         /// Output as JSON
         #[arg(long)]
         json: bool,
+
+        /// Include test files and directories in analysis (excluded by default)
+        #[arg(long)]
+        include_tests: bool,
     },
 }
 
@@ -68,9 +72,10 @@ fn main() {
             show_all,
             min_lines,
             json,
+            include_tests,
         } => {
             let target = path.unwrap_or_else(|| PathBuf::from("."));
-            if let Err(err) = dups::run(&target, min_lines, report, show_all, json) {
+            if let Err(err) = dups::run(&target, min_lines, report, show_all, json, !include_tests) {
                 eprintln!("error: {err}");
                 std::process::exit(1);
             }
