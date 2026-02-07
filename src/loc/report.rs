@@ -1,5 +1,8 @@
 use std::time::Duration;
 
+use serde::Serialize;
+
+#[derive(Serialize)]
 pub struct LanguageReport {
     pub name: String,
     pub files: usize,
@@ -72,6 +75,38 @@ pub fn print_report(mut reports: Vec<LanguageReport>, verbose: Option<VerboseSta
         "SUM:", total_files, total_blank, total_comment, total_code
     );
     println!("{separator}");
+}
+
+#[derive(Serialize)]
+struct JsonOutput {
+    languages: Vec<LanguageReport>,
+    totals: JsonTotals,
+}
+
+#[derive(Serialize)]
+struct JsonTotals {
+    files: usize,
+    blank: usize,
+    comment: usize,
+    code: usize,
+}
+
+pub fn print_json(mut reports: Vec<LanguageReport>) {
+    reports.sort_by(|a, b| b.code.cmp(&a.code));
+
+    let totals = JsonTotals {
+        files: reports.iter().map(|r| r.files).sum(),
+        blank: reports.iter().map(|r| r.blank).sum(),
+        comment: reports.iter().map(|r| r.comment).sum(),
+        code: reports.iter().map(|r| r.code).sum(),
+    };
+
+    let output = JsonOutput {
+        languages: reports,
+        totals,
+    };
+
+    println!("{}", serde_json::to_string_pretty(&output).unwrap());
 }
 
 #[cfg(test)]
@@ -149,5 +184,31 @@ mod tests {
         };
         // Division by zero guard should work
         print_report(reports, Some(stats));
+    }
+
+    #[test]
+    fn print_json_with_reports() {
+        let reports = vec![
+            LanguageReport {
+                name: "Rust".to_string(),
+                files: 5,
+                blank: 20,
+                comment: 10,
+                code: 500,
+            },
+            LanguageReport {
+                name: "Python".to_string(),
+                files: 3,
+                blank: 10,
+                comment: 5,
+                code: 100,
+            },
+        ];
+        print_json(reports);
+    }
+
+    #[test]
+    fn print_json_empty() {
+        print_json(vec![]);
     }
 }

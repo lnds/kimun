@@ -22,6 +22,10 @@ enum Commands {
         /// Show summary stats (files read, unique, ignored, elapsed time)
         #[arg(short, long)]
         verbose: bool,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
     },
 
     /// Detect duplicate code across files
@@ -47,9 +51,9 @@ fn main() {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Loc { path, verbose } => {
+        Commands::Loc { path, verbose, json } => {
             let target = path.unwrap_or_else(|| PathBuf::from("."));
-            if let Err(err) = loc::run(&target, verbose) {
+            if let Err(err) = loc::run(&target, verbose, json) {
                 eprintln!("error: {err}");
                 std::process::exit(1);
             }

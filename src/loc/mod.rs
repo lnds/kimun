@@ -15,7 +15,7 @@ use std::io::{BufRead, BufReader, Read};
 
 use counter::{count_lines, FileStats};
 use language::{detect, detect_by_shebang};
-use report::{print_report, LanguageReport, VerboseStats};
+use report::{print_json, print_report, LanguageReport, VerboseStats};
 
 fn hash_file(path: &Path) -> Option<u64> {
     let file = File::open(path).ok()?;
@@ -32,7 +32,7 @@ fn hash_file(path: &Path) -> Option<u64> {
     Some(hasher.finish())
 }
 
-pub fn run(path: &Path, verbose: bool) -> Result<(), Box<dyn Error>> {
+pub fn run(path: &Path, verbose: bool, json: bool) -> Result<(), Box<dyn Error>> {
     let start = Instant::now();
     let mut stats_by_lang: HashMap<&'static str, (usize, FileStats)> = HashMap::new();
     let mut seen_hashes: HashSet<u64> = HashSet::new();
@@ -111,7 +111,13 @@ pub fn run(path: &Path, verbose: bool) -> Result<(), Box<dyn Error>> {
         .collect();
 
     if reports.is_empty() {
-        println!("No recognized source files found.");
+        if json {
+            println!("{}", serde_json::json!({"languages": [], "totals": {"files": 0, "blank": 0, "comment": 0, "code": 0}}));
+        } else {
+            println!("No recognized source files found.");
+        }
+    } else if json {
+        print_json(reports);
     } else {
         let verbose_stats = if verbose {
             Some(VerboseStats {
@@ -152,14 +158,14 @@ mod tests {
         .unwrap();
 
         // Should succeed without error
-        run(dir.path(), false).unwrap();
+        run(dir.path(), false, false).unwrap();
     }
 
     #[test]
     fn run_on_empty_dir() {
         let dir = tempfile::tempdir().unwrap();
         // Should succeed and print "No recognized source files found."
-        run(dir.path(), false).unwrap();
+        run(dir.path(), false, false).unwrap();
     }
 
     #[test]
@@ -167,7 +173,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         fs::write(dir.path().join("data.c"), b"hello\x00world").unwrap();
         // Should succeed — binary file silently skipped
-        run(dir.path(), false).unwrap();
+        run(dir.path(), false, false).unwrap();
     }
 
     #[test]
@@ -177,7 +183,7 @@ mod tests {
         fs::write(dir.path().join("a.c"), content).unwrap();
         fs::write(dir.path().join("b.c"), content).unwrap();
         // Should succeed — one of the duplicates skipped
-        run(dir.path(), false).unwrap();
+        run(dir.path(), false, false).unwrap();
     }
 
     #[test]
@@ -188,7 +194,7 @@ mod tests {
             "#!/usr/bin/env python3\nprint('hello')\n",
         )
         .unwrap();
-        run(dir.path(), false).unwrap();
+        run(dir.path(), false, false).unwrap();
     }
 
     #[test]
@@ -197,7 +203,7 @@ mod tests {
         fs::write(dir.path().join("main.rs"), "fn main() {}\n").unwrap();
         fs::write(dir.path().join("lib.rs"), "pub fn x() {}\n").unwrap();
         // Should succeed with verbose stats printed
-        run(dir.path(), true).unwrap();
+        run(dir.path(), true, false).unwrap();
     }
 
     #[test]
@@ -207,13 +213,30 @@ mod tests {
         fs::write(dir.path().join("a.c"), content).unwrap();
         fs::write(dir.path().join("b.c"), content).unwrap();
         // Should show skipped_files=1 (duplicate)
-        run(dir.path(), true).unwrap();
+        run(dir.path(), true, false).unwrap();
     }
 
     #[test]
     fn run_verbose_empty_dir() {
         let dir = tempfile::tempdir().unwrap();
-        run(dir.path(), true).unwrap();
+        run(dir.path(), true, false).unwrap();
+    }
+
+    #[test]
+    fn run_json_output() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(
+            dir.path().join("main.rs"),
+            "fn main() {\n    println!(\"hi\");\n}\n",
+        )
+        .unwrap();
+        run(dir.path(), false, true).unwrap();
+    }
+
+    #[test]
+    fn run_json_empty_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        run(dir.path(), false, true).unwrap();
     }
 
     #[test]
