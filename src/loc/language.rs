@@ -5,11 +5,12 @@ pub struct LanguageSpec {
     pub name: &'static str,
     pub extensions: &'static [&'static str],
     pub filenames: &'static [&'static str],
-    pub line_comment: Option<&'static str>,
+    pub line_comments: &'static [&'static str],
     pub block_comment: Option<(&'static str, &'static str)>,
     pub nested_block_comments: bool,
     pub single_quote_strings: bool,
     pub triple_quote_strings: bool,
+    pub pragma: Option<(&'static str, &'static str)>,
     pub shebangs: &'static [&'static str],
 }
 
@@ -20,6 +21,29 @@ macro_rules! lang {
     ($name:expr, ext: [$($ext:expr),*], $($rest:tt)*) => {
         lang!(@build $name, &[$($ext),*], &[], $($rest)*)
     };
+    // line + block + pragma
+    (@build $name:expr, $ext:expr, $files:expr,
+     line: $lc:expr, block: $bo:expr, $bc:expr
+     $(, nested: $nested:expr)?
+     $(, sq: $sq:expr)?
+     $(, tq: $tq:expr)?
+     , pragma: $po:expr, $pc:expr
+     $(, shebangs: [$($sh:expr),*])?
+    ) => {
+        LanguageSpec {
+            name: $name,
+            extensions: $ext,
+            filenames: $files,
+            line_comments: &[$lc],
+            block_comment: Some(($bo, $bc)),
+            nested_block_comments: false $(|| $nested)?,
+            single_quote_strings: false $(|| $sq)?,
+            triple_quote_strings: false $(|| $tq)?,
+            pragma: Some(($po, $pc)),
+            shebangs: &[$($($sh),*)?],
+        }
+    };
+    // line + block (no pragma)
     (@build $name:expr, $ext:expr, $files:expr,
      line: $lc:expr, block: $bo:expr, $bc:expr
      $(, nested: $nested:expr)?
@@ -31,14 +55,16 @@ macro_rules! lang {
             name: $name,
             extensions: $ext,
             filenames: $files,
-            line_comment: Some($lc),
+            line_comments: &[$lc],
             block_comment: Some(($bo, $bc)),
             nested_block_comments: false $(|| $nested)?,
             single_quote_strings: false $(|| $sq)?,
             triple_quote_strings: false $(|| $tq)?,
+            pragma: None,
             shebangs: &[$($($sh),*)?],
         }
     };
+    // line comment only
     (@build $name:expr, $ext:expr, $files:expr,
      line: $lc:expr
      $(, nested: $nested:expr)?
@@ -50,14 +76,38 @@ macro_rules! lang {
             name: $name,
             extensions: $ext,
             filenames: $files,
-            line_comment: Some($lc),
+            line_comments: &[$lc],
             block_comment: None,
             nested_block_comments: false $(|| $nested)?,
             single_quote_strings: false $(|| $sq)?,
             triple_quote_strings: false $(|| $tq)?,
+            pragma: None,
             shebangs: &[$($($sh),*)?],
         }
     };
+    // block + pragma (no line comment)
+    (@build $name:expr, $ext:expr, $files:expr,
+     block: $bo:expr, $bc:expr
+     $(, nested: $nested:expr)?
+     $(, sq: $sq:expr)?
+     $(, tq: $tq:expr)?
+     , pragma: $po:expr, $pc:expr
+     $(, shebangs: [$($sh:expr),*])?
+    ) => {
+        LanguageSpec {
+            name: $name,
+            extensions: $ext,
+            filenames: $files,
+            line_comments: &[],
+            block_comment: Some(($bo, $bc)),
+            nested_block_comments: false $(|| $nested)?,
+            single_quote_strings: false $(|| $sq)?,
+            triple_quote_strings: false $(|| $tq)?,
+            pragma: Some(($po, $pc)),
+            shebangs: &[$($($sh),*)?],
+        }
+    };
+    // block only (no pragma, no line comment)
     (@build $name:expr, $ext:expr, $files:expr,
      block: $bo:expr, $bc:expr
      $(, nested: $nested:expr)?
@@ -69,14 +119,34 @@ macro_rules! lang {
             name: $name,
             extensions: $ext,
             filenames: $files,
-            line_comment: None,
+            line_comments: &[],
             block_comment: Some(($bo, $bc)),
             nested_block_comments: false $(|| $nested)?,
             single_quote_strings: false $(|| $sq)?,
             triple_quote_strings: false $(|| $tq)?,
+            pragma: None,
             shebangs: &[$($($sh),*)?],
         }
     };
+    // multiple line comment markers (e.g. DOS Batch: :: and rem)
+    (@build $name:expr, $ext:expr, $files:expr,
+     lines: [$($lc:expr),+]
+     $(, shebangs: [$($sh:expr),*])?
+    ) => {
+        LanguageSpec {
+            name: $name,
+            extensions: $ext,
+            filenames: $files,
+            line_comments: &[$($lc),+],
+            block_comment: None,
+            nested_block_comments: false,
+            single_quote_strings: false,
+            triple_quote_strings: false,
+            pragma: None,
+            shebangs: &[$($($sh),*)?],
+        }
+    };
+    // no comments
     (@build $name:expr, $ext:expr, $files:expr,
      none
      $(, sq: $sq:expr)?
@@ -86,11 +156,12 @@ macro_rules! lang {
             name: $name,
             extensions: $ext,
             filenames: $files,
-            line_comment: None,
+            line_comments: &[],
             block_comment: None,
             nested_block_comments: false,
             single_quote_strings: false $(|| $sq)?,
             triple_quote_strings: false,
+            pragma: None,
             shebangs: &[$($($sh),*)?],
         }
     };
@@ -153,7 +224,8 @@ pub fn languages() -> &'static [LanguageSpec] {
         lang!("Dart", ext: ["dart"],
               line: "//", block: "/*", "*/", sq: true),
         lang!("Haskell", ext: ["hs"],
-              line: "--", block: "{-", "-}", nested: true),
+              line: "--", block: "{-", "-}", nested: true,
+              pragma: "{-#", "#-}"),
         lang!("Lua", ext: ["lua"],
               line: "--", block: "--[[", "]]", sq: true,
               shebangs: ["lua"]),
@@ -200,7 +272,7 @@ pub fn languages() -> &'static [LanguageSpec] {
         lang!("Erlang", ext: ["erl", "hrl"],
               line: "%"),
         lang!("DOS Batch", ext: ["bat", "cmd"],
-              line: "::"),
+              lines: ["::", "rem ", "REM ", "Rem "]),
         lang!("Properties", ext: ["properties"],
               line: "#"),
         lang!("Text", ext: ["txt"],

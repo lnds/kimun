@@ -52,12 +52,22 @@ pub fn count_lines(path: &Path, spec: &LanguageSpec) -> io::Result<Option<FileSt
 pub fn count_reader<R: BufRead>(reader: R, spec: &LanguageSpec) -> FileStats {
     let mut stats = FileStats::default();
     let mut state = State::Normal;
+    let mut is_first_line = true;
 
     for line_result in reader.lines() {
         let line = match line_result {
             Ok(l) => l,
             Err(_) => continue,
         };
+
+        // Shebang line is code, not a comment
+        if is_first_line {
+            is_first_line = false;
+            if line.starts_with("#!") {
+                stats.code += 1;
+                continue;
+            }
+        }
 
         if line.trim().is_empty() && !matches!(state, State::InBlockComment(_)) {
             stats.blank += 1;
@@ -98,6 +108,24 @@ pub fn count_reader<R: BufRead>(reader: R, spec: &LanguageSpec) -> FileStats {
                         }
                     }
 
+                    // Pragma (e.g. Haskell {-# ... #-}) — must check before block comment
+                    if let Some((popen, pclose)) = spec.pragma {
+                        if bytes_start_with(rest, popen) {
+                            has_code = true;
+                            // Skip to closing pragma delimiter
+                            i += popen.len();
+                            while i < len {
+                                let prest = &bytes[i..];
+                                if bytes_start_with(prest, pclose) {
+                                    i += pclose.len();
+                                    break;
+                                }
+                                i += 1;
+                            }
+                            continue;
+                        }
+                    }
+
                     // Block comment open
                     if let Some((open, _)) = spec.block_comment {
                         if bytes_start_with(rest, open) {
@@ -109,11 +137,9 @@ pub fn count_reader<R: BufRead>(reader: R, spec: &LanguageSpec) -> FileStats {
                     }
 
                     // Line comment
-                    if let Some(lc) = spec.line_comment {
-                        if bytes_start_with(rest, lc) {
-                            has_comment = true;
-                            break;
-                        }
+                    if spec.line_comments.iter().any(|lc| bytes_start_with(rest, lc)) {
+                        has_comment = true;
+                        break;
                     }
 
                     let ch = bytes[i];
@@ -244,11 +270,12 @@ mod tests {
             name: "C",
             extensions: &["c"],
             filenames: &[],
-            line_comment: Some("//"),
+            line_comments: &["//"],
             block_comment: Some(("/*", "*/")),
             nested_block_comments: false,
             single_quote_strings: false,
             triple_quote_strings: false,
+            pragma: None,
             shebangs: &[],
         }
     }
@@ -258,11 +285,12 @@ mod tests {
             name: "Rust",
             extensions: &["rs"],
             filenames: &[],
-            line_comment: Some("//"),
+            line_comments: &["//"],
             block_comment: Some(("/*", "*/")),
             nested_block_comments: true,
             single_quote_strings: false,
             triple_quote_strings: false,
+            pragma: None,
             shebangs: &[],
         }
     }
@@ -272,11 +300,12 @@ mod tests {
             name: "Python",
             extensions: &["py"],
             filenames: &[],
-            line_comment: Some("#"),
+            line_comments: &["#"],
             block_comment: None,
             nested_block_comments: false,
             single_quote_strings: true,
             triple_quote_strings: true,
+            pragma: None,
             shebangs: &["python", "python3"],
         }
     }
@@ -286,12 +315,28 @@ mod tests {
             name: "JavaScript",
             extensions: &["js"],
             filenames: &[],
-            line_comment: Some("//"),
+            line_comments: &["//"],
             block_comment: Some(("/*", "*/")),
             nested_block_comments: false,
             single_quote_strings: true,
             triple_quote_strings: false,
+            pragma: None,
             shebangs: &["node"],
+        }
+    }
+
+    fn spec_haskell() -> LanguageSpec {
+        LanguageSpec {
+            name: "Haskell",
+            extensions: &["hs"],
+            filenames: &[],
+            line_comments: &["--"],
+            block_comment: Some(("{-", "-}")),
+            nested_block_comments: true,
+            single_quote_strings: false,
+            triple_quote_strings: false,
+            pragma: Some(("{-#", "#-}")),
+            shebangs: &[],
         }
     }
 
@@ -442,6 +487,32 @@ mod tests {
     fn python_comment_inside_triple_string() {
         let stats = count(&spec_python(), "s = \"\"\"# not a comment\"\"\"\n");
         assert_eq!(stats.code, 1);
+        assert_eq!(stats.comment, 0);
+    }
+
+    // --- Haskell pragmas ---
+
+    #[test]
+    fn haskell_pragma_is_code() {
+        let stats = count(&spec_haskell(), "{-# LANGUAGE OverloadedStrings #-}\n");
+        assert_eq!(stats.code, 1);
+        assert_eq!(stats.comment, 0);
+    }
+
+    #[test]
+    fn haskell_block_comment_still_works() {
+        let stats = count(&spec_haskell(), "{- this is a comment -}\n");
+        assert_eq!(stats.comment, 1);
+        assert_eq!(stats.code, 0);
+    }
+
+    #[test]
+    fn haskell_pragma_with_code() {
+        let stats = count(
+            &spec_haskell(),
+            "{-# LANGUAGE OverloadedStrings #-}\nmodule Main where\n",
+        );
+        assert_eq!(stats.code, 2);
         assert_eq!(stats.comment, 0);
     }
 

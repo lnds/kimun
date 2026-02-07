@@ -2,21 +2,30 @@ mod counter;
 mod language;
 mod report;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::Path;
 
 use ignore::WalkBuilder;
 
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
 
 use counter::{count_lines, FileStats};
 use language::{detect, detect_by_shebang};
 use report::{print_report, LanguageReport};
 
+fn hash_file(path: &Path) -> Option<u64> {
+    let content = fs::read(path).ok()?;
+    let mut hasher = DefaultHasher::new();
+    content.hash(&mut hasher);
+    Some(hasher.finish())
+}
+
 pub fn run(path: &Path) -> Result<(), Box<dyn Error>> {
     let mut stats_by_lang: HashMap<&'static str, (usize, FileStats)> = HashMap::new();
+    let mut seen_hashes: HashSet<u64> = HashSet::new();
 
     let walker = WalkBuilder::new(path)
         .follow_links(false)
@@ -46,6 +55,13 @@ pub fn run(path: &Path) -> Result<(), Box<dyn Error>> {
                 }
             }
         };
+
+        // Skip duplicate files (same content)
+        if let Some(h) = hash_file(file_path) {
+            if !seen_hashes.insert(h) {
+                continue;
+            }
+        }
 
         match count_lines(file_path, spec) {
             Ok(Some(file_stats)) => {
