@@ -1,5 +1,5 @@
-mod counter;
-mod language;
+pub(crate) mod counter;
+pub(crate) mod language;
 mod report;
 
 use std::collections::{HashMap, HashSet};

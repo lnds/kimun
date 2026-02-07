@@ -1,3 +1,4 @@
+mod dups;
 mod loc;
 
 use std::path::PathBuf;
@@ -22,6 +23,24 @@ enum Commands {
         #[arg(short, long)]
         verbose: bool,
     },
+
+    /// Detect duplicate code across files
+    Dups {
+        /// Directory to analyze (default: current directory)
+        path: Option<PathBuf>,
+
+        /// Show detailed report with duplicate locations
+        #[arg(short, long)]
+        report: bool,
+
+        /// Show all duplicate groups (default: top 20)
+        #[arg(long)]
+        show_all: bool,
+
+        /// Minimum lines for a duplicate block (default: 6)
+        #[arg(long, default_value = "6")]
+        min_lines: usize,
+    },
 }
 
 fn main() {
@@ -31,6 +50,18 @@ fn main() {
         Commands::Loc { path, verbose } => {
             let target = path.unwrap_or_else(|| PathBuf::from("."));
             if let Err(err) = loc::run(&target, verbose) {
+                eprintln!("error: {err}");
+                std::process::exit(1);
+            }
+        }
+        Commands::Dups {
+            path,
+            report,
+            show_all,
+            min_lines,
+        } => {
+            let target = path.unwrap_or_else(|| PathBuf::from("."));
+            if let Err(err) = dups::run(&target, min_lines, report, show_all) {
                 eprintln!("error: {err}");
                 std::process::exit(1);
             }

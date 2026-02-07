@@ -11,6 +11,13 @@ pub struct FileStats {
     pub code: usize,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LineKind {
+    Blank,
+    Comment,
+    Code,
+}
+
 #[derive(Debug, PartialEq)]
 enum StringKind {
     Double,
@@ -49,8 +56,25 @@ pub fn count_lines(path: &Path, spec: &LanguageSpec) -> io::Result<Option<FileSt
     Ok(Some(count_reader(reader, spec)))
 }
 
+/// Classify each line of source code as Blank, Comment, or Code.
+pub fn classify_reader<R: BufRead>(reader: R, spec: &LanguageSpec) -> Vec<LineKind> {
+    process_lines(reader, spec)
+}
+
 pub fn count_reader<R: BufRead>(reader: R, spec: &LanguageSpec) -> FileStats {
     let mut stats = FileStats::default();
+    for kind in process_lines(reader, spec) {
+        match kind {
+            LineKind::Blank => stats.blank += 1,
+            LineKind::Comment => stats.comment += 1,
+            LineKind::Code => stats.code += 1,
+        }
+    }
+    stats
+}
+
+fn process_lines<R: BufRead>(reader: R, spec: &LanguageSpec) -> Vec<LineKind> {
+    let mut kinds = Vec::new();
     let mut state = State::Normal;
     let mut is_first_line = true;
 
@@ -64,13 +88,13 @@ pub fn count_reader<R: BufRead>(reader: R, spec: &LanguageSpec) -> FileStats {
         if is_first_line {
             is_first_line = false;
             if line.starts_with("#!") {
-                stats.code += 1;
+                kinds.push(LineKind::Code);
                 continue;
             }
         }
 
         if line.trim().is_empty() && !matches!(state, State::InBlockComment(_)) {
-            stats.blank += 1;
+            kinds.push(LineKind::Blank);
             continue;
         }
 
@@ -261,15 +285,15 @@ pub fn count_reader<R: BufRead>(reader: R, spec: &LanguageSpec) -> FileStats {
         }
 
         if has_code {
-            stats.code += 1;
+            kinds.push(LineKind::Code);
         } else if has_comment {
-            stats.comment += 1;
+            kinds.push(LineKind::Comment);
         } else {
-            stats.blank += 1;
+            kinds.push(LineKind::Blank);
         }
     }
 
-    stats
+    kinds
 }
 
 #[cfg(test)]
