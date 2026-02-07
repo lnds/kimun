@@ -155,7 +155,7 @@ pub fn run(
         let limit = display_limit(groups.len(), show_all);
         print_detailed(&metrics, &groups[..limit], groups.len());
     } else {
-        print_summary(&metrics);
+        print_summary(&metrics, &groups);
     }
 
     Ok(())

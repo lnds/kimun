@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use super::detector::DuplicateGroup;
+use super::detector::{DuplicateGroup, DuplicationSeverity};
 
 #[derive(Serialize)]
 pub struct DuplicationMetrics {
@@ -35,7 +35,7 @@ fn assessment(percentage: f64) -> &'static str {
     }
 }
 
-pub fn print_summary(metrics: &DuplicationMetrics) {
+pub fn print_summary(metrics: &DuplicationMetrics, groups: &[DuplicateGroup]) {
     let separator = "─".repeat(68);
     let pct = metrics.percentage();
 
@@ -54,6 +54,34 @@ pub fn print_summary(metrics: &DuplicationMetrics) {
             metrics.largest_block
         );
     }
+
+    let critical_groups = groups.iter().filter(|g| g.severity == DuplicationSeverity::Critical).count();
+    let tolerable_groups = groups.iter().filter(|g| g.severity == DuplicationSeverity::Tolerable).count();
+    if critical_groups > 0 || tolerable_groups > 0 {
+        let critical_lines: usize = groups.iter()
+            .filter(|g| g.severity == DuplicationSeverity::Critical)
+            .map(|g| g.duplicated_lines())
+            .sum();
+        let tolerable_lines: usize = groups.iter()
+            .filter(|g| g.severity == DuplicationSeverity::Tolerable)
+            .map(|g| g.duplicated_lines())
+            .sum();
+        println!();
+        println!(" Rule of Three Analysis:");
+        if critical_groups > 0 {
+            println!(
+                "   Critical duplicates (3+): {:>5} groups, {:>5} lines",
+                critical_groups, critical_lines
+            );
+        }
+        if tolerable_groups > 0 {
+            println!(
+                "   Tolerable duplicates (2x):{:>5} groups, {:>5} lines",
+                tolerable_groups, tolerable_lines
+            );
+        }
+    }
+
     println!();
     println!(" Assessment:           {:>42}", assessment(pct));
     println!("{separator}");
@@ -71,7 +99,7 @@ pub fn print_detailed(
     groups: &[DuplicateGroup],
     total_groups: usize,
 ) {
-    print_summary(metrics);
+    print_summary(metrics, groups);
 
     if groups.is_empty() {
         return;
@@ -80,14 +108,19 @@ pub fn print_detailed(
     let separator = "─".repeat(68);
 
     println!();
-    println!(" Duplicate Groups (sorted by duplicated lines)");
+    println!(" Duplicate Groups (sorted by severity, then duplicated lines)");
 
     for (i, group) in groups.iter().enumerate() {
+        let severity_label = match group.severity {
+            DuplicationSeverity::Critical => "CRITICAL",
+            DuplicationSeverity::Tolerable => "TOLERABLE",
+        };
         println!();
         println!("{separator}");
         println!(
-            " [{}] {} lines, {} occurrences ({} duplicated lines)",
+            " [{}] {}: {} lines, {} occurrences ({} duplicated lines)",
             i + 1,
+            severity_label,
             group.line_count,
             group.locations.len(),
             group.duplicated_lines()
@@ -192,26 +225,6 @@ mod tests {
             DuplicateGroup {
                 locations: vec![
                     DuplicateLocation {
-                        file_path: PathBuf::from("src/foo.rs"),
-                        start_line: 10,
-                        end_line: 21,
-                    },
-                    DuplicateLocation {
-                        file_path: PathBuf::from("src/bar.rs"),
-                        start_line: 30,
-                        end_line: 41,
-                    },
-                ],
-                line_count: 12,
-                sample: vec![
-                    "fn process() {".to_string(),
-                    "let x = read();".to_string(),
-                    "transform(x);".to_string(),
-                ],
-            },
-            DuplicateGroup {
-                locations: vec![
-                    DuplicateLocation {
                         file_path: PathBuf::from("src/a.rs"),
                         start_line: 1,
                         end_line: 6,
@@ -229,6 +242,28 @@ mod tests {
                 ],
                 line_count: 6,
                 sample: vec!["use std::io;".to_string(), "use std::fs;".to_string()],
+                severity: DuplicationSeverity::Critical,
+            },
+            DuplicateGroup {
+                locations: vec![
+                    DuplicateLocation {
+                        file_path: PathBuf::from("src/foo.rs"),
+                        start_line: 10,
+                        end_line: 21,
+                    },
+                    DuplicateLocation {
+                        file_path: PathBuf::from("src/bar.rs"),
+                        start_line: 30,
+                        end_line: 41,
+                    },
+                ],
+                line_count: 12,
+                sample: vec![
+                    "fn process() {".to_string(),
+                    "let x = read();".to_string(),
+                    "transform(x);".to_string(),
+                ],
+                severity: DuplicationSeverity::Tolerable,
             },
         ]
     }
@@ -267,7 +302,7 @@ mod tests {
 
     #[test]
     fn print_summary_does_not_panic() {
-        print_summary(&sample_metrics());
+        print_summary(&sample_metrics(), &sample_groups());
     }
 
     #[test]
@@ -279,7 +314,7 @@ mod tests {
             files_with_duplicates: 0,
             largest_block: 0,
         };
-        print_summary(&m);
+        print_summary(&m, &[]);
     }
 
     #[test]
@@ -329,8 +364,10 @@ mod tests {
 
         let groups = parsed["groups"].as_array().unwrap();
         assert_eq!(groups.len(), 2);
-        assert_eq!(groups[0]["line_count"], 12);
-        assert_eq!(groups[0]["locations"].as_array().unwrap().len(), 2);
+        assert_eq!(groups[0]["line_count"], 6);
+        assert_eq!(groups[0]["locations"].as_array().unwrap().len(), 3);
+        assert_eq!(groups[0]["severity"], "Critical");
+        assert_eq!(groups[1]["severity"], "Tolerable");
         assert!(groups[0]["sample"].as_array().unwrap().len() > 0);
     }
 

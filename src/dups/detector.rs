@@ -3,6 +3,15 @@ use std::path::PathBuf;
 
 use serde::Serialize;
 
+/// Severity classification based on the Rule of Three.
+/// - `Critical`: 3+ occurrences — should be refactored.
+/// - `Tolerable`: 2 occurrences — acceptable duplication.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+pub enum DuplicationSeverity {
+    Critical,
+    Tolerable,
+}
+
 /// A normalized code line with its original position and content.
 pub struct NormalizedLine {
     pub original_line_number: usize, // 1-based
@@ -29,6 +38,7 @@ pub struct DuplicateGroup {
     pub locations: Vec<DuplicateLocation>,
     pub line_count: usize,
     pub sample: Vec<String>,
+    pub severity: DuplicationSeverity,
 }
 
 impl DuplicateGroup {
@@ -176,15 +186,27 @@ pub fn detect_duplicates(files: &[NormalizedFile], min_lines: usize, quiet: bool
             });
         }
 
+        let severity = if dup_locations.len() >= 3 {
+            DuplicationSeverity::Critical
+        } else {
+            DuplicationSeverity::Tolerable
+        };
+
         groups.push(DuplicateGroup {
             locations: dup_locations,
             line_count: block_size,
             sample,
+            severity,
         });
     }
 
-    // Sort by duplicated lines descending
-    groups.sort_by_key(|g| std::cmp::Reverse(g.duplicated_lines()));
+    // Sort by severity (Critical first), then by duplicated lines descending
+    groups.sort_by(|a, b| {
+        match a.severity.cmp(&b.severity) {
+            std::cmp::Ordering::Equal => b.duplicated_lines().cmp(&a.duplicated_lines()),
+            other => other,
+        }
+    });
     groups
 }
 
@@ -408,6 +430,103 @@ mod tests {
         let groups = detect_duplicates(&files, 6, false);
         assert!(!groups.is_empty());
         assert!(groups[0].sample.len() <= 5);
+    }
+
+    #[test]
+    fn two_occurrences_is_tolerable() {
+        let code: Vec<(usize, &str)> = vec![
+            (1, "fn process() {"),
+            (2, "let data = read();"),
+            (3, "let result = transform(data);"),
+            (4, "write(result);"),
+            (5, "log(\"done\");"),
+            (6, "}"),
+        ];
+        let files = vec![make_file("a.rs", &code), make_file("b.rs", &code)];
+        let groups = detect_duplicates(&files, 6, false);
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].severity, DuplicationSeverity::Tolerable);
+    }
+
+    #[test]
+    fn three_occurrences_is_critical() {
+        let code: Vec<(usize, &str)> = vec![
+            (1, "fn process() {"),
+            (2, "let data = read();"),
+            (3, "let result = transform(data);"),
+            (4, "write(result);"),
+            (5, "log(\"done\");"),
+            (6, "}"),
+        ];
+        let files = vec![
+            make_file("a.rs", &code),
+            make_file("b.rs", &code),
+            make_file("c.rs", &code),
+        ];
+        let groups = detect_duplicates(&files, 6, false);
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].severity, DuplicationSeverity::Critical);
+    }
+
+    #[test]
+    fn critical_sorted_before_tolerable() {
+        // 3 files: a+b+c share block1 (critical), a+b share block2 (tolerable)
+        let files = vec![
+            make_file(
+                "a.rs",
+                &[
+                    (1, "fn shared3() {"),
+                    (2, "let x = 1;"),
+                    (3, "let y = 2;"),
+                    (4, "let z = 3;"),
+                    (5, "let w = 4;"),
+                    (6, "}"),
+                    (10, "fn shared2() {"),
+                    (11, "let a = 10;"),
+                    (12, "let b = 20;"),
+                    (13, "let c = 30;"),
+                    (14, "let d = 40;"),
+                    (15, "let e = 50;"),
+                    (16, "}"),
+                ],
+            ),
+            make_file(
+                "b.rs",
+                &[
+                    (1, "fn shared3() {"),
+                    (2, "let x = 1;"),
+                    (3, "let y = 2;"),
+                    (4, "let z = 3;"),
+                    (5, "let w = 4;"),
+                    (6, "}"),
+                    (10, "fn shared2() {"),
+                    (11, "let a = 10;"),
+                    (12, "let b = 20;"),
+                    (13, "let c = 30;"),
+                    (14, "let d = 40;"),
+                    (15, "let e = 50;"),
+                    (16, "}"),
+                ],
+            ),
+            make_file(
+                "c.rs",
+                &[
+                    (1, "fn shared3() {"),
+                    (2, "let x = 1;"),
+                    (3, "let y = 2;"),
+                    (4, "let z = 3;"),
+                    (5, "let w = 4;"),
+                    (6, "}"),
+                ],
+            ),
+        ];
+        let groups = detect_duplicates(&files, 6, false);
+        assert!(groups.len() >= 2);
+        // First group should be Critical (3 occurrences)
+        assert_eq!(groups[0].severity, DuplicationSeverity::Critical);
+        // Find a Tolerable group
+        let has_tolerable = groups.iter().any(|g| g.severity == DuplicationSeverity::Tolerable);
+        assert!(has_tolerable);
     }
 
     #[test]
