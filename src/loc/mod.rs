@@ -36,7 +36,12 @@ pub fn run(path: &Path) -> Result<(), Box<dyn Error>> {
     let mut seen_hashes: HashSet<u64> = HashSet::new();
 
     let walker = WalkBuilder::new(path)
+        .hidden(false)
         .follow_links(false)
+        .filter_entry(|entry| {
+            !(entry.file_type().is_some_and(|ft| ft.is_dir())
+                && entry.file_name() == ".git")
+        })
         .build();
 
     for entry in walker {
