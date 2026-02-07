@@ -1,5 +1,8 @@
+use serde::Serialize;
+
 use super::detector::DuplicateGroup;
 
+#[derive(Serialize)]
 pub struct DuplicationMetrics {
     pub total_code_lines: usize,
     pub duplicated_lines: usize,
@@ -56,10 +59,17 @@ pub fn print_summary(metrics: &DuplicationMetrics) {
     println!("{separator}");
 }
 
+/// Maximum duplicate groups shown by default (use `--show-all` to override).
+pub const DEFAULT_GROUP_LIMIT: usize = 20;
+
+pub fn display_limit(total: usize, show_all: bool) -> usize {
+    if show_all { total } else { DEFAULT_GROUP_LIMIT.min(total) }
+}
+
 pub fn print_detailed(
     metrics: &DuplicationMetrics,
     groups: &[DuplicateGroup],
-    show_all: bool,
+    total_groups: usize,
 ) {
     print_summary(metrics);
 
@@ -67,14 +77,12 @@ pub fn print_detailed(
         return;
     }
 
-    let limit = if show_all { groups.len() } else { 20.min(groups.len()) };
-
     let separator = "─".repeat(68);
 
     println!();
     println!(" Duplicate Groups (sorted by duplicated lines)");
 
-    for (i, group) in groups.iter().take(limit).enumerate() {
+    for (i, group) in groups.iter().enumerate() {
         println!();
         println!("{separator}");
         println!(
@@ -107,15 +115,60 @@ pub fn print_detailed(
 
     println!("{separator}");
 
-    if !show_all && limit < groups.len() {
+    if groups.len() < total_groups {
         println!();
         println!(
             " Showing top {} of {} duplicate groups.",
-            limit,
-            groups.len()
+            groups.len(),
+            total_groups
         );
         println!(" Use --show-all to see all groups.");
     }
+}
+
+#[derive(Serialize)]
+struct JsonOutput<'a> {
+    metrics: JsonMetrics,
+    groups: &'a [DuplicateGroup],
+}
+
+#[derive(Serialize)]
+struct JsonMetrics {
+    total_code_lines: usize,
+    duplicated_lines: usize,
+    duplication_percentage: f64,
+    duplicate_groups: usize,
+    files_with_duplicates: usize,
+    largest_block: usize,
+    assessment: &'static str,
+}
+
+pub fn format_json(
+    metrics: &DuplicationMetrics,
+    groups: &[DuplicateGroup],
+) -> Result<String, Box<dyn std::error::Error>> {
+    let pct = metrics.percentage();
+    let output = JsonOutput {
+        metrics: JsonMetrics {
+            total_code_lines: metrics.total_code_lines,
+            duplicated_lines: metrics.duplicated_lines,
+            duplication_percentage: pct,
+            duplicate_groups: metrics.duplicate_groups,
+            files_with_duplicates: metrics.files_with_duplicates,
+            largest_block: metrics.largest_block,
+            assessment: assessment(pct),
+        },
+        groups,
+    };
+    Ok(serde_json::to_string_pretty(&output)?)
+}
+
+pub fn print_json(
+    metrics: &DuplicationMetrics,
+    groups: &[DuplicateGroup],
+) -> Result<(), Box<dyn std::error::Error>> {
+    println!("{}", format_json(metrics, groups)?);
+    Ok(())
 }
 
 #[cfg(test)]
@@ -231,12 +284,16 @@ mod tests {
 
     #[test]
     fn print_detailed_does_not_panic() {
-        print_detailed(&sample_metrics(), &sample_groups(), false);
+        let groups = sample_groups();
+        let limit = display_limit(groups.len(), false);
+        print_detailed(&sample_metrics(), &groups[..limit], groups.len());
     }
 
     #[test]
     fn print_detailed_show_all() {
-        print_detailed(&sample_metrics(), &sample_groups(), true);
+        let groups = sample_groups();
+        let limit = display_limit(groups.len(), true);
+        print_detailed(&sample_metrics(), &groups[..limit], groups.len());
     }
 
     #[test]
@@ -248,6 +305,59 @@ mod tests {
             files_with_duplicates: 0,
             largest_block: 0,
         };
-        print_detailed(&m, &[], false);
+        print_detailed(&m, &[], 0);
+    }
+
+    #[test]
+    fn print_json_with_groups() {
+        print_json(&sample_metrics(), &sample_groups()).unwrap();
+    }
+
+    #[test]
+    fn format_json_validates_structure() {
+        let json_str = format_json(&sample_metrics(), &sample_groups()).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+
+        let metrics = &parsed["metrics"];
+        assert_eq!(metrics["total_code_lines"], 1000);
+        assert_eq!(metrics["duplicated_lines"], 48);
+        assert_eq!(metrics["duplicate_groups"], 2);
+        assert_eq!(metrics["files_with_duplicates"], 3);
+        assert_eq!(metrics["largest_block"], 12);
+        assert_eq!(metrics["assessment"], "Good");
+        assert!((metrics["duplication_percentage"].as_f64().unwrap() - 4.8).abs() < 0.01);
+
+        let groups = parsed["groups"].as_array().unwrap();
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups[0]["line_count"], 12);
+        assert_eq!(groups[0]["locations"].as_array().unwrap().len(), 2);
+        assert!(groups[0]["sample"].as_array().unwrap().len() > 0);
+    }
+
+    #[test]
+    fn format_json_empty_groups() {
+        let m = DuplicationMetrics {
+            total_code_lines: 100,
+            duplicated_lines: 0,
+            duplicate_groups: 0,
+            files_with_duplicates: 0,
+            largest_block: 0,
+        };
+        let json_str = format_json(&m, &[]).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+
+        assert_eq!(parsed["metrics"]["total_code_lines"], 100);
+        assert_eq!(parsed["metrics"]["duplicated_lines"], 0);
+        assert_eq!(parsed["metrics"]["assessment"], "Excellent");
+        assert_eq!(parsed["groups"].as_array().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn format_json_respects_group_slice() {
+        let groups = sample_groups();
+        // Pass only first group
+        let json_str = format_json(&sample_metrics(), &groups[..1]).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+        assert_eq!(parsed["groups"].as_array().unwrap().len(), 1);
     }
 }

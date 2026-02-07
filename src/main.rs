@@ -44,6 +44,10 @@ enum Commands {
         /// Minimum lines for a duplicate block (default: 6)
         #[arg(long, default_value = "6")]
         min_lines: usize,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
     },
 }
 
@@ -63,9 +67,10 @@ fn main() {
             report,
             show_all,
             min_lines,
+            json,
         } => {
             let target = path.unwrap_or_else(|| PathBuf::from("."));
-            if let Err(err) = dups::run(&target, min_lines, report, show_all) {
+            if let Err(err) = dups::run(&target, min_lines, report, show_all, json) {
                 eprintln!("error: {err}");
                 std::process::exit(1);
             }

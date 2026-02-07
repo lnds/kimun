@@ -12,7 +12,7 @@ use ignore::WalkBuilder;
 use crate::loc::counter::{classify_reader, LineKind};
 use crate::loc::language::{detect, detect_by_shebang, LanguageSpec};
 use detector::{detect_duplicates, NormalizedFile, NormalizedLine};
-use report::{print_detailed, print_summary, DuplicationMetrics};
+use report::{display_limit, print_detailed, print_json, print_summary, DuplicationMetrics};
 
 fn normalize_file(path: &Path, spec: &LanguageSpec) -> Result<Option<NormalizedFile>, Box<dyn Error>> {
     let file = File::open(path)?;
@@ -66,6 +66,7 @@ pub fn run(
     min_lines: usize,
     show_report: bool,
     show_all: bool,
+    json: bool,
 ) -> Result<(), Box<dyn Error>> {
     let mut files: Vec<NormalizedFile> = Vec::new();
     let mut total_code_lines: usize = 0;
@@ -114,11 +115,22 @@ pub fn run(
     }
 
     if files.is_empty() {
-        println!("No recognized source files found.");
+        if json {
+            let metrics = DuplicationMetrics {
+                total_code_lines: 0,
+                duplicated_lines: 0,
+                duplicate_groups: 0,
+                files_with_duplicates: 0,
+                largest_block: 0,
+            };
+            print_json(&metrics, &[])?;
+        } else {
+            println!("No recognized source files found.");
+        }
         return Ok(());
     }
 
-    let groups = detect_duplicates(&files, min_lines);
+    let groups = detect_duplicates(&files, min_lines, json);
 
     let duplicated_lines: usize = groups.iter().map(|g| g.duplicated_lines()).sum();
     let largest_block = groups.iter().map(|g| g.line_count).max().unwrap_or(0);
@@ -136,8 +148,12 @@ pub fn run(
         largest_block,
     };
 
-    if show_report {
-        print_detailed(&metrics, &groups, show_all);
+    if json {
+        let limit = display_limit(groups.len(), show_all);
+        print_json(&metrics, &groups[..limit])?;
+    } else if show_report {
+        let limit = display_limit(groups.len(), show_all);
+        print_detailed(&metrics, &groups[..limit], groups.len());
     } else {
         print_summary(&metrics);
     }
@@ -153,7 +169,7 @@ mod tests {
     #[test]
     fn run_on_empty_dir() {
         let dir = tempfile::tempdir().unwrap();
-        run(dir.path(), 6, false, false).unwrap();
+        run(dir.path(), 6, false, false, false).unwrap();
     }
 
     #[test]
@@ -167,7 +183,7 @@ mod tests {
             dir.path().join("b.rs"),
             "fn bar() {\n    let a = 10;\n    let b = 20;\n    let c = a * b;\n    println!(\"{}\", c);\n    return c;\n}\n",
         ).unwrap();
-        run(dir.path(), 6, false, false).unwrap();
+        run(dir.path(), 6, false, false, false).unwrap();
     }
 
     #[test]
@@ -177,7 +193,7 @@ mod tests {
         fs::write(dir.path().join("a.rs"), code).unwrap();
         fs::write(dir.path().join("b.rs"), code).unwrap();
         // Should not panic, should detect duplicates
-        run(dir.path(), 6, false, false).unwrap();
+        run(dir.path(), 6, false, false, false).unwrap();
     }
 
     #[test]
@@ -186,7 +202,7 @@ mod tests {
         let code = "fn process() {\n    let x = read();\n    let y = transform(x);\n    write(y);\n    log(\"done\");\n    cleanup();\n}\n";
         fs::write(dir.path().join("a.rs"), code).unwrap();
         fs::write(dir.path().join("b.rs"), code).unwrap();
-        run(dir.path(), 6, true, false).unwrap();
+        run(dir.path(), 6, true, false, false).unwrap();
     }
 
     #[test]
@@ -195,14 +211,14 @@ mod tests {
         let code = "fn process() {\n    let x = read();\n    let y = transform(x);\n    write(y);\n    log(\"done\");\n    cleanup();\n}\n";
         fs::write(dir.path().join("a.rs"), code).unwrap();
         fs::write(dir.path().join("b.rs"), code).unwrap();
-        run(dir.path(), 6, true, true).unwrap();
+        run(dir.path(), 6, true, true, false).unwrap();
     }
 
     #[test]
     fn run_skips_binary_files() {
         let dir = tempfile::tempdir().unwrap();
         fs::write(dir.path().join("data.c"), b"hello\x00world").unwrap();
-        run(dir.path(), 6, false, false).unwrap();
+        run(dir.path(), 6, false, false, false).unwrap();
     }
 
     #[test]
@@ -212,7 +228,7 @@ mod tests {
         fs::write(dir.path().join("a.rs"), code).unwrap();
         fs::write(dir.path().join("b.rs"), code).unwrap();
         // min_lines=20 means no 4-line file can produce duplicates
-        run(dir.path(), 20, false, false).unwrap();
+        run(dir.path(), 20, false, false, false).unwrap();
     }
 
     #[test]
@@ -242,5 +258,27 @@ mod tests {
 
         let spec = detect(Path::new("test.c")).unwrap();
         assert!(normalize_file(&path, spec).unwrap().is_none());
+    }
+
+    #[test]
+    fn run_json_with_duplicates() {
+        let dir = tempfile::tempdir().unwrap();
+        let code = "fn process() {\n    let x = read();\n    let y = transform(x);\n    write(y);\n    log(\"done\");\n    cleanup();\n}\n";
+        fs::write(dir.path().join("a.rs"), code).unwrap();
+        fs::write(dir.path().join("b.rs"), code).unwrap();
+        run(dir.path(), 6, false, false, true).unwrap();
+    }
+
+    #[test]
+    fn run_json_empty_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        run(dir.path(), 6, false, false, true).unwrap();
+    }
+
+    #[test]
+    fn run_json_no_duplicates() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("a.rs"), "fn foo() {\n    let x = 1;\n}\n").unwrap();
+        run(dir.path(), 6, false, false, true).unwrap();
     }
 }

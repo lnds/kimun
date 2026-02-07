@@ -1,6 +1,8 @@
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
+use serde::Serialize;
+
 /// A normalized code line with its original position and content.
 pub struct NormalizedLine {
     pub original_line_number: usize, // 1-based
@@ -14,7 +16,7 @@ pub struct NormalizedFile {
 }
 
 /// A location where a duplicate block appears.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct DuplicateLocation {
     pub file_path: PathBuf,
     pub start_line: usize, // 1-based original line number
@@ -22,7 +24,7 @@ pub struct DuplicateLocation {
 }
 
 /// A group of identical code blocks found in different locations.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct DuplicateGroup {
     pub locations: Vec<DuplicateLocation>,
     pub line_count: usize,
@@ -56,7 +58,7 @@ fn hash_window(lines: &[NormalizedLine]) -> u64 {
 
 /// Detect duplicate code blocks across files using a sliding window approach
 /// with extension-based merging.
-pub fn detect_duplicates(files: &[NormalizedFile], min_lines: usize) -> Vec<DuplicateGroup> {
+pub fn detect_duplicates(files: &[NormalizedFile], min_lines: usize, quiet: bool) -> Vec<DuplicateGroup> {
     // Phase 1: hash all windows of size min_lines
     let mut hash_map: HashMap<u64, Vec<(usize, usize)>> = HashMap::new();
 
@@ -93,7 +95,7 @@ pub fn detect_duplicates(files: &[NormalizedFile], min_lines: usize) -> Vec<Dupl
         valid_hashes.push((hash, locations));
     }
 
-    if skipped_common > 0 {
+    if skipped_common > 0 && !quiet {
         eprintln!(
             "note: skipped {skipped_common} patterns with >{MAX_OCCURRENCES} occurrences (likely boilerplate)"
         );
@@ -232,7 +234,7 @@ mod tests {
             ),
         ];
 
-        let groups = detect_duplicates(&files, 6);
+        let groups = detect_duplicates(&files, 6, false);
         assert_eq!(groups.len(), 1);
         assert_eq!(groups[0].line_count, 6);
         assert_eq!(groups[0].locations.len(), 2);
@@ -265,7 +267,7 @@ mod tests {
             ),
         ];
 
-        let groups = detect_duplicates(&files, 6);
+        let groups = detect_duplicates(&files, 6, false);
         assert!(groups.is_empty());
     }
 
@@ -276,7 +278,7 @@ mod tests {
             &[(1, "fn foo() {"), (2, "let x = 1;"), (3, "}")],
         )];
 
-        let groups = detect_duplicates(&files, 6);
+        let groups = detect_duplicates(&files, 6, false);
         assert!(groups.is_empty());
     }
 
@@ -296,7 +298,7 @@ mod tests {
 
         let files = vec![make_file("a.rs", &code), make_file("b.rs", &code)];
 
-        let groups = detect_duplicates(&files, 6);
+        let groups = detect_duplicates(&files, 6, false);
         assert_eq!(groups.len(), 1);
         assert_eq!(groups[0].line_count, 8);
     }
@@ -333,7 +335,7 @@ mod tests {
             ),
         ];
 
-        let groups = detect_duplicates(&files, 6);
+        let groups = detect_duplicates(&files, 6, false);
         assert_eq!(groups.len(), 1);
         assert_eq!(groups[0].line_count, 7);
     }
@@ -355,7 +357,7 @@ mod tests {
             make_file("c.rs", &code),
         ];
 
-        let groups = detect_duplicates(&files, 6);
+        let groups = detect_duplicates(&files, 6, false);
         assert_eq!(groups.len(), 1);
         assert_eq!(groups[0].locations.len(), 3);
         assert_eq!(groups[0].duplicated_lines(), 12); // 6 * (3-1)
@@ -381,7 +383,7 @@ mod tests {
             ],
         )];
 
-        let groups = detect_duplicates(&files, 6);
+        let groups = detect_duplicates(&files, 6, false);
         assert_eq!(groups.len(), 1);
         assert_eq!(groups[0].locations.len(), 2);
     }
@@ -403,7 +405,7 @@ mod tests {
 
         let files = vec![make_file("a.rs", &code), make_file("b.rs", &code)];
 
-        let groups = detect_duplicates(&files, 6);
+        let groups = detect_duplicates(&files, 6, false);
         assert!(!groups.is_empty());
         assert!(groups[0].sample.len() <= 5);
     }
