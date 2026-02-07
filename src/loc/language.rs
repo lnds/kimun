@@ -6,6 +6,10 @@ pub struct LanguageSpec {
     pub extensions: &'static [&'static str],
     pub filenames: &'static [&'static str],
     pub line_comments: &'static [&'static str],
+    /// Characters that, if immediately following a line comment marker,
+    /// prevent it from being treated as a comment. Used for Haskell where
+    /// `-->` is an operator but `-- comment` is a comment.
+    pub line_comment_not_before: &'static str,
     pub block_comment: Option<(&'static str, &'static str)>,
     pub nested_block_comments: bool,
     pub single_quote_strings: bool,
@@ -35,6 +39,7 @@ macro_rules! lang {
             extensions: $ext,
             filenames: $files,
             line_comments: &[$lc],
+            line_comment_not_before: "",
             block_comment: Some(($bo, $bc)),
             nested_block_comments: false $(|| $nested)?,
             single_quote_strings: false $(|| $sq)?,
@@ -56,6 +61,7 @@ macro_rules! lang {
             extensions: $ext,
             filenames: $files,
             line_comments: &[$lc],
+            line_comment_not_before: "",
             block_comment: Some(($bo, $bc)),
             nested_block_comments: false $(|| $nested)?,
             single_quote_strings: false $(|| $sq)?,
@@ -77,6 +83,7 @@ macro_rules! lang {
             extensions: $ext,
             filenames: $files,
             line_comments: &[$lc],
+            line_comment_not_before: "",
             block_comment: None,
             nested_block_comments: false $(|| $nested)?,
             single_quote_strings: false $(|| $sq)?,
@@ -99,6 +106,7 @@ macro_rules! lang {
             extensions: $ext,
             filenames: $files,
             line_comments: &[],
+            line_comment_not_before: "",
             block_comment: Some(($bo, $bc)),
             nested_block_comments: false $(|| $nested)?,
             single_quote_strings: false $(|| $sq)?,
@@ -120,6 +128,7 @@ macro_rules! lang {
             extensions: $ext,
             filenames: $files,
             line_comments: &[],
+            line_comment_not_before: "",
             block_comment: Some(($bo, $bc)),
             nested_block_comments: false $(|| $nested)?,
             single_quote_strings: false $(|| $sq)?,
@@ -138,6 +147,7 @@ macro_rules! lang {
             extensions: $ext,
             filenames: $files,
             line_comments: &[$($lc),+],
+            line_comment_not_before: "",
             block_comment: None,
             nested_block_comments: false,
             single_quote_strings: false,
@@ -157,6 +167,7 @@ macro_rules! lang {
             extensions: $ext,
             filenames: $files,
             line_comments: &[],
+            line_comment_not_before: "",
             block_comment: None,
             nested_block_comments: false,
             single_quote_strings: false $(|| $sq)?,
@@ -223,9 +234,19 @@ pub fn languages() -> &'static [LanguageSpec] {
               line: "//", block: "/*", "*/", sq: true),
         lang!("Dart", ext: ["dart"],
               line: "//", block: "/*", "*/", sq: true),
-        lang!("Haskell", ext: ["hs"],
-              line: "--", block: "{-", "-}", nested: true,
-              pragma: "{-#", "#-}"),
+        LanguageSpec {
+            name: "Haskell",
+            extensions: &["hs"],
+            filenames: &[],
+            line_comments: &["--"],
+            line_comment_not_before: "!#$%&*+./<=>?@\\^|~",
+            block_comment: Some(("{-", "-}")),
+            nested_block_comments: true,
+            single_quote_strings: false,
+            triple_quote_strings: false,
+            pragma: Some(("{-#", "#-}")),
+            shebangs: &[],
+        },
         lang!("Lua", ext: ["lua"],
               line: "--", block: "--[[", "]]", sq: true,
               shebangs: ["lua"]),
@@ -291,13 +312,9 @@ pub fn detect(path: &Path) -> Option<&'static LanguageSpec> {
     }
 
     let ext = path.extension()?.to_str()?;
-    for spec in languages() {
-        if spec.extensions.contains(&ext) {
-            return Some(spec);
-        }
-    }
-
-    None
+    languages()
+        .iter()
+        .find(|spec| spec.extensions.contains(&ext))
 }
 
 pub fn detect_by_shebang(first_line: &str) -> Option<&'static LanguageSpec> {
@@ -318,20 +335,118 @@ pub fn detect_by_shebang(first_line: &str) -> Option<&'static LanguageSpec> {
         .next()
         .unwrap_or("");
 
-    // If "env", the real interpreter is the next argument
+    // If "env", the real interpreter is the first non-flag argument
+    // Handles: #!/usr/bin/env python3, #!/usr/bin/env -S python3 -u
     let prog = if interpreter == "env" {
-        line.split_whitespace().last().unwrap_or("")
+        line.split_whitespace()
+            .skip_while(|s| !s.ends_with("env"))
+            .skip(1) // skip "env" itself
+            .find(|s| !s.starts_with('-'))
+            .unwrap_or("")
     } else {
         interpreter
     };
 
     for spec in languages() {
         for shebang in spec.shebangs {
-            if prog == *shebang || prog.starts_with(&format!("{shebang}")) {
+            if prog == *shebang || prog.starts_with(*shebang) {
                 return Some(spec);
             }
         }
     }
 
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn detect_by_extension_rs() {
+        let spec = detect(Path::new("main.rs")).unwrap();
+        assert_eq!(spec.name, "Rust");
+    }
+
+    #[test]
+    fn detect_by_extension_py() {
+        let spec = detect(Path::new("script.py")).unwrap();
+        assert_eq!(spec.name, "Python");
+    }
+
+    #[test]
+    fn detect_by_filename_makefile() {
+        let spec = detect(Path::new("Makefile")).unwrap();
+        assert_eq!(spec.name, "Makefile");
+    }
+
+    #[test]
+    fn detect_by_filename_dockerfile() {
+        let spec = detect(Path::new("Dockerfile")).unwrap();
+        assert_eq!(spec.name, "Dockerfile");
+    }
+
+    #[test]
+    fn detect_unknown_extension() {
+        assert!(detect(Path::new("file.xyz123")).is_none());
+    }
+
+    #[test]
+    fn detect_no_extension() {
+        // A file with no extension and no matching filename
+        assert!(detect(Path::new("randomfile")).is_none());
+    }
+
+    #[test]
+    fn shebang_python() {
+        let spec = detect_by_shebang("#!/usr/bin/python3\n").unwrap();
+        assert_eq!(spec.name, "Python");
+    }
+
+    #[test]
+    fn shebang_env_python() {
+        let spec = detect_by_shebang("#!/usr/bin/env python3\n").unwrap();
+        assert_eq!(spec.name, "Python");
+    }
+
+    #[test]
+    fn shebang_env_with_flags() {
+        let spec = detect_by_shebang("#!/usr/bin/env -S python3 -u\n").unwrap();
+        assert_eq!(spec.name, "Python");
+    }
+
+    #[test]
+    fn shebang_bash() {
+        let spec = detect_by_shebang("#!/bin/bash\n").unwrap();
+        assert_eq!(spec.name, "Bourne Again Shell");
+    }
+
+    #[test]
+    fn shebang_node() {
+        let spec = detect_by_shebang("#!/usr/bin/env node\n").unwrap();
+        assert_eq!(spec.name, "JavaScript");
+    }
+
+    #[test]
+    fn shebang_not_a_shebang() {
+        assert!(detect_by_shebang("print('hello')\n").is_none());
+    }
+
+    #[test]
+    fn shebang_unknown_interpreter() {
+        assert!(detect_by_shebang("#!/usr/bin/unknownlang\n").is_none());
+    }
+
+    #[test]
+    fn languages_not_empty() {
+        assert!(!languages().is_empty());
+    }
+
+    #[test]
+    fn all_languages_have_names() {
+        for spec in languages() {
+            assert!(!spec.name.is_empty());
+        }
+    }
 }

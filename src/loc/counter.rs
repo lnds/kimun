@@ -109,35 +109,48 @@ pub fn count_reader<R: BufRead>(reader: R, spec: &LanguageSpec) -> FileStats {
                     }
 
                     // Pragma (e.g. Haskell {-# ... #-}) — must check before block comment
-                    if let Some((popen, pclose)) = spec.pragma {
-                        if bytes_start_with(rest, popen) {
-                            has_code = true;
-                            // Skip to closing pragma delimiter
-                            i += popen.len();
-                            while i < len {
-                                let prest = &bytes[i..];
-                                if bytes_start_with(prest, pclose) {
-                                    i += pclose.len();
-                                    break;
-                                }
-                                i += 1;
+                    if let Some((popen, pclose)) = spec.pragma
+                        && bytes_start_with(rest, popen)
+                    {
+                        has_code = true;
+                        // Skip to closing pragma delimiter
+                        i += popen.len();
+                        while i < len {
+                            let prest = &bytes[i..];
+                            if bytes_start_with(prest, pclose) {
+                                i += pclose.len();
+                                break;
                             }
-                            continue;
+                            i += 1;
                         }
+                        continue;
                     }
 
                     // Block comment open
-                    if let Some((open, _)) = spec.block_comment {
-                        if bytes_start_with(rest, open) {
-                            has_comment = true;
-                            state = State::InBlockComment(1);
-                            i += open.len();
-                            continue;
-                        }
+                    if let Some((open, _)) = spec.block_comment
+                        && bytes_start_with(rest, open)
+                    {
+                        has_comment = true;
+                        state = State::InBlockComment(1);
+                        i += open.len();
+                        continue;
                     }
 
                     // Line comment
-                    if spec.line_comments.iter().any(|lc| bytes_start_with(rest, lc)) {
+                    let is_line_comment = spec.line_comments.iter().any(|lc| {
+                        if !bytes_start_with(rest, lc) {
+                            return false;
+                        }
+                        // Check that the char after the marker isn't an exception char
+                        if !spec.line_comment_not_before.is_empty()
+                            && let Some(&next_byte) = rest.get(lc.len())
+                            && spec.line_comment_not_before.as_bytes().contains(&next_byte)
+                        {
+                            return false;
+                        }
+                        true
+                    });
+                    if is_line_comment {
                         has_comment = true;
                         break;
                     }
@@ -216,26 +229,25 @@ pub fn count_reader<R: BufRead>(reader: R, spec: &LanguageSpec) -> FileStats {
                     let rest = &bytes[i..];
 
                     // Check for nested open (before checking close)
-                    if spec.nested_block_comments {
-                        if let Some((open, _)) = spec.block_comment {
-                            if bytes_start_with(rest, open) {
-                                state = State::InBlockComment(depth + 1);
-                                i += open.len();
-                                continue;
-                            }
-                        }
+                    if spec.nested_block_comments
+                        && let Some((open, _)) = spec.block_comment
+                        && bytes_start_with(rest, open)
+                    {
+                        state = State::InBlockComment(depth + 1);
+                        i += open.len();
+                        continue;
                     }
 
-                    if let Some((_, close)) = spec.block_comment {
-                        if bytes_start_with(rest, close) {
-                            if *depth <= 1 {
-                                state = State::Normal;
-                            } else {
-                                state = State::InBlockComment(depth - 1);
-                            }
-                            i += close.len();
-                            continue;
+                    if let Some((_, close)) = spec.block_comment
+                        && bytes_start_with(rest, close)
+                    {
+                        if *depth <= 1 {
+                            state = State::Normal;
+                        } else {
+                            state = State::InBlockComment(depth - 1);
                         }
+                        i += close.len();
+                        continue;
                     }
                     i += 1;
                 }
@@ -271,6 +283,7 @@ mod tests {
             extensions: &["c"],
             filenames: &[],
             line_comments: &["//"],
+            line_comment_not_before: "",
             block_comment: Some(("/*", "*/")),
             nested_block_comments: false,
             single_quote_strings: false,
@@ -286,6 +299,7 @@ mod tests {
             extensions: &["rs"],
             filenames: &[],
             line_comments: &["//"],
+            line_comment_not_before: "",
             block_comment: Some(("/*", "*/")),
             nested_block_comments: true,
             single_quote_strings: false,
@@ -301,6 +315,7 @@ mod tests {
             extensions: &["py"],
             filenames: &[],
             line_comments: &["#"],
+            line_comment_not_before: "",
             block_comment: None,
             nested_block_comments: false,
             single_quote_strings: true,
@@ -316,6 +331,7 @@ mod tests {
             extensions: &["js"],
             filenames: &[],
             line_comments: &["//"],
+            line_comment_not_before: "",
             block_comment: Some(("/*", "*/")),
             nested_block_comments: false,
             single_quote_strings: true,
@@ -331,6 +347,7 @@ mod tests {
             extensions: &["hs"],
             filenames: &[],
             line_comments: &["--"],
+            line_comment_not_before: "!#$%&*+./<=>?@\\^|~",
             block_comment: Some(("{-", "-}")),
             nested_block_comments: true,
             single_quote_strings: false,
@@ -500,6 +517,29 @@ mod tests {
     }
 
     #[test]
+    fn haskell_arrow_not_comment() {
+        // --> is an operator in Haskell, not a comment
+        let stats = count(&spec_haskell(), "x = y --> z\n");
+        assert_eq!(stats.code, 1);
+        assert_eq!(stats.comment, 0);
+    }
+
+    #[test]
+    fn haskell_dash_dash_space_is_comment() {
+        let stats = count(&spec_haskell(), "-- this is a comment\n");
+        assert_eq!(stats.comment, 1);
+        assert_eq!(stats.code, 0);
+    }
+
+    #[test]
+    fn haskell_triple_dash_is_comment() {
+        // --- is still a comment (- is not in the exception list because
+        // consecutive dashes are comments by convention)
+        let stats = count(&spec_haskell(), "--- section\n");
+        assert_eq!(stats.comment, 1);
+    }
+
+    #[test]
     fn haskell_block_comment_still_works() {
         let stats = count(&spec_haskell(), "{- this is a comment -}\n");
         assert_eq!(stats.comment, 1);
@@ -581,9 +621,118 @@ mod tests {
     }
 
     #[test]
+    fn shebang_is_code() {
+        let stats = count(&spec_python(), "#!/usr/bin/env python3\n# comment\nprint('hi')\n");
+        assert_eq!(stats.code, 2);
+        assert_eq!(stats.comment, 1);
+    }
+
+    #[test]
     fn string_at_end_of_line_resets() {
         // Unterminated string on one line should not affect the next
         let stats = count(&spec_c_like(), "char *s = \"unterminated\nint x = 1;\n");
         assert_eq!(stats.code, 2);
+    }
+
+    // --- Additional coverage tests ---
+
+    #[test]
+    fn python_triple_double_close_mid_line() {
+        // Close triple-double-quote mid-line, then code continues
+        let stats = count(&spec_python(), "s = \"\"\"text\"\"\"; x = 1\n");
+        assert_eq!(stats.code, 1);
+    }
+
+    #[test]
+    fn python_triple_single_close_mid_line() {
+        let stats = count(&spec_python(), "s = '''text'''; x = 1\n");
+        assert_eq!(stats.code, 1);
+    }
+
+    #[test]
+    fn single_quote_escape() {
+        let stats = count(&spec_js(), "var s = 'it\\'s';\n");
+        assert_eq!(stats.code, 1);
+    }
+
+    #[test]
+    fn single_quote_close() {
+        let stats = count(&spec_js(), "var s = 'hello';\n");
+        assert_eq!(stats.code, 1);
+    }
+
+    #[test]
+    fn binary_detection() {
+        use std::io::Write;
+        use tempfile::NamedTempFile;
+
+        let mut tmp = NamedTempFile::new().unwrap();
+        tmp.write_all(b"hello\x00world").unwrap();
+        tmp.flush().unwrap();
+
+        let result = count_lines(tmp.path(), &spec_c_like()).unwrap();
+        assert!(result.is_none(), "binary files should return None");
+    }
+
+    #[test]
+    fn count_lines_regular_file() {
+        use std::io::Write;
+        use tempfile::NamedTempFile;
+
+        let mut tmp = NamedTempFile::new().unwrap();
+        tmp.write_all(b"int x = 1;\n// comment\n\n")
+            .unwrap();
+        tmp.flush().unwrap();
+
+        let stats = count_lines(tmp.path(), &spec_c_like()).unwrap().unwrap();
+        assert_eq!(stats.code, 1);
+        assert_eq!(stats.comment, 1);
+        assert_eq!(stats.blank, 1);
+    }
+
+    fn spec_no_comments() -> LanguageSpec {
+        LanguageSpec {
+            name: "JSON",
+            extensions: &["json"],
+            filenames: &[],
+            line_comments: &[],
+            line_comment_not_before: "",
+            block_comment: None,
+            nested_block_comments: false,
+            single_quote_strings: false,
+            triple_quote_strings: false,
+            pragma: None,
+            shebangs: &[],
+        }
+    }
+
+    #[test]
+    fn no_comment_language() {
+        let stats = count(&spec_no_comments(), "{\"key\": \"value\"}\n");
+        assert_eq!(stats.code, 1);
+        assert_eq!(stats.comment, 0);
+    }
+
+    fn spec_batch() -> LanguageSpec {
+        LanguageSpec {
+            name: "DOS Batch",
+            extensions: &["bat"],
+            filenames: &[],
+            line_comments: &["::", "rem ", "REM ", "Rem "],
+            line_comment_not_before: "",
+            block_comment: None,
+            nested_block_comments: false,
+            single_quote_strings: false,
+            triple_quote_strings: false,
+            pragma: None,
+            shebangs: &[],
+        }
+    }
+
+    #[test]
+    fn batch_multiple_comment_markers() {
+        let stats = count(&spec_batch(), ":: comment\nrem comment\nREM comment\necho hello\n");
+        assert_eq!(stats.comment, 3);
+        assert_eq!(stats.code, 1);
     }
 }

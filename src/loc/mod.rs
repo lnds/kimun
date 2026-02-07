@@ -4,22 +4,30 @@ mod report;
 
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
-use std::hash::{DefaultHasher, Hash, Hasher};
+use std::hash::Hasher;
 use std::path::Path;
 
 use ignore::WalkBuilder;
 
-use std::fs::{self, File};
-use std::io::{BufRead, BufReader};
+use std::fs::File;
+use std::io::{BufRead, BufReader, Read};
 
 use counter::{count_lines, FileStats};
 use language::{detect, detect_by_shebang};
 use report::{print_report, LanguageReport};
 
 fn hash_file(path: &Path) -> Option<u64> {
-    let content = fs::read(path).ok()?;
-    let mut hasher = DefaultHasher::new();
-    content.hash(&mut hasher);
+    let file = File::open(path).ok()?;
+    let mut reader = BufReader::new(file);
+    let mut hasher = std::hash::DefaultHasher::new();
+    let mut buf = [0u8; 8192];
+    loop {
+        let n = reader.read(&mut buf).ok()?;
+        if n == 0 {
+            break;
+        }
+        hasher.write(&buf[..n]);
+    }
     Some(hasher.finish())
 }
 
@@ -57,10 +65,10 @@ pub fn run(path: &Path) -> Result<(), Box<dyn Error>> {
         };
 
         // Skip duplicate files (same content)
-        if let Some(h) = hash_file(file_path) {
-            if !seen_hashes.insert(h) {
-                continue;
-            }
+        if let Some(h) = hash_file(file_path)
+            && !seen_hashes.insert(h)
+        {
+            continue;
         }
 
         match count_lines(file_path, spec) {
@@ -106,4 +114,75 @@ fn try_detect_shebang(path: &Path) -> Option<&'static language::LanguageSpec> {
     let mut first_line = String::new();
     reader.read_line(&mut first_line).ok()?;
     detect_by_shebang(&first_line)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn run_on_temp_dir_with_rust_file() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(
+            dir.path().join("main.rs"),
+            "fn main() {\n    // hello\n    println!(\"hi\");\n}\n",
+        )
+        .unwrap();
+
+        // Should succeed without error
+        run(dir.path()).unwrap();
+    }
+
+    #[test]
+    fn run_on_empty_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        // Should succeed and print "No recognized source files found."
+        run(dir.path()).unwrap();
+    }
+
+    #[test]
+    fn run_skips_binary_files() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("data.c"), b"hello\x00world").unwrap();
+        // Should succeed — binary file silently skipped
+        run(dir.path()).unwrap();
+    }
+
+    #[test]
+    fn run_deduplicates_identical_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let content = "int x = 1;\n";
+        fs::write(dir.path().join("a.c"), content).unwrap();
+        fs::write(dir.path().join("b.c"), content).unwrap();
+        // Should succeed — one of the duplicates skipped
+        run(dir.path()).unwrap();
+    }
+
+    #[test]
+    fn run_with_shebang_detection() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(
+            dir.path().join("script"),
+            "#!/usr/bin/env python3\nprint('hello')\n",
+        )
+        .unwrap();
+        run(dir.path()).unwrap();
+    }
+
+    #[test]
+    fn hash_file_works() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.txt");
+        fs::write(&path, "hello world").unwrap();
+
+        let h1 = hash_file(&path).unwrap();
+        let h2 = hash_file(&path).unwrap();
+        assert_eq!(h1, h2, "same content should produce same hash");
+    }
+
+    #[test]
+    fn hash_file_nonexistent() {
+        assert!(hash_file(Path::new("/nonexistent/file")).is_none());
+    }
 }
