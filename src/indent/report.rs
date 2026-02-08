@@ -2,11 +2,14 @@ use std::path::PathBuf;
 
 use serde::Serialize;
 
+use super::analyzer::ComplexityLevel;
+
 pub struct FileIndentMetrics {
     pub path: PathBuf,
     pub code_lines: usize,
     pub stddev: f64,
     pub max_depth: usize,
+    pub complexity: ComplexityLevel,
 }
 
 pub fn print_report(files: &[FileIndentMetrics]) {
@@ -22,12 +25,12 @@ pub fn print_report(files: &[FileIndentMetrics]) {
         .unwrap_or(4)
         .max(4);
 
-    let header_width = max_path_len + 30; // path + numbers
+    let header_width = max_path_len + 42; // path + numbers + complexity
     let separator = "─".repeat(header_width.max(68));
 
     println!("{separator}");
     println!(
-        " {:<width$} {:>8} {:>8} {:>5}",
+        " {:<width$} {:>8} {:>8} {:>5}  Complexity",
         "File",
         "Lines",
         "StdDev",
@@ -38,11 +41,12 @@ pub fn print_report(files: &[FileIndentMetrics]) {
 
     for f in files {
         println!(
-            " {:<width$} {:>8} {:>8.1} {:>5}",
+            " {:<width$} {:>8} {:>8.1} {:>5}  {}",
             f.path.display(),
             f.code_lines,
             f.stddev,
             f.max_depth,
+            f.complexity.as_str(),
             width = max_path_len
         );
     }
@@ -56,6 +60,7 @@ struct JsonFileEntry {
     code_lines: usize,
     indent_stddev: f64,
     indent_max: usize,
+    complexity: ComplexityLevel,
 }
 
 pub fn print_json(files: &[FileIndentMetrics]) -> Result<(), Box<dyn std::error::Error>> {
@@ -66,6 +71,7 @@ pub fn print_json(files: &[FileIndentMetrics]) -> Result<(), Box<dyn std::error:
             code_lines: f.code_lines,
             indent_stddev: f.stddev,
             indent_max: f.max_depth,
+            complexity: f.complexity,
         })
         .collect();
 
@@ -84,12 +90,14 @@ mod tests {
                 code_lines: 100,
                 stddev: 4.5,
                 max_depth: 24,
+                complexity: ComplexityLevel::High,
             },
             FileIndentMetrics {
                 path: PathBuf::from("src/bar.rs"),
                 code_lines: 50,
                 stddev: 2.1,
                 max_depth: 12,
+                complexity: ComplexityLevel::Moderate,
             },
         ]
     }
@@ -124,6 +132,7 @@ mod tests {
                 code_lines: f.code_lines,
                 indent_stddev: f.stddev,
                 indent_max: f.max_depth,
+                complexity: f.complexity,
             })
             .collect();
         let json_str = serde_json::to_string_pretty(&entries).unwrap();
@@ -133,5 +142,7 @@ mod tests {
         assert_eq!(arr[0]["code_lines"], 100);
         assert_eq!(arr[0]["indent_stddev"], 4.5);
         assert_eq!(arr[0]["indent_max"], 24);
+        assert_eq!(arr[0]["complexity"], "high");
+        assert_eq!(arr[1]["complexity"], "moderate");
     }
 }

@@ -93,6 +93,7 @@ fn analyze_file(
         code_lines: metrics.code_lines,
         stddev: metrics.stddev,
         max_depth: metrics.max_depth,
+        complexity: metrics.complexity,
     }))
 }
 

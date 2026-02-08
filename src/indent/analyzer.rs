@@ -1,10 +1,50 @@
+use serde::Serialize;
+
 use crate::loc::counter::LineKind;
+
+/// Qualitative complexity classification based on indentation stddev.
+///
+/// Thresholds are initial heuristics inspired by Adam Tornhill's emphasis on
+/// structural variance as a complexity signal ("Your Code as a Crime Scene").
+/// They may need tuning based on real-world corpus analysis.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ComplexityLevel {
+    Low,
+    Moderate,
+    High,
+    VeryHigh,
+}
+
+impl ComplexityLevel {
+    pub fn from_stddev(stddev: f64) -> Self {
+        if stddev < 2.0 {
+            Self::Low
+        } else if stddev < 4.0 {
+            Self::Moderate
+        } else if stddev < 6.0 {
+            Self::High
+        } else {
+            Self::VeryHigh
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Low => "Low",
+            Self::Moderate => "Moderate",
+            Self::High => "High",
+            Self::VeryHigh => "Very High",
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct IndentMetrics {
     pub code_lines: usize,
     pub stddev: f64,
     pub max_depth: usize,
+    pub complexity: ComplexityLevel,
 }
 
 /// Count leading whitespace in a line, normalizing tabs to `tab_width` spaces.
@@ -36,11 +76,13 @@ pub fn analyze(lines: &[String], kinds: &[LineKind], tab_width: usize) -> Option
 
     let max_depth = *depths.iter().max().unwrap();
     let stddev = calculate_stddev(&depths);
+    let complexity = ComplexityLevel::from_stddev(stddev);
 
     Some(IndentMetrics {
         code_lines: depths.len(),
         stddev,
         max_depth,
+        complexity,
     })
 }
 
@@ -170,5 +212,54 @@ mod tests {
     #[test]
     fn stddev_empty_is_zero() {
         assert_eq!(calculate_stddev(&[]), 0.0);
+    }
+
+    #[test]
+    fn complexity_level_thresholds() {
+        assert_eq!(ComplexityLevel::from_stddev(0.0), ComplexityLevel::Low);
+        assert_eq!(ComplexityLevel::from_stddev(1.99), ComplexityLevel::Low);
+        assert_eq!(ComplexityLevel::from_stddev(2.0), ComplexityLevel::Moderate);
+        assert_eq!(
+            ComplexityLevel::from_stddev(3.99),
+            ComplexityLevel::Moderate
+        );
+        assert_eq!(ComplexityLevel::from_stddev(4.0), ComplexityLevel::High);
+        assert_eq!(ComplexityLevel::from_stddev(5.99), ComplexityLevel::High);
+        assert_eq!(ComplexityLevel::from_stddev(6.0), ComplexityLevel::VeryHigh);
+        assert_eq!(
+            ComplexityLevel::from_stddev(10.0),
+            ComplexityLevel::VeryHigh
+        );
+    }
+
+    #[test]
+    fn complexity_level_display() {
+        assert_eq!(ComplexityLevel::Low.as_str(), "Low");
+        assert_eq!(ComplexityLevel::Moderate.as_str(), "Moderate");
+        assert_eq!(ComplexityLevel::High.as_str(), "High");
+        assert_eq!(ComplexityLevel::VeryHigh.as_str(), "Very High");
+    }
+
+    #[test]
+    fn complexity_level_serde() {
+        assert_eq!(
+            serde_json::to_string(&ComplexityLevel::VeryHigh).unwrap(),
+            "\"very_high\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ComplexityLevel::Low).unwrap(),
+            "\"low\""
+        );
+    }
+
+    #[test]
+    fn analyze_includes_complexity() {
+        let lines: Vec<String> = vec!["    a();", "    b();", "    c();"]
+            .into_iter()
+            .map(String::from)
+            .collect();
+        let kinds = vec![LineKind::Code; 3];
+        let m = analyze(&lines, &kinds, 4).unwrap();
+        assert_eq!(m.complexity, ComplexityLevel::Low);
     }
 }
