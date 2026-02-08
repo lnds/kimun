@@ -73,6 +73,247 @@ pub fn count_reader<R: BufRead>(reader: R, spec: &LanguageSpec) -> FileStats {
     stats
 }
 
+struct StepResult {
+    advance: usize,
+    new_state: Option<State>,
+    has_code: bool,
+    has_comment: bool,
+    break_line: bool,
+}
+
+fn skip_pragma(bytes: &[u8], start: usize, pclose: &str) -> usize {
+    let len = bytes.len();
+    let mut i = start;
+    while i < len {
+        if bytes_start_with(&bytes[i..], pclose) {
+            return i + pclose.len();
+        }
+        i += 1;
+    }
+    i
+}
+
+fn step_normal(rest: &[u8], spec: &LanguageSpec, full_bytes: &[u8], pos: usize) -> StepResult {
+    // Triple-quote strings (before regular quotes)
+    if spec.triple_quote_strings {
+        if rest.len() >= 3 && &rest[..3] == b"\"\"\"" {
+            return StepResult {
+                advance: 3,
+                new_state: Some(State::InString(StringKind::TripleDouble)),
+                has_code: true,
+                has_comment: false,
+                break_line: false,
+            };
+        }
+        if spec.single_quote_strings && rest.len() >= 3 && &rest[..3] == b"'''" {
+            return StepResult {
+                advance: 3,
+                new_state: Some(State::InString(StringKind::TripleSingle)),
+                has_code: true,
+                has_comment: false,
+                break_line: false,
+            };
+        }
+    }
+
+    // Pragma (e.g. Haskell {-# ... #-}) — must check before block comment
+    if let Some((popen, pclose)) = spec.pragma
+        && bytes_start_with(rest, popen)
+    {
+        let end = skip_pragma(full_bytes, pos + popen.len(), pclose);
+        return StepResult {
+            advance: end - pos,
+            new_state: None,
+            has_code: true,
+            has_comment: false,
+            break_line: false,
+        };
+    }
+
+    // Block comment open
+    if let Some((open, _)) = spec.block_comment
+        && bytes_start_with(rest, open)
+    {
+        return StepResult {
+            advance: open.len(),
+            new_state: Some(State::InBlockComment(1)),
+            has_code: false,
+            has_comment: true,
+            break_line: false,
+        };
+    }
+
+    // Line comment
+    let is_line_comment = spec.line_comments.iter().any(|lc| {
+        if !bytes_start_with(rest, lc) {
+            return false;
+        }
+        if !spec.line_comment_not_before.is_empty()
+            && let Some(&next_byte) = rest.get(lc.len())
+            && spec.line_comment_not_before.as_bytes().contains(&next_byte)
+        {
+            return false;
+        }
+        true
+    });
+    if is_line_comment {
+        return StepResult {
+            advance: 0,
+            new_state: None,
+            has_code: false,
+            has_comment: true,
+            break_line: true,
+        };
+    }
+
+    let ch = rest[0];
+
+    // Double-quote string
+    if ch == b'"' {
+        return StepResult {
+            advance: 1,
+            new_state: Some(State::InString(StringKind::Double)),
+            has_code: true,
+            has_comment: false,
+            break_line: false,
+        };
+    }
+
+    // Single-quote string
+    if spec.single_quote_strings && ch == b'\'' {
+        return StepResult {
+            advance: 1,
+            new_state: Some(State::InString(StringKind::Single)),
+            has_code: true,
+            has_comment: false,
+            break_line: false,
+        };
+    }
+
+    StepResult {
+        advance: 1,
+        new_state: None,
+        has_code: !ch.is_ascii_whitespace(),
+        has_comment: false,
+        break_line: false,
+    }
+}
+
+fn step_in_string(rest: &[u8], ch: u8, kind: &StringKind, len: usize, pos: usize) -> StepResult {
+    match kind {
+        StringKind::TripleDouble => {
+            if rest.len() >= 3 && &rest[..3] == b"\"\"\"" {
+                return StepResult {
+                    advance: 3,
+                    new_state: Some(State::Normal),
+                    has_code: true,
+                    has_comment: false,
+                    break_line: false,
+                };
+            }
+        }
+        StringKind::TripleSingle => {
+            if rest.len() >= 3 && &rest[..3] == b"'''" {
+                return StepResult {
+                    advance: 3,
+                    new_state: Some(State::Normal),
+                    has_code: true,
+                    has_comment: false,
+                    break_line: false,
+                };
+            }
+        }
+        StringKind::Double => {
+            if ch == b'\\' {
+                return StepResult {
+                    advance: (pos + 2).min(len) - pos,
+                    new_state: None,
+                    has_code: true,
+                    has_comment: false,
+                    break_line: false,
+                };
+            }
+            if ch == b'"' {
+                return StepResult {
+                    advance: 1,
+                    new_state: Some(State::Normal),
+                    has_code: true,
+                    has_comment: false,
+                    break_line: false,
+                };
+            }
+        }
+        StringKind::Single => {
+            if ch == b'\\' {
+                return StepResult {
+                    advance: (pos + 2).min(len) - pos,
+                    new_state: None,
+                    has_code: true,
+                    has_comment: false,
+                    break_line: false,
+                };
+            }
+            if ch == b'\'' {
+                return StepResult {
+                    advance: 1,
+                    new_state: Some(State::Normal),
+                    has_code: true,
+                    has_comment: false,
+                    break_line: false,
+                };
+            }
+        }
+    }
+    StepResult {
+        advance: 1,
+        new_state: None,
+        has_code: true,
+        has_comment: false,
+        break_line: false,
+    }
+}
+
+fn step_in_block_comment(rest: &[u8], spec: &LanguageSpec, depth: usize) -> StepResult {
+    // Check for nested open (before checking close)
+    if spec.nested_block_comments
+        && let Some((open, _)) = spec.block_comment
+        && bytes_start_with(rest, open)
+    {
+        return StepResult {
+            advance: open.len(),
+            new_state: Some(State::InBlockComment(depth + 1)),
+            has_code: false,
+            has_comment: true,
+            break_line: false,
+        };
+    }
+
+    if let Some((_, close)) = spec.block_comment
+        && bytes_start_with(rest, close)
+    {
+        let new_state = if depth <= 1 {
+            State::Normal
+        } else {
+            State::InBlockComment(depth - 1)
+        };
+        return StepResult {
+            advance: close.len(),
+            new_state: Some(new_state),
+            has_code: false,
+            has_comment: true,
+            break_line: false,
+        };
+    }
+
+    StepResult {
+        advance: 1,
+        new_state: None,
+        has_code: false,
+        has_comment: true,
+        break_line: false,
+    }
+}
+
 fn process_lines<R: BufRead>(reader: R, spec: &LanguageSpec) -> Vec<LineKind> {
     let mut kinds = Vec::new();
     let mut state = State::Normal;
@@ -112,169 +353,23 @@ fn process_lines<R: BufRead>(reader: R, spec: &LanguageSpec) -> Vec<LineKind> {
         }
 
         while i < len {
-            match &state {
-                State::Normal => {
-                    let rest = &bytes[i..];
-
-                    // Triple-quote strings (before regular quotes)
-                    if spec.triple_quote_strings {
-                        if rest.len() >= 3 && &rest[..3] == b"\"\"\"" {
-                            has_code = true;
-                            state = State::InString(StringKind::TripleDouble);
-                            i += 3;
-                            continue;
-                        }
-                        if spec.single_quote_strings && rest.len() >= 3 && &rest[..3] == b"'''" {
-                            has_code = true;
-                            state = State::InString(StringKind::TripleSingle);
-                            i += 3;
-                            continue;
-                        }
-                    }
-
-                    // Pragma (e.g. Haskell {-# ... #-}) — must check before block comment
-                    if let Some((popen, pclose)) = spec.pragma
-                        && bytes_start_with(rest, popen)
-                    {
-                        has_code = true;
-                        // Skip to closing pragma delimiter
-                        i += popen.len();
-                        while i < len {
-                            let prest = &bytes[i..];
-                            if bytes_start_with(prest, pclose) {
-                                i += pclose.len();
-                                break;
-                            }
-                            i += 1;
-                        }
-                        continue;
-                    }
-
-                    // Block comment open
-                    if let Some((open, _)) = spec.block_comment
-                        && bytes_start_with(rest, open)
-                    {
-                        has_comment = true;
-                        state = State::InBlockComment(1);
-                        i += open.len();
-                        continue;
-                    }
-
-                    // Line comment
-                    let is_line_comment = spec.line_comments.iter().any(|lc| {
-                        if !bytes_start_with(rest, lc) {
-                            return false;
-                        }
-                        // Check that the char after the marker isn't an exception char
-                        if !spec.line_comment_not_before.is_empty()
-                            && let Some(&next_byte) = rest.get(lc.len())
-                            && spec.line_comment_not_before.as_bytes().contains(&next_byte)
-                        {
-                            return false;
-                        }
-                        true
-                    });
-                    if is_line_comment {
-                        has_comment = true;
-                        break;
-                    }
-
-                    let ch = bytes[i];
-
-                    // Double-quote string
-                    if ch == b'"' {
-                        has_code = true;
-                        state = State::InString(StringKind::Double);
-                        i += 1;
-                        continue;
-                    }
-
-                    // Single-quote string
-                    if spec.single_quote_strings && ch == b'\'' {
-                        has_code = true;
-                        state = State::InString(StringKind::Single);
-                        i += 1;
-                        continue;
-                    }
-
-                    if !ch.is_ascii_whitespace() {
-                        has_code = true;
-                    }
-                    i += 1;
-                }
-                State::InString(kind) => {
-                    has_code = true;
-                    let rest = &bytes[i..];
-
-                    match kind {
-                        StringKind::TripleDouble => {
-                            if rest.len() >= 3 && &rest[..3] == b"\"\"\"" {
-                                state = State::Normal;
-                                i += 3;
-                                continue;
-                            }
-                        }
-                        StringKind::TripleSingle => {
-                            if rest.len() >= 3 && &rest[..3] == b"'''" {
-                                state = State::Normal;
-                                i += 3;
-                                continue;
-                            }
-                        }
-                        StringKind::Double => {
-                            let ch = bytes[i];
-                            if ch == b'\\' {
-                                i = (i + 2).min(len);
-                                continue;
-                            }
-                            if ch == b'"' {
-                                state = State::Normal;
-                                i += 1;
-                                continue;
-                            }
-                        }
-                        StringKind::Single => {
-                            let ch = bytes[i];
-                            if ch == b'\\' {
-                                i = (i + 2).min(len);
-                                continue;
-                            }
-                            if ch == b'\'' {
-                                state = State::Normal;
-                                i += 1;
-                                continue;
-                            }
-                        }
-                    }
-                    i += 1;
-                }
-                State::InBlockComment(depth) => {
-                    has_comment = true;
-                    let rest = &bytes[i..];
-
-                    // Check for nested open (before checking close)
-                    if spec.nested_block_comments
-                        && let Some((open, _)) = spec.block_comment
-                        && bytes_start_with(rest, open)
-                    {
-                        state = State::InBlockComment(depth + 1);
-                        i += open.len();
-                        continue;
-                    }
-
-                    if let Some((_, close)) = spec.block_comment
-                        && bytes_start_with(rest, close)
-                    {
-                        if *depth <= 1 {
-                            state = State::Normal;
-                        } else {
-                            state = State::InBlockComment(depth - 1);
-                        }
-                        i += close.len();
-                        continue;
-                    }
-                    i += 1;
-                }
+            let result = match &state {
+                State::Normal => step_normal(&bytes[i..], spec, bytes, i),
+                State::InString(kind) => step_in_string(&bytes[i..], bytes[i], kind, len, i),
+                State::InBlockComment(depth) => step_in_block_comment(&bytes[i..], spec, *depth),
+            };
+            if result.has_code {
+                has_code = true;
+            }
+            if result.has_comment {
+                has_comment = true;
+            }
+            if let Some(new_state) = result.new_state {
+                state = new_state;
+            }
+            i += result.advance;
+            if result.break_line {
+                break;
             }
         }
 

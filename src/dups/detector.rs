@@ -51,6 +51,9 @@ impl DuplicateGroup {
 /// Maximum occurrences before a pattern is considered boilerplate and skipped.
 const MAX_OCCURRENCES: usize = 100;
 
+/// A set of (file_index, line_offset) pairs identifying where a window appears.
+type LocationSet = Vec<(usize, usize)>;
+
 /// FNV-1a hash — stable, deterministic, fast.
 fn hash_window(lines: &[NormalizedLine]) -> u64 {
     let mut hash: u64 = 0xcbf29ce484222325; // FNV offset basis
@@ -66,16 +69,9 @@ fn hash_window(lines: &[NormalizedLine]) -> u64 {
     hash
 }
 
-/// Detect duplicate code blocks across files using a sliding window approach
-/// with extension-based merging.
-pub fn detect_duplicates(
-    files: &[NormalizedFile],
-    min_lines: usize,
-    quiet: bool,
-) -> Vec<DuplicateGroup> {
-    // Phase 1: hash all windows of size min_lines
-    let mut hash_map: HashMap<u64, Vec<(usize, usize)>> = HashMap::new();
-
+/// Phase 1: hash all windows of `min_lines` size across all files.
+fn hash_all_windows(files: &[NormalizedFile], min_lines: usize) -> HashMap<u64, LocationSet> {
+    let mut hash_map: HashMap<u64, LocationSet> = HashMap::new();
     for (file_idx, file) in files.iter().enumerate() {
         if file.lines.len() < min_lines {
             continue;
@@ -85,19 +81,26 @@ pub fn detect_duplicates(
             hash_map.entry(hash).or_default().push((file_idx, offset));
         }
     }
+    hash_map
+}
 
-    // Phase 2: build a lookup from sorted-location-set to hash
-    // Filter to hashes with 2+ locations, skip overly common patterns
-    let mut location_to_hash: HashMap<Vec<(usize, usize)>, u64> = HashMap::new();
-    let mut valid_hashes: Vec<(u64, Vec<(usize, usize)>)> = Vec::new();
+/// Phase 2: filter hashes to those with 2+ verified-identical locations.
+/// Returns the location-to-hash lookup and the sorted valid entries.
+fn validate_hashes(
+    hash_map: HashMap<u64, LocationSet>,
+    files: &[NormalizedFile],
+    min_lines: usize,
+    quiet: bool,
+) -> (HashMap<LocationSet, u64>, Vec<(u64, LocationSet)>) {
+    let mut location_to_hash: HashMap<LocationSet, u64> = HashMap::new();
+    let mut valid_hashes: Vec<(u64, LocationSet)> = Vec::new();
     let mut skipped_common = 0usize;
 
     for (hash, mut locations) in hash_map {
-        if locations.len() < 2 {
-            continue;
-        }
-        if locations.len() > MAX_OCCURRENCES {
-            skipped_common += 1;
+        if locations.len() < 2 || locations.len() > MAX_OCCURRENCES {
+            if locations.len() > MAX_OCCURRENCES {
+                skipped_common += 1;
+            }
             continue;
         }
         locations.sort();
@@ -107,7 +110,6 @@ pub fn detect_duplicates(
         }
 
         // Post-hash verification: confirm windows have identical text content
-        // to guard against FNV hash collisions.
         let first = &locations[0];
         let first_window: Vec<&str> = files[first.0].lines[first.1..first.1 + min_lines]
             .iter()
@@ -133,13 +135,113 @@ pub fn detect_duplicates(
         );
     }
 
-    // Phase 3: extension-based merging
-    // For each location set, extend backward and forward to find maximal blocks
-    let mut consumed: HashSet<Vec<(usize, usize)>> = HashSet::new();
-    let mut groups: Vec<DuplicateGroup> = Vec::new();
-
-    // Sort by first location for deterministic ordering
     valid_hashes.sort_by(|a, b| a.1.cmp(&b.1));
+    (location_to_hash, valid_hashes)
+}
+
+/// Extend a set of locations backward while adjacent windows exist in the lookup.
+fn extend_backward(
+    locations: &[(usize, usize)],
+    location_to_hash: &HashMap<LocationSet, u64>,
+    consumed: &mut HashSet<LocationSet>,
+) -> (LocationSet, usize) {
+    let mut start_locs = locations.to_vec();
+    let mut backward_ext = 0usize;
+    loop {
+        if start_locs.iter().any(|(_, o)| *o == 0) {
+            break;
+        }
+        let prev_locs: LocationSet = start_locs.iter().map(|(f, o)| (*f, o - 1)).collect();
+        if location_to_hash.contains_key(&prev_locs) {
+            consumed.insert(prev_locs.clone());
+            start_locs = prev_locs;
+            backward_ext += 1;
+        } else {
+            break;
+        }
+    }
+    (start_locs, backward_ext)
+}
+
+/// Extend a set of locations forward while adjacent windows exist in the lookup.
+fn extend_forward(
+    locations: &[(usize, usize)],
+    location_to_hash: &HashMap<LocationSet, u64>,
+    consumed: &mut HashSet<LocationSet>,
+) -> usize {
+    let mut current_locs = locations.to_vec();
+    let mut forward_ext = 0usize;
+    loop {
+        let next_locs: LocationSet = current_locs.iter().map(|(f, o)| (*f, o + 1)).collect();
+        if location_to_hash.contains_key(&next_locs) {
+            consumed.insert(next_locs.clone());
+            current_locs = next_locs;
+            forward_ext += 1;
+        } else {
+            break;
+        }
+    }
+    forward_ext
+}
+
+/// Build a `DuplicateGroup` from the extended start locations.
+fn build_group(
+    files: &[NormalizedFile],
+    start_locs: &[(usize, usize)],
+    block_size: usize,
+) -> DuplicateGroup {
+    let mut dup_locations = Vec::new();
+    let mut sample = Vec::new();
+
+    for (file_idx, offset) in start_locs {
+        let file = &files[*file_idx];
+        let start_line = file.lines[*offset].original_line_number;
+        let end_offset = (*offset + block_size - 1).min(file.lines.len() - 1);
+        let end_line = file.lines[end_offset].original_line_number;
+
+        if sample.is_empty() {
+            let sample_end = (*offset + block_size).min(file.lines.len());
+            sample = file.lines[*offset..sample_end]
+                .iter()
+                .take(5)
+                .map(|l| l.content.clone())
+                .collect();
+        }
+
+        dup_locations.push(DuplicateLocation {
+            file_path: file.path.clone(),
+            start_line,
+            end_line,
+        });
+    }
+
+    let severity = if dup_locations.len() >= 3 {
+        DuplicationSeverity::Critical
+    } else {
+        DuplicationSeverity::Tolerable
+    };
+
+    DuplicateGroup {
+        locations: dup_locations,
+        line_count: block_size,
+        sample,
+        severity,
+    }
+}
+
+/// Detect duplicate code blocks across files using a sliding window approach
+/// with extension-based merging.
+pub fn detect_duplicates(
+    files: &[NormalizedFile],
+    min_lines: usize,
+    quiet: bool,
+) -> Vec<DuplicateGroup> {
+    let hash_map = hash_all_windows(files, min_lines);
+    let (location_to_hash, valid_hashes) = validate_hashes(hash_map, files, min_lines, quiet);
+
+    // Phase 3: extension-based merging
+    let mut consumed: HashSet<LocationSet> = HashSet::new();
+    let mut groups: Vec<DuplicateGroup> = Vec::new();
 
     for (_hash, locations) in &valid_hashes {
         if consumed.contains(locations) {
@@ -147,79 +249,12 @@ pub fn detect_duplicates(
         }
         consumed.insert(locations.clone());
 
-        // Extend backward
-        let mut start_locs = locations.clone();
-        let mut backward_ext = 0usize;
-        loop {
-            if start_locs.iter().any(|(_, o)| *o == 0) {
-                break;
-            }
-            let prev_locs: Vec<(usize, usize)> =
-                start_locs.iter().map(|(f, o)| (*f, o - 1)).collect();
-            if location_to_hash.contains_key(&prev_locs) {
-                consumed.insert(prev_locs.clone());
-                start_locs = prev_locs;
-                backward_ext += 1;
-            } else {
-                break;
-            }
-        }
-
-        // Extend forward from the original (not start) locations
-        let mut current_locs = locations.clone();
-        let mut forward_ext = 0usize;
-        loop {
-            let next_locs: Vec<(usize, usize)> =
-                current_locs.iter().map(|(f, o)| (*f, o + 1)).collect();
-            if location_to_hash.contains_key(&next_locs) {
-                consumed.insert(next_locs.clone());
-                current_locs = next_locs;
-                forward_ext += 1;
-            } else {
-                break;
-            }
-        }
-
+        let (start_locs, backward_ext) =
+            extend_backward(locations, &location_to_hash, &mut consumed);
+        let forward_ext = extend_forward(locations, &location_to_hash, &mut consumed);
         let block_size = min_lines + backward_ext + forward_ext;
 
-        // Build the DuplicateGroup from the extended start locations
-        let mut dup_locations = Vec::new();
-        let mut sample = Vec::new();
-
-        for (file_idx, offset) in &start_locs {
-            let file = &files[*file_idx];
-            let start_line = file.lines[*offset].original_line_number;
-            let end_offset = (*offset + block_size - 1).min(file.lines.len() - 1);
-            let end_line = file.lines[end_offset].original_line_number;
-
-            if sample.is_empty() {
-                let sample_end = (*offset + block_size).min(file.lines.len());
-                sample = file.lines[*offset..sample_end]
-                    .iter()
-                    .take(5)
-                    .map(|l| l.content.clone())
-                    .collect();
-            }
-
-            dup_locations.push(DuplicateLocation {
-                file_path: file.path.clone(),
-                start_line,
-                end_line,
-            });
-        }
-
-        let severity = if dup_locations.len() >= 3 {
-            DuplicationSeverity::Critical
-        } else {
-            DuplicationSeverity::Tolerable
-        };
-
-        groups.push(DuplicateGroup {
-            locations: dup_locations,
-            line_count: block_size,
-            sample,
-            severity,
-        });
+        groups.push(build_group(files, &start_locs, block_size));
     }
 
     // Sort by severity (Critical first), then by duplicated lines descending
