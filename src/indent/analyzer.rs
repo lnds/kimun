@@ -2,11 +2,13 @@ use serde::Serialize;
 
 use crate::loc::counter::LineKind;
 
-/// Qualitative complexity classification based on indentation stddev.
+/// Qualitative complexity classification based on indentation stddev
+/// measured in logical indentation levels (4 spaces = 1 level).
 ///
 /// Thresholds are initial heuristics inspired by Adam Tornhill's emphasis on
-/// structural variance as a complexity signal ("Your Code as a Crime Scene").
-/// They may need tuning based on real-world corpus analysis.
+/// structural variance as a complexity signal ("Your Code as a Crime Scene",
+/// Chapter 6). Tornhill's example: Configuration.java has sd=1.63 which he
+/// calls "not too bad". They may need tuning based on real-world corpus analysis.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ComplexityLevel {
@@ -18,11 +20,11 @@ pub enum ComplexityLevel {
 
 impl ComplexityLevel {
     pub fn from_stddev(stddev: f64) -> Self {
-        if stddev < 2.0 {
+        if stddev < 1.0 {
             Self::Low
-        } else if stddev < 4.0 {
+        } else if stddev < 1.5 {
             Self::Moderate
-        } else if stddev < 6.0 {
+        } else if stddev < 2.0 {
             Self::High
         } else {
             Self::VeryHigh
@@ -47,17 +49,20 @@ pub struct IndentMetrics {
     pub complexity: ComplexityLevel,
 }
 
-/// Count leading whitespace in a line, normalizing tabs to `tab_width` spaces.
+/// Count leading whitespace as logical indentation levels.
+/// Each tab counts as one level; spaces are accumulated and divided by `tab_width`.
+/// This matches Adam Tornhill's `complexity_analysis.py` approach where
+/// "four spaces or one tab counts as one logical indentation."
 pub fn indent_depth(line: &str, tab_width: usize) -> usize {
-    let mut depth = 0;
+    let mut spaces = 0;
     for ch in line.chars() {
         match ch {
-            ' ' => depth += 1,
-            '\t' => depth += tab_width,
+            ' ' => spaces += 1,
+            '\t' => spaces += tab_width,
             _ => break,
         }
     }
-    depth
+    spaces / tab_width
 }
 
 /// Calculate indentation metrics from lines and their classifications.
@@ -106,19 +111,22 @@ mod tests {
 
     #[test]
     fn indent_depth_spaces() {
-        assert_eq!(indent_depth("    code", 4), 4);
-        assert_eq!(indent_depth("        code", 4), 8);
+        // 4 spaces = 1 logical level, 8 spaces = 2 logical levels
+        assert_eq!(indent_depth("    code", 4), 1);
+        assert_eq!(indent_depth("        code", 4), 2);
     }
 
     #[test]
     fn indent_depth_tabs() {
-        assert_eq!(indent_depth("\tcode", 4), 4);
-        assert_eq!(indent_depth("\t\tcode", 4), 8);
+        // 1 tab = 1 logical level, 2 tabs = 2 logical levels
+        assert_eq!(indent_depth("\tcode", 4), 1);
+        assert_eq!(indent_depth("\t\tcode", 4), 2);
     }
 
     #[test]
     fn indent_depth_mixed() {
-        assert_eq!(indent_depth("\t  code", 4), 6);
+        // 1 tab + 2 spaces = 6 raw spaces / 4 = 1 logical level (integer division)
+        assert_eq!(indent_depth("\t  code", 4), 1);
     }
 
     #[test]
@@ -129,6 +137,14 @@ mod tests {
     #[test]
     fn indent_depth_empty_line() {
         assert_eq!(indent_depth("", 4), 0);
+    }
+
+    #[test]
+    fn indent_depth_partial_indent() {
+        // 2 spaces = 0 logical levels (less than one tab_width)
+        assert_eq!(indent_depth("  code", 4), 0);
+        // 6 spaces = 1 logical level
+        assert_eq!(indent_depth("      code", 4), 1);
     }
 
     #[test]
@@ -147,9 +163,9 @@ mod tests {
         let kinds = vec![LineKind::Code; 6];
 
         let m = analyze(&lines, &kinds, 4).unwrap();
-        // depths = [0, 4, 4, 8, 4, 0] → mean=3.33, max=8
+        // logical depths = [0, 1, 1, 2, 1, 0] → mean=0.83, max=2
         assert_eq!(m.code_lines, 6);
-        assert_eq!(m.max_depth, 8);
+        assert_eq!(m.max_depth, 2);
         assert!(m.stddev > 0.0);
     }
 
@@ -194,12 +210,12 @@ mod tests {
 
         let m = analyze(&lines, &kinds, 4).unwrap();
         assert!((m.stddev - 0.0).abs() < 0.001);
-        assert_eq!(m.max_depth, 4);
+        assert_eq!(m.max_depth, 1); // 4 spaces = 1 logical level
     }
 
     #[test]
     fn stddev_calculation() {
-        // values [0, 4, 8] → mean=4, variance=((16+0+16)/2)=16, sd=4.0 (Bessel's correction)
+        // logical levels [0, 4, 8] → mean=4, variance=((16+0+16)/2)=16, sd=4.0 (Bessel's correction)
         let m = calculate_stddev(&[0, 4, 8]);
         assert!((m - 4.0).abs() < 0.01);
     }
@@ -217,19 +233,16 @@ mod tests {
     #[test]
     fn complexity_level_thresholds() {
         assert_eq!(ComplexityLevel::from_stddev(0.0), ComplexityLevel::Low);
-        assert_eq!(ComplexityLevel::from_stddev(1.99), ComplexityLevel::Low);
-        assert_eq!(ComplexityLevel::from_stddev(2.0), ComplexityLevel::Moderate);
+        assert_eq!(ComplexityLevel::from_stddev(0.99), ComplexityLevel::Low);
+        assert_eq!(ComplexityLevel::from_stddev(1.0), ComplexityLevel::Moderate);
         assert_eq!(
-            ComplexityLevel::from_stddev(3.99),
+            ComplexityLevel::from_stddev(1.49),
             ComplexityLevel::Moderate
         );
-        assert_eq!(ComplexityLevel::from_stddev(4.0), ComplexityLevel::High);
-        assert_eq!(ComplexityLevel::from_stddev(5.99), ComplexityLevel::High);
-        assert_eq!(ComplexityLevel::from_stddev(6.0), ComplexityLevel::VeryHigh);
-        assert_eq!(
-            ComplexityLevel::from_stddev(10.0),
-            ComplexityLevel::VeryHigh
-        );
+        assert_eq!(ComplexityLevel::from_stddev(1.5), ComplexityLevel::High);
+        assert_eq!(ComplexityLevel::from_stddev(1.99), ComplexityLevel::High);
+        assert_eq!(ComplexityLevel::from_stddev(2.0), ComplexityLevel::VeryHigh);
+        assert_eq!(ComplexityLevel::from_stddev(5.0), ComplexityLevel::VeryHigh);
     }
 
     #[test]

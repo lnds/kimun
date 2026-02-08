@@ -30,7 +30,7 @@ pub fn print_report(files: &[FileIndentMetrics]) {
 
     println!("{separator}");
     println!(
-        " {:<width$} {:>8} {:>8} {:>5}  Complexity",
+        " {:<width$} {:>8} {:>6} {:>5}  Complexity",
         "File",
         "Lines",
         "StdDev",
@@ -41,7 +41,7 @@ pub fn print_report(files: &[FileIndentMetrics]) {
 
     for f in files {
         println!(
-            " {:<width$} {:>8} {:>8.1} {:>5}  {}",
+            " {:<width$} {:>8} {:>6.2} {:>5}  {}",
             f.path.display(),
             f.code_lines,
             f.stddev,
@@ -52,6 +52,9 @@ pub fn print_report(files: &[FileIndentMetrics]) {
     }
 
     println!("{separator}");
+    println!();
+    println!(" Complexity based on indentation stddev (Adam Tornhill,");
+    println!(" \"Your Code as a Crime Scene\", Ch.6). Thresholds are heuristic.");
 }
 
 #[derive(Serialize)]
@@ -88,15 +91,15 @@ mod tests {
             FileIndentMetrics {
                 path: PathBuf::from("src/foo.rs"),
                 code_lines: 100,
-                stddev: 4.5,
-                max_depth: 24,
+                stddev: 1.8,
+                max_depth: 6,
                 complexity: ComplexityLevel::High,
             },
             FileIndentMetrics {
                 path: PathBuf::from("src/bar.rs"),
                 code_lines: 50,
-                stddev: 2.1,
-                max_depth: 12,
+                stddev: 1.2,
+                max_depth: 3,
                 complexity: ComplexityLevel::Moderate,
             },
         ]
@@ -140,8 +143,8 @@ mod tests {
         let arr = parsed.as_array().unwrap();
         assert_eq!(arr.len(), 2);
         assert_eq!(arr[0]["code_lines"], 100);
-        assert_eq!(arr[0]["indent_stddev"], 4.5);
-        assert_eq!(arr[0]["indent_max"], 24);
+        assert_eq!(arr[0]["indent_stddev"], 1.8);
+        assert_eq!(arr[0]["indent_max"], 6);
         assert_eq!(arr[0]["complexity"], "high");
         assert_eq!(arr[1]["complexity"], "moderate");
     }
