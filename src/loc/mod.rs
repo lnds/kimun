@@ -13,9 +13,9 @@ use ignore::WalkBuilder;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read};
 
-use counter::{count_lines, FileStats};
+use counter::{FileStats, count_lines};
 use language::{detect, detect_by_shebang};
-use report::{print_json, print_report, LanguageReport, VerboseStats};
+use report::{LanguageReport, VerboseStats, print_json, print_report};
 
 fn hash_file(path: &Path) -> Option<u64> {
     let file = File::open(path).ok()?;
@@ -43,8 +43,7 @@ pub fn run(path: &Path, verbose: bool, json: bool) -> Result<(), Box<dyn Error>>
         .hidden(false)
         .follow_links(false)
         .filter_entry(|entry| {
-            !(entry.file_type().is_some_and(|ft| ft.is_dir())
-                && entry.file_name() == ".git")
+            !(entry.file_type().is_some_and(|ft| ft.is_dir()) && entry.file_name() == ".git")
         })
         .build();
 
@@ -84,9 +83,9 @@ pub fn run(path: &Path, verbose: bool, json: bool) -> Result<(), Box<dyn Error>>
         match count_lines(file_path, spec) {
             Ok(Some(file_stats)) => {
                 unique_files += 1;
-                let entry = stats_by_lang.entry(spec.name).or_insert_with(|| {
-                    (0, FileStats::default())
-                });
+                let entry = stats_by_lang
+                    .entry(spec.name)
+                    .or_insert_with(|| (0, FileStats::default()));
                 entry.0 += 1;
                 entry.1.blank += file_stats.blank;
                 entry.1.comment += file_stats.comment;
@@ -112,7 +111,10 @@ pub fn run(path: &Path, verbose: bool, json: bool) -> Result<(), Box<dyn Error>>
 
     if reports.is_empty() {
         if json {
-            println!("{}", serde_json::json!({"languages": [], "totals": {"files": 0, "blank": 0, "comment": 0, "code": 0}}));
+            println!(
+                "{}",
+                serde_json::json!({"languages": [], "totals": {"files": 0, "blank": 0, "comment": 0, "code": 0}})
+            );
         } else {
             println!("No recognized source files found.");
         }

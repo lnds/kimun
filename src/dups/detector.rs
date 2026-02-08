@@ -68,7 +68,11 @@ fn hash_window(lines: &[NormalizedLine]) -> u64 {
 
 /// Detect duplicate code blocks across files using a sliding window approach
 /// with extension-based merging.
-pub fn detect_duplicates(files: &[NormalizedFile], min_lines: usize, quiet: bool) -> Vec<DuplicateGroup> {
+pub fn detect_duplicates(
+    files: &[NormalizedFile],
+    min_lines: usize,
+    quiet: bool,
+) -> Vec<DuplicateGroup> {
     // Phase 1: hash all windows of size min_lines
     let mut hash_map: HashMap<u64, Vec<(usize, usize)>> = HashMap::new();
 
@@ -201,11 +205,9 @@ pub fn detect_duplicates(files: &[NormalizedFile], min_lines: usize, quiet: bool
     }
 
     // Sort by severity (Critical first), then by duplicated lines descending
-    groups.sort_by(|a, b| {
-        match a.severity.cmp(&b.severity) {
-            std::cmp::Ordering::Equal => b.duplicated_lines().cmp(&a.duplicated_lines()),
-            other => other,
-        }
+    groups.sort_by(|a, b| match a.severity.cmp(&b.severity) {
+        std::cmp::Ordering::Equal => b.duplicated_lines().cmp(&a.duplicated_lines()),
+        other => other,
     });
     groups
 }
@@ -525,7 +527,9 @@ mod tests {
         // First group should be Critical (3 occurrences)
         assert_eq!(groups[0].severity, DuplicationSeverity::Critical);
         // Find a Tolerable group
-        let has_tolerable = groups.iter().any(|g| g.severity == DuplicationSeverity::Tolerable);
+        let has_tolerable = groups
+            .iter()
+            .any(|g| g.severity == DuplicationSeverity::Tolerable);
         assert!(has_tolerable);
     }
 

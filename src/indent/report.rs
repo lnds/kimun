@@ -1,0 +1,137 @@
+use std::path::PathBuf;
+
+use serde::Serialize;
+
+pub struct FileIndentMetrics {
+    pub path: PathBuf,
+    pub code_lines: usize,
+    pub stddev: f64,
+    pub max_depth: usize,
+}
+
+pub fn print_report(files: &[FileIndentMetrics]) {
+    if files.is_empty() {
+        println!("No recognized source files found.");
+        return;
+    }
+
+    let max_path_len = files
+        .iter()
+        .map(|f| f.path.display().to_string().len())
+        .max()
+        .unwrap_or(4)
+        .max(4);
+
+    let header_width = max_path_len + 30; // path + numbers
+    let separator = "─".repeat(header_width.max(68));
+
+    println!("{separator}");
+    println!(
+        " {:<width$} {:>8} {:>8} {:>5}",
+        "File",
+        "Lines",
+        "StdDev",
+        "Max",
+        width = max_path_len
+    );
+    println!("{separator}");
+
+    for f in files {
+        println!(
+            " {:<width$} {:>8} {:>8.1} {:>5}",
+            f.path.display(),
+            f.code_lines,
+            f.stddev,
+            f.max_depth,
+            width = max_path_len
+        );
+    }
+
+    println!("{separator}");
+}
+
+#[derive(Serialize)]
+struct JsonFileEntry {
+    path: String,
+    code_lines: usize,
+    indent_stddev: f64,
+    indent_max: usize,
+}
+
+pub fn print_json(files: &[FileIndentMetrics]) -> Result<(), Box<dyn std::error::Error>> {
+    let entries: Vec<JsonFileEntry> = files
+        .iter()
+        .map(|f| JsonFileEntry {
+            path: f.path.display().to_string(),
+            code_lines: f.code_lines,
+            indent_stddev: f.stddev,
+            indent_max: f.max_depth,
+        })
+        .collect();
+
+    println!("{}", serde_json::to_string_pretty(&entries)?);
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_files() -> Vec<FileIndentMetrics> {
+        vec![
+            FileIndentMetrics {
+                path: PathBuf::from("src/foo.rs"),
+                code_lines: 100,
+                stddev: 4.5,
+                max_depth: 24,
+            },
+            FileIndentMetrics {
+                path: PathBuf::from("src/bar.rs"),
+                code_lines: 50,
+                stddev: 2.1,
+                max_depth: 12,
+            },
+        ]
+    }
+
+    #[test]
+    fn print_report_does_not_panic() {
+        print_report(&sample_files());
+    }
+
+    #[test]
+    fn print_report_empty() {
+        print_report(&[]);
+    }
+
+    #[test]
+    fn print_json_does_not_panic() {
+        print_json(&sample_files()).unwrap();
+    }
+
+    #[test]
+    fn print_json_empty() {
+        print_json(&[]).unwrap();
+    }
+
+    #[test]
+    fn json_structure_is_valid() {
+        let files = sample_files();
+        let entries: Vec<JsonFileEntry> = files
+            .iter()
+            .map(|f| JsonFileEntry {
+                path: f.path.display().to_string(),
+                code_lines: f.code_lines,
+                indent_stddev: f.stddev,
+                indent_max: f.max_depth,
+            })
+            .collect();
+        let json_str = serde_json::to_string_pretty(&entries).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+        let arr = parsed.as_array().unwrap();
+        assert_eq!(arr.len(), 2);
+        assert_eq!(arr[0]["code_lines"], 100);
+        assert_eq!(arr[0]["indent_stddev"], 4.5);
+        assert_eq!(arr[0]["indent_max"], 24);
+    }
+}

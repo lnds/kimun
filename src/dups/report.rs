@@ -47,22 +47,30 @@ pub fn print_summary(metrics: &DuplicationMetrics, groups: &[DuplicateGroup]) {
     println!(" Duplication:          {:>41.1}%", pct);
     println!();
     println!(" Duplicate groups:     {:>42}", metrics.duplicate_groups);
-    println!(" Files with duplicates:{:>42}", metrics.files_with_duplicates);
+    println!(
+        " Files with duplicates:{:>42}",
+        metrics.files_with_duplicates
+    );
     if metrics.largest_block > 0 {
-        println!(
-            " Largest duplicate:    {:>37} lines",
-            metrics.largest_block
-        );
+        println!(" Largest duplicate:    {:>37} lines", metrics.largest_block);
     }
 
-    let critical_groups = groups.iter().filter(|g| g.severity == DuplicationSeverity::Critical).count();
-    let tolerable_groups = groups.iter().filter(|g| g.severity == DuplicationSeverity::Tolerable).count();
+    let critical_groups = groups
+        .iter()
+        .filter(|g| g.severity == DuplicationSeverity::Critical)
+        .count();
+    let tolerable_groups = groups
+        .iter()
+        .filter(|g| g.severity == DuplicationSeverity::Tolerable)
+        .count();
     if critical_groups > 0 || tolerable_groups > 0 {
-        let critical_lines: usize = groups.iter()
+        let critical_lines: usize = groups
+            .iter()
             .filter(|g| g.severity == DuplicationSeverity::Critical)
             .map(|g| g.duplicated_lines())
             .sum();
-        let tolerable_lines: usize = groups.iter()
+        let tolerable_lines: usize = groups
+            .iter()
             .filter(|g| g.severity == DuplicationSeverity::Tolerable)
             .map(|g| g.duplicated_lines())
             .sum();
@@ -91,7 +99,11 @@ pub fn print_summary(metrics: &DuplicationMetrics, groups: &[DuplicateGroup]) {
 pub const DEFAULT_GROUP_LIMIT: usize = 20;
 
 pub fn display_limit(total: usize, show_all: bool) -> usize {
-    if show_all { total } else { DEFAULT_GROUP_LIMIT.min(total) }
+    if show_all {
+        total
+    } else {
+        DEFAULT_GROUP_LIMIT.min(total)
+    }
 }
 
 pub fn print_detailed(

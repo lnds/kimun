@@ -1,4 +1,5 @@
 mod dups;
+mod indent;
 mod loc;
 
 use std::path::PathBuf;
@@ -53,13 +54,31 @@ enum Commands {
         #[arg(long)]
         include_tests: bool,
     },
+
+    /// Analyze indentation complexity (stddev and max depth per file)
+    Indent {
+        /// Directory to analyze (default: current directory)
+        path: Option<PathBuf>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Include test files and directories in analysis (excluded by default)
+        #[arg(long)]
+        include_tests: bool,
+    },
 }
 
 fn main() {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Loc { path, verbose, json } => {
+        Commands::Loc {
+            path,
+            verbose,
+            json,
+        } => {
             let target = path.unwrap_or_else(|| PathBuf::from("."));
             if let Err(err) = loc::run(&target, verbose, json) {
                 eprintln!("error: {err}");
@@ -75,7 +94,19 @@ fn main() {
             include_tests,
         } => {
             let target = path.unwrap_or_else(|| PathBuf::from("."));
-            if let Err(err) = dups::run(&target, min_lines, report, show_all, json, !include_tests) {
+            if let Err(err) = dups::run(&target, min_lines, report, show_all, json, !include_tests)
+            {
+                eprintln!("error: {err}");
+                std::process::exit(1);
+            }
+        }
+        Commands::Indent {
+            path,
+            json,
+            include_tests,
+        } => {
+            let target = path.unwrap_or_else(|| PathBuf::from("."));
+            if let Err(err) = indent::run(&target, json, include_tests) {
                 eprintln!("error: {err}");
                 std::process::exit(1);
             }

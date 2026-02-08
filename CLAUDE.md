@@ -9,6 +9,7 @@ cargo build                  # build debug binary
 cargo build --release        # build release binary
 cargo test                   # run all 68 tests
 cargo test <test_name>       # run a single test, e.g. cargo test haskell_arrow_not_comment
+cargo fmt                    # format code — always run before clippy
 cargo clippy                 # lint — must pass with zero warnings before committing
 cargo tarpaulin --out stdout # coverage report (currently ~92%)
 cargo run --bin cm -- loc    # run on current directory
@@ -51,7 +52,7 @@ Optional flags: `nested: true`, `sq: true` (single-quote strings), `tq: true` (t
 ## Conventions
 
 - The tool's output should match `cloc` as closely as possible — use `cloc` as the reference when validating changes.
-- Always validate with `cargo clippy` (zero warnings required) and `cargo test` before considering a change complete.
+- Always run `cargo fmt` before `cargo clippy`. Then validate with `cargo clippy` (zero warnings required) and `cargo test` before considering a change complete.
 - Tests in `counter.rs` use `count_reader(Cursor::new(...))` to test the FSM without touching the filesystem.
 - Tests in `mod.rs` use `tempfile::tempdir()` for integration tests with real files.
 - Tests exist in all modules: `counter.rs`, `language.rs`, `report.rs`, `mod.rs`.

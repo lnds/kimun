@@ -9,12 +9,15 @@ use std::path::Path;
 
 use ignore::WalkBuilder;
 
-use crate::loc::counter::{classify_reader, LineKind};
-use crate::loc::language::{detect, detect_by_shebang, LanguageSpec};
-use detector::{detect_duplicates, NormalizedFile, NormalizedLine};
-use report::{display_limit, print_detailed, print_json, print_summary, DuplicationMetrics};
+use crate::loc::counter::{LineKind, classify_reader};
+use crate::loc::language::{LanguageSpec, detect, detect_by_shebang};
+use detector::{NormalizedFile, NormalizedLine, detect_duplicates};
+use report::{DuplicationMetrics, display_limit, print_detailed, print_json, print_summary};
 
-fn normalize_file(path: &Path, spec: &LanguageSpec) -> Result<Option<NormalizedFile>, Box<dyn Error>> {
+fn normalize_file(
+    path: &Path,
+    spec: &LanguageSpec,
+) -> Result<Option<NormalizedFile>, Box<dyn Error>> {
     let file = File::open(path)?;
     let mut reader = BufReader::new(file);
 
@@ -27,10 +30,7 @@ fn normalize_file(path: &Path, spec: &LanguageSpec) -> Result<Option<NormalizedF
     reader.seek(SeekFrom::Start(0))?;
 
     // Read all lines once
-    let lines: Vec<String> = reader
-        .lines()
-        .map_while(Result::ok)
-        .collect();
+    let lines: Vec<String> = reader.lines().map_while(Result::ok).collect();
 
     // Classify using a Cursor over the joined content
     let content = lines.join("\n");
@@ -86,9 +86,7 @@ fn is_test_file(path: &Path) -> bool {
         "swift" => base.ends_with("Test") || base.ends_with("Tests"),
         "scala" => base.ends_with("Test") || base.ends_with("Spec"),
         // C/C++
-        "c" => {
-            base.ends_with("_test") || base.starts_with("test_") || base.ends_with("_unittest")
-        }
+        "c" => base.ends_with("_test") || base.starts_with("test_") || base.ends_with("_unittest"),
         "cc" | "cpp" | "cxx" => {
             base.ends_with("_test")
                 || base.starts_with("test_")
@@ -301,7 +299,8 @@ mod tests {
         fs::write(
             &path,
             "// comment\n\nfn main() {\n    // another comment\n    let x = 1;\n}\n",
-        ).unwrap();
+        )
+        .unwrap();
 
         let spec = detect(Path::new("test.rs")).unwrap();
         let nf = normalize_file(&path, spec).unwrap().unwrap();
@@ -478,7 +477,11 @@ mod tests {
         fs::create_dir_all(dir.path().join("src/utils")).unwrap();
         fs::write(dir.path().join("src/utils/parser_test.rs"), code).unwrap();
         fs::write(dir.path().join("src/utils/handler_test.rs"), code).unwrap();
-        fs::write(dir.path().join("src/lib.rs"), "fn foo() {\n    let x = 1;\n}\n").unwrap();
+        fs::write(
+            dir.path().join("src/lib.rs"),
+            "fn foo() {\n    let x = 1;\n}\n",
+        )
+        .unwrap();
 
         // With exclude_tests, *_test.rs files in any directory are skipped
         run(dir.path(), 6, false, false, false, true).unwrap();

@@ -280,7 +280,10 @@ fn process_lines<R: BufRead>(reader: R, spec: &LanguageSpec) -> Vec<LineKind> {
 
         // Reset InString at end of line for non-triple-quote strings
         // (most languages don't allow multi-line strings with plain quotes)
-        if matches!(state, State::InString(StringKind::Double | StringKind::Single)) {
+        if matches!(
+            state,
+            State::InString(StringKind::Double | StringKind::Single)
+        ) {
             state = State::Normal;
         }
 
@@ -646,7 +649,10 @@ mod tests {
 
     #[test]
     fn shebang_is_code() {
-        let stats = count(&spec_python(), "#!/usr/bin/env python3\n# comment\nprint('hi')\n");
+        let stats = count(
+            &spec_python(),
+            "#!/usr/bin/env python3\n# comment\nprint('hi')\n",
+        );
         assert_eq!(stats.code, 2);
         assert_eq!(stats.comment, 1);
     }
@@ -704,8 +710,7 @@ mod tests {
         use tempfile::NamedTempFile;
 
         let mut tmp = NamedTempFile::new().unwrap();
-        tmp.write_all(b"int x = 1;\n// comment\n\n")
-            .unwrap();
+        tmp.write_all(b"int x = 1;\n// comment\n\n").unwrap();
         tmp.flush().unwrap();
 
         let stats = count_lines(tmp.path(), &spec_c_like()).unwrap().unwrap();
@@ -755,7 +760,10 @@ mod tests {
 
     #[test]
     fn batch_multiple_comment_markers() {
-        let stats = count(&spec_batch(), ":: comment\nrem comment\nREM comment\necho hello\n");
+        let stats = count(
+            &spec_batch(),
+            ":: comment\nrem comment\nREM comment\necho hello\n",
+        );
         assert_eq!(stats.comment, 3);
         assert_eq!(stats.code, 1);
     }
