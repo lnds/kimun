@@ -1,3 +1,4 @@
+mod cycom;
 mod dups;
 mod indent;
 mod loc;
@@ -69,6 +70,32 @@ enum Commands {
         #[arg(long)]
         include_tests: bool,
     },
+
+    /// Analyze cyclomatic complexity per file and per function
+    Cycom {
+        /// Directory to analyze (default: current directory)
+        path: Option<PathBuf>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Include test files and directories in analysis (excluded by default)
+        #[arg(long)]
+        include_tests: bool,
+
+        /// Minimum max-complexity to include a file (default: 1)
+        #[arg(long, default_value = "1")]
+        min_complexity: usize,
+
+        /// Show only the top N files (default: 20)
+        #[arg(long, default_value = "20")]
+        top: usize,
+
+        /// Show per-function breakdown
+        #[arg(long)]
+        per_function: bool,
+    },
 }
 
 fn main() {
@@ -108,6 +135,27 @@ fn main() {
         } => {
             let target = path.unwrap_or_else(|| PathBuf::from("."));
             if let Err(err) = indent::run(&target, json, include_tests) {
+                eprintln!("error: {err}");
+                std::process::exit(1);
+            }
+        }
+        Commands::Cycom {
+            path,
+            json,
+            include_tests,
+            min_complexity,
+            top,
+            per_function,
+        } => {
+            let target = path.unwrap_or_else(|| PathBuf::from("."));
+            if let Err(err) = cycom::run(
+                &target,
+                json,
+                include_tests,
+                min_complexity,
+                top,
+                per_function,
+            ) {
                 eprintln!("error: {err}");
                 std::process::exit(1);
             }
