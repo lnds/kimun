@@ -105,6 +105,24 @@ pub fn detect_duplicates(
         if locations.len() < 2 {
             continue;
         }
+
+        // Post-hash verification: confirm windows have identical text content
+        // to guard against FNV hash collisions.
+        let first = &locations[0];
+        let first_window: Vec<&str> = files[first.0].lines[first.1..first.1 + min_lines]
+            .iter()
+            .map(|l| l.content.as_str())
+            .collect();
+        let all_match = locations[1..].iter().all(|(fi, off)| {
+            files[*fi].lines[*off..*off + min_lines]
+                .iter()
+                .map(|l| l.content.as_str())
+                .eq(first_window.iter().copied())
+        });
+        if !all_match {
+            continue;
+        }
+
         location_to_hash.insert(locations.clone(), hash);
         valid_hashes.push((hash, locations));
     }

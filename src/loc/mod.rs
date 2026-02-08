@@ -8,13 +8,12 @@ use std::hash::Hasher;
 use std::path::Path;
 use std::time::Instant;
 
-use ignore::WalkBuilder;
-
 use std::fs::File;
-use std::io::{BufRead, BufReader, Read};
+use std::io::{BufReader, Read};
 
+use crate::walk;
 use counter::{FileStats, count_lines};
-use language::{detect, detect_by_shebang};
+use language::detect;
 use report::{LanguageReport, VerboseStats, print_json, print_report};
 
 fn hash_file(path: &Path) -> Option<u64> {
@@ -39,15 +38,7 @@ pub fn run(path: &Path, verbose: bool, json: bool) -> Result<(), Box<dyn Error>>
     let mut total_files: usize = 0;
     let mut unique_files: usize = 0;
 
-    let walker = WalkBuilder::new(path)
-        .hidden(false)
-        .follow_links(false)
-        .filter_entry(|entry| {
-            !(entry.file_type().is_some_and(|ft| ft.is_dir()) && entry.file_name() == ".git")
-        })
-        .build();
-
-    for entry in walker {
+    for entry in walk::walk(path, false) {
         let entry = match entry {
             Ok(e) => e,
             Err(err) => {
@@ -66,7 +57,7 @@ pub fn run(path: &Path, verbose: bool, json: bool) -> Result<(), Box<dyn Error>>
             Some(s) => s,
             None => {
                 // Fallback: try shebang detection
-                match try_detect_shebang(file_path) {
+                match walk::try_detect_shebang(file_path) {
                     Some(s) => s,
                     None => continue,
                 }
@@ -135,14 +126,6 @@ pub fn run(path: &Path, verbose: bool, json: bool) -> Result<(), Box<dyn Error>>
     }
 
     Ok(())
-}
-
-fn try_detect_shebang(path: &Path) -> Option<&'static language::LanguageSpec> {
-    let file = File::open(path).ok()?;
-    let mut reader = BufReader::new(file);
-    let mut first_line = String::new();
-    reader.read_line(&mut first_line).ok()?;
-    detect_by_shebang(&first_line)
 }
 
 #[cfg(test)]

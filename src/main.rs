@@ -1,6 +1,7 @@
 mod dups;
 mod indent;
 mod loc;
+mod walk;
 
 use std::path::PathBuf;
 

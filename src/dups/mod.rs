@@ -4,13 +4,12 @@ mod report;
 use std::collections::HashSet;
 use std::error::Error;
 use std::fs::File;
-use std::io::{BufRead, BufReader, Cursor, Read, Seek, SeekFrom};
+use std::io::{BufReader, Cursor, Read, Seek, SeekFrom};
 use std::path::Path;
 
-use ignore::WalkBuilder;
-
 use crate::loc::counter::{LineKind, classify_reader};
-use crate::loc::language::{LanguageSpec, detect, detect_by_shebang};
+use crate::loc::language::{LanguageSpec, detect};
+use crate::walk;
 use detector::{NormalizedFile, NormalizedLine, detect_duplicates};
 use report::{DuplicationMetrics, display_limit, print_detailed, print_json, print_summary};
 
@@ -29,12 +28,10 @@ fn normalize_file(
     }
     reader.seek(SeekFrom::Start(0))?;
 
-    // Read all lines once
-    let lines: Vec<String> = reader.lines().map_while(Result::ok).collect();
-
-    // Classify using a Cursor over the joined content
-    let content = lines.join("\n");
-    let kinds = classify_reader(BufReader::new(Cursor::new(content)), spec);
+    // Read content once, reuse for classification and normalization.
+    let content = std::io::read_to_string(reader)?;
+    let lines: Vec<&str> = content.lines().collect();
+    let kinds = classify_reader(BufReader::new(Cursor::new(&content)), spec);
 
     let normalized: Vec<NormalizedLine> = lines
         .iter()
@@ -53,60 +50,6 @@ fn normalize_file(
     }))
 }
 
-/// Test directory names to exclude when `--exclude-tests` is active.
-const TEST_DIRS: &[&str] = &["tests", "test", "__tests__", "spec"];
-
-/// Check whether a file matches a test naming pattern based on its extension.
-fn is_test_file(path: &Path) -> bool {
-    let file_name = match path.file_name().and_then(|n| n.to_str()) {
-        Some(n) => n,
-        None => return false,
-    };
-
-    // Split into base name and extension
-    let Some(dot) = file_name.rfind('.') else {
-        return false;
-    };
-    let ext = &file_name[dot + 1..];
-    let base = &file_name[..dot];
-
-    match ext {
-        // suffix _test: Rust, Go, Python, Ruby, PHP, Elixir, Dart
-        "rs" | "go" | "exs" | "dart" => base.ends_with("_test"),
-        "py" => base.starts_with("test_") || base.ends_with("_test"),
-        "rb" => base.ends_with("_test") || base.ends_with("_spec"),
-        "php" => base.ends_with("Test") || base.ends_with("_test"),
-        // double-ext .test./.spec.: JS/TS family
-        "js" | "jsx" | "mjs" | "cjs" | "ts" | "tsx" | "mts" | "cts" => {
-            base.ends_with(".test") || base.ends_with(".spec")
-        }
-        // PascalCase suffixes: Java, Kotlin, C#, Swift, Scala
-        "java" | "kt" | "kts" => base.ends_with("Test") || base.ends_with("Tests"),
-        "cs" => base.ends_with("Test") || base.ends_with("Tests"),
-        "swift" => base.ends_with("Test") || base.ends_with("Tests"),
-        "scala" => base.ends_with("Test") || base.ends_with("Spec"),
-        // C/C++
-        "c" => base.ends_with("_test") || base.starts_with("test_") || base.ends_with("_unittest"),
-        "cc" | "cpp" | "cxx" => {
-            base.ends_with("_test")
-                || base.starts_with("test_")
-                || base.ends_with("_unittest")
-                || base.ends_with("Test")
-        }
-        // Haskell
-        "hs" => base.ends_with("Test") || base.ends_with("Spec"),
-        _ => false,
-    }
-}
-
-fn try_detect_shebang(path: &Path) -> Option<&'static LanguageSpec> {
-    let file = File::open(path).ok()?;
-    let mut reader = BufReader::new(file);
-    let mut first_line = String::new();
-    reader.read_line(&mut first_line).ok()?;
-    detect_by_shebang(&first_line)
-}
-
 pub fn run(
     path: &Path,
     min_lines: usize,
@@ -118,26 +61,7 @@ pub fn run(
     let mut files: Vec<NormalizedFile> = Vec::new();
     let mut total_code_lines: usize = 0;
 
-    let walker = WalkBuilder::new(path)
-        .hidden(false)
-        .follow_links(false)
-        .filter_entry(move |entry| {
-            if entry.file_type().is_some_and(|ft| ft.is_dir()) {
-                if entry.file_name() == ".git" {
-                    return false;
-                }
-                if exclude_tests
-                    && let Some(name) = entry.file_name().to_str()
-                    && TEST_DIRS.contains(&name)
-                {
-                    return false;
-                }
-            }
-            true
-        })
-        .build();
-
-    for entry in walker {
+    for entry in walk::walk(path, exclude_tests) {
         let entry = match entry {
             Ok(e) => e,
             Err(err) => {
@@ -152,12 +76,12 @@ pub fn run(
 
         let file_path = entry.path();
 
-        if exclude_tests && is_test_file(file_path) {
+        if exclude_tests && walk::is_test_file(file_path) {
             continue;
         }
         let spec = match detect(file_path) {
             Some(s) => s,
-            None => match try_detect_shebang(file_path) {
+            None => match walk::try_detect_shebang(file_path) {
                 Some(s) => s,
                 None => continue,
             },
@@ -344,95 +268,95 @@ mod tests {
         run(dir.path(), 6, false, false, true, false).unwrap();
     }
 
-    // --- is_test_file tests ---
+    // --- is_test_file tests (use shared walk module) ---
 
     #[test]
     fn test_file_rust() {
-        assert!(is_test_file(Path::new("parser_test.rs")));
-        assert!(!is_test_file(Path::new("parser.rs")));
-        assert!(!is_test_file(Path::new("test.rs"))); // no _test suffix
+        assert!(walk::is_test_file(Path::new("parser_test.rs")));
+        assert!(!walk::is_test_file(Path::new("parser.rs")));
+        assert!(!walk::is_test_file(Path::new("test.rs"))); // no _test suffix
     }
 
     #[test]
     fn test_file_python() {
-        assert!(is_test_file(Path::new("test_parser.py")));
-        assert!(is_test_file(Path::new("parser_test.py")));
-        assert!(!is_test_file(Path::new("parser.py")));
+        assert!(walk::is_test_file(Path::new("test_parser.py")));
+        assert!(walk::is_test_file(Path::new("parser_test.py")));
+        assert!(!walk::is_test_file(Path::new("parser.py")));
     }
 
     #[test]
     fn test_file_javascript() {
-        assert!(is_test_file(Path::new("parser.test.js")));
-        assert!(is_test_file(Path::new("parser.spec.js")));
-        assert!(is_test_file(Path::new("parser.test.tsx")));
-        assert!(is_test_file(Path::new("parser.spec.ts")));
-        assert!(!is_test_file(Path::new("parser.js")));
+        assert!(walk::is_test_file(Path::new("parser.test.js")));
+        assert!(walk::is_test_file(Path::new("parser.spec.js")));
+        assert!(walk::is_test_file(Path::new("parser.test.tsx")));
+        assert!(walk::is_test_file(Path::new("parser.spec.ts")));
+        assert!(!walk::is_test_file(Path::new("parser.js")));
     }
 
     #[test]
     fn test_file_java_kotlin() {
-        assert!(is_test_file(Path::new("ParserTest.java")));
-        assert!(is_test_file(Path::new("ParserTests.java")));
-        assert!(!is_test_file(Path::new("Parser.java")));
-        assert!(is_test_file(Path::new("ParserTest.kt")));
+        assert!(walk::is_test_file(Path::new("ParserTest.java")));
+        assert!(walk::is_test_file(Path::new("ParserTests.java")));
+        assert!(!walk::is_test_file(Path::new("Parser.java")));
+        assert!(walk::is_test_file(Path::new("ParserTest.kt")));
     }
 
     #[test]
     fn test_file_go() {
-        assert!(is_test_file(Path::new("parser_test.go")));
-        assert!(!is_test_file(Path::new("parser.go")));
+        assert!(walk::is_test_file(Path::new("parser_test.go")));
+        assert!(!walk::is_test_file(Path::new("parser.go")));
     }
 
     #[test]
     fn test_file_csharp() {
-        assert!(is_test_file(Path::new("ParserTest.cs")));
-        assert!(is_test_file(Path::new("ParserTests.cs")));
-        assert!(!is_test_file(Path::new("Parser.cs")));
+        assert!(walk::is_test_file(Path::new("ParserTest.cs")));
+        assert!(walk::is_test_file(Path::new("ParserTests.cs")));
+        assert!(!walk::is_test_file(Path::new("Parser.cs")));
     }
 
     #[test]
     fn test_file_ruby() {
-        assert!(is_test_file(Path::new("parser_spec.rb")));
-        assert!(is_test_file(Path::new("parser_test.rb")));
-        assert!(!is_test_file(Path::new("parser.rb")));
+        assert!(walk::is_test_file(Path::new("parser_spec.rb")));
+        assert!(walk::is_test_file(Path::new("parser_test.rb")));
+        assert!(!walk::is_test_file(Path::new("parser.rb")));
     }
 
     #[test]
     fn test_file_cpp() {
-        assert!(is_test_file(Path::new("parser_test.cpp")));
-        assert!(is_test_file(Path::new("test_parser.cpp")));
-        assert!(is_test_file(Path::new("parser_unittest.cpp")));
-        assert!(is_test_file(Path::new("ParserTest.cpp")));
-        assert!(!is_test_file(Path::new("parser.cpp")));
+        assert!(walk::is_test_file(Path::new("parser_test.cpp")));
+        assert!(walk::is_test_file(Path::new("test_parser.cpp")));
+        assert!(walk::is_test_file(Path::new("parser_unittest.cpp")));
+        assert!(walk::is_test_file(Path::new("ParserTest.cpp")));
+        assert!(!walk::is_test_file(Path::new("parser.cpp")));
     }
 
     #[test]
     fn test_file_c() {
-        assert!(is_test_file(Path::new("parser_test.c")));
-        assert!(is_test_file(Path::new("test_parser.c")));
-        assert!(is_test_file(Path::new("parser_unittest.c")));
-        assert!(!is_test_file(Path::new("parser.c")));
+        assert!(walk::is_test_file(Path::new("parser_test.c")));
+        assert!(walk::is_test_file(Path::new("test_parser.c")));
+        assert!(walk::is_test_file(Path::new("parser_unittest.c")));
+        assert!(!walk::is_test_file(Path::new("parser.c")));
     }
 
     #[test]
     fn test_file_other_languages() {
-        assert!(is_test_file(Path::new("parser_test.exs")));
-        assert!(is_test_file(Path::new("parser_test.dart")));
-        assert!(is_test_file(Path::new("ParserTest.swift")));
-        assert!(is_test_file(Path::new("ParserSpec.scala")));
-        assert!(is_test_file(Path::new("ParserSpec.hs")));
-        assert!(is_test_file(Path::new("ParserTest.php")));
+        assert!(walk::is_test_file(Path::new("parser_test.exs")));
+        assert!(walk::is_test_file(Path::new("parser_test.dart")));
+        assert!(walk::is_test_file(Path::new("ParserTest.swift")));
+        assert!(walk::is_test_file(Path::new("ParserSpec.scala")));
+        assert!(walk::is_test_file(Path::new("ParserSpec.hs")));
+        assert!(walk::is_test_file(Path::new("ParserTest.php")));
     }
 
     #[test]
     fn test_file_no_extension() {
-        assert!(!is_test_file(Path::new("Makefile")));
-        assert!(!is_test_file(Path::new("README")));
+        assert!(!walk::is_test_file(Path::new("Makefile")));
+        assert!(!walk::is_test_file(Path::new("README")));
     }
 
     #[test]
     fn test_file_unknown_extension() {
-        assert!(!is_test_file(Path::new("test_foo.xyz")));
+        assert!(!walk::is_test_file(Path::new("test_foo.xyz")));
     }
 
     // --- exclude_tests integration tests ---

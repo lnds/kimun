@@ -3,65 +3,16 @@ mod report;
 
 use std::error::Error;
 use std::fs::File;
-use std::io::{BufRead, BufReader, Cursor, Read, Seek, SeekFrom};
+use std::io::{BufReader, Cursor, Read, Seek, SeekFrom};
 use std::path::Path;
 
-use ignore::WalkBuilder;
-
 use crate::loc::counter::classify_reader;
-use crate::loc::language::{LanguageSpec, detect, detect_by_shebang};
+use crate::loc::language::{LanguageSpec, detect};
+use crate::walk;
 use analyzer::analyze;
 use report::{FileIndentMetrics, print_json, print_report};
 
 const TAB_WIDTH: usize = 4;
-
-/// Test directory names to exclude by default.
-const TEST_DIRS: &[&str] = &["tests", "test", "__tests__", "spec"];
-
-/// Check whether a file matches a test naming pattern based on its extension.
-fn is_test_file(path: &Path) -> bool {
-    let file_name = match path.file_name().and_then(|n| n.to_str()) {
-        Some(n) => n,
-        None => return false,
-    };
-
-    let Some(dot) = file_name.rfind('.') else {
-        return false;
-    };
-    let ext = &file_name[dot + 1..];
-    let base = &file_name[..dot];
-
-    match ext {
-        "rs" | "go" | "exs" | "dart" => base.ends_with("_test"),
-        "py" => base.starts_with("test_") || base.ends_with("_test"),
-        "rb" => base.ends_with("_test") || base.ends_with("_spec"),
-        "php" => base.ends_with("Test") || base.ends_with("_test"),
-        "js" | "jsx" | "mjs" | "cjs" | "ts" | "tsx" | "mts" | "cts" => {
-            base.ends_with(".test") || base.ends_with(".spec")
-        }
-        "java" | "kt" | "kts" => base.ends_with("Test") || base.ends_with("Tests"),
-        "cs" => base.ends_with("Test") || base.ends_with("Tests"),
-        "swift" => base.ends_with("Test") || base.ends_with("Tests"),
-        "scala" => base.ends_with("Test") || base.ends_with("Spec"),
-        "c" => base.ends_with("_test") || base.starts_with("test_") || base.ends_with("_unittest"),
-        "cc" | "cpp" | "cxx" => {
-            base.ends_with("_test")
-                || base.starts_with("test_")
-                || base.ends_with("_unittest")
-                || base.ends_with("Test")
-        }
-        "hs" => base.ends_with("Test") || base.ends_with("Spec"),
-        _ => false,
-    }
-}
-
-fn try_detect_shebang(path: &Path) -> Option<&'static LanguageSpec> {
-    let file = File::open(path).ok()?;
-    let mut reader = BufReader::new(file);
-    let mut first_line = String::new();
-    reader.read_line(&mut first_line).ok()?;
-    detect_by_shebang(&first_line)
-}
 
 fn analyze_file(
     path: &Path,
@@ -101,26 +52,7 @@ pub fn run(path: &Path, json: bool, include_tests: bool) -> Result<(), Box<dyn E
     let exclude_tests = !include_tests;
     let mut results: Vec<FileIndentMetrics> = Vec::new();
 
-    let walker = WalkBuilder::new(path)
-        .hidden(false)
-        .follow_links(false)
-        .filter_entry(move |entry| {
-            if entry.file_type().is_some_and(|ft| ft.is_dir()) {
-                if entry.file_name() == ".git" {
-                    return false;
-                }
-                if exclude_tests
-                    && let Some(name) = entry.file_name().to_str()
-                    && TEST_DIRS.contains(&name)
-                {
-                    return false;
-                }
-            }
-            true
-        })
-        .build();
-
-    for entry in walker {
+    for entry in walk::walk(path, exclude_tests) {
         let entry = match entry {
             Ok(e) => e,
             Err(err) => {
@@ -135,13 +67,13 @@ pub fn run(path: &Path, json: bool, include_tests: bool) -> Result<(), Box<dyn E
 
         let file_path = entry.path();
 
-        if exclude_tests && is_test_file(file_path) {
+        if exclude_tests && walk::is_test_file(file_path) {
             continue;
         }
 
         let spec = match detect(file_path) {
             Some(s) => s,
-            None => match try_detect_shebang(file_path) {
+            None => match walk::try_detect_shebang(file_path) {
                 Some(s) => s,
                 None => continue,
             },
