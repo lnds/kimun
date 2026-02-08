@@ -161,7 +161,8 @@ fn detect_brace_scoped(
                 let (jidx, jline) = code_lines[j];
                 func_code_lines.push((jidx, jline));
 
-                for ch in jline.chars() {
+                let masked = mask_strings(jline);
+                for ch in masked.chars() {
                     if ch == '{' {
                         brace_depth += 1;
                         found_open = true;
@@ -299,6 +300,45 @@ fn extract_function_name(trimmed: &str, markers: &ComplexityMarkers) -> String {
     format!("<line {}>", trimmed.len())
 }
 
+/// Replace the contents of string and char literals with spaces,
+/// so that keywords/braces inside literals are not counted.
+fn mask_strings(line: &str) -> String {
+    let bytes = line.as_bytes();
+    let len = bytes.len();
+    let mut result = bytes.to_vec();
+    let mut i = 0;
+
+    while i < len {
+        let ch = bytes[i];
+        if ch == b'"' || ch == b'\'' {
+            let quote = ch;
+            i += 1; // skip opening quote
+            while i < len {
+                if bytes[i] == b'\\' {
+                    // escape: mask both chars
+                    result[i] = b' ';
+                    i += 1;
+                    if i < len {
+                        result[i] = b' ';
+                        i += 1;
+                    }
+                } else if bytes[i] == quote {
+                    i += 1; // skip closing quote
+                    break;
+                } else {
+                    result[i] = b' ';
+                    i += 1;
+                }
+            }
+        } else {
+            i += 1;
+        }
+    }
+
+    // SAFETY: we only replaced ASCII bytes with ASCII spaces
+    String::from_utf8(result).unwrap_or_else(|_| line.to_string())
+}
+
 fn count_complexity_for_lines(func_lines: &[(usize, &str)], markers: &ComplexityMarkers) -> usize {
     let mut complexity: usize = 1; // baseline
 
@@ -311,10 +351,11 @@ fn count_complexity_for_lines(func_lines: &[(usize, &str)], markers: &Complexity
 }
 
 fn count_line_complexity(line: &str, markers: &ComplexityMarkers) -> usize {
+    let stripped = mask_strings(line);
     let mut count = 0;
 
     // Process multi-word keywords first, masking matched regions
-    let mut masked = line.to_string();
+    let mut masked = stripped.clone();
     for kw in markers.keywords {
         if kw.contains(' ') {
             count += count_keyword(&masked, kw);
@@ -332,7 +373,7 @@ fn count_line_complexity(line: &str, markers: &ComplexityMarkers) -> usize {
 
     // Operators (substring match)
     for op in markers.operators {
-        count += count_operator(line, op);
+        count += count_operator(&stripped, op);
     }
 
     count
@@ -576,6 +617,46 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&CyclomaticLevel::HighlyComplex).unwrap(),
             "\"highly_complex\""
+        );
+    }
+
+    #[test]
+    fn keywords_in_strings_not_counted() {
+        // Keywords inside string literals must not inflate complexity
+        let (lines, kinds) = make_lines(
+            "fn foo() {\n    let kw = [\"if\", \"for\", \"while\", \"match\"];\n    let s = \"if x && y || z\";\n}\n",
+        );
+        let result = analyze(&lines, &kinds, rust_markers()).unwrap();
+        assert_eq!(result.functions[0].complexity, 1); // base only, no real branches
+    }
+
+    #[test]
+    fn braces_in_char_literals_not_counted() {
+        // '{' inside char literal must not break brace-depth tracking
+        let (lines, kinds) = make_lines(
+            "fn foo() {\n    if c == '{' {\n        bar();\n    }\n}\nfn bar() {\n    baz();\n}\n",
+        );
+        let result = analyze(&lines, &kinds, rust_markers()).unwrap();
+        assert_eq!(result.functions.len(), 2);
+        assert_eq!(result.functions[0].name, "foo");
+        assert_eq!(result.functions[0].complexity, 2); // 1 base + 1 if
+        assert_eq!(result.functions[1].name, "bar");
+        assert_eq!(result.functions[1].complexity, 1);
+    }
+
+    #[test]
+    fn mask_strings_basic() {
+        assert_eq!(
+            mask_strings(r#"let s = "if x > 0";"#),
+            r#"let s = "        ";"#
+        );
+        assert_eq!(
+            mask_strings(r#"let c = '{'; if x {"#),
+            r#"let c = ' '; if x {"#
+        );
+        assert_eq!(
+            mask_strings(r#"let s = "he said \"hi\"";"#),
+            r#"let s = "              ";"#
         );
     }
 
