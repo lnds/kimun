@@ -1,3 +1,15 @@
+## 0.3.0 (2026-02-08)
+
+### Feat
+
+- **indent**: use logical indentation levels and add complexity labels
+- **indent**: add qualitative complexity labels based on indentation stddev
+- add indent command for indentation complexity analysis
+
+### Refactor
+
+- shared code
+
 ## 0.2.0 (2026-02-07)
 
 ### Feat
