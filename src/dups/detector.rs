@@ -231,6 +231,27 @@ fn build_group(
 
 /// Detect duplicate code blocks across files using a sliding window approach
 /// with extension-based merging.
+///
+/// ## Algorithm
+///
+/// **Phase 1 — Hashing:** Slide a window of `min_lines` over every file,
+/// hashing each window with FNV-1a. This produces a map from hash to the
+/// list of (file, offset) locations where that window appears.
+///
+/// **Phase 2 — Validation:** Keep only hashes that appear at 2+ distinct
+/// locations (after dedup). Verify that matching hashes have truly identical
+/// text content (guards against FNV collisions). Also builds a reverse
+/// lookup from `LocationSet → hash` used by Phase 3.
+///
+/// **Phase 3 — Extension-based merging:** A sliding window finds the
+/// *minimum* duplicate block, but the actual duplicated region may be
+/// larger. For each location set, we extend backward and forward by
+/// checking whether adjacent shifted windows also exist in the lookup.
+///
+/// The `consumed` set tracks which windows have already been merged into a
+/// larger block, preventing the same duplicate from being reported multiple
+/// times. Invariant: once a window's location set is in `consumed`, it is
+/// part of an already-emitted (or currently-being-built) `DuplicateGroup`.
 pub fn detect_duplicates(
     files: &[NormalizedFile],
     min_lines: usize,
@@ -239,7 +260,7 @@ pub fn detect_duplicates(
     let hash_map = hash_all_windows(files, min_lines);
     let (location_to_hash, valid_hashes) = validate_hashes(hash_map, files, min_lines, quiet);
 
-    // Phase 3: extension-based merging
+    // Phase 3: extension-based merging — see doc comment above for details.
     let mut consumed: HashSet<LocationSet> = HashSet::new();
     let mut groups: Vec<DuplicateGroup> = Vec::new();
 

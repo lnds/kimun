@@ -131,6 +131,52 @@ fn detect_functions(
     functions
 }
 
+/// Check whether a line is a function declaration, using explicit markers
+/// or the C-family heuristic as fallback.
+fn is_function_declaration(trimmed: &str, markers: &ComplexityMarkers) -> bool {
+    if !markers.function_markers.is_empty() {
+        markers.function_markers.iter().any(|m| trimmed.contains(m))
+    } else {
+        is_c_family_function(trimmed)
+    }
+}
+
+/// Starting from `code_lines[start]`, collect all lines belonging to the
+/// function body by tracking brace depth (string/char literals are masked).
+/// Returns `(func_code_lines, end_index)` where `end_index` is the index
+/// of the closing brace line in `code_lines`.
+fn find_function_body<'a>(
+    code_lines: &[(usize, &'a str)],
+    start: usize,
+) -> (Vec<(usize, &'a str)>, usize) {
+    let mut brace_depth: isize = 0;
+    let mut found_open = false;
+    let mut func_code_lines: Vec<(usize, &str)> = Vec::new();
+    let mut j = start;
+
+    while j < code_lines.len() {
+        let (jidx, jline) = code_lines[j];
+        func_code_lines.push((jidx, jline));
+
+        let masked = mask_strings(jline);
+        for ch in masked.bytes() {
+            if ch == b'{' {
+                brace_depth += 1;
+                found_open = true;
+            } else if ch == b'}' {
+                brace_depth -= 1;
+            }
+        }
+
+        if found_open && brace_depth <= 0 {
+            break;
+        }
+        j += 1;
+    }
+
+    (func_code_lines, j)
+}
+
 fn detect_brace_scoped(
     code_lines: &[(usize, &str)],
     markers: &ComplexityMarkers,
@@ -141,52 +187,18 @@ fn detect_brace_scoped(
         let (line_idx, line) = code_lines[i];
         let trimmed = line.trim();
 
-        let is_function = if !markers.function_markers.is_empty() {
-            markers.function_markers.iter().any(|m| trimmed.contains(m))
-        } else {
-            is_c_family_function(trimmed)
-        };
-
-        if is_function {
+        if is_function_declaration(trimmed, markers) {
             let name = extract_function_name(trimmed, markers);
-            let start_line = line_idx + 1; // 1-based
-
-            // Find the opening brace
-            let mut brace_depth: isize = 0;
-            let mut found_open = false;
-            let mut func_code_lines: Vec<(usize, &str)> = Vec::new();
-            let mut j = i;
-
-            while j < code_lines.len() {
-                let (jidx, jline) = code_lines[j];
-                func_code_lines.push((jidx, jline));
-
-                let masked = mask_strings(jline);
-                for ch in masked.chars() {
-                    if ch == '{' {
-                        brace_depth += 1;
-                        found_open = true;
-                    } else if ch == '}' {
-                        brace_depth -= 1;
-                    }
-                }
-
-                if found_open && brace_depth <= 0 {
-                    break;
-                }
-                j += 1;
-            }
-
+            let (func_code_lines, end) = find_function_body(code_lines, i);
             let complexity = count_complexity_for_lines(&func_code_lines, markers);
             let level = CyclomaticLevel::from_complexity(complexity);
             functions.push(FunctionComplexity {
                 name,
-                start_line,
+                start_line: line_idx + 1,
                 complexity,
                 level,
             });
-
-            i = j + 1;
+            i = end + 1;
         } else {
             i += 1;
         }
@@ -255,9 +267,16 @@ fn indent_level(line: &str) -> usize {
     spaces
 }
 
+/// Heuristic for C/C++/Java/C# function detection: line contains '(' and
+/// ends with '{' or ')', and the first word is NOT a control keyword.
+///
+/// Known limitations:
+/// - Multiline declarations where '{' is on a separate line are missed.
+/// - Function pointers (e.g., `void (*fp)(int)`) may be misdetected.
+/// - C++ constructor initializer lists are not handled.
+/// - Macros that look like functions (e.g., `DEFINE_TEST(name)`) are
+///   treated as functions.
 fn is_c_family_function(trimmed: &str) -> bool {
-    // Heuristic: line contains '(' and ends with '{' or ')',
-    // and the first word is NOT a control keyword.
     if !trimmed.contains('(') {
         return false;
     }
@@ -297,7 +316,7 @@ fn extract_function_name(trimmed: &str, markers: &ComplexityMarkers) -> String {
         }
     }
 
-    format!("<line {}>", trimmed.len())
+    "<anonymous>".to_string()
 }
 
 /// Replace the contents of string and char literals with spaces,
