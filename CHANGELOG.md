@@ -1,3 +1,17 @@
+## 0.4.0 (2026-02-09)
+
+### Feat
+
+- add cycom command for cyclomatic complexity analysis
+
+### Fix
+
+- false positive for keywords inside block
+
+### Refactor
+
+- fix cycom false positives and split complex functions
+
 ## 0.3.0 (2026-02-08)
 
 ### Feat
