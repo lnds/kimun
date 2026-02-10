@@ -1,3 +1,13 @@
+## 0.9.0 (2026-02-10)
+
+### Feat
+
+- add knowledge command (thornhill metric)
+
+### Fix
+
+- improve hotspots after code review
+
 ## 0.8.0 (2026-02-09)
 
 ### Feat
