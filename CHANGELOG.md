@@ -1,3 +1,10 @@
+## 0.6.0 (2026-02-09)
+
+### Feat
+
+- implements mi visual studio version
+- implements maintainability index verisoft
+
 ## 0.5.0 (2026-02-09)
 
 ### Feat
