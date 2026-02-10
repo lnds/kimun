@@ -4,8 +4,14 @@
 //! normalized to 0–100 scale, clamped at 0. Invoked via `cm mi`.
 //!
 //! This module directly calls `hal::analyze_file` and `cycom::analyze_file`
-//! (pub(crate) functions). Each file is read twice (once for Halstead, once
-//! for cyclomatic complexity) plus once for LOC classification.
+//! (pub(crate) functions). This creates tight coupling but avoids duplicating
+//! file I/O and parsing logic. Changes to hal/cycom `analyze_file` signatures
+//! must be coordinated with this module.
+//!
+//! Each file is read three times: once for LOC classification, once for
+//! Halstead metrics (via `hal::analyze_file`), once for cyclomatic complexity
+//! (via `cycom::analyze_file`). This is suboptimal but acceptable given the
+//! existing per-module architecture where each analyzer owns its file I/O.
 
 mod analyzer;
 mod report;
@@ -44,6 +50,8 @@ fn analyze_file(path: &Path, spec: &LanguageSpec) -> Result<Option<FileMIMetrics
         None => return Ok(None),
     };
 
+    // compute_mi returns None only if code_lines==0, volume<=0, or complexity==0.
+    // These should not occur when hal/cycom returned valid results, but guard anyway.
     let metrics = match compute_mi(volume, complexity, code_lines) {
         Some(m) => m,
         None => return Ok(None),
@@ -102,13 +110,12 @@ pub fn run(
         }
     }
 
-    // Sort: mi ascending (worst first), others descending
+    // Sort: mi ascending (worst first), volume/complexity/loc descending
     match sort_by {
         "volume" => results.sort_by(|a, b| {
             b.metrics
                 .halstead_volume
-                .partial_cmp(&a.metrics.halstead_volume)
-                .unwrap_or(std::cmp::Ordering::Equal)
+                .total_cmp(&a.metrics.halstead_volume)
         }),
         "complexity" => {
             results.sort_by(|a, b| {
@@ -118,12 +125,7 @@ pub fn run(
             });
         }
         "loc" => results.sort_by(|a, b| b.metrics.loc.cmp(&a.metrics.loc)),
-        _ => results.sort_by(|a, b| {
-            a.metrics
-                .mi_score
-                .partial_cmp(&b.metrics.mi_score)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        }),
+        _ => results.sort_by(|a, b| a.metrics.mi_score.total_cmp(&b.metrics.mi_score)),
     }
 
     results.truncate(top);
@@ -243,6 +245,19 @@ mod tests {
         )
         .unwrap();
         run(dir.path(), false, false, 20, "loc").unwrap();
+    }
+
+    #[test]
+    fn analyze_file_returns_none_for_empty_code() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("empty.rs");
+        fs::write(&path, "// only a comment\n").unwrap();
+        let spec = detect(&path).unwrap();
+        let result = analyze_file(&path, spec).unwrap();
+        assert!(
+            result.is_none(),
+            "file with no code lines should return None"
+        );
     }
 
     #[test]

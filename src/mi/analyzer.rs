@@ -45,12 +45,19 @@ pub struct MIMetrics {
 
 /// Compute the Maintainability Index using the Visual Studio variant.
 ///
-/// Formula:
+/// Formula (from Microsoft's Code Metrics documentation):
 ///   MI = MAX(0, (171 - 5.2 × ln(V) - 0.23 × G - 16.2 × ln(LOC)) × 100 / 171)
 ///
-/// No comment-weight term. Result is normalized to a 0–100 scale.
+/// The `× 100 / 171` normalization maps the raw 0–171 range to a 0–100 scale,
+/// as specified by Visual Studio's implementation.
+/// <https://learn.microsoft.com/en-us/visualstudio/code-quality/code-metrics-maintainability-index-range-and-meaning>
 ///
-/// Returns `None` if code_lines == 0, volume <= 0, or complexity == 0.
+/// No comment-weight term. Result is clamped at 0 (never negative).
+///
+/// Returns `None` if `code_lines == 0`, `volume <= 0`, or `complexity == 0`.
+/// In practice `volume <= 0` means the Halstead tokenizer found no tokens
+/// (e.g., file is empty or only comments), and `complexity == 0` means no
+/// decision points were detected.
 pub fn compute_mi(volume: f64, complexity: usize, code_lines: usize) -> Option<MIMetrics> {
     if code_lines == 0 || volume <= 0.0 || complexity == 0 {
         return None;
@@ -58,6 +65,7 @@ pub fn compute_mi(volume: f64, complexity: usize, code_lines: usize) -> Option<M
 
     let raw =
         171.0 - 5.2 * volume.ln() - 0.23 * complexity as f64 - 16.2 * (code_lines as f64).ln();
+    // Normalize to 0–100 and clamp at 0 (VS formula)
     let mi_score = f64::max(0.0, raw * 100.0 / 171.0);
 
     Some(MIMetrics {

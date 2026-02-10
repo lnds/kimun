@@ -23,8 +23,9 @@ pub fn print_report(files: &[FileMIMetrics]) {
         .unwrap_or(4)
         .max(4);
 
-    // " " + path + "  " + Vol(9) + Cyc(6) + LOC(6) + MI(7) + "  " + Level(6)
-    let header_width = max_path_len + 1 + 2 + 9 + 6 + 6 + 7 + 2 + 6;
+    // Width derived from the header format string below:
+    // " {path}  {Volume:>9} {Cyclo:>5} {LOC:>5} {MI:>6}  Level"
+    let header_width = 1 + max_path_len + 2 + 9 + 1 + 5 + 1 + 5 + 1 + 6 + 2 + 5;
     let separator = "\u{2500}".repeat(header_width.max(70));
 
     println!("Maintainability Index (Visual Studio)");

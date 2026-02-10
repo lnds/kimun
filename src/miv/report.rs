@@ -23,8 +23,9 @@ pub fn print_report(files: &[FileMIMetrics]) {
         .unwrap_or(4)
         .max(4);
 
-    // " " + path + "  " + Vol(9) + Cyc(6) + LOC(6) + Cmt%(6) + MIwoc(8) + MI(8) + "  " + Level(9)
-    let header_width = max_path_len + 1 + 2 + 9 + 6 + 6 + 6 + 8 + 8 + 2 + 9;
+    // Width derived from the header format string below:
+    // " {path}  {Volume:>9} {Cyclo:>5} {LOC:>5} {Cmt%:>5} {MIwoc:>7} {MI:>7}  Level"
+    let header_width = 1 + max_path_len + 2 + 9 + 1 + 5 + 1 + 5 + 1 + 5 + 1 + 7 + 1 + 7 + 2 + 5;
     let separator = "\u{2500}".repeat(header_width.max(80));
 
     println!("Maintainability Index");

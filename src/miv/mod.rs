@@ -52,6 +52,8 @@ fn analyze_file(path: &Path, spec: &LanguageSpec) -> Result<Option<FileMIMetrics
         None => return Ok(None),
     };
 
+    // compute_mi returns None only if code_lines==0, volume<=0, or complexity==0.
+    // These should not occur when hal/cycom returned valid results, but guard anyway.
     let metrics = match compute_mi(volume, complexity, code_lines, comment_lines) {
         Some(m) => m,
         None => return Ok(None),
@@ -110,13 +112,12 @@ pub fn run(
         }
     }
 
-    // Sort: mi ascending (worst first), others descending
+    // Sort: mi ascending (worst first), volume/complexity/loc descending
     match sort_by {
         "volume" => results.sort_by(|a, b| {
             b.metrics
                 .halstead_volume
-                .partial_cmp(&a.metrics.halstead_volume)
-                .unwrap_or(std::cmp::Ordering::Equal)
+                .total_cmp(&a.metrics.halstead_volume)
         }),
         "complexity" => {
             results.sort_by(|a, b| {
@@ -126,12 +127,7 @@ pub fn run(
             });
         }
         "loc" => results.sort_by(|a, b| b.metrics.loc.cmp(&a.metrics.loc)),
-        _ => results.sort_by(|a, b| {
-            a.metrics
-                .mi_score
-                .partial_cmp(&b.metrics.mi_score)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        }),
+        _ => results.sort_by(|a, b| a.metrics.mi_score.total_cmp(&b.metrics.mi_score)),
     }
 
     results.truncate(top);

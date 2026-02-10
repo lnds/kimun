@@ -179,7 +179,7 @@ Thresholds:
         #[arg(long, default_value = "20")]
         top: usize,
 
-        /// Sort by metric: mi, volume, complexity, or loc (default: mi, ascending)
+        /// Sort by metric: mi, volume, complexity, or loc (default: mi)
         #[arg(long, default_value = "mi", value_parser = ["mi", "volume", "complexity", "loc"])]
         sort_by: String,
     },
@@ -220,7 +220,7 @@ Thresholds:
         #[arg(long, default_value = "20")]
         top: usize,
 
-        /// Sort by metric: mi, volume, complexity, or loc (default: mi, ascending)
+        /// Sort by metric: mi, volume, complexity, or loc (default: mi)
         #[arg(long, default_value = "mi", value_parser = ["mi", "volume", "complexity", "loc"])]
         sort_by: String,
     },
