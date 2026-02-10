@@ -1,3 +1,10 @@
+## 0.7.0 (2026-02-09)
+
+### Feat
+
+- implement cm report command
+- full report
+
 ## 0.6.1 (2026-02-09)
 
 ### Refactor
