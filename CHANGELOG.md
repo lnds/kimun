@@ -1,3 +1,15 @@
+## 0.8.0 (2026-02-09)
+
+### Feat
+
+- add hotspots (tornhill)
+- add git module with file frequency and temporal coupling APIs (git2)
+- add --full flag to report command
+
+### Refactor
+
+- 1 pass to calculate mi and miv
+
 ## 0.7.0 (2026-02-09)
 
 ### Feat
