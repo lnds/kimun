@@ -10,7 +10,8 @@ pub struct FileHalsteadMetrics {
     pub metrics: HalsteadMetrics,
 }
 
-fn format_time(seconds: f64) -> String {
+/// Format seconds as a human-readable duration (e.g. "45s", "3m 20s", "2h 15m", "1d 4h").
+pub(crate) fn format_time(seconds: f64) -> String {
     if seconds < 60.0 {
         format!("{seconds:.0}s")
     } else if seconds < 3600.0 {

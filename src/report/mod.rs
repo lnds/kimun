@@ -60,12 +60,14 @@ pub struct ProjectReport {
 /// A section of per-file results with total count before truncation.
 #[derive(Debug, Serialize)]
 pub struct SectionResult<T> {
+    pub description: &'static str,
     pub total_count: usize,
     pub entries: Vec<T>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct DupsSummary {
+    pub description: &'static str,
     pub total_code_lines: usize,
     pub duplicated_lines: usize,
     pub duplication_percentage: f64,
@@ -89,6 +91,7 @@ pub struct HalsteadEntry {
     pub volume: f64,
     pub effort: f64,
     pub bugs: f64,
+    pub time: f64,
 }
 
 #[derive(Debug, Serialize)]
@@ -114,6 +117,40 @@ pub struct MiVerifysoftEntry {
     pub mi_score: f64,
     pub level: String,
 }
+
+// --- Section descriptions (used in both markdown and JSON output) ---
+
+const DESC_DUPS: &str = "Duplicate code detection using sliding-window fingerprinting. \
+    Identical normalized code blocks across files are grouped. \
+    High duplication suggests opportunities for refactoring shared logic.";
+
+const DESC_INDENT: &str = "Indentation complexity measures how deeply nested code is. \
+    StdDev of indentation depth per file indicates structural complexity. \
+    Higher values suggest deeply nested control flow that may be hard to follow.";
+
+const DESC_HALSTEAD: &str = "Halstead complexity metrics based on operators and operands. \
+    Volume = N * log2(n) measures implementation size. \
+    Effort = D * V estimates mental effort. \
+    Bugs = V / 3000 estimates delivered defects. \
+    Time = E / 18 estimates development time in seconds. \
+    Reference: Halstead, M.H. (1977) Elements of Software Science.";
+
+const DESC_CYCOM: &str = "Cyclomatic complexity counts linearly independent paths through code. \
+    Total = sum of all function complexities. Max = highest single function. \
+    Levels: simple (1-10), moderate (11-20), complex (21-50), highly complex (>50). \
+    Reference: McCabe, T.J. (1976) A Complexity Measure.";
+
+const DESC_MI_VS: &str = "Maintainability Index (Visual Studio variant). \
+    Formula: MI = max(0, (171 - 5.2*ln(V) - 0.23*G - 16.2*ln(LOC)) * 100/171). \
+    Normalized 0-100 scale, no comment weight. \
+    Thresholds: green (20+), yellow (10-19), red (0-9). \
+    Reference: Oman, P. & Hagemeister, J. (1992).";
+
+const DESC_MI_VF: &str = "Maintainability Index (Verifysoft variant with comment weight). \
+    Formula: MI = MIwoc + 50*sin(sqrt(2.46*rad(PerCM))). \
+    Unbounded scale; comment percentage boosts the score. \
+    Thresholds: good (85+), moderate (65-84), difficult (<65). \
+    Reference: verifysoft.com Maintainability Index.";
 
 pub fn run(
     path: &Path,
@@ -274,6 +311,7 @@ pub fn build_report(
                     volume: h.metrics.volume,
                     effort: h.metrics.effort,
                     bugs: h.metrics.bugs,
+                    time: h.metrics.time,
                 });
                 Some(vol)
             }
@@ -395,6 +433,7 @@ pub fn build_report(
         min_lines,
         loc: loc_reports,
         duplication: DupsSummary {
+            description: DESC_DUPS,
             total_code_lines,
             duplicated_lines,
             duplication_percentage: dup_percentage,
@@ -403,22 +442,27 @@ pub fn build_report(
             largest_block,
         },
         indent: SectionResult {
+            description: DESC_INDENT,
             total_count: indent_total,
             entries: indent_results,
         },
         halstead: SectionResult {
+            description: DESC_HALSTEAD,
             total_count: hal_total,
             entries: hal_results,
         },
         cyclomatic: SectionResult {
+            description: DESC_CYCOM,
             total_count: cycom_total,
             entries: cycom_results,
         },
         mi_visual_studio: SectionResult {
+            description: DESC_MI_VS,
             total_count: mi_vs_total,
             entries: mi_vs_results,
         },
         mi_verifysoft: SectionResult {
+            description: DESC_MI_VF,
             total_count: mi_vf_total,
             entries: mi_vf_results,
         },
