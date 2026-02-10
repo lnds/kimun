@@ -1,5 +1,5 @@
 mod analyzer;
-mod report;
+pub(crate) mod report;
 mod tokenizer;
 
 use std::error::Error;
@@ -73,7 +73,7 @@ fn multi_line_string_mask(lines: &[String], spec: &LanguageSpec) -> Vec<bool> {
     mask
 }
 
-fn analyze_file(
+pub(crate) fn analyze_file(
     path: &Path,
     spec: &LanguageSpec,
 ) -> Result<Option<FileHalsteadMetrics>, Box<dyn Error>> {

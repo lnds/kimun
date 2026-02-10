@@ -3,6 +3,7 @@ mod dups;
 mod hal;
 mod indent;
 mod loc;
+mod miv;
 mod util;
 mod walk;
 
@@ -144,6 +145,47 @@ Higher effort/volume/bugs indicate more complex and error-prone code.")]
         #[arg(long, default_value = "total", value_parser = ["total", "max", "avg"])]
         sort_by: String,
     },
+
+    /// Compute Maintainability Index per file (verifysoft variant, with comment weight)
+    #[command(long_about = "\
+Compute Maintainability Index (MI) per file using the verifysoft.com variant.
+
+This variant includes a comment-weight term (MIcw) that rewards well-commented
+code. For the simpler Visual Studio variant (0-100 scale, no comment weight),
+use `cm mi` instead.
+
+Formula:
+  MIwoc = 171 - 5.2 * ln(V) - 0.23 * G - 16.2 * ln(LOC)
+  MIcw  = 50 * sin(sqrt(2.46 * radians(PerCM)))
+  MI    = MIwoc + MIcw
+
+Where V = Halstead Volume, G = cyclomatic complexity,
+LOC = code lines, PerCM = comment percentage (converted to radians).
+
+Thresholds:
+  85+     good         -- easy to maintain
+  65-84   moderate     -- reasonable maintainability
+  <65     difficult    -- hard to maintain")]
+    Miv {
+        /// Directory to analyze (default: current directory)
+        path: Option<PathBuf>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Include test files and directories in analysis (excluded by default)
+        #[arg(long)]
+        include_tests: bool,
+
+        /// Show only the top N files (default: 20)
+        #[arg(long, default_value = "20")]
+        top: usize,
+
+        /// Sort by metric: mi, volume, complexity, or loc (default: mi, ascending)
+        #[arg(long, default_value = "mi", value_parser = ["mi", "volume", "complexity", "loc"])]
+        sort_by: String,
+    },
 }
 
 fn main() {
@@ -219,6 +261,19 @@ fn main() {
                 per_function,
                 &sort_by,
             ) {
+                eprintln!("error: {err}");
+                std::process::exit(1);
+            }
+        }
+        Commands::Miv {
+            path,
+            json,
+            include_tests,
+            top,
+            sort_by,
+        } => {
+            let target = path.unwrap_or_else(|| PathBuf::from("."));
+            if let Err(err) = miv::run(&target, json, include_tests, top, &sort_by) {
                 eprintln!("error: {err}");
                 std::process::exit(1);
             }

@@ -1,6 +1,6 @@
 mod analyzer;
 mod markers;
-mod report;
+pub(crate) mod report;
 
 use std::error::Error;
 use std::fs::File;
@@ -15,7 +15,7 @@ use analyzer::analyze;
 use markers::markers_for;
 use report::{FileCycomMetrics, print_json, print_per_function, print_report};
 
-fn analyze_file(
+pub(crate) fn analyze_file(
     path: &Path,
     spec: &LanguageSpec,
 ) -> Result<Option<FileCycomMetrics>, Box<dyn Error>> {

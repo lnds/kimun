@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 cargo build                  # build debug binary
 cargo build --release        # build release binary
-cargo test                   # run all 68 tests
+cargo test                   # run all tests
 cargo test <test_name>       # run a single test, e.g. cargo test haskell_arrow_not_comment
 cargo fmt                    # format code — always run before clippy
 cargo clippy                 # lint — must pass with zero warnings before committing
@@ -20,7 +20,7 @@ The binary is named `cm` (configured in `[[bin]]` in Cargo.toml). After `cargo i
 
 ## Architecture
 
-CLI tool that counts lines of code by language (like `cloc`), built around a character-level finite state machine.
+CLI tool for code metrics: lines of code (like `cloc`), duplicate detection, Halstead complexity, cyclomatic complexity, indentation analysis, and Maintainability Index. Built around a character-level finite state machine for line classification.
 
 ### Module structure: `src/loc/`
 
@@ -57,3 +57,11 @@ Optional flags: `nested: true`, `sq: true` (single-quote strings), `tq: true` (t
 - Tests in `mod.rs` use `tempfile::tempdir()` for integration tests with real files.
 - Tests exist in all modules: `counter.rs`, `language.rs`, `report.rs`, `mod.rs`.
 - Edition 2024 Rust (requires recent toolchain).
+
+### Module structure: `src/miv/`
+
+Maintainability Index (verifysoft variant with comment weight). Invoked via `cm miv`.
+
+- **`analyzer.rs`** — `MILevel` enum (Good/Moderate/Difficult), `MIMetrics` struct, `compute_mi()` function implementing the verifysoft formula with radians conversion for comment percentage.
+- **`report.rs`** — Table and JSON output formatters (`FileMIMetrics`, `print_report`, `print_json`).
+- **`mod.rs`** — Orchestration: walks files, calls `hal::analyze_file` and `cycom::analyze_file` (pub(crate)) for Halstead volume and cyclomatic complexity, classifies lines for LOC/comment counts, computes MI. Note: each file is read three times (once per analyzer) due to per-module architecture.
