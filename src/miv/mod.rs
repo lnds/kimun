@@ -13,8 +13,8 @@
 //! (via `cycom::analyze_file`). This is suboptimal but acceptable given the
 //! existing per-module architecture where each analyzer owns its file I/O.
 
-mod analyzer;
-mod report;
+pub(crate) mod analyzer;
+pub(crate) mod report;
 
 use std::error::Error;
 use std::fs::File;

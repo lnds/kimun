@@ -1,5 +1,5 @@
-mod analyzer;
-mod report;
+pub(crate) mod analyzer;
+pub(crate) mod report;
 
 use std::error::Error;
 use std::fs::File;
@@ -15,7 +15,7 @@ use report::{FileIndentMetrics, print_json, print_report};
 
 const TAB_WIDTH: usize = 4;
 
-fn analyze_file(
+pub(crate) fn analyze_file(
     path: &Path,
     spec: &LanguageSpec,
 ) -> Result<Option<FileIndentMetrics>, Box<dyn Error>> {

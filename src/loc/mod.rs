@@ -1,35 +1,17 @@
 pub(crate) mod counter;
 pub(crate) mod language;
-mod report;
+pub(crate) mod report;
 
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
-use std::hash::Hasher;
 use std::path::Path;
 use std::time::Instant;
 
-use std::fs::File;
-use std::io::{BufReader, Read};
-
+use crate::util::hash_file;
 use crate::walk;
 use counter::{FileStats, count_lines};
 use language::detect;
 use report::{LanguageReport, VerboseStats, print_json, print_report};
-
-fn hash_file(path: &Path) -> Option<u64> {
-    let file = File::open(path).ok()?;
-    let mut reader = BufReader::new(file);
-    let mut hasher = std::hash::DefaultHasher::new();
-    let mut buf = [0u8; 8192];
-    loop {
-        let n = reader.read(&mut buf).ok()?;
-        if n == 0 {
-            break;
-        }
-        hasher.write(&buf[..n]);
-    }
-    Some(hasher.finish())
-}
 
 pub fn run(path: &Path, verbose: bool, json: bool) -> Result<(), Box<dyn Error>> {
     let start = Instant::now();

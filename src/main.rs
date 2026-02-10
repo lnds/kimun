@@ -5,6 +5,7 @@ mod indent;
 mod loc;
 mod mi;
 mod miv;
+mod report;
 mod util;
 mod walk;
 
@@ -184,6 +185,28 @@ Thresholds:
         sort_by: String,
     },
 
+    /// Generate a comprehensive report combining all code metrics
+    Report {
+        /// Directory to analyze (default: current directory)
+        path: Option<PathBuf>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Include test files and directories in analysis (excluded by default)
+        #[arg(long)]
+        include_tests: bool,
+
+        /// Show only the top N files per section (default: 20)
+        #[arg(long, default_value = "20")]
+        top: usize,
+
+        /// Minimum lines for a duplicate block (default: 6)
+        #[arg(long, default_value = "6")]
+        min_lines: usize,
+    },
+
     /// Compute Maintainability Index per file (verifysoft variant, with comment weight)
     #[command(long_about = "\
 Compute Maintainability Index (MI) per file using the verifysoft.com variant.
@@ -312,6 +335,19 @@ fn main() {
         } => {
             let target = path.unwrap_or_else(|| PathBuf::from("."));
             if let Err(err) = mi::run(&target, json, include_tests, top, &sort_by) {
+                eprintln!("error: {err}");
+                std::process::exit(1);
+            }
+        }
+        Commands::Report {
+            path,
+            json,
+            include_tests,
+            top,
+            min_lines,
+        } => {
+            let target = path.unwrap_or_else(|| PathBuf::from("."));
+            if let Err(err) = report::run(&target, json, include_tests, top, min_lines) {
                 eprintln!("error: {err}");
                 std::process::exit(1);
             }

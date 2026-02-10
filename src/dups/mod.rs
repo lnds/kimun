@@ -1,5 +1,5 @@
-mod detector;
-mod report;
+pub(crate) mod detector;
+pub(crate) mod report;
 
 use std::collections::HashSet;
 use std::error::Error;
@@ -14,7 +14,7 @@ use crate::walk;
 use detector::{NormalizedFile, NormalizedLine, detect_duplicates};
 use report::{DuplicationMetrics, display_limit, print_detailed, print_json, print_summary};
 
-fn normalize_file(
+pub(crate) fn normalize_file(
     path: &Path,
     spec: &LanguageSpec,
 ) -> Result<Option<NormalizedFile>, Box<dyn Error>> {

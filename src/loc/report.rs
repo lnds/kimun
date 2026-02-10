@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use serde::Serialize;
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub struct LanguageReport {
     pub name: String,
     pub files: usize,

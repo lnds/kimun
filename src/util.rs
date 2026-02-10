@@ -1,4 +1,7 @@
-use std::io::{self, Read, Seek, SeekFrom};
+use std::fs::File;
+use std::hash::Hasher;
+use std::io::{self, BufReader, Read, Seek, SeekFrom};
+use std::path::Path;
 
 /// Check whether a reader points to a binary file by looking for null bytes
 /// in the first 512 bytes. Resets the reader position to the start afterward.
@@ -7,6 +10,23 @@ pub fn is_binary_reader<R: Read + Seek>(reader: &mut R) -> io::Result<bool> {
     let n = reader.read(&mut header)?;
     reader.seek(SeekFrom::Start(0))?;
     Ok(header[..n].contains(&0))
+}
+
+/// Compute a content hash for a file using streaming FNV via `DefaultHasher`.
+/// Returns `None` if the file cannot be opened or read.
+pub fn hash_file(path: &Path) -> Option<u64> {
+    let file = File::open(path).ok()?;
+    let mut reader = BufReader::new(file);
+    let mut hasher = std::hash::DefaultHasher::new();
+    let mut buf = [0u8; 8192];
+    loop {
+        let n = reader.read(&mut buf).ok()?;
+        if n == 0 {
+            break;
+        }
+        hasher.write(&buf[..n]);
+    }
+    Some(hasher.finish())
 }
 
 /// Replace the contents of string and char literals with spaces,
