@@ -1,5 +1,7 @@
 mod cycom;
 mod dups;
+#[allow(dead_code)]
+mod git;
 mod hal;
 mod indent;
 mod loc;
