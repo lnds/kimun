@@ -58,6 +58,14 @@ Optional flags: `nested: true`, `sq: true` (single-quote strings), `tq: true` (t
 - Tests exist in all modules: `counter.rs`, `language.rs`, `report.rs`, `mod.rs`.
 - Edition 2024 Rust (requires recent toolchain).
 
+### Module structure: `src/mi/`
+
+Maintainability Index (Visual Studio variant, 0–100 scale). Invoked via `cm mi`.
+
+- **`analyzer.rs`** — `MILevel` enum (Green/Yellow/Red), `MIMetrics` struct, `compute_mi()` with VS formula: `MAX(0, raw * 100/171)`.
+- **`report.rs`** — Table and JSON output formatters.
+- **`mod.rs`** — Orchestration: walks files, calls `hal::analyze_file` and `cycom::analyze_file` (pub(crate)) for volume and complexity, classifies lines for LOC.
+
 ### Module structure: `src/miv/`
 
 Maintainability Index (verifysoft variant with comment weight). Invoked via `cm miv`.
