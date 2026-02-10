@@ -1,0 +1,307 @@
+pub mod analyzer;
+mod report;
+
+use std::error::Error;
+use std::path::Path;
+
+use crate::git::GitRepo;
+use crate::loc::language::detect;
+use crate::util::parse_since;
+use crate::walk;
+
+use analyzer::{FileOwnership, compute_ownership};
+use report::{print_json, print_report};
+
+/// Filenames and patterns for generated files that should be excluded.
+fn is_generated(path: &Path) -> bool {
+    let file_name = match path.file_name().and_then(|n| n.to_str()) {
+        Some(n) => n,
+        None => return false,
+    };
+
+    matches!(
+        file_name,
+        "Cargo.lock"
+            | "package-lock.json"
+            | "yarn.lock"
+            | "pnpm-lock.yaml"
+            | "Gemfile.lock"
+            | "poetry.lock"
+            | "composer.lock"
+            | "Pipfile.lock"
+            | "go.sum"
+    ) || file_name.ends_with(".min.js")
+        || file_name.ends_with(".min.css")
+        || file_name.ends_with(".bundle.js")
+        || file_name.ends_with(".pb.go")
+        || file_name.ends_with("_pb2.py")
+        || file_name.contains(".generated.")
+}
+
+pub fn run(
+    path: &Path,
+    json: bool,
+    include_tests: bool,
+    top: usize,
+    sort_by: &str,
+    since: Option<&str>,
+    risk_only: bool,
+) -> Result<(), Box<dyn Error>> {
+    let git_repo =
+        GitRepo::open(path).map_err(|e| format!("not a git repository (or any parent): {e}"))?;
+
+    let since_ts = match since {
+        Some(s) => Some(parse_since(s)?),
+        None => None,
+    };
+
+    // Collect recent authors (for knowledge loss detection)
+    let recent_authors = if since_ts.is_some() {
+        git_repo.recent_authors(since_ts)?
+    } else {
+        std::collections::HashSet::new()
+    };
+
+    // Canonicalize paths ONCE at the top
+    let git_root = git_repo
+        .root()
+        .canonicalize()
+        .map_err(|e| format!("cannot resolve git root: {e}"))?;
+    let walk_root = path
+        .canonicalize()
+        .map_err(|e| format!("cannot resolve target path {}: {e}", path.display()))?;
+    let walk_prefix = walk_root
+        .strip_prefix(&git_root)
+        .unwrap_or(Path::new(""))
+        .to_path_buf();
+
+    let exclude_tests = !include_tests;
+    let mut results: Vec<FileOwnership> = Vec::new();
+
+    for entry in walk::walk(path, exclude_tests) {
+        let entry = match entry {
+            Ok(e) => e,
+            Err(err) => {
+                eprintln!("warning: {err}");
+                continue;
+            }
+        };
+
+        if !entry.file_type().is_some_and(|ft| ft.is_file()) {
+            continue;
+        }
+
+        let file_path = entry.path();
+
+        if exclude_tests && walk::is_test_file(file_path) {
+            continue;
+        }
+
+        if is_generated(file_path) {
+            continue;
+        }
+
+        let spec = match detect(file_path) {
+            Some(s) => s,
+            None => match walk::try_detect_shebang(file_path) {
+                Some(s) => s,
+                None => continue,
+            },
+        };
+
+        // Compute path relative to git root
+        let rel_to_walk = file_path.strip_prefix(path).unwrap_or(file_path);
+        let rel_path = if walk_prefix.as_os_str().is_empty() {
+            rel_to_walk.to_path_buf()
+        } else {
+            walk_prefix.join(rel_to_walk)
+        };
+
+        // Run blame
+        let blames = match git_repo.blame_file(&rel_path) {
+            Ok(b) => b,
+            Err(_) => continue,
+        };
+
+        let ownership = compute_ownership(rel_path, spec.name, &blames, &recent_authors);
+        results.push(ownership);
+    }
+
+    // Filter risk-only if requested
+    if risk_only {
+        results.retain(|f| f.knowledge_loss);
+    }
+
+    // Sort
+    match sort_by {
+        "diffusion" => results.sort_by(|a, b| b.contributors.cmp(&a.contributors)),
+        "risk" => results.sort_by(|a, b| {
+            a.risk.sort_key().cmp(&b.risk.sort_key()).then_with(|| {
+                b.ownership_pct
+                    .partial_cmp(&a.ownership_pct)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+        }),
+        _ => {
+            // concentration: highest ownership % first
+            results.sort_by(|a, b| {
+                b.ownership_pct
+                    .partial_cmp(&a.ownership_pct)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+        }
+    }
+
+    results.truncate(top);
+
+    if json {
+        print_json(&results)?;
+    } else {
+        print_report(&results);
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::path::Path as StdPath;
+
+    use git2::Repository;
+
+    #[test]
+    fn test_is_generated() {
+        assert!(is_generated(StdPath::new("Cargo.lock")));
+        assert!(is_generated(StdPath::new("package-lock.json")));
+        assert!(is_generated(StdPath::new("app.min.js")));
+        assert!(is_generated(StdPath::new("main.bundle.js")));
+        assert!(is_generated(StdPath::new("proto.pb.go")));
+        assert!(is_generated(StdPath::new("msg_pb2.py")));
+        assert!(is_generated(StdPath::new("foo.generated.ts")));
+        assert!(!is_generated(StdPath::new("main.rs")));
+        assert!(!is_generated(StdPath::new("lib.js")));
+    }
+
+    #[test]
+    fn run_on_non_git_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let sub = dir.path().join("not_a_repo");
+        fs::create_dir_all(&sub).unwrap();
+        let err = run(&sub, false, false, 20, "concentration", None, false).unwrap_err();
+        assert!(
+            err.to_string().contains("not a git repository"),
+            "should mention not a git repo, got: {err}"
+        );
+    }
+
+    fn create_test_repo() -> (tempfile::TempDir, Repository) {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = Repository::init(dir.path()).unwrap();
+        let mut config = repo.config().unwrap();
+        config.set_str("user.name", "Test").unwrap();
+        config.set_str("user.email", "test@test.com").unwrap();
+        (dir, repo)
+    }
+
+    fn make_commit(repo: &Repository, files: &[(&str, &str)], message: &str) {
+        let sig = git2::Signature::new("Test", "test@test.com", &git2::Time::new(1_700_000_000, 0))
+            .unwrap();
+        let mut index = repo.index().unwrap();
+        for (path, content) in files {
+            let full_path = repo.workdir().unwrap().join(path);
+            if let Some(parent) = full_path.parent() {
+                fs::create_dir_all(parent).unwrap();
+            }
+            fs::write(&full_path, content).unwrap();
+            index.add_path(StdPath::new(path)).unwrap();
+        }
+        index.write().unwrap();
+        let tree_oid = index.write_tree().unwrap();
+        let tree = repo.find_tree(tree_oid).unwrap();
+        let parent = repo.head().ok().and_then(|h| h.peel_to_commit().ok());
+        let parents: Vec<&git2::Commit> = parent.iter().collect();
+        repo.commit(Some("HEAD"), &sig, &sig, message, &tree, &parents)
+            .unwrap();
+    }
+
+    #[test]
+    fn integration_basic() {
+        let (dir, repo) = create_test_repo();
+        make_commit(
+            &repo,
+            &[("main.rs", "fn main() {\n    println!(\"hi\");\n}\n")],
+            "add main",
+        );
+
+        let result = run(dir.path(), false, false, 20, "concentration", None, false);
+        assert!(result.is_ok(), "knowledge map should succeed on a git repo");
+    }
+
+    #[test]
+    fn integration_json() {
+        let (dir, repo) = create_test_repo();
+        make_commit(
+            &repo,
+            &[("main.rs", "fn main() {\n    println!(\"hi\");\n}\n")],
+            "add main",
+        );
+
+        let result = run(dir.path(), true, false, 20, "concentration", None, false);
+        assert!(result.is_ok(), "JSON output should succeed");
+    }
+
+    #[test]
+    fn integration_risk_only() {
+        let (dir, repo) = create_test_repo();
+        make_commit(
+            &repo,
+            &[("main.rs", "fn main() {\n    println!(\"hi\");\n}\n")],
+            "add main",
+        );
+
+        let result = run(dir.path(), false, false, 20, "risk", None, true);
+        assert!(result.is_ok(), "risk-only filter should work");
+    }
+
+    #[test]
+    fn integration_sort_by_risk() {
+        let (dir, repo) = create_test_repo();
+        make_commit(
+            &repo,
+            &[("main.rs", "fn main() {\n    println!(\"hi\");\n}\n")],
+            "add main",
+        );
+
+        let result = run(dir.path(), false, false, 20, "risk", None, false);
+        assert!(result.is_ok(), "sort by risk should work");
+    }
+
+    #[test]
+    fn integration_sort_by_diffusion() {
+        let (dir, repo) = create_test_repo();
+        make_commit(
+            &repo,
+            &[("main.rs", "fn main() {\n    println!(\"hi\");\n}\n")],
+            "add main",
+        );
+
+        let result = run(dir.path(), false, false, 20, "diffusion", None, false);
+        assert!(result.is_ok(), "sort by diffusion should work");
+    }
+
+    #[test]
+    fn run_on_current_repo() {
+        let result = run(
+            StdPath::new("."),
+            true,
+            false,
+            5,
+            "concentration",
+            None,
+            false,
+        );
+        assert!(result.is_ok(), "knowledge map should work on current repo");
+    }
+}

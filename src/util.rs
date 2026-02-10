@@ -1,7 +1,9 @@
+use std::error::Error;
 use std::fs::File;
 use std::hash::Hasher;
 use std::io::{self, BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
+use std::time::SystemTime;
 
 /// Check whether a reader points to a binary file by looking for null bytes
 /// in the first 512 bytes. Resets the reader position to the start afterward.
@@ -66,6 +68,44 @@ pub fn mask_strings(line: &str) -> String {
 
     // SAFETY: we only replaced ASCII bytes with ASCII spaces
     String::from_utf8(result).unwrap_or_else(|_| line.to_string())
+}
+
+/// Parse a duration string like "6m", "1y", "30d" into a Unix timestamp
+/// representing that far back from now.
+///
+/// Approximations: 1 month = 30 days, 1 year = 365 days.
+pub fn parse_since(s: &str) -> Result<i64, Box<dyn Error>> {
+    let s = s.trim();
+    if s.is_empty() {
+        return Err("empty --since value".into());
+    }
+
+    let split_pos = s.find(|c: char| !c.is_ascii_digit()).ok_or_else(|| {
+        format!("invalid --since value: {s:?} (no unit, expected e.g. 6m, 1y, 30d)")
+    })?;
+
+    let (num_str, unit) = s.split_at(split_pos);
+    let n: u64 = num_str
+        .parse()
+        .map_err(|_| format!("invalid --since value: {s:?} (expected e.g. 6m, 1y, 30d)"))?;
+
+    let seconds = match unit {
+        "d" | "day" | "days" => n.checked_mul(86_400),
+        "m" | "mo" | "month" | "months" => n.checked_mul(30 * 86_400),
+        "y" | "yr" | "year" | "years" => n.checked_mul(365 * 86_400),
+        _ => return Err(format!("unknown unit in --since: {s:?} (use d, m, or y)").into()),
+    }
+    .ok_or("--since value too large")?;
+
+    let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)?
+        .as_secs();
+
+    let ts = now
+        .checked_sub(seconds)
+        .ok_or("--since value goes before Unix epoch")?;
+
+    Ok(ts as i64)
 }
 
 #[cfg(test)]

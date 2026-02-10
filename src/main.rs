@@ -4,6 +4,7 @@ mod git;
 mod hal;
 mod hotspots;
 mod indent;
+mod knowledge;
 mod loc;
 mod mi;
 mod miv;
@@ -304,6 +305,59 @@ Examples:
         #[arg(long, default_value = "indent", value_parser = ["indent", "cycom"])]
         complexity: String,
     },
+
+    /// Analyze code ownership patterns via git blame (knowledge maps)
+    #[command(long_about = "\
+Analyze code ownership patterns via git blame (knowledge maps).
+
+Based on Adam Thornhill's method (\"Your Code as a Crime Scene\" caps 8-9):
+identifies bus factor risk and knowledge concentration per file.
+
+Risk levels:
+  CRITICAL  -- one person owns >80% of the code
+  HIGH      -- one person owns 60-80%
+  MEDIUM    -- 2-3 people own >80% combined
+  LOW       -- well-distributed ownership
+
+Use --since to detect knowledge loss: files where the primary owner
+has not committed recently. Use --risk-only to show only those files.
+
+Requires a git repository. Generated files (lock files, minified JS, etc.)
+are automatically excluded.
+
+Examples:
+  cm knowledge                          # ownership by concentration
+  cm knowledge --sort-by risk           # highest risk first
+  cm knowledge --since 6m --risk-only   # knowledge loss detection
+  cm knowledge --json                   # machine-readable output")]
+    Knowledge {
+        /// Directory to analyze (default: current directory)
+        path: Option<PathBuf>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Include test files and directories in analysis (excluded by default)
+        #[arg(long)]
+        include_tests: bool,
+
+        /// Show only the top N files (default: 20)
+        #[arg(long, default_value = "20")]
+        top: usize,
+
+        /// Sort by: concentration, diffusion, or risk (default: concentration)
+        #[arg(long, default_value = "concentration", value_parser = ["concentration", "diffusion", "risk"])]
+        sort_by: String,
+
+        /// Only consider recent activity since this time for knowledge loss detection (e.g. 6m, 1y, 30d)
+        #[arg(long)]
+        since: Option<String>,
+
+        /// Show only files with knowledge loss risk (primary owner inactive)
+        #[arg(long)]
+        risk_only: bool,
+    },
 }
 
 fn main() {
@@ -442,6 +496,29 @@ fn main() {
                 &sort_by,
                 since.as_deref(),
                 &complexity,
+            ) {
+                eprintln!("error: {err}");
+                std::process::exit(1);
+            }
+        }
+        Commands::Knowledge {
+            path,
+            json,
+            include_tests,
+            top,
+            sort_by,
+            since,
+            risk_only,
+        } => {
+            let target = path.unwrap_or_else(|| PathBuf::from("."));
+            if let Err(err) = knowledge::run(
+                &target,
+                json,
+                include_tests,
+                top,
+                &sort_by,
+                since.as_deref(),
+                risk_only,
             ) {
                 eprintln!("error: {err}");
                 std::process::exit(1);

@@ -73,3 +73,11 @@ Maintainability Index (verifysoft variant with comment weight). Invoked via `cm 
 - **`analyzer.rs`** — `MILevel` enum (Good/Moderate/Difficult), `MIMetrics` struct, `compute_mi()` function implementing the verifysoft formula with radians conversion for comment percentage.
 - **`report.rs`** — Table and JSON output formatters (`FileMIMetrics`, `print_report`, `print_json`).
 - **`mod.rs`** — Orchestration: walks files, calls `hal::analyze_file` and `cycom::analyze_file` (pub(crate)) for Halstead volume and cyclomatic complexity, classifies lines for LOC/comment counts, computes MI. Note: each file is read three times (once per analyzer) due to per-module architecture.
+
+### Module structure: `src/knowledge/`
+
+Knowledge maps (Thornhill, code ownership via git blame). Invoked via `cm knowledge`.
+
+- **`analyzer.rs`** — `RiskLevel` enum (Critical/High/Medium/Low), `FileOwnership` struct, `compute_ownership()` function that calculates primary owner, concentration, and knowledge loss risk.
+- **`report.rs`** — Table and JSON output formatters.
+- **`mod.rs`** — Orchestration: opens git repo, walks files (filtering generated files), runs `blame_file()` per file, computes ownership, sorts/filters results. Uses `util::parse_since` for `--since` flag.
