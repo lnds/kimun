@@ -1,6 +1,7 @@
 use serde::Serialize;
 
 use crate::loc::counter::LineKind;
+use crate::util::mask_strings;
 
 use super::markers::ComplexityMarkers;
 
@@ -319,45 +320,6 @@ fn extract_function_name(trimmed: &str, markers: &ComplexityMarkers) -> String {
     "<anonymous>".to_string()
 }
 
-/// Replace the contents of string and char literals with spaces,
-/// so that keywords/braces inside literals are not counted.
-fn mask_strings(line: &str) -> String {
-    let bytes = line.as_bytes();
-    let len = bytes.len();
-    let mut result = bytes.to_vec();
-    let mut i = 0;
-
-    while i < len {
-        let ch = bytes[i];
-        if ch == b'"' || ch == b'\'' {
-            let quote = ch;
-            i += 1; // skip opening quote
-            while i < len {
-                if bytes[i] == b'\\' {
-                    // escape: mask both chars
-                    result[i] = b' ';
-                    i += 1;
-                    if i < len {
-                        result[i] = b' ';
-                        i += 1;
-                    }
-                } else if bytes[i] == quote {
-                    i += 1; // skip closing quote
-                    break;
-                } else {
-                    result[i] = b' ';
-                    i += 1;
-                }
-            }
-        } else {
-            i += 1;
-        }
-    }
-
-    // SAFETY: we only replaced ASCII bytes with ASCII spaces
-    String::from_utf8(result).unwrap_or_else(|_| line.to_string())
-}
-
 fn count_complexity_for_lines(func_lines: &[(usize, &str)], markers: &ComplexityMarkers) -> usize {
     let mut complexity: usize = 1; // baseline
 
@@ -664,18 +626,56 @@ mod tests {
     }
 
     #[test]
-    fn mask_strings_basic() {
+    fn extract_name_rust_function() {
+        let m = rust_markers();
+        assert_eq!(extract_function_name("fn foo() {", m), "foo");
         assert_eq!(
-            mask_strings(r#"let s = "if x > 0";"#),
-            r#"let s = "        ";"#
+            extract_function_name("pub fn bar(x: i32) -> bool {", m),
+            "bar"
         );
+        assert_eq!(extract_function_name("fn main() {", m), "main");
+    }
+
+    #[test]
+    fn extract_name_python_function() {
+        let m = python_markers();
+        assert_eq!(extract_function_name("def foo():", m), "foo");
+        assert_eq!(extract_function_name("def bar(x, y):", m), "bar");
+    }
+
+    #[test]
+    fn extract_name_c_family_heuristic() {
+        let m = c_markers();
+        assert_eq!(extract_function_name("int main(int argc) {", m), "main");
         assert_eq!(
-            mask_strings(r#"let c = '{'; if x {"#),
-            r#"let c = ' '; if x {"#
+            extract_function_name("void *process(void *arg) {", m),
+            "process"
         );
+    }
+
+    #[test]
+    fn extract_name_pointer_return_type() {
+        let m = c_markers();
         assert_eq!(
-            mask_strings(r#"let s = "he said \"hi\"";"#),
-            r#"let s = "              ";"#
+            extract_function_name("char *get_name(int id) {", m),
+            "get_name"
+        );
+    }
+
+    #[test]
+    fn extract_name_anonymous_fallback() {
+        let m = c_markers();
+        // No parenthesis at all — falls through to anonymous
+        assert_eq!(extract_function_name("something_weird {", m), "<anonymous>");
+    }
+
+    #[test]
+    fn extract_name_macro_like() {
+        let m = c_markers();
+        // Macro that looks like a function — treated as function by heuristic
+        assert_eq!(
+            extract_function_name("DEFINE_TEST(my_test) {", m),
+            "DEFINE_TEST"
         );
     }
 

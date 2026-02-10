@@ -234,6 +234,9 @@ pub fn languages() -> &'static [LanguageSpec] {
               line: "//", block: "/*", "*/", sq: true),
         lang!("Dart", ext: ["dart"],
               line: "//", block: "/*", "*/", sq: true),
+        // Haskell is defined manually (not via lang! macro) because it needs
+        // `line_comment_not_before` to prevent `-->` from being treated as a
+        // `--` comment. The macro does not support this field.
         LanguageSpec {
             name: "Haskell",
             extensions: &["hs"],

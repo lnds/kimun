@@ -1,8 +1,9 @@
 use std::fs::File;
-use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom};
+use std::io::{self, BufRead, BufReader};
 use std::path::Path;
 
 use super::language::LanguageSpec;
+use crate::util::is_binary_reader;
 
 #[derive(Debug, Default, Clone)]
 pub struct FileStats {
@@ -33,10 +34,6 @@ enum State {
     InBlockComment(usize), // nesting depth
 }
 
-fn is_binary(data: &[u8]) -> bool {
-    data.contains(&0)
-}
-
 fn bytes_start_with(haystack: &[u8], needle: &str) -> bool {
     haystack.starts_with(needle.as_bytes())
 }
@@ -45,13 +42,9 @@ pub fn count_lines(path: &Path, spec: &LanguageSpec) -> io::Result<Option<FileSt
     let file = File::open(path)?;
     let mut reader = BufReader::new(file);
 
-    // Binary detection on first 512 bytes
-    let mut header = [0u8; 512];
-    let n = reader.read(&mut header)?;
-    if is_binary(&header[..n]) {
+    if is_binary_reader(&mut reader)? {
         return Ok(None);
     }
-    reader.seek(SeekFrom::Start(0))?;
 
     Ok(Some(count_reader(reader, spec)))
 }

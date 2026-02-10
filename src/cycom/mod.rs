@@ -4,11 +4,12 @@ mod report;
 
 use std::error::Error;
 use std::fs::File;
-use std::io::{BufReader, Cursor, Read, Seek, SeekFrom};
+use std::io::{BufReader, Cursor};
 use std::path::Path;
 
 use crate::loc::counter::classify_reader;
 use crate::loc::language::{LanguageSpec, detect};
+use crate::util::is_binary_reader;
 use crate::walk;
 use analyzer::analyze;
 use markers::markers_for;
@@ -26,13 +27,9 @@ fn analyze_file(
     let file = File::open(path)?;
     let mut reader = BufReader::new(file);
 
-    // Binary detection: reject files with null bytes in first 512 bytes.
-    let mut header = [0u8; 512];
-    let n = reader.read(&mut header)?;
-    if header[..n].contains(&0) {
+    if is_binary_reader(&mut reader)? {
         return Ok(None);
     }
-    reader.seek(SeekFrom::Start(0))?;
 
     let content = std::io::read_to_string(reader)?;
     let lines: Vec<String> = content.lines().map(String::from).collect();
@@ -62,6 +59,7 @@ pub fn run(
     min_complexity: usize,
     top: usize,
     per_function: bool,
+    sort_by: &str,
 ) -> Result<(), Box<dyn Error>> {
     let exclude_tests = !include_tests;
     let mut results: Vec<FileCycomMetrics> = Vec::new();
@@ -107,8 +105,16 @@ pub fn run(
         results.retain(|f| f.max_complexity >= min_complexity);
     }
 
-    // Sort by total_complexity descending
-    results.sort_by(|a, b| b.total_complexity.cmp(&a.total_complexity));
+    // Sort by chosen metric descending
+    match sort_by {
+        "max" => results.sort_by(|a, b| b.max_complexity.cmp(&a.max_complexity)),
+        "avg" => results.sort_by(|a, b| {
+            b.avg_complexity
+                .partial_cmp(&a.avg_complexity)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        }),
+        _ => results.sort_by(|a, b| b.total_complexity.cmp(&a.total_complexity)),
+    }
 
     // Limit to top N
     results.truncate(top);
@@ -132,7 +138,7 @@ mod tests {
     #[test]
     fn run_on_empty_dir() {
         let dir = tempfile::tempdir().unwrap();
-        run(dir.path(), false, false, 1, 20, false).unwrap();
+        run(dir.path(), false, false, 1, 20, false, "total").unwrap();
     }
 
     #[test]
@@ -143,7 +149,7 @@ mod tests {
             "fn main() {\n    if true {\n        println!(\"hi\");\n    }\n}\n",
         )
         .unwrap();
-        run(dir.path(), false, false, 1, 20, false).unwrap();
+        run(dir.path(), false, false, 1, 20, false, "total").unwrap();
     }
 
     #[test]
@@ -154,14 +160,14 @@ mod tests {
             "def main():\n    if True:\n        print(\"hi\")\n",
         )
         .unwrap();
-        run(dir.path(), false, false, 1, 20, false).unwrap();
+        run(dir.path(), false, false, 1, 20, false, "total").unwrap();
     }
 
     #[test]
     fn run_skips_binary() {
         let dir = tempfile::tempdir().unwrap();
         fs::write(dir.path().join("data.c"), b"hello\x00world").unwrap();
-        run(dir.path(), false, false, 1, 20, false).unwrap();
+        run(dir.path(), false, false, 1, 20, false, "total").unwrap();
     }
 
     #[test]
@@ -173,7 +179,7 @@ mod tests {
             "fn test() {\n    assert!(true);\n}\n",
         )
         .unwrap();
-        run(dir.path(), false, false, 1, 20, false).unwrap();
+        run(dir.path(), false, false, 1, 20, false, "total").unwrap();
     }
 
     #[test]
@@ -184,7 +190,7 @@ mod tests {
             "fn main() {\n    let x = 1;\n}\n",
         )
         .unwrap();
-        run(dir.path(), true, false, 1, 20, false).unwrap();
+        run(dir.path(), true, false, 1, 20, false, "total").unwrap();
     }
 
     #[test]
@@ -195,7 +201,7 @@ mod tests {
             "fn foo() {\n    if x > 0 {\n        bar();\n    }\n}\nfn baz() {\n    quux();\n}\n",
         )
         .unwrap();
-        run(dir.path(), false, false, 1, 20, true).unwrap();
+        run(dir.path(), false, false, 1, 20, true, "total").unwrap();
     }
 
     #[test]
@@ -207,7 +213,7 @@ mod tests {
         )
         .unwrap();
         // min_complexity=5 should filter out simple functions
-        run(dir.path(), false, false, 5, 20, false).unwrap();
+        run(dir.path(), false, false, 5, 20, false, "total").unwrap();
     }
 
     #[test]
@@ -223,7 +229,7 @@ mod tests {
             "fn b() {\n    if y { baz(); }\n}\n",
         )
         .unwrap();
-        run(dir.path(), false, false, 1, 1, false).unwrap();
+        run(dir.path(), false, false, 1, 1, false, "total").unwrap();
     }
 
     #[test]
@@ -235,7 +241,7 @@ mod tests {
             "fn test() {\n    assert!(true);\n}\n",
         )
         .unwrap();
-        run(dir.path(), false, true, 1, 20, false).unwrap();
+        run(dir.path(), false, true, 1, 20, false, "total").unwrap();
     }
 
     #[test]
@@ -244,6 +250,6 @@ mod tests {
         fs::write(dir.path().join("data.json"), "{\"key\": \"value\"}\n").unwrap();
         fs::write(dir.path().join("style.css"), "body { color: red; }\n").unwrap();
         // Should produce no results (JSON/CSS have no markers)
-        run(dir.path(), false, false, 1, 20, false).unwrap();
+        run(dir.path(), false, false, 1, 20, false, "total").unwrap();
     }
 }

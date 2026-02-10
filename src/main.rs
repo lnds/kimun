@@ -1,7 +1,9 @@
 mod cycom;
 mod dups;
+mod hal;
 mod indent;
 mod loc;
+mod util;
 mod walk;
 
 use std::path::PathBuf;
@@ -71,6 +73,48 @@ enum Commands {
         include_tests: bool,
     },
 
+    /// Analyze Halstead complexity metrics per file
+    #[command(long_about = "\
+Analyze Halstead complexity metrics per file.
+
+Halstead metrics measure software complexity based on operators and operands
+extracted from source code.
+
+Base counts:
+  n1 = distinct operators    n2 = distinct operands
+  N1 = total operators       N2 = total operands
+
+Derived metrics:
+  Vocabulary (n) = n1 + n2
+  Length (N)     = N1 + N2
+  Volume (V)     = N * log2(n)       -- size of the implementation
+  Difficulty (D) = (n1/2) * (N2/n2)  -- error proneness
+  Effort (E)     = D * V             -- mental effort to develop
+  Bugs (B)       = V / 3000          -- estimated delivered bugs
+  Time (T)       = E / 18 seconds    -- estimated development time
+
+Higher effort/volume/bugs indicate more complex and error-prone code.")]
+    Hal {
+        /// Directory to analyze (default: current directory)
+        path: Option<PathBuf>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Include test files and directories in analysis (excluded by default)
+        #[arg(long)]
+        include_tests: bool,
+
+        /// Show only the top N files (default: 20)
+        #[arg(long, default_value = "20")]
+        top: usize,
+
+        /// Sort by metric: effort, volume, or bugs (default: effort)
+        #[arg(long, default_value = "effort", value_parser = ["effort", "volume", "bugs"])]
+        sort_by: String,
+    },
+
     /// Analyze cyclomatic complexity per file and per function
     Cycom {
         /// Directory to analyze (default: current directory)
@@ -95,6 +139,10 @@ enum Commands {
         /// Show per-function breakdown
         #[arg(long)]
         per_function: bool,
+
+        /// Sort by metric: total, max, or avg (default: total)
+        #[arg(long, default_value = "total", value_parser = ["total", "max", "avg"])]
+        sort_by: String,
     },
 }
 
@@ -139,6 +187,19 @@ fn main() {
                 std::process::exit(1);
             }
         }
+        Commands::Hal {
+            path,
+            json,
+            include_tests,
+            top,
+            sort_by,
+        } => {
+            let target = path.unwrap_or_else(|| PathBuf::from("."));
+            if let Err(err) = hal::run(&target, json, include_tests, top, &sort_by) {
+                eprintln!("error: {err}");
+                std::process::exit(1);
+            }
+        }
         Commands::Cycom {
             path,
             json,
@@ -146,6 +207,7 @@ fn main() {
             min_complexity,
             top,
             per_function,
+            sort_by,
         } => {
             let target = path.unwrap_or_else(|| PathBuf::from("."));
             if let Err(err) = cycom::run(
@@ -155,6 +217,7 @@ fn main() {
                 min_complexity,
                 top,
                 per_function,
+                &sort_by,
             ) {
                 eprintln!("error: {err}");
                 std::process::exit(1);

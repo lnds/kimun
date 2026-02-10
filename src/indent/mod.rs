@@ -3,11 +3,12 @@ mod report;
 
 use std::error::Error;
 use std::fs::File;
-use std::io::{BufReader, Cursor, Read, Seek, SeekFrom};
+use std::io::{BufReader, Cursor};
 use std::path::Path;
 
 use crate::loc::counter::classify_reader;
 use crate::loc::language::{LanguageSpec, detect};
+use crate::util::is_binary_reader;
 use crate::walk;
 use analyzer::analyze;
 use report::{FileIndentMetrics, print_json, print_report};
@@ -21,15 +22,10 @@ fn analyze_file(
     let file = File::open(path)?;
     let mut reader = BufReader::new(file);
 
-    // Binary detection: reject files with null bytes in first 512 bytes.
-    let mut header = [0u8; 512];
-    let n = reader.read(&mut header)?;
-    if header[..n].contains(&0) {
+    if is_binary_reader(&mut reader)? {
         return Ok(None);
     }
-    reader.seek(SeekFrom::Start(0))?;
 
-    // Read content once, reuse for classification and indentation analysis.
     let content = std::io::read_to_string(reader)?;
     let lines: Vec<String> = content.lines().map(String::from).collect();
     let kinds = classify_reader(BufReader::new(Cursor::new(&content)), spec);
