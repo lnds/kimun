@@ -313,6 +313,54 @@ Maintainability Index
  Total (3 files)                         1011                  51.9
 ```
 
+### `cm hotspots` -- Hotspot analysis
+
+Finds hotspots: files that change frequently AND have high cyclomatic complexity. Based on Adam Thornhill's method ("Your Code as a Crime Scene").
+
+```bash
+cm hotspots [path]
+```
+
+#### Formula
+
+```
+Score = Commits × Cyclomatic Complexity
+```
+
+Files with high scores concentrate risk — they are both change-prone and complex, making them the highest-value refactoring targets.
+
+Requires a git repository. Merge commits are excluded from the count.
+
+Options:
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Output as JSON |
+| `--include-tests` | Include test files in analysis (excluded by default) |
+| `--top N` | Show only the top N files (default: 20) |
+| `--sort-by METRIC` | Sort by `score`, `commits`, or `complexity` (default: `score`) |
+| `--since DURATION` | Only consider commits since this time (e.g. `30d`, `6m`, `1y`) |
+
+Duration units: `d` (days), `m` (months, approx. 30 days), `y` (years, approx. 365 days).
+
+Example output:
+
+```
+Hotspots (Commits × Complexity)
+──────────────────────────────────────────────────────────────────────────────
+ File                      Language Commits Complexity      Score
+──────────────────────────────────────────────────────────────────────────────
+ src/loc/counter.rs            Rust       7        115        805
+ src/dups/mod.rs               Rust       9         44        396
+ src/cycom/analyzer.rs         Rust       4         92        368
+ src/main.rs                   Rust      17         21        357
+ src/dups/detector.rs          Rust       7         46        322
+──────────────────────────────────────────────────────────────────────────────
+
+Score = Commits × Cyclomatic Complexity (Thornhill method).
+High-score files are change-prone and complex — prime refactoring targets.
+```
+
 ## Features
 
 - Respects `.gitignore` rules automatically

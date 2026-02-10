@@ -26,6 +26,7 @@ impl GitRepo {
         Ok(Self { repo, root })
     }
 
+    #[allow(dead_code)]
     pub fn is_git_repo(path: &Path) -> bool {
         Repository::discover(path).is_ok()
     }
@@ -85,6 +86,7 @@ impl GitRepo {
         Ok(result)
     }
 
+    #[allow(dead_code)]
     pub fn co_changing_commits(
         &self,
         since: Option<i64>,
