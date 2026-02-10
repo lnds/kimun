@@ -565,6 +565,27 @@ mod tests {
     }
 
     #[test]
+    fn build_report_full_shows_all() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("a.rs"), "fn a() {\n    let x = 1;\n}\n").unwrap();
+        fs::write(
+            dir.path().join("b.rs"),
+            "fn b() {\n    let x = 1;\n    let y = 2;\n}\n",
+        )
+        .unwrap();
+        fs::write(
+            dir.path().join("c.rs"),
+            "fn c() {\n    let x = 1;\n    let y = 2;\n    let z = 3;\n}\n",
+        )
+        .unwrap();
+        let report = build_report(dir.path(), false, usize::MAX, 6).unwrap();
+
+        // all 3 files shown when top is usize::MAX (--full mode)
+        assert_eq!(report.indent.total_count, 3);
+        assert_eq!(report.indent.entries.len(), 3);
+    }
+
+    #[test]
     fn build_report_excludes_tests() {
         let dir = tempfile::tempdir().unwrap();
         fs::create_dir(dir.path().join("tests")).unwrap();
