@@ -205,6 +205,10 @@ Thresholds:
         /// Minimum lines for a duplicate block (default: 6)
         #[arg(long, default_value = "6")]
         min_lines: usize,
+
+        /// Show all files instead of truncating to top N
+        #[arg(long)]
+        full: bool,
     },
 
     /// Compute Maintainability Index per file (verifysoft variant, with comment weight)
@@ -345,9 +349,11 @@ fn main() {
             include_tests,
             top,
             min_lines,
+            full,
         } => {
             let target = path.unwrap_or_else(|| PathBuf::from("."));
-            if let Err(err) = report::run(&target, json, include_tests, top, min_lines) {
+            let effective_top = if full { usize::MAX } else { top };
+            if let Err(err) = report::run(&target, json, include_tests, effective_top, min_lines) {
                 eprintln!("error: {err}");
                 std::process::exit(1);
             }
