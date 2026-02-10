@@ -7,13 +7,23 @@ use std::fs::File;
 use std::io::{BufReader, Cursor};
 use std::path::Path;
 
-use crate::loc::counter::classify_reader;
+use crate::loc::counter::{LineKind, classify_reader};
 use crate::loc::language::{LanguageSpec, detect};
 use crate::util::is_binary_reader;
 use crate::walk;
 use analyzer::analyze;
 use markers::markers_for;
 use report::{FileCycomMetrics, print_json, print_per_function, print_report};
+
+/// Analyze pre-read content (avoids re-reading the file).
+pub(crate) fn analyze_content(
+    lines: &[String],
+    kinds: &[LineKind],
+    spec: &LanguageSpec,
+) -> Option<analyzer::FileComplexity> {
+    let cm = markers_for(spec.name)?;
+    analyze(lines, kinds, cm)
+}
 
 pub(crate) fn analyze_file(
     path: &Path,

@@ -14,6 +14,20 @@ use crate::walk;
 use detector::{NormalizedFile, NormalizedLine, detect_duplicates};
 use report::{DuplicationMetrics, display_limit, print_detailed, print_json, print_summary};
 
+/// Normalize pre-read content (avoids re-reading the file).
+pub(crate) fn normalize_content(lines: &[String], kinds: &[LineKind]) -> Vec<NormalizedLine> {
+    lines
+        .iter()
+        .zip(kinds.iter())
+        .enumerate()
+        .filter(|(_, (_, kind))| **kind == LineKind::Code)
+        .map(|(i, (line, _))| NormalizedLine {
+            original_line_number: i + 1,
+            content: line.trim().to_string(),
+        })
+        .collect()
+}
+
 pub(crate) fn normalize_file(
     path: &Path,
     spec: &LanguageSpec,

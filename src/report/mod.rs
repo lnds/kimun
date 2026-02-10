@@ -13,7 +13,7 @@ use crate::cycom;
 use crate::dups;
 use crate::hal;
 use crate::indent;
-use crate::loc::counter::{FileStats, LineKind, classify_reader, count_lines};
+use crate::loc::counter::{FileStats, LineKind, classify_reader};
 use crate::loc::language::detect;
 use crate::loc::report::LanguageReport;
 use crate::mi;
@@ -178,8 +178,9 @@ pub fn build_report(
     top: usize,
     min_lines: usize,
 ) -> Result<ProjectReport, Box<dyn Error>> {
-    // LOC aggregation (no dedup — every file counts; the duplication section
-    // surfaces duplicates explicitly)
+    // LOC aggregation — counts all files without deduplication
+    // (standalone `cm loc` deduplicates by content hash; report does not).
+    // Duplication is surfaced explicitly in the duplication section.
     let mut stats_by_lang: HashMap<&'static str, (usize, FileStats)> = HashMap::new();
 
     // Dups collection
@@ -222,24 +223,7 @@ pub fn build_report(
             },
         };
 
-        // --- LOC ---
-        match count_lines(file_path, spec) {
-            Ok(Some(file_stats)) => {
-                let entry = stats_by_lang
-                    .entry(spec.name)
-                    .or_insert_with(|| (0, FileStats::default()));
-                entry.0 += 1;
-                entry.1.blank += file_stats.blank;
-                entry.1.comment += file_stats.comment;
-                entry.1.code += file_stats.code;
-            }
-            Ok(None) => {} // binary
-            Err(err) => {
-                eprintln!("warning: {}: {err}", file_path.display());
-            }
-        }
-
-        // --- Binary check for remaining analyzers ---
+        // --- Single read: open, binary check, read content, classify ---
         let file = match File::open(file_path) {
             Ok(f) => f,
             Err(err) => {
@@ -257,11 +241,6 @@ pub fn build_report(
             Ok(false) => {}
         }
 
-        // --- Read file for line classification (used by MI) ---
-        // Note: hal::analyze_file and cycom::analyze_file below each re-open
-        // the file internally. Refactoring them to accept content would avoid
-        // the extra reads, but OS page cache makes the cost negligible.
-        // This read provides code_lines/comment_lines for MI computation.
         let content = match std::io::read_to_string(reader) {
             Ok(c) => c,
             Err(err) => {
@@ -269,85 +248,72 @@ pub fn build_report(
                 continue;
             }
         };
+        let lines: Vec<String> = content.lines().map(String::from).collect();
         let kinds = classify_reader(content.as_bytes(), spec);
-        let code_lines = kinds.iter().filter(|k| **k == LineKind::Code).count();
+
+        // --- LOC (derived from kinds) ---
+        let blank = kinds.iter().filter(|k| **k == LineKind::Blank).count();
         let comment_lines = kinds.iter().filter(|k| **k == LineKind::Comment).count();
-
-        // --- Dups: normalize file ---
-        match dups::normalize_file(file_path, spec) {
-            Ok(Some(nf)) => {
-                total_code_lines += nf.lines.len();
-                dup_files.push(nf);
-            }
-            Ok(None) => {}
-            Err(err) => {
-                eprintln!("warning: {}: {err}", file_path.display());
-            }
+        let code_lines = kinds.iter().filter(|k| **k == LineKind::Code).count();
+        {
+            let entry = stats_by_lang
+                .entry(spec.name)
+                .or_insert_with(|| (0, FileStats::default()));
+            entry.0 += 1;
+            entry.1.blank += blank;
+            entry.1.comment += comment_lines;
+            entry.1.code += code_lines;
         }
 
-        // --- Indent ---
-        match indent::analyze_file(file_path, spec) {
-            Ok(Some(fc)) => {
-                indent_results.push(IndentEntry {
-                    path: file_path.display().to_string(),
-                    code_lines: fc.code_lines,
-                    stddev: fc.stddev,
-                    max_depth: fc.max_depth,
-                    complexity: fc.complexity.as_str().to_string(),
-                });
-            }
-            Ok(None) => {}
-            Err(err) => {
-                eprintln!("warning: {}: {err}", file_path.display());
-            }
+        // --- Dups (from content) ---
+        let normalized = dups::normalize_content(&lines, &kinds);
+        total_code_lines += normalized.len();
+        dup_files.push(dups::detector::NormalizedFile {
+            path: file_path.to_path_buf(),
+            lines: normalized,
+        });
+
+        // --- Indent (from content) ---
+        if let Some(m) = indent::analyzer::analyze(&lines, &kinds, 4) {
+            indent_results.push(IndentEntry {
+                path: file_path.display().to_string(),
+                code_lines: m.code_lines,
+                stddev: m.stddev,
+                max_depth: m.max_depth,
+                complexity: m.complexity.as_str().to_string(),
+            });
         }
 
-        // --- Halstead ---
-        let volume_opt = match hal::analyze_file(file_path, spec) {
-            Ok(Some(h)) => {
-                let vol = h.metrics.volume;
-                hal_results.push(HalsteadEntry {
-                    path: file_path.display().to_string(),
-                    volume: h.metrics.volume,
-                    effort: h.metrics.effort,
-                    bugs: h.metrics.bugs,
-                    time: h.metrics.time,
-                });
-                Some(vol)
-            }
-            Ok(None) => None,
-            Err(err) => {
-                eprintln!("warning: {}: {err}", file_path.display());
-                None
-            }
+        // --- Halstead (from content) ---
+        let volume_opt = if let Some(h) = hal::analyze_content(&lines, &kinds, spec) {
+            hal_results.push(HalsteadEntry {
+                path: file_path.display().to_string(),
+                volume: h.volume,
+                effort: h.effort,
+                bugs: h.bugs,
+                time: h.time,
+            });
+            Some(h.volume)
+        } else {
+            None
         };
 
-        // --- Cyclomatic ---
-        let complexity_opt = match cycom::analyze_file(file_path, spec) {
-            Ok(Some(c)) => {
-                let total = c.total_complexity;
-                cycom_results.push(CycomEntry {
-                    path: file_path.display().to_string(),
-                    functions: c.function_count,
-                    total: c.total_complexity,
-                    max: c.max_complexity,
-                    avg: c.avg_complexity,
-                    level: c.level.as_str().to_string(),
-                });
-                Some(total)
-            }
-            Ok(None) => None,
-            Err(err) => {
-                eprintln!("warning: {}: {err}", file_path.display());
-                None
-            }
+        // --- Cyclomatic (from content) ---
+        let complexity_opt = if let Some(c) = cycom::analyze_content(&lines, &kinds, spec) {
+            cycom_results.push(CycomEntry {
+                path: file_path.display().to_string(),
+                functions: c.functions.len(),
+                total: c.total_complexity,
+                max: c.max_complexity,
+                avg: c.avg_complexity,
+                level: c.level.as_str().to_string(),
+            });
+            Some(c.total_complexity)
+        } else {
+            None
         };
 
         // --- MI computation (requires both Halstead volume and cyclomatic complexity) ---
-        // Files are silently skipped for MI when: Halstead or cyclomatic analysis
-        // returned None (e.g. no operators/operands), or compute_mi returns None
-        // (e.g. zero code lines, zero volume). This is expected — not all source
-        // files produce meaningful metrics for every analyzer.
         if let (Some(volume), Some(complexity)) = (volume_opt, complexity_opt) {
             let path_str = file_path.display().to_string();
             if let Some(m) = mi::analyzer::compute_mi(volume, complexity, code_lines) {

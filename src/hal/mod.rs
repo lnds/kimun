@@ -73,6 +73,31 @@ fn multi_line_string_mask(lines: &[String], spec: &LanguageSpec) -> Vec<bool> {
     mask
 }
 
+/// Analyze pre-read content (avoids re-reading the file).
+pub(crate) fn analyze_content(
+    lines: &[String],
+    kinds: &[LineKind],
+    spec: &LanguageSpec,
+) -> Option<analyzer::HalsteadMetrics> {
+    let rules = rules_for(spec.name)?;
+    let string_mask = multi_line_string_mask(lines, spec);
+
+    let code_lines: Vec<&str> = lines
+        .iter()
+        .zip(kinds.iter())
+        .zip(string_mask.iter())
+        .filter(|((_, k), in_string)| **k == LineKind::Code && !*in_string)
+        .map(|((line, _), _)| line.as_str())
+        .collect();
+
+    if code_lines.is_empty() {
+        return None;
+    }
+
+    let counts = count_tokens(&code_lines, rules);
+    compute(&counts)
+}
+
 pub(crate) fn analyze_file(
     path: &Path,
     spec: &LanguageSpec,
