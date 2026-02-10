@@ -9,6 +9,7 @@ pub struct FileIndentMetrics {
     pub code_lines: usize,
     pub stddev: f64,
     pub max_depth: usize,
+    pub total_indent: usize,
     pub complexity: ComplexityLevel,
 }
 
@@ -93,6 +94,7 @@ mod tests {
                 code_lines: 100,
                 stddev: 1.8,
                 max_depth: 6,
+                total_indent: 180,
                 complexity: ComplexityLevel::High,
             },
             FileIndentMetrics {
@@ -100,6 +102,7 @@ mod tests {
                 code_lines: 50,
                 stddev: 1.2,
                 max_depth: 3,
+                total_indent: 60,
                 complexity: ComplexityLevel::Moderate,
             },
         ]

@@ -2,11 +2,27 @@ use serde::Serialize;
 
 use super::FileHotspot;
 
-pub fn print_report(files: &[FileHotspot]) {
+fn complexity_label(metric: &str) -> &'static str {
+    match metric {
+        "cycom" => "Cyclomatic",
+        _ => "Total Indent",
+    }
+}
+
+fn method_description(metric: &str) -> &'static str {
+    match metric {
+        "cycom" => "Score = Commits × Cyclomatic Complexity.",
+        _ => "Score = Commits × Total Indentation (Thornhill method).",
+    }
+}
+
+pub fn print_report(files: &[FileHotspot], metric: &str) {
     if files.is_empty() {
         println!("No hotspots found.");
         return;
     }
+
+    let label = complexity_label(metric);
 
     let max_path_len = files
         .iter()
@@ -14,18 +30,18 @@ pub fn print_report(files: &[FileHotspot]) {
         .max()
         .unwrap_or(4);
 
-    // 1 (leading space) + path + 2 + 10 + 1 + 7 + 1 + 10 + 1 + 10 = path + 43
-    let header_width = max_path_len + 43;
-    let separator = "\u{2500}".repeat(header_width.max(78));
+    // 1 (leading space) + path + 2 + 10 + 1 + 7 + 1 + 12 + 1 + 10 = path + 45
+    let header_width = max_path_len + 45;
+    let separator = "─".repeat(header_width.max(78));
 
-    println!("Hotspots (Commits \u{00d7} Complexity)");
+    println!("Hotspots (Commits × {label} Complexity)");
     println!("{separator}");
     println!(
-        " {:<width$}  {:>10} {:>7} {:>10} {:>10}",
+        " {:<width$}  {:>10} {:>7} {:>12} {:>10}",
         "File",
         "Language",
         "Commits",
-        "Complexity",
+        label,
         "Score",
         width = max_path_len
     );
@@ -33,7 +49,7 @@ pub fn print_report(files: &[FileHotspot]) {
 
     for f in files {
         println!(
-            " {:<width$}  {:>10} {:>7} {:>10} {:>10}",
+            " {:<width$}  {:>10} {:>7} {:>12} {:>10}",
             f.path.display(),
             f.language,
             f.commits,
@@ -45,8 +61,8 @@ pub fn print_report(files: &[FileHotspot]) {
 
     println!("{separator}");
     println!();
-    println!("Score = Commits \u{00d7} Cyclomatic Complexity (Thornhill method).");
-    println!("High-score files are change-prone and complex \u{2014} prime refactoring targets.");
+    println!("{}", method_description(metric));
+    println!("High-score files are change-prone and complex — prime refactoring targets.");
 }
 
 #[derive(Serialize)]
@@ -55,10 +71,11 @@ struct JsonEntry {
     language: String,
     commits: usize,
     complexity: usize,
+    complexity_metric: String,
     score: usize,
 }
 
-pub fn print_json(files: &[FileHotspot]) -> Result<(), Box<dyn std::error::Error>> {
+pub fn print_json(files: &[FileHotspot], metric: &str) -> Result<(), Box<dyn std::error::Error>> {
     let entries: Vec<JsonEntry> = files
         .iter()
         .map(|f| JsonEntry {
@@ -66,6 +83,7 @@ pub fn print_json(files: &[FileHotspot]) -> Result<(), Box<dyn std::error::Error
             language: f.language.clone(),
             commits: f.commits,
             complexity: f.complexity,
+            complexity_metric: metric.to_string(),
             score: f.score,
         })
         .collect();
@@ -99,23 +117,28 @@ mod tests {
     }
 
     #[test]
-    fn print_report_does_not_panic() {
-        print_report(&sample_files());
+    fn print_report_does_not_panic_indent() {
+        print_report(&sample_files(), "indent");
+    }
+
+    #[test]
+    fn print_report_does_not_panic_cycom() {
+        print_report(&sample_files(), "cycom");
     }
 
     #[test]
     fn print_report_empty() {
-        print_report(&[]);
+        print_report(&[], "indent");
     }
 
     #[test]
     fn print_json_does_not_panic() {
-        print_json(&sample_files()).unwrap();
+        print_json(&sample_files(), "indent").unwrap();
     }
 
     #[test]
     fn print_json_empty() {
-        print_json(&[]).unwrap();
+        print_json(&[], "indent").unwrap();
     }
 
     #[test]
@@ -129,6 +152,7 @@ mod tests {
                     "language": f.language,
                     "commits": f.commits,
                     "complexity": f.complexity,
+                    "complexity_metric": "indent",
                     "score": f.score,
                 })
             })
@@ -147,6 +171,10 @@ mod tests {
             arr[0]["score"],
             42 * 34,
             "score should be commits * complexity"
+        );
+        assert_eq!(
+            arr[0]["complexity_metric"], "indent",
+            "metric should be indent"
         );
         assert!(
             arr[1]["path"].as_str().unwrap().contains("bar.rs"),

@@ -259,7 +259,10 @@ Thresholds:
 Find hotspots: files that change frequently AND have high complexity.
 
 Based on Adam Thornhill's method (\"Your Code as a Crime Scene\"):
-  Score = commits × cyclomatic complexity
+  Score = commits × complexity
+
+By default, complexity is measured by total indentation (Thornhill's original
+method). Use --complexity cycom for cyclomatic complexity instead.
 
 Files with high scores are both change-prone and complex — they concentrate
 risk and are the highest-value refactoring targets.
@@ -268,11 +271,11 @@ Requires a git repository. Use --since to limit the analysis window
 (approximations: 1 month = 30 days, 1 year = 365 days).
 
 Examples:
-  cm hotspots              # all history, top 20 by score
-  cm hotspots --since 6m   # last 6 months
+  cm hotspots                    # indentation complexity (default)
+  cm hotspots --complexity cycom # cyclomatic complexity
+  cm hotspots --since 6m         # last 6 months
   cm hotspots --since 1y --sort-by commits
-  cm hotspots --top 10     # show only top 10
-  cm hotspots --json       # machine-readable output")]
+  cm hotspots --json             # machine-readable output")]
     Hotspots {
         /// Directory to analyze (default: current directory)
         path: Option<PathBuf>,
@@ -296,6 +299,10 @@ Examples:
         /// Only consider commits since this time (e.g. 6m, 1y, 30d)
         #[arg(long)]
         since: Option<String>,
+
+        /// Complexity metric: indent (default, Thornhill) or cycom (cyclomatic)
+        #[arg(long, default_value = "indent", value_parser = ["indent", "cycom"])]
+        complexity: String,
     },
 }
 
@@ -424,6 +431,7 @@ fn main() {
             top,
             sort_by,
             since,
+            complexity,
         } => {
             let target = path.unwrap_or_else(|| PathBuf::from("."));
             if let Err(err) = hotspots::run(
@@ -433,6 +441,7 @@ fn main() {
                 top,
                 &sort_by,
                 since.as_deref(),
+                &complexity,
             ) {
                 eprintln!("error: {err}");
                 std::process::exit(1);

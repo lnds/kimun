@@ -46,6 +46,7 @@ pub struct IndentMetrics {
     pub code_lines: usize,
     pub stddev: f64,
     pub max_depth: usize,
+    pub total_indent: usize,
     pub complexity: ComplexityLevel,
 }
 
@@ -80,6 +81,7 @@ pub fn analyze(lines: &[String], kinds: &[LineKind], tab_width: usize) -> Option
     }
 
     let max_depth = *depths.iter().max().unwrap();
+    let total_indent: usize = depths.iter().sum();
     let stddev = calculate_stddev(&depths);
     let complexity = ComplexityLevel::from_stddev(stddev);
 
@@ -87,6 +89,7 @@ pub fn analyze(lines: &[String], kinds: &[LineKind], tab_width: usize) -> Option
         code_lines: depths.len(),
         stddev,
         max_depth,
+        total_indent,
         complexity,
     })
 }
