@@ -1,3 +1,9 @@
+## 0.5.0 (2026-02-09)
+
+### Feat
+
+- add hal command for Halstead complexity metrics
+
 ## 0.4.0 (2026-02-09)
 
 ### Feat
