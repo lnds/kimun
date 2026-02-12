@@ -9,6 +9,7 @@ mod loc;
 mod mi;
 mod miv;
 mod report;
+mod tc;
 mod util;
 mod walk;
 
@@ -358,6 +359,61 @@ Examples:
         #[arg(long)]
         risk_only: bool,
     },
+
+    /// Analyze temporal coupling: files that change together in commits
+    #[command(long_about = "\
+Analyze temporal coupling between files via git history.
+
+Based on Adam Thornhill's method (\"Your Code as a Crime Scene\" ch. 7):
+files that frequently change together in the same commits have implicit
+coupling, even without direct imports.
+
+Coupling strength = shared_commits / min(commits_a, commits_b)
+
+Levels:
+  STRONG    -- strength >= 0.5 (files change together most of the time)
+  MODERATE  -- strength 0.3-0.5
+  WEAK      -- strength < 0.3
+
+High coupling between unrelated modules suggests hidden dependencies
+or architectural issues — consider extracting shared abstractions.
+
+Requires a git repository. File renames are not tracked across history.
+
+Examples:
+  cm tc                          # default: min 3 shared commits
+  cm tc --min-degree 5           # stricter filter
+  cm tc --since 6m               # last 6 months only
+  cm tc --min-strength 0.5       # only strong coupling
+  cm tc --json                   # machine-readable output")]
+    Tc {
+        /// Directory to analyze (default: current directory)
+        path: Option<PathBuf>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Show only the top N file pairs (default: 20)
+        #[arg(long, default_value = "20")]
+        top: usize,
+
+        /// Sort by: strength or shared (default: strength)
+        #[arg(long, default_value = "strength", value_parser = ["strength", "shared"])]
+        sort_by: String,
+
+        /// Only consider commits since this time (e.g. 6m, 1y, 30d)
+        #[arg(long)]
+        since: Option<String>,
+
+        /// Minimum commits per file to be included (default: 3)
+        #[arg(long, default_value = "3")]
+        min_degree: usize,
+
+        /// Minimum coupling strength to show (e.g. 0.5 for strong only)
+        #[arg(long)]
+        min_strength: Option<f64>,
+    },
 }
 
 fn main() {
@@ -519,6 +575,29 @@ fn main() {
                 &sort_by,
                 since.as_deref(),
                 risk_only,
+            ) {
+                eprintln!("error: {err}");
+                std::process::exit(1);
+            }
+        }
+        Commands::Tc {
+            path,
+            json,
+            top,
+            sort_by,
+            since,
+            min_degree,
+            min_strength,
+        } => {
+            let target = path.unwrap_or_else(|| PathBuf::from("."));
+            if let Err(err) = tc::run(
+                &target,
+                json,
+                top,
+                &sort_by,
+                since.as_deref(),
+                min_degree,
+                min_strength,
             ) {
                 eprintln!("error: {err}");
                 std::process::exit(1);

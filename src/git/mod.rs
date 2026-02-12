@@ -93,7 +93,6 @@ impl GitRepo {
         Ok(result)
     }
 
-    #[allow(dead_code)]
     pub fn co_changing_commits(
         &self,
         since: Option<i64>,
