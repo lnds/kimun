@@ -1,3 +1,10 @@
+## 0.10.0 (2026-02-16)
+
+### Feat
+
+- add version flag to show version
+- add tc command (temporal coupling)
+
 ## 0.9.0 (2026-02-10)
 
 ### Feat
