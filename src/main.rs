@@ -18,7 +18,7 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "cm", about = "Code metrics tools")]
+#[command(name = "cm", version, about = "Code metrics tools")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
