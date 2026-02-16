@@ -485,6 +485,80 @@ Strong coupling (>= 0.5) suggests hidden dependencies — consider extracting sh
 
 **Note:** File renames are not tracked across git history. Renamed files appear as separate entries.
 
+### `cm score` -- Code health score
+
+Computes an overall code health score for the project, grading it from A++ (exceptional) to F-- (severe issues). Analyzes 6 dimensions of code quality using only static metrics (no git required).
+
+Non-code files (Markdown, TOML, JSON, etc.) are automatically excluded. Inline test blocks (`#[cfg(test)]`) are excluded from duplication analysis.
+
+```bash
+cm score [path]
+```
+
+#### Dimensions and weights
+
+| Dimension | Weight | What it measures |
+|-----------|--------|-----------------|
+| Maintainability Index | 30% | Verifysoft MI, normalized to 0-100 |
+| Cyclomatic Complexity | 20% | Max complexity per file |
+| Duplication | 15% | Project-wide duplicate code % |
+| Indentation Complexity | 15% | Stddev of indentation depth |
+| Halstead Effort | 15% | Mental effort per LOC |
+| File Size | 5% | Optimal range 50-300 LOC |
+
+Each dimension is aggregated as a LOC-weighted mean across all files (except Duplication which is a single project-level value). The project score is the weighted sum of all dimension scores.
+
+#### Grade scale
+
+| Grade | Score range | Grade | Score range |
+|-------|------------|-------|------------|
+| A++ | 97-100 | C+ | 73-76 |
+| A+ | 93-96 | C | 70-72 |
+| A | 90-92 | C- | 67-69 |
+| A- | 87-89 | D+ | 63-66 |
+| B+ | 83-86 | D | 60-62 |
+| B | 80-82 | D- | 57-59 |
+| B- | 77-79 | F | 40-56 |
+| | | F-- | 0-39 |
+
+Options:
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Output as JSON |
+| `--include-tests` | Include test files in analysis (excluded by default) |
+| `--bottom N` | Number of worst files to show in "needs attention" (default: 10) |
+| `--min-lines N` | Minimum lines for a duplicate block (default: 6) |
+
+Example output:
+
+```
+Code Health Score
+──────────────────────────────────────────────────────────────────
+ Project Score:  B+ (84.3)
+ Files Analyzed: 42
+ Total LOC:      8,432
+──────────────────────────────────────────────────────────────────
+ Dimension                 Weight   Score   Grade
+──────────────────────────────────────────────────────────────────
+ Maintainability Index        30%    88.2   A-
+ Cyclomatic Complexity        20%    82.4   B+
+ Duplication                  15%    91.3   A
+ Indentation Complexity       15%    79.8   B-
+ Halstead Effort              15%    85.1   B+
+ File Size                     5%    89.2   A-
+──────────────────────────────────────────────────────────────────
+
+ Files Needing Attention (worst scores)
+──────────────────────────────────────────────────────────────────
+ Score  Grade  File                       Issues
+──────────────────────────────────────────────────────────────────
+  54.2  F      src/legacy/parser.rs       Complexity: 87, MI: 12
+  63.7  D+     src/utils/helpers.rs       MI: 42, Indent: 2.4
+  68.9  C-     src/core/engine.rs         Size: 1243 LOC
+──────────────────────────────────────────────────────────────────
+```
+
 ## Features
 
 - Respects `.gitignore` rules automatically

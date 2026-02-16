@@ -9,6 +9,7 @@ mod loc;
 mod mi;
 mod miv;
 mod report;
+mod score;
 mod tc;
 mod util;
 mod walk;
@@ -418,6 +419,64 @@ Examples:
         #[arg(long)]
         min_strength: Option<f64>,
     },
+
+    /// Compute an overall code health score for the project (A++ to F--)
+    #[command(long_about = "\
+Compute an overall code health score for the project.
+
+Analyzes 6 dimensions of code quality and produces a letter grade
+from A++ (exceptional) to F-- (severe issues). Each dimension is
+scored 0-100 and weighted to produce a final project score.
+
+Dimensions and weights:
+  Maintainability Index   30%  (verifysoft MI, normalized to 0-100)
+  Cyclomatic Complexity   20%  (max complexity per file)
+  Duplication             15%  (project-wide duplicate code %)
+  Indentation Complexity  15%  (stddev of indentation depth)
+  Halstead Effort         15%  (mental effort per LOC)
+  File Size                5%  (optimal 50-300 LOC)
+
+Non-code files (Markdown, TOML, JSON, etc.) are automatically excluded.
+Inline test blocks (#[cfg(test)]) are excluded from duplication analysis.
+
+Grade scale:
+  A++ (97-100)  A+ (93-96)  A (90-92)  A- (87-89)
+  B+  (83-86)   B  (80-82)  B- (77-79)
+  C+  (73-76)   C  (70-72)  C- (67-69)
+  D+  (63-66)   D  (60-62)  D- (57-59)
+  F   (40-56)   F-- (0-39)
+
+The report includes a breakdown by dimension and a list of files
+that need the most attention (lowest per-file scores).
+
+Uses only static code metrics (no git history required).
+
+Examples:
+  cm score                       # score current directory
+  cm score src/                  # score a subdirectory
+  cm score --json                # machine-readable output
+  cm score --bottom 20           # show 20 worst files
+  cm score --include-tests       # include test files")]
+    Score {
+        /// File or directory to analyze (default: current directory)
+        path: Option<PathBuf>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Include test files and directories in analysis (excluded by default)
+        #[arg(long)]
+        include_tests: bool,
+
+        /// Number of worst files to show in "needs attention" (default: 10)
+        #[arg(long, default_value = "10")]
+        bottom: usize,
+
+        /// Minimum lines for a duplicate block (default: 6)
+        #[arg(long, default_value = "6")]
+        min_lines: usize,
+    },
 }
 
 fn main() {
@@ -605,6 +664,19 @@ fn main() {
                 min_degree,
                 min_strength,
             ) {
+                eprintln!("error: {err}");
+                std::process::exit(1);
+            }
+        }
+        Commands::Score {
+            path,
+            json,
+            include_tests,
+            bottom,
+            min_lines,
+        } => {
+            let target = path.unwrap_or_else(|| PathBuf::from("."));
+            if let Err(err) = score::run(&target, json, include_tests, bottom, min_lines) {
                 eprintln!("error: {err}");
                 std::process::exit(1);
             }

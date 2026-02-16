@@ -89,3 +89,11 @@ Temporal coupling analysis (Thornhill, files that change together). Invoked via 
 - **`analyzer.rs`** — `CouplingLevel` enum (Strong/Moderate/Weak), `FileCoupling` struct, `compute_coupling()` function that pairs co-changing files, calculates strength = shared_commits / min(commits_a, commits_b), and classifies by threshold (0.5 strong, 0.3 moderate).
 - **`report.rs`** — Table and JSON output formatters.
 - **`mod.rs`** — Orchestration: opens git repo, calls `file_frequencies()` (filtered by `min_degree`), `co_changing_commits()`, `compute_coupling()`, sorts/filters results. Uses `util::parse_since` for `--since` flag. No filesystem walk needed — works entirely from git data.
+
+### Module structure: `src/score/`
+
+Overall code health score (A++ to F--). Invoked via `cm score`. Static metrics only (no git).
+
+- **`analyzer.rs`** — `Grade` enum (15 grades from A++ to F--), `DimensionScore`/`FileScore`/`ProjectScore` structs, `score_to_grade()`, `compute_project_score()`, and 6 normalization functions (`normalize_mi`, `normalize_complexity`, `normalize_duplication`, `normalize_indent`, `normalize_halstead`, `normalize_file_size`). Halstead normalization uses effort-per-LOC.
+- **`report.rs`** — Table and JSON output formatters.
+- **`mod.rs`** — Orchestration: walks files once, computes MI (verifysoft), cyclomatic, indent, and halstead metrics per file; filters non-code files (Markdown, TOML, etc.); strips inline `#[cfg(test)]` blocks from duplication; detects duplication at project level; aggregates 6 dimensions as LOC-weighted mean; computes weighted project score; identifies worst-scoring files as "needs attention".
