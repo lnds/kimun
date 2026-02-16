@@ -1,3 +1,4 @@
+mod ai;
 mod cycom;
 mod dups;
 mod git;
@@ -477,6 +478,38 @@ Examples:
         #[arg(long, default_value = "6")]
         min_lines: usize,
     },
+
+    /// AI-powered repository analysis using an LLM provider
+    #[command(long_about = "\
+AI-powered repository analysis using an LLM provider.
+
+Invokes an AI model that uses cm tools to analyze the repository and produce
+a comprehensive report including code health, complexity hotspots,
+maintainability issues, and actionable recommendations.
+
+Supported providers:
+  claude  — Anthropic Claude (requires ANTHROPIC_API_KEY env var)
+
+Examples:
+  cm ai claude                           # analyze current directory
+  cm ai claude src/                      # analyze a subdirectory
+  cm ai claude --model claude-sonnet-4-5-20250929  # use specific model
+  cm ai claude --output report.md       # save report to file")]
+    Ai {
+        /// AI provider to use (e.g. claude)
+        provider: String,
+
+        /// Directory to analyze (default: current directory)
+        path: Option<PathBuf>,
+
+        /// Model to use (default: claude-sonnet-4-5-20250929)
+        #[arg(long)]
+        model: Option<String>,
+
+        /// Save the report to a file
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+    },
 }
 
 fn main() {
@@ -677,6 +710,18 @@ fn main() {
         } => {
             let target = path.unwrap_or_else(|| PathBuf::from("."));
             if let Err(err) = score::run(&target, json, include_tests, bottom, min_lines) {
+                eprintln!("error: {err}");
+                std::process::exit(1);
+            }
+        }
+        Commands::Ai {
+            provider,
+            path,
+            model,
+            output,
+        } => {
+            let target = path.unwrap_or_else(|| PathBuf::from("."));
+            if let Err(err) = ai::run(&provider, &target, model.as_deref(), output.as_deref()) {
                 eprintln!("error: {err}");
                 std::process::exit(1);
             }
