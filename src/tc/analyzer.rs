@@ -53,8 +53,7 @@ pub fn compute_coupling(
             .iter()
             .filter(|p| freq_map.get(*p).is_some_and(|&c| c >= min_degree))
             .collect();
-        eligible.sort();
-        eligible.dedup();
+        eligible.sort_unstable();
 
         // Generate all pairs ordered lexicographically
         for i in 0..eligible.len() {
@@ -70,12 +69,9 @@ pub fn compute_coupling(
         .map(|((a, b), shared)| {
             let commits_a = freq_map[&a];
             let commits_b = freq_map[&b];
+            // min_commits >= min_degree >= 1 (enforced by caller), so division is safe
             let min_commits = commits_a.min(commits_b);
-            let strength = if min_commits > 0 {
-                shared as f64 / min_commits as f64
-            } else {
-                0.0
-            };
+            let strength = shared as f64 / min_commits as f64;
             FileCoupling {
                 file_a: a,
                 file_b: b,
@@ -194,6 +190,22 @@ mod tests {
         assert_eq!(result.len(), 1);
         assert!((result[0].strength - 0.5).abs() < 0.001);
         assert_eq!(result[0].level, CouplingLevel::Strong);
+    }
+
+    #[test]
+    fn test_empty_co_changes() {
+        let co: Vec<Vec<PathBuf>> = vec![];
+        let fm = freq(&[("a.rs", 5)]);
+        let result = compute_coupling(&co, &fm, 1);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_empty_freq_map() {
+        let co = vec![vec![path("a.rs"), path("b.rs")]];
+        let fm: HashMap<PathBuf, usize> = HashMap::new();
+        let result = compute_coupling(&co, &fm, 1);
+        assert!(result.is_empty());
     }
 
     #[test]

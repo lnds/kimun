@@ -2,7 +2,7 @@ use serde::Serialize;
 
 use super::analyzer::FileCoupling;
 
-pub fn print_report(pairs: &[FileCoupling], total: usize, min_shared: usize) {
+pub fn print_report(pairs: &[FileCoupling], total: usize) {
     if pairs.is_empty() {
         println!("No coupled file pairs found.");
         return;
@@ -53,14 +53,13 @@ pub fn print_report(pairs: &[FileCoupling], total: usize, min_shared: usize) {
     }
 
     println!("{separator}");
-    println!();
-    println!(
-        "{total} coupled pairs found ({shown} shown). Showing pairs with >= {min_shared} shared commits.",
-        shown = pairs.len(),
-    );
-    println!(
-        "Strong coupling (>= 0.5) suggests hidden dependencies — consider extracting shared abstractions."
-    );
+    if total > pairs.len() {
+        println!();
+        println!(
+            "{total} coupled pairs found ({shown} shown).",
+            shown = pairs.len()
+        );
+    }
 }
 
 #[derive(Serialize)]
@@ -123,12 +122,12 @@ mod tests {
 
     #[test]
     fn print_report_does_not_panic() {
-        print_report(&sample_pairs(), 10, 3);
+        print_report(&sample_pairs(), 10);
     }
 
     #[test]
     fn print_report_empty() {
-        print_report(&[], 0, 3);
+        print_report(&[], 0);
     }
 
     #[test]

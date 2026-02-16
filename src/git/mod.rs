@@ -33,11 +33,6 @@ impl GitRepo {
         Ok(Self { repo, root })
     }
 
-    #[allow(dead_code)]
-    pub fn is_git_repo(path: &Path) -> bool {
-        Repository::discover(path).is_ok()
-    }
-
     pub fn root(&self) -> &Path {
         &self.root
     }
@@ -218,6 +213,10 @@ mod tests {
     use super::*;
     use std::fs;
 
+    fn is_git_repo(path: &Path) -> bool {
+        Repository::discover(path).is_ok()
+    }
+
     fn create_test_repo() -> (tempfile::TempDir, Repository) {
         let dir = tempfile::tempdir().unwrap();
         let repo = Repository::init(dir.path()).unwrap();
@@ -269,7 +268,7 @@ mod tests {
         let (dir, _repo) = create_test_repo();
         let git_repo = GitRepo::open(dir.path());
         assert!(git_repo.is_ok());
-        assert!(GitRepo::is_git_repo(dir.path()));
+        assert!(is_git_repo(dir.path()));
     }
 
     #[test]
@@ -279,7 +278,7 @@ mod tests {
         let sub = dir.path().join("not_a_repo");
         fs::create_dir_all(&sub).unwrap();
         assert!(GitRepo::open(&sub).is_err());
-        assert!(!GitRepo::is_git_repo(&sub));
+        assert!(!is_git_repo(&sub));
     }
 
     #[test]

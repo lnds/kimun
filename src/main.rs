@@ -394,6 +394,10 @@ Examples:
         #[arg(long)]
         json: bool,
 
+        /// Include test files and directories in analysis (excluded by default)
+        #[arg(long)]
+        include_tests: bool,
+
         /// Show only the top N file pairs (default: 20)
         #[arg(long, default_value = "20")]
         top: usize,
@@ -410,7 +414,7 @@ Examples:
         #[arg(long, default_value = "3")]
         min_degree: usize,
 
-        /// Minimum coupling strength to show (e.g. 0.5 for strong only)
+        /// Filter results: show only pairs with strength >= threshold (e.g. 0.5 for strong coupling only)
         #[arg(long)]
         min_strength: Option<f64>,
     },
@@ -583,6 +587,7 @@ fn main() {
         Commands::Tc {
             path,
             json,
+            include_tests,
             top,
             sort_by,
             since,
@@ -593,6 +598,7 @@ fn main() {
             if let Err(err) = tc::run(
                 &target,
                 json,
+                include_tests,
                 top,
                 &sort_by,
                 since.as_deref(),

@@ -7,18 +7,37 @@ use std::path::{Path, PathBuf};
 
 use crate::git::GitRepo;
 use crate::util::parse_since;
+use crate::walk;
 use analyzer::compute_coupling;
 use report::{print_json, print_report};
 
+/// Check whether a git-relative path is inside a test directory or is a test file.
+fn is_test_path(path: &Path) -> bool {
+    for component in path.components() {
+        if let Some(name) = component.as_os_str().to_str()
+            && walk::TEST_DIRS.contains(&name)
+        {
+            return true;
+        }
+    }
+    walk::is_test_file(path)
+}
+
+#[allow(clippy::too_many_arguments)]
 pub fn run(
     path: &Path,
     json: bool,
+    include_tests: bool,
     top: usize,
     sort_by: &str,
     since: Option<&str>,
     min_degree: usize,
     min_strength: Option<f64>,
 ) -> Result<(), Box<dyn Error>> {
+    if min_degree == 0 {
+        return Err("--min-degree must be at least 1".into());
+    }
+
     let git_repo =
         GitRepo::open(path).map_err(|e| format!("not a git repository (or any parent): {e}"))?;
 
@@ -27,7 +46,7 @@ pub fn run(
         None => None,
     };
 
-    // Build freq_map: path → commits, filtering by min_degree
+    // Build freq_map: path → commits, filtering by min_degree and optionally test files
     let freqs = git_repo.file_frequencies(since_ts)?;
     if freqs.is_empty() {
         if since.is_some() {
@@ -37,9 +56,11 @@ pub fn run(
         }
         return Ok(());
     }
+    let exclude_tests = !include_tests;
     let freq_map: HashMap<PathBuf, usize> = freqs
         .into_iter()
         .filter(|f| f.commits >= min_degree)
+        .filter(|f| !exclude_tests || !is_test_path(&f.path))
         .map(|f| (f.path, f.commits))
         .collect();
 
@@ -79,7 +100,7 @@ pub fn run(
     if json {
         print_json(&results)?;
     } else {
-        print_report(&results, total, min_degree);
+        print_report(&results, total);
     }
 
     Ok(())
@@ -128,10 +149,29 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let sub = dir.path().join("not_a_repo");
         fs::create_dir_all(&sub).unwrap();
-        let err = run(&sub, false, 20, "strength", None, 3, None).unwrap_err();
+        let err = run(&sub, false, false, 20, "strength", None, 3, None).unwrap_err();
         assert!(
             err.to_string().contains("not a git repository"),
             "should mention not a git repository, got: {err}"
+        );
+    }
+
+    #[test]
+    fn run_min_degree_zero_rejected() {
+        let err = run(
+            StdPath::new("."),
+            false,
+            false,
+            20,
+            "strength",
+            None,
+            0,
+            None,
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("--min-degree must be at least 1"),
+            "should reject min_degree=0, got: {err}"
         );
     }
 
@@ -149,7 +189,21 @@ mod tests {
                 &format!("commit {i}"),
             );
         }
-        let result = run(dir.path(), false, 20, "strength", None, 3, None);
+
+        // Verify coupling is found by using compute_coupling directly
+        let git_repo = GitRepo::open(dir.path()).unwrap();
+        let freqs = git_repo.file_frequencies(None).unwrap();
+        let freq_map: HashMap<PathBuf, usize> =
+            freqs.into_iter().map(|f| (f.path, f.commits)).collect();
+        let co = git_repo.co_changing_commits(None).unwrap();
+        let results = compute_coupling(&co, &freq_map, 3);
+
+        assert_eq!(results.len(), 1, "should find exactly one coupled pair");
+        assert_eq!(results[0].shared_commits, 3);
+        assert!((results[0].strength - 1.0).abs() < 0.001);
+
+        // Also verify run() succeeds
+        let result = run(dir.path(), false, false, 20, "strength", None, 3, None);
         assert!(result.is_ok(), "basic coupling should succeed");
     }
 
@@ -166,7 +220,7 @@ mod tests {
                 &format!("commit {i}"),
             );
         }
-        let result = run(dir.path(), true, 20, "strength", None, 3, None);
+        let result = run(dir.path(), true, false, 20, "strength", None, 3, None);
         assert!(result.is_ok(), "JSON output should succeed");
     }
 
@@ -188,7 +242,7 @@ mod tests {
                 &format!("commit b {i}"),
             );
         }
-        let result = run(dir.path(), false, 20, "strength", None, 3, None);
+        let result = run(dir.path(), false, false, 20, "strength", None, 3, None);
         assert!(result.is_ok(), "no coupling should succeed");
     }
 
@@ -206,20 +260,67 @@ mod tests {
             &[("a.rs", "fn a() { 2 }"), ("b.rs", "fn b() { 2 }")],
             "c2",
         );
-        let result = run(dir.path(), false, 20, "strength", None, 3, None);
+        let result = run(dir.path(), false, false, 20, "strength", None, 3, None);
         assert!(result.is_ok(), "min_degree filter should not crash");
+    }
+
+    #[test]
+    fn integration_test_file_excluded() {
+        let (dir, repo) = create_test_repo();
+        // 3 commits touching a.rs + a_test.rs
+        for i in 0..3 {
+            make_commit(
+                &repo,
+                &[
+                    ("a.rs", &format!("fn a() {{ {i} }}")),
+                    ("a_test.rs", &format!("fn test_a() {{ {i} }}")),
+                ],
+                &format!("commit {i}"),
+            );
+        }
+        // With exclude_tests (default), test file should be filtered
+        let git_repo = GitRepo::open(dir.path()).unwrap();
+        let freqs = git_repo.file_frequencies(None).unwrap();
+        let freq_map: HashMap<PathBuf, usize> = freqs
+            .into_iter()
+            .filter(|f| f.commits >= 3)
+            .filter(|f| !is_test_path(&f.path))
+            .map(|f| (f.path, f.commits))
+            .collect();
+        assert!(
+            !freq_map.contains_key(&PathBuf::from("a_test.rs")),
+            "test file should be excluded from freq_map"
+        );
+    }
+
+    #[test]
+    fn test_is_test_path() {
+        assert!(is_test_path(Path::new("tests/foo.rs")));
+        assert!(is_test_path(Path::new("src/tests/bar.rs")));
+        assert!(is_test_path(Path::new("counter_test.rs")));
+        assert!(!is_test_path(Path::new("src/counter.rs")));
+        assert!(!is_test_path(Path::new("src/main.rs")));
     }
 
     #[test]
     fn run_on_current_repo() {
         // Smoke test on the actual repo
-        let result = run(StdPath::new("."), false, 5, "strength", None, 3, None);
+        let result = run(
+            StdPath::new("."),
+            false,
+            false,
+            5,
+            "strength",
+            None,
+            3,
+            None,
+        );
         assert!(result.is_ok(), "tc should succeed on a git repo");
     }
 
     #[test]
     fn run_on_current_repo_json() {
-        let result = run(StdPath::new("."), true, 5, "strength", None, 3, None);
+        let result = run(StdPath::new("."), true, false, 5, "strength", None, 3, None);
         assert!(result.is_ok(), "tc JSON should succeed on a git repo");
     }
 }
