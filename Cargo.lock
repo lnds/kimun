@@ -137,7 +137,7 @@ checksum = "c3e64b0cc0439b12df2fa678eae89a1c56a529fd067a9115f7827f1fffd22b32"
 
 [[package]]
 name = "code-metrics"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "clap",
  "git2",
