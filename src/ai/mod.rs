@@ -1,4 +1,5 @@
 mod client;
+pub mod skill;
 mod tools;
 
 use client::{ApiRequest, ContentBlock, Message, MessageContent};
