@@ -93,6 +93,17 @@ pub fn read_and_classify(path: &Path, spec: &LanguageSpec) -> io::Result<Option<
     Ok(Some((lines, kinds)))
 }
 
+/// Find the line index where `#[cfg(test)]` starts (for stripping inline test blocks).
+/// Returns `lines.len()` if no such line is found.
+pub fn find_test_block_start(lines: &[String]) -> usize {
+    for (i, line) in lines.iter().enumerate() {
+        if line.trim() == "#[cfg(test)]" {
+            return i;
+        }
+    }
+    lines.len()
+}
+
 /// Parse a duration string like "6m", "1y", "30d" into a Unix timestamp
 /// representing that far back from now.
 ///

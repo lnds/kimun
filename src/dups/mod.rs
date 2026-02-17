@@ -7,7 +7,7 @@ use std::path::Path;
 
 use crate::loc::counter::LineKind;
 use crate::loc::language::LanguageSpec;
-use crate::util::read_and_classify;
+use crate::util::{find_test_block_start, read_and_classify};
 use crate::walk;
 use detector::{NormalizedFile, NormalizedLine, detect_duplicates};
 use report::{DuplicationMetrics, display_limit, print_detailed, print_json, print_summary};
@@ -29,15 +29,23 @@ pub(crate) fn normalize_content(lines: &[String], kinds: &[LineKind]) -> Vec<Nor
 pub(crate) fn normalize_file(
     path: &Path,
     spec: &LanguageSpec,
+    exclude_tests: bool,
 ) -> Result<Option<NormalizedFile>, Box<dyn Error>> {
     let (lines, kinds) = match read_and_classify(path, spec)? {
         Some(v) => v,
         None => return Ok(None),
     };
 
-    let normalized: Vec<NormalizedLine> = lines
+    // Strip inline #[cfg(test)] blocks when excluding tests (Rust-specific)
+    let end = if exclude_tests {
+        find_test_block_start(&lines)
+    } else {
+        lines.len()
+    };
+
+    let normalized: Vec<NormalizedLine> = lines[..end]
         .iter()
-        .zip(kinds.iter())
+        .zip(kinds[..end].iter())
         .enumerate()
         .filter(|(_, (_, kind))| **kind == LineKind::Code)
         .map(|(i, (line, _))| NormalizedLine {
@@ -64,7 +72,7 @@ pub fn run(
     let mut total_code_lines: usize = 0;
 
     for (file_path, spec) in walk::source_files(path, exclude_tests) {
-        match normalize_file(&file_path, spec) {
+        match normalize_file(&file_path, spec, exclude_tests) {
             Ok(Some(nf)) => {
                 total_code_lines += nf.lines.len();
                 files.push(nf);
@@ -205,7 +213,7 @@ mod tests {
         .unwrap();
 
         let spec = detect(Path::new("test.rs")).unwrap();
-        let nf = normalize_file(&path, spec).unwrap().unwrap();
+        let nf = normalize_file(&path, spec, false).unwrap().unwrap();
 
         // Should only have code lines: "fn main() {", "let x = 1;", "}"
         assert_eq!(nf.lines.len(), 3);
@@ -221,7 +229,7 @@ mod tests {
         fs::write(&path, b"hello\x00world").unwrap();
 
         let spec = detect(Path::new("test.c")).unwrap();
-        assert!(normalize_file(&path, spec).unwrap().is_none());
+        assert!(normalize_file(&path, spec, false).unwrap().is_none());
     }
 
     #[test]

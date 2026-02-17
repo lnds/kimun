@@ -12,7 +12,7 @@ use crate::hal;
 use crate::indent;
 use crate::loc::counter::{LineKind, classify_reader};
 use crate::miv;
-use crate::util::is_binary_reader;
+use crate::util::{find_test_block_start, is_binary_reader};
 use crate::walk;
 
 use analyzer::{
@@ -342,16 +342,6 @@ fn weighted_mean(
 
 fn build_empty_dimensions() -> Vec<DimensionScore> {
     build_dimensions(&[], 0, 0.0)
-}
-
-/// Find the line index where `#[cfg(test)]` starts (for stripping inline test blocks).
-fn find_test_block_start(lines: &[String]) -> usize {
-    for (i, line) in lines.iter().enumerate() {
-        if line.trim() == "#[cfg(test)]" {
-            return i;
-        }
-    }
-    lines.len()
 }
 
 #[cfg(test)]
