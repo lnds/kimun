@@ -1,3 +1,8 @@
+/// Indentation complexity analysis module (Thornhill method).
+///
+/// Measures the standard deviation of indentation depth per file
+/// as a proxy for structural complexity. Higher stddev indicates
+/// deeply nested control flow that may be hard to follow.
 pub(crate) mod analyzer;
 pub(crate) mod report;
 
@@ -10,8 +15,11 @@ use crate::walk;
 use analyzer::analyze;
 use report::{FileIndentMetrics, print_json, print_report};
 
+/// Tab width used for converting tabs to spaces in indentation calculation.
 const TAB_WIDTH: usize = 4;
 
+/// Read a file, classify lines, and compute indentation metrics.
+/// Returns `None` for binary files or files with no code lines.
 pub(crate) fn analyze_file(
     path: &Path,
     spec: &LanguageSpec,
@@ -36,6 +44,8 @@ pub(crate) fn analyze_file(
     }))
 }
 
+/// Walk source files, compute indentation metrics, sort by stddev
+/// descending, and print as a table or JSON.
 pub fn run(path: &Path, json: bool, include_tests: bool) -> Result<(), Box<dyn Error>> {
     let exclude_tests = !include_tests;
     let mut results = walk::collect_analysis(path, exclude_tests, analyze_file);

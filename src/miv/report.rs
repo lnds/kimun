@@ -1,3 +1,8 @@
+/// Report formatters for the verifysoft Maintainability Index.
+///
+/// Provides table and JSON output showing per-file MI scores with
+/// Halstead volume, cyclomatic complexity, LOC, comment percentage,
+/// and the comment-weight contribution (MIwoc vs MI).
 use std::path::PathBuf;
 
 use serde::Serialize;
@@ -5,12 +10,15 @@ use serde::Serialize;
 use super::analyzer::{MILevel, MIMetrics};
 use crate::report_helpers;
 
+/// Per-file MI metrics bundled with filesystem path and language name.
 pub struct FileMIMetrics {
     pub path: PathBuf,
     pub language: String,
     pub metrics: MIMetrics,
 }
 
+/// Print a table of per-file MI metrics with a totals row showing
+/// average MI and total LOC across all analyzed files.
 pub fn print_report(files: &[FileMIMetrics]) {
     if files.is_empty() {
         println!("No recognized source files found.");
@@ -73,6 +81,7 @@ pub fn print_report(files: &[FileMIMetrics]) {
     );
 }
 
+/// JSON-serializable representation of a file's MI breakdown.
 #[derive(Serialize)]
 struct JsonEntry {
     path: String,
@@ -88,6 +97,7 @@ struct JsonEntry {
     level: MILevel,
 }
 
+/// Serialize per-file MI data as pretty-printed JSON to stdout.
 pub fn print_json(files: &[FileMIMetrics]) -> Result<(), Box<dyn std::error::Error>> {
     let entries: Vec<JsonEntry> = files
         .iter()

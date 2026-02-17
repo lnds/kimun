@@ -1,8 +1,13 @@
+/// Report formatters for hotspot analysis.
+///
+/// Provides table and JSON output showing files ranked by their
+/// hotspot score (commits x complexity), identifying prime refactoring targets.
 use serde::Serialize;
 
 use super::FileHotspot;
 use crate::report_helpers;
 
+/// Map the metric flag to a human-readable column header.
 fn complexity_label(metric: &str) -> &'static str {
     match metric {
         "cycom" => "Cyclomatic",
@@ -10,6 +15,7 @@ fn complexity_label(metric: &str) -> &'static str {
     }
 }
 
+/// Return a description of the scoring formula for the chosen metric.
 fn method_description(metric: &str) -> &'static str {
     match metric {
         "cycom" => "Score = Commits × Cyclomatic Complexity.",
@@ -17,6 +23,8 @@ fn method_description(metric: &str) -> &'static str {
     }
 }
 
+/// Print a table of hotspots sorted by score descending with a
+/// footer explaining the scoring method.
 pub fn print_report(files: &[FileHotspot], metric: &str) {
     if files.is_empty() {
         println!("No hotspots found.");
@@ -61,6 +69,7 @@ pub fn print_report(files: &[FileHotspot], metric: &str) {
     println!("High-score files are change-prone and complex — prime refactoring targets.");
 }
 
+/// JSON-serializable representation of a single hotspot entry.
 #[derive(Serialize)]
 struct JsonEntry {
     path: String,
@@ -71,6 +80,7 @@ struct JsonEntry {
     score: usize,
 }
 
+/// Serialize hotspot data as pretty-printed JSON to stdout.
 pub fn print_json(files: &[FileHotspot], metric: &str) -> Result<(), Box<dyn std::error::Error>> {
     let entries: Vec<JsonEntry> = files
         .iter()

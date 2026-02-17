@@ -1,3 +1,8 @@
+/// Duplicate code detection module.
+///
+/// Finds repeated code blocks across files using content-hash based matching.
+/// Normalizes lines (strips whitespace, filters non-code) before comparison,
+/// optionally excluding inline `#[cfg(test)]` blocks.
 pub(crate) mod detector;
 pub(crate) mod report;
 
@@ -26,6 +31,8 @@ pub(crate) fn normalize_content(lines: &[String], kinds: &[LineKind]) -> Vec<Nor
         .collect()
 }
 
+/// Read a file, classify its lines, and normalize code lines for duplication.
+/// Returns `None` for binary files. Strips test blocks when `exclude_tests`.
 pub(crate) fn normalize_file(
     path: &Path,
     spec: &LanguageSpec,
@@ -49,6 +56,8 @@ pub(crate) fn normalize_file(
     }))
 }
 
+/// Run the full duplication analysis pipeline: walk files, normalize,
+/// detect duplicates, and print results (summary, detailed, or JSON).
 pub fn run(
     path: &Path,
     min_lines: usize,

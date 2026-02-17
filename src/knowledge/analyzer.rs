@@ -1,3 +1,8 @@
+/// Knowledge map analyzer — code ownership via git blame.
+///
+/// For each file, determines the primary owner, ownership concentration,
+/// contributor count, and bus-factor risk level. Optionally detects
+/// knowledge loss when the primary owner is no longer active.
 use std::collections::HashSet;
 use std::path::PathBuf;
 
@@ -5,6 +10,7 @@ use serde::Serialize;
 
 use crate::git::BlameInfo;
 
+/// Bus-factor risk level based on ownership concentration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum RiskLevel {
     Critical,
@@ -14,6 +20,7 @@ pub enum RiskLevel {
 }
 
 impl RiskLevel {
+    /// Human-readable label for display in reports.
     pub fn label(&self) -> &'static str {
         match self {
             RiskLevel::Critical => "CRITICAL",
@@ -23,6 +30,7 @@ impl RiskLevel {
         }
     }
 
+    /// Numeric key for sorting risk levels (0 = most critical).
     pub fn sort_key(&self) -> u8 {
         match self {
             RiskLevel::Critical => 0,
@@ -33,12 +41,14 @@ impl RiskLevel {
     }
 }
 
+/// Internal representation of a single author's contribution to a file.
 struct AuthorContribution {
     author: String,
     percentage: f64,
     active: bool,
 }
 
+/// Ownership analysis result for a single file.
 pub struct FileOwnership {
     pub path: PathBuf,
     pub language: String,
@@ -50,6 +60,8 @@ pub struct FileOwnership {
     pub knowledge_loss: bool,
 }
 
+/// Compute ownership metrics from git blame data for a single file.
+/// Uses `recent_authors` (if non-empty) to detect knowledge loss risk.
 pub fn compute_ownership(
     path: PathBuf,
     language: &str,
@@ -99,6 +111,9 @@ pub fn compute_ownership(
     }
 }
 
+/// Classify bus-factor risk based on ownership concentration.
+/// Critical: single owner ≥80%. High: top owner ≥60%.
+/// Medium: top 2-3 owners combine ≥80%. Low: otherwise.
 fn classify_risk(contributors: &[AuthorContribution]) -> RiskLevel {
     if contributors.is_empty() {
         return RiskLevel::Low;

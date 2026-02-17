@@ -1,14 +1,21 @@
+/// Git repository access via libgit2.
+///
+/// Provides file change frequencies, co-changing commit analysis,
+/// git blame for ownership, and recent author detection — all used
+/// by the hotspots, knowledge, and temporal coupling modules.
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
 use git2::{BlameOptions, DiffOptions, Repository, Sort};
 
+/// Wrapper around a `git2::Repository` with its resolved root path.
 pub struct GitRepo {
     repo: Repository,
     root: PathBuf,
 }
 
+/// How often a file was changed in git history.
 pub struct FileFrequency {
     pub path: PathBuf,
     pub commits: usize,
@@ -16,6 +23,7 @@ pub struct FileFrequency {
     pub last_commit: i64,
 }
 
+/// Per-author blame contribution for a single file.
 pub struct BlameInfo {
     pub author: String,
     pub email: String,
@@ -24,6 +32,7 @@ pub struct BlameInfo {
 }
 
 impl GitRepo {
+    /// Open the git repository that contains `path`.
     pub fn open(path: &Path) -> Result<Self, Box<dyn Error>> {
         let repo = Repository::discover(path)?;
         let root = repo
@@ -33,6 +42,7 @@ impl GitRepo {
         Ok(Self { repo, root })
     }
 
+    /// Return the working directory root of the repository.
     pub fn root(&self) -> &Path {
         &self.root
     }
@@ -61,6 +71,7 @@ impl GitRepo {
         Ok(())
     }
 
+    /// Count how many commits touched each file, with first/last timestamps.
     pub fn file_frequencies(
         &self,
         since: Option<i64>,
@@ -96,6 +107,8 @@ impl GitRepo {
         Ok(result)
     }
 
+    /// Collect groups of files that changed together in each commit.
+    /// Only includes commits that touch 2+ files.
     pub fn co_changing_commits(
         &self,
         since: Option<i64>,
@@ -167,6 +180,7 @@ impl GitRepo {
         Ok(authors)
     }
 
+    /// Diff a commit against its parent to get the list of changed file paths.
     fn changed_files(&self, commit: &git2::Commit) -> Result<Vec<PathBuf>, Box<dyn Error>> {
         let tree = commit.tree()?;
         let parent_tree = if commit.parent_count() > 0 {

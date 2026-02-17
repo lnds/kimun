@@ -1,3 +1,7 @@
+/// Report formatters for Halstead complexity metrics.
+///
+/// Displays per-file operator/operand counts, volume, effort, estimated
+/// bugs, and development time in both table and JSON formats.
 use std::path::PathBuf;
 
 use serde::Serialize;
@@ -5,6 +9,7 @@ use serde::Serialize;
 use super::analyzer::HalsteadMetrics;
 use crate::report_helpers;
 
+/// Per-file Halstead metrics with path and detected language.
 pub struct FileHalsteadMetrics {
     pub path: PathBuf,
     pub language: String,
@@ -30,6 +35,7 @@ pub(crate) fn format_time(seconds: f64) -> String {
     }
 }
 
+/// Print a table of per-file Halstead metrics with totals row.
 pub fn print_report(files: &[FileHalsteadMetrics]) {
     if files.is_empty() {
         println!("No recognized source files found.");
@@ -99,6 +105,7 @@ pub fn print_report(files: &[FileHalsteadMetrics]) {
     );
 }
 
+/// JSON-serializable representation of a file's Halstead metrics.
 #[derive(Serialize)]
 struct JsonEntry {
     path: String,
@@ -116,6 +123,7 @@ struct JsonEntry {
     time: f64,
 }
 
+/// Serialize Halstead metrics as pretty-printed JSON to stdout.
 pub fn print_json(files: &[FileHalsteadMetrics]) -> Result<(), Box<dyn std::error::Error>> {
     let entries: Vec<JsonEntry> = files
         .iter()

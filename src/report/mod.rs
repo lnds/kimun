@@ -1,3 +1,10 @@
+/// Combined report module (`cm report` command).
+///
+/// Walks all source files once, runs every analyzer (LOC, duplication,
+/// indentation, Halstead, cyclomatic, MI), and produces a unified
+/// markdown or JSON report with all metrics.
+mod analyzer;
+pub(crate) mod data;
 mod json;
 mod markdown;
 
@@ -5,115 +12,14 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::path::Path;
 
-use serde::Serialize;
-
-use crate::cycom;
 use crate::dups;
-use crate::hal;
-use crate::indent;
-use crate::loc::counter::{FileStats, LineKind};
+use crate::loc::counter::FileStats;
 use crate::loc::report::LanguageReport;
-use crate::mi;
-use crate::miv;
-use crate::util::read_and_classify;
 use crate::walk;
 
-/// Comprehensive project report combining all code metrics.
-///
-/// When serialized to JSON the structure is:
-/// ```json
-/// {
-///   "path": "...",
-///   "top": 20,
-///   "include_tests": false,
-///   "min_lines": 6,
-///   "loc": [{ "name": "Rust", "files": 5, "blank": 20, "comment": 10, "code": 500 }],
-///   "duplication": { "total_code_lines": ..., "duplicated_lines": ..., ... },
-///   "indent": [{ "path": "...", "code_lines": ..., "stddev": ..., ... }],
-///   "halstead": [{ "path": "...", "volume": ..., "effort": ..., "bugs": ... }],
-///   "cyclomatic": [{ "path": "...", "functions": ..., "total": ..., ... }],
-///   "mi_visual_studio": [{ "path": "...", "mi_score": ..., "level": "..." }],
-///   "mi_verifysoft": [{ "path": "...", "mi_score": ..., "level": "..." }]
-/// }
-/// ```
-///
-/// Each per-file section includes `total_count` (total files before truncation)
-/// and up to `top` entries sorted by the relevant metric.
-#[derive(Debug, Serialize)]
-pub struct ProjectReport {
-    pub path: String,
-    pub top: usize,
-    pub include_tests: bool,
-    pub min_lines: usize,
-    pub loc: Vec<LanguageReport>,
-    pub duplication: DupsSummary,
-    pub indent: SectionResult<IndentEntry>,
-    pub halstead: SectionResult<HalsteadEntry>,
-    pub cyclomatic: SectionResult<CycomEntry>,
-    pub mi_visual_studio: SectionResult<MiVisualStudioEntry>,
-    pub mi_verifysoft: SectionResult<MiVerifysoftEntry>,
-}
+pub use data::*;
 
-/// A section of per-file results with total count before truncation.
-#[derive(Debug, Serialize)]
-pub struct SectionResult<T> {
-    pub description: &'static str,
-    pub total_count: usize,
-    pub entries: Vec<T>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct DupsSummary {
-    pub description: &'static str,
-    pub total_code_lines: usize,
-    pub duplicated_lines: usize,
-    pub duplication_percentage: f64,
-    pub duplicate_groups: usize,
-    pub files_with_duplicates: usize,
-    pub largest_block: usize,
-}
-
-#[derive(Debug, Serialize)]
-pub struct IndentEntry {
-    pub path: String,
-    pub code_lines: usize,
-    pub stddev: f64,
-    pub max_depth: usize,
-    pub complexity: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct HalsteadEntry {
-    pub path: String,
-    pub volume: f64,
-    pub effort: f64,
-    pub bugs: f64,
-    pub time: f64,
-}
-
-#[derive(Debug, Serialize)]
-pub struct CycomEntry {
-    pub path: String,
-    pub functions: usize,
-    pub total: usize,
-    pub max: usize,
-    pub avg: f64,
-    pub level: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct MiVisualStudioEntry {
-    pub path: String,
-    pub mi_score: f64,
-    pub level: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct MiVerifysoftEntry {
-    pub path: String,
-    pub mi_score: f64,
-    pub level: String,
-}
+use analyzer::analyze_file_for_report;
 
 // --- Section descriptions (used in both markdown and JSON output) ---
 
@@ -161,6 +67,7 @@ fn sort_truncate<T>(
     total
 }
 
+/// Entry point: build the combined report and print it as markdown or JSON.
 pub fn run(
     path: &Path,
     json: bool,
@@ -179,114 +86,6 @@ pub fn run(
     Ok(())
 }
 
-/// Per-file analysis results collected by `analyze_file_for_report`.
-struct FileReportData {
-    blank: usize,
-    comment_lines: usize,
-    code_lines: usize,
-    dup_normalized: Vec<dups::detector::NormalizedLine>,
-    indent: Option<IndentEntry>,
-    halstead: Option<HalsteadEntry>,
-    cycom: Option<CycomEntry>,
-    mi_vs: Option<MiVisualStudioEntry>,
-    mi_vf: Option<MiVerifysoftEntry>,
-}
-
-/// Read, classify, and run all analyzers on a single file.
-/// Returns `None` for binary files or on I/O errors.
-fn analyze_file_for_report(
-    file_path: &Path,
-    spec: &crate::loc::language::LanguageSpec,
-) -> Option<FileReportData> {
-    let (lines, kinds) = match read_and_classify(file_path, spec) {
-        Ok(Some(v)) => v,
-        Ok(None) => return None,
-        Err(e) => {
-            eprintln!("warning: {}: {e}", file_path.display());
-            return None;
-        }
-    };
-
-    let blank = kinds.iter().filter(|k| **k == LineKind::Blank).count();
-    let comment_lines = kinds.iter().filter(|k| **k == LineKind::Comment).count();
-    let code_lines = kinds.iter().filter(|k| **k == LineKind::Code).count();
-
-    let dup_normalized = dups::normalize_content(&lines, &kinds);
-
-    let indent = indent::analyzer::analyze(&lines, &kinds, 4).map(|m| IndentEntry {
-        path: file_path.display().to_string(),
-        code_lines: m.code_lines,
-        stddev: m.stddev,
-        max_depth: m.max_depth,
-        complexity: m.complexity.as_str().to_string(),
-    });
-
-    let path_str = file_path.display().to_string();
-    let (halstead, volume_opt) = if let Some(h) = hal::analyze_content(&lines, &kinds, spec) {
-        let vol = h.volume;
-        (
-            Some(HalsteadEntry {
-                path: path_str.clone(),
-                volume: h.volume,
-                effort: h.effort,
-                bugs: h.bugs,
-                time: h.time,
-            }),
-            Some(vol),
-        )
-    } else {
-        (None, None)
-    };
-
-    let (cycom, complexity_opt) = if let Some(c) = cycom::analyze_content(&lines, &kinds, spec) {
-        (
-            Some(CycomEntry {
-                path: path_str.clone(),
-                functions: c.functions.len(),
-                total: c.total_complexity,
-                max: c.max_complexity,
-                avg: c.avg_complexity,
-                level: c.level.as_str().to_string(),
-            }),
-            Some(c.total_complexity),
-        )
-    } else {
-        (None, None)
-    };
-
-    let (mi_vs, mi_vf) = if let (Some(volume), Some(complexity)) = (volume_opt, complexity_opt) {
-        let vs =
-            mi::analyzer::compute_mi(volume, complexity, code_lines).map(|m| MiVisualStudioEntry {
-                path: path_str.clone(),
-                mi_score: m.mi_score,
-                level: m.level.as_str().to_string(),
-            });
-        let vf =
-            miv::analyzer::compute_mi(volume, complexity, code_lines, comment_lines).map(|m| {
-                MiVerifysoftEntry {
-                    path: path_str,
-                    mi_score: m.mi_score,
-                    level: m.level.as_str().to_string(),
-                }
-            });
-        (vs, vf)
-    } else {
-        (None, None)
-    };
-
-    Some(FileReportData {
-        blank,
-        comment_lines,
-        code_lines,
-        dup_normalized,
-        indent,
-        halstead,
-        cycom,
-        mi_vs,
-        mi_vf,
-    })
-}
-
 /// Build the full project report by walking the file tree once and running
 /// all analyzers per file. Returns the report struct for output or testing.
 pub fn build_report(
@@ -295,16 +94,11 @@ pub fn build_report(
     top: usize,
     min_lines: usize,
 ) -> Result<ProjectReport, Box<dyn Error>> {
-    // LOC aggregation — counts all files without deduplication
-    // (standalone `cm loc` deduplicates by content hash; report does not).
-    // Duplication is surfaced explicitly in the duplication section.
+    // LOC aggregation — counts all files without deduplication.
     let mut stats_by_lang: HashMap<&'static str, (usize, FileStats)> = HashMap::new();
-
-    // Dups collection
     let mut dup_files: Vec<dups::detector::NormalizedFile> = Vec::new();
     let mut total_code_lines: usize = 0;
 
-    // Per-file metrics
     let mut indent_results: Vec<IndentEntry> = Vec::new();
     let mut hal_results: Vec<HalsteadEntry> = Vec::new();
     let mut cycom_results: Vec<CycomEntry> = Vec::new();
@@ -317,7 +111,6 @@ pub fn build_report(
             None => continue,
         };
 
-        // LOC
         {
             let entry = stats_by_lang
                 .entry(spec.name)
@@ -328,14 +121,12 @@ pub fn build_report(
             entry.1.code += result.code_lines;
         }
 
-        // Dups
         total_code_lines += result.dup_normalized.len();
         dup_files.push(dups::detector::NormalizedFile {
             path: file_path.to_path_buf(),
             lines: result.dup_normalized,
         });
 
-        // Per-file metric results
         if let Some(e) = result.indent {
             indent_results.push(e);
         }
@@ -353,14 +144,12 @@ pub fn build_report(
         }
     }
 
-    // --- Post-walk: Dups detection ---
-    // Pass quiet=true to suppress boilerplate-skip notices in report context.
+    // Duplication detection (project-level).
     let dup_groups = if dup_files.is_empty() {
         Vec::new()
     } else {
         dups::detector::detect_duplicates(&dup_files, min_lines, true)
     };
-
     let duplicated_lines: usize = dup_groups.iter().map(|g| g.duplicated_lines()).sum();
     let largest_block = dup_groups.iter().map(|g| g.line_count).max().unwrap_or(0);
     let files_with_dups: std::collections::HashSet<&Path> = dup_groups
@@ -373,23 +162,10 @@ pub fn build_report(
         duplicated_lines as f64 / total_code_lines as f64 * 100.0
     };
 
-    // --- Build LOC reports ---
-    let loc_reports: Vec<LanguageReport> = {
-        let mut reports: Vec<LanguageReport> = stats_by_lang
-            .into_iter()
-            .map(|(name, (files, fs))| LanguageReport {
-                name: name.to_string(),
-                files,
-                blank: fs.blank,
-                comment: fs.comment,
-                code: fs.code,
-            })
-            .collect();
-        reports.sort_by(|a, b| b.code.cmp(&a.code).then_with(|| a.name.cmp(&b.name)));
-        reports
-    };
+    // Build LOC reports sorted by code lines descending.
+    let loc_reports = build_loc_reports(stats_by_lang);
 
-    // --- Sort, record totals, and truncate ---
+    // Sort, record totals, and truncate each section.
     let indent_total = sort_truncate(&mut indent_results, top, |a, b| {
         b.stddev.total_cmp(&a.stddev)
     });
@@ -443,6 +219,24 @@ pub fn build_report(
             entries: mi_vf_results,
         },
     })
+}
+
+/// Convert per-language stats into sorted LOC report entries.
+fn build_loc_reports(
+    stats_by_lang: HashMap<&'static str, (usize, FileStats)>,
+) -> Vec<LanguageReport> {
+    let mut reports: Vec<LanguageReport> = stats_by_lang
+        .into_iter()
+        .map(|(name, (files, fs))| LanguageReport {
+            name: name.to_string(),
+            files,
+            blank: fs.blank,
+            comment: fs.comment,
+            code: fs.code,
+        })
+        .collect();
+    reports.sort_by(|a, b| b.code.cmp(&a.code).then_with(|| a.name.cmp(&b.name)));
+    reports
 }
 
 #[cfg(test)]

@@ -1,8 +1,13 @@
+/// Report formatters for temporal coupling analysis.
+///
+/// Displays file pairs that frequently change together in commits,
+/// ranked by coupling strength (shared_commits / min(commits_a, commits_b)).
 use serde::Serialize;
 
 use super::analyzer::FileCoupling;
 use crate::report_helpers;
 
+/// Print a table of temporally coupled file pairs with strength and level.
 pub fn print_report(pairs: &[FileCoupling], total: usize) {
     if pairs.is_empty() {
         println!("No coupled file pairs found.");
@@ -51,6 +56,7 @@ pub fn print_report(pairs: &[FileCoupling], total: usize) {
     }
 }
 
+/// JSON-serializable representation of a coupled file pair.
 #[derive(Serialize)]
 struct JsonEntry {
     file_a: String,
@@ -62,6 +68,7 @@ struct JsonEntry {
     level: String,
 }
 
+/// Serialize coupled file pairs as pretty-printed JSON to stdout.
 pub fn print_json(pairs: &[FileCoupling]) -> Result<(), Box<dyn std::error::Error>> {
     let entries: Vec<JsonEntry> = pairs
         .iter()

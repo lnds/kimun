@@ -1,3 +1,8 @@
+/// Finite state machine steps for source line classification.
+///
+/// Implements the core character-by-character logic for detecting
+/// comments, strings, and pragmas. Called by `counter.rs` which
+/// drives the FSM line by line.
 use super::language::LanguageSpec;
 
 /// The kind of string literal currently being parsed.

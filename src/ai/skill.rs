@@ -1,7 +1,15 @@
+/// AI provider skill installer.
+///
+/// Installs a Claude Code skill file (`SKILL.md`) that teaches the AI
+/// provider how to invoke the `cm` CLI for code analysis. The skill
+/// can be installed at project level (`.claude/skills/`) or user level
+/// (`~/.claude/skills/`).
 use std::fs;
 use std::io::{self, Write};
 use std::path::PathBuf;
 
+/// Skill markdown content embedded at compile time.
+/// Describes all available `cm` subcommands and their JSON schemas.
 const SKILL_CONTENT: &str = r#"---
 name: cm-analyze
 description: Analyze a code repository using cm (code metrics) tool
@@ -97,6 +105,11 @@ Produce a structured report with:
 Reference specific file names and metric values. Be concise but thorough.
 "#;
 
+/// Install the `cm-analyze` skill for the given AI provider.
+///
+/// Prompts the user to choose between project-level and user-level
+/// installation, creates the directory structure, and writes the skill file.
+/// Currently only the `claude` provider is supported.
 pub fn install(provider: &str) -> Result<(), Box<dyn std::error::Error>> {
     if provider != "claude" {
         return Err(format!("Unsupported provider: {provider}. Supported: claude").into());

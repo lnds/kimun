@@ -1,9 +1,14 @@
+/// Report formatters for lines-of-code results.
+///
+/// Provides a cloc-style table (sorted by code lines descending) and
+/// a JSON output with per-language and total breakdowns.
 use std::time::Duration;
 
 use serde::Serialize;
 
 use crate::report_helpers;
 
+/// Per-language line count summary.
 #[derive(Debug, Serialize)]
 pub struct LanguageReport {
     pub name: String,
@@ -13,6 +18,7 @@ pub struct LanguageReport {
     pub code: usize,
 }
 
+/// Timing and file-count statistics shown in verbose mode.
 pub struct VerboseStats {
     pub total_files: usize,
     pub unique_files: usize,
@@ -20,6 +26,8 @@ pub struct VerboseStats {
     pub elapsed: Duration,
 }
 
+/// Print a cloc-style table with per-language line counts and totals.
+/// When `verbose` is provided, prints file counts and throughput first.
 pub fn print_report(mut reports: Vec<LanguageReport>, verbose: Option<VerboseStats>) {
     reports.sort_by(|a, b| b.code.cmp(&a.code));
 
@@ -79,12 +87,14 @@ pub fn print_report(mut reports: Vec<LanguageReport>, verbose: Option<VerboseSta
     println!("{separator}");
 }
 
+/// JSON envelope with per-language details and aggregated totals.
 #[derive(Serialize)]
 struct JsonOutput {
     languages: Vec<LanguageReport>,
     totals: JsonTotals,
 }
 
+/// Aggregated totals across all languages.
 #[derive(Serialize)]
 struct JsonTotals {
     files: usize,
@@ -93,6 +103,7 @@ struct JsonTotals {
     code: usize,
 }
 
+/// Serialize line counts as pretty-printed JSON to stdout.
 pub fn print_json(mut reports: Vec<LanguageReport>) {
     reports.sort_by(|a, b| b.code.cmp(&a.code));
 

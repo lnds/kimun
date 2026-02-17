@@ -1,3 +1,8 @@
+/// Filesystem walking with `.gitignore` support and test exclusion.
+///
+/// Provides directory traversal that respects `.gitignore` rules, skips
+/// `.git` directories, filters test directories/files when requested,
+/// and detects source file languages by extension or shebang line.
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};

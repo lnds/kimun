@@ -1,3 +1,8 @@
+/// Function detection and complexity analysis for cyclomatic metrics.
+///
+/// Detects function boundaries using either brace-scoped languages
+/// (C, Rust, Java, etc.) or indent-scoped languages (Python, Ruby),
+/// then counts control-flow keywords per function body.
 use crate::util::mask_strings;
 
 use super::markers::ComplexityMarkers;
@@ -40,6 +45,8 @@ fn is_c_family_function(trimmed: &str) -> bool {
     !CONTROL_KEYWORDS.contains(&first_word)
 }
 
+/// Extract the function name from a declaration line using language-specific
+/// markers or the C-family heuristic (token before the first `(`).
 pub fn extract_function_name(trimmed: &str, markers: &ComplexityMarkers) -> String {
     for marker in markers.function_markers {
         if let Some(pos) = trimmed.find(marker) {
@@ -104,6 +111,7 @@ fn find_function_body<'a>(
     (func_code_lines, j)
 }
 
+/// Count the indentation level of a line in spaces (tabs count as 4).
 fn indent_level(line: &str) -> usize {
     let mut spaces = 0;
     for ch in line.chars() {
@@ -118,6 +126,8 @@ fn indent_level(line: &str) -> usize {
 
 use super::analyzer::{CyclomaticLevel, FunctionComplexity, count_complexity_for_lines};
 
+/// Detect function boundaries and compute per-function cyclomatic complexity.
+/// Delegates to brace-scoped or indent-scoped detection based on the language.
 pub fn detect_functions(
     all_lines: &[String],
     code_lines: &[(usize, &str)],
@@ -134,6 +144,8 @@ pub fn detect_functions(
     functions
 }
 
+/// Walk code lines, find function declarations by markers or C-family
+/// heuristic, track brace depth to determine body extent, count complexity.
 fn detect_brace_scoped(
     code_lines: &[(usize, &str)],
     markers: &ComplexityMarkers,
@@ -162,6 +174,8 @@ fn detect_brace_scoped(
     }
 }
 
+/// Walk code lines for indent-scoped languages (Python, Ruby), using
+/// indentation level to determine where function bodies end.
 fn detect_indent_scoped(
     all_lines: &[String],
     code_lines: &[(usize, &str)],

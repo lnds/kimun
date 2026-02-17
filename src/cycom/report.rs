@@ -1,3 +1,8 @@
+/// Report formatters for cyclomatic complexity analysis.
+///
+/// Provides three output modes: per-file table, per-function breakdown,
+/// and JSON. Complexity levels (Simple, Moderate, Complex, HighlyComplex)
+/// help identify functions that are hard to test.
 use std::path::PathBuf;
 
 use serde::Serialize;
@@ -18,6 +23,8 @@ pub struct FileCycomMetrics {
 }
 
 /// Print a table of per-file cyclomatic complexity with totals row.
+/// Print a table of per-file cyclomatic complexity with a totals row
+/// showing aggregate function count, average, max, and total complexity.
 pub fn print_report(files: &[FileCycomMetrics]) {
     if files.is_empty() {
         println!("No recognized source files found.");
@@ -77,7 +84,8 @@ pub fn print_report(files: &[FileCycomMetrics]) {
     );
 }
 
-/// Print per-function complexity breakdown grouped by file.
+/// Print per-function complexity breakdown grouped by file, showing
+/// each function's name, complexity value, and level classification.
 pub fn print_per_function(files: &[FileCycomMetrics]) {
     if files.is_empty() {
         println!("No recognized source files found.");
@@ -114,6 +122,7 @@ pub fn print_per_function(files: &[FileCycomMetrics]) {
     println!("{separator}");
 }
 
+/// JSON-serializable representation of a single function's complexity.
 #[derive(Serialize)]
 struct JsonFunctionEntry {
     name: String,
@@ -122,6 +131,7 @@ struct JsonFunctionEntry {
     level: CyclomaticLevel,
 }
 
+/// JSON-serializable representation of a file's complexity with function details.
 #[derive(Serialize)]
 struct JsonFileEntry {
     path: String,
@@ -134,7 +144,8 @@ struct JsonFileEntry {
     functions: Vec<JsonFunctionEntry>,
 }
 
-/// Serialize per-file metrics (including per-function detail) as pretty JSON.
+/// Serialize per-file metrics (including per-function detail) as
+/// pretty-printed JSON to stdout.
 pub fn print_json(files: &[FileCycomMetrics]) -> Result<(), Box<dyn std::error::Error>> {
     let entries: Vec<JsonFileEntry> = files
         .iter()

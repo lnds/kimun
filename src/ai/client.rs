@@ -1,11 +1,19 @@
+/// HTTP client for the Anthropic Messages API.
+///
+/// Handles request serialization, authentication headers, timeout, and
+/// response deserialization for the AI-assisted analysis feature.
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::time::Duration;
 
+/// Anthropic Messages API endpoint.
 const API_URL: &str = "https://api.anthropic.com/v1/messages";
+/// API version header required by the Anthropic API.
 const ANTHROPIC_VERSION: &str = "2023-06-01";
+/// Maximum time to wait for a model response (5 minutes).
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(300);
 
+/// Request payload for the Anthropic Messages API.
 #[derive(Serialize)]
 pub struct ApiRequest {
     pub model: String,
@@ -15,12 +23,15 @@ pub struct ApiRequest {
     pub messages: Vec<Message>,
 }
 
+/// A single message in the conversation (role + content).
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Message {
     pub role: String,
     pub content: MessageContent,
 }
 
+/// Message content: either a plain text string or a list of content blocks
+/// (text, tool_use, tool_result) for multi-turn tool interactions.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(untagged)]
 pub enum MessageContent {
@@ -28,6 +39,7 @@ pub enum MessageContent {
     Blocks(Vec<ContentBlock>),
 }
 
+/// A typed content block within a message: text, tool invocation, or tool result.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(tag = "type")]
 pub enum ContentBlock {
@@ -46,6 +58,7 @@ pub enum ContentBlock {
     },
 }
 
+/// Response from the Anthropic Messages API.
 #[derive(Deserialize, Debug)]
 pub struct ApiResponse {
     pub content: Vec<ContentBlock>,
@@ -53,6 +66,8 @@ pub struct ApiResponse {
     pub stop_reason: String,
 }
 
+/// Send a request to the Anthropic Messages API and return the parsed response.
+/// Fails with a descriptive error on HTTP errors or deserialization failures.
 pub fn send_message(
     api_key: &str,
     request: &ApiRequest,

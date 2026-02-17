@@ -1,3 +1,8 @@
+/// Cyclomatic complexity analysis module.
+///
+/// Detects functions per file, counts control-flow decision points
+/// (if, for, while, match, etc.), and classifies complexity as
+/// Simple, Moderate, Complex, or HighlyComplex.
 mod analyzer;
 mod detection;
 mod markers;
@@ -24,6 +29,8 @@ pub(crate) fn analyze_content(
     analyze(lines, kinds, cm)
 }
 
+/// Read a file from disk, classify lines, detect functions, and compute
+/// per-function and file-level cyclomatic complexity.
 pub(crate) fn analyze_file(
     path: &Path,
     spec: &LanguageSpec,
@@ -55,6 +62,8 @@ pub(crate) fn analyze_file(
     }))
 }
 
+/// Walk source files, compute cyclomatic complexity, filter/sort/truncate
+/// results, and print as a table, per-function breakdown, or JSON.
 pub fn run(
     path: &Path,
     json: bool,

@@ -1,3 +1,8 @@
+/// Markdown report formatter for the combined `cm report` command.
+///
+/// Generates a single markdown document with sections for lines of code,
+/// duplication, indentation, Halstead, cyclomatic complexity, and
+/// maintainability index (both Visual Studio and verifysoft variants).
 use super::ProjectReport;
 use crate::hal::report::format_time;
 
@@ -7,7 +12,8 @@ fn escape_md(s: &str) -> String {
     s.replace('\\', "\\\\").replace('|', "\\|")
 }
 
-/// Format "top N of M" or just "N" when not truncated.
+/// Format a count as "top N of M" when truncated, or just "N" when
+/// all entries are shown.
 fn top_of(shown: usize, total: usize) -> String {
     if shown < total {
         format!("top {shown} of {total}")
@@ -16,6 +22,9 @@ fn top_of(shown: usize, total: usize) -> String {
     }
 }
 
+/// Print the full project report as a single markdown document.
+/// Each metric section includes a description, a markdown table of the
+/// top N files, and (when truncated) a note of how many were omitted.
 pub fn print_markdown(report: &ProjectReport) {
     println!("# Code Metrics Report");
     println!();

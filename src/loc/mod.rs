@@ -1,5 +1,11 @@
+/// Lines-of-code counting module (like `cloc`).
+///
+/// Walks the directory tree, deduplicates files by content hash,
+/// counts blank/comment/code lines per language via a character-level
+/// FSM, and aggregates results for table or JSON output.
 pub(crate) mod counter;
 mod fsm;
+mod lang_macro;
 pub(crate) mod language;
 pub(crate) mod report;
 
@@ -13,6 +19,8 @@ use crate::walk;
 use counter::{FileStats, count_lines};
 use report::{LanguageReport, VerboseStats, print_json, print_report};
 
+/// Walk source files, deduplicate by content hash, count lines per
+/// language, and print a summary table (or JSON when `json` is true).
 pub fn run(path: &Path, verbose: bool, json: bool) -> Result<(), Box<dyn Error>> {
     let start = Instant::now();
     let mut stats_by_lang: HashMap<&'static str, (usize, FileStats)> = HashMap::new();

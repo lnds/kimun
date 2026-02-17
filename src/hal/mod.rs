@@ -1,5 +1,11 @@
+/// Halstead complexity metrics module.
+///
+/// Tokenizes source code (excluding comments and multi-line strings),
+/// counts distinct and total operators/operands, and computes volume,
+/// difficulty, effort, estimated bugs, and implementation time.
 mod analyzer;
 pub(crate) mod report;
+mod rules;
 mod string_mask;
 mod tokenizer;
 
@@ -41,6 +47,8 @@ pub(crate) fn analyze_content(
     compute(&counts)
 }
 
+/// Read a file from disk, classify lines, tokenize code, and compute
+/// Halstead metrics. Returns `None` for binary or unsupported files.
 pub(crate) fn analyze_file(
     path: &Path,
     spec: &LanguageSpec,
@@ -82,6 +90,8 @@ pub(crate) fn analyze_file(
     }))
 }
 
+/// Walk source files, compute Halstead metrics for each, sort by the
+/// chosen metric (effort, volume, or bugs), and print results.
 pub fn run(
     path: &Path,
     json: bool,

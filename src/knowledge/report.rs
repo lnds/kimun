@@ -1,8 +1,14 @@
+/// Report formatters for knowledge map (code ownership) analysis.
+///
+/// Provides table and JSON output showing per-file primary owner,
+/// ownership concentration, contributor count, and knowledge loss risk.
 use serde::Serialize;
 
 use super::analyzer::FileOwnership;
 use crate::report_helpers;
 
+/// Print a table of per-file ownership with risk assessment and
+/// a summary of files at risk of knowledge loss (inactive primary owner).
 pub fn print_report(files: &[FileOwnership]) {
     if files.is_empty() {
         println!("No files found for knowledge map analysis.");
@@ -64,6 +70,7 @@ pub fn print_report(files: &[FileOwnership]) {
     }
 }
 
+/// JSON-serializable representation of a single file's ownership data.
 #[derive(Serialize)]
 struct JsonEntry {
     path: String,
@@ -76,6 +83,7 @@ struct JsonEntry {
     knowledge_loss: bool,
 }
 
+/// Serialize per-file ownership data as pretty-printed JSON to stdout.
 pub fn print_json(files: &[FileOwnership]) -> Result<(), Box<dyn std::error::Error>> {
     let entries: Vec<JsonEntry> = files
         .iter()

@@ -39,6 +39,7 @@ pub enum Grade {
 }
 
 impl Grade {
+    /// Short display string for this grade (e.g. "A++", "B-", "F--").
     pub fn as_str(self) -> &'static str {
         match self {
             Self::APlusPlus => "A++",
@@ -66,6 +67,8 @@ impl fmt::Display for Grade {
     }
 }
 
+/// Map a numeric score (0–100) to a letter grade.
+/// Thresholds: A++ ≥97, A+ ≥93, A ≥90, A- ≥87, B+ ≥83, B ≥80, etc.
 pub fn score_to_grade(score: f64) -> Grade {
     if score >= 97.0 {
         Grade::APlusPlus
@@ -100,6 +103,7 @@ pub fn score_to_grade(score: f64) -> Grade {
     }
 }
 
+/// A single scored dimension (e.g. MI, Complexity) with its weight.
 #[derive(Debug, Clone, Serialize)]
 pub struct DimensionScore {
     pub name: &'static str,
@@ -108,6 +112,7 @@ pub struct DimensionScore {
     pub grade: Grade,
 }
 
+/// Per-file weighted score with identified issues.
 #[derive(Debug, Clone, Serialize)]
 pub struct FileScore {
     pub path: PathBuf,
@@ -117,6 +122,8 @@ pub struct FileScore {
     pub issues: Vec<String>,
 }
 
+/// Aggregated project-level score with per-dimension breakdown
+/// and the worst-scoring files that need attention.
 #[derive(Debug, Clone, Serialize)]
 pub struct ProjectScore {
     pub score: f64,

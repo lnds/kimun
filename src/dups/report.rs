@@ -1,3 +1,7 @@
+/// Report formatters for duplicate code detection.
+///
+/// Provides summary, detailed, and JSON output modes showing duplicate
+/// groups with severity classification (Rule of Three analysis).
 use serde::Serialize;
 
 use super::detector::{DuplicateGroup, DuplicationSeverity};
@@ -189,12 +193,14 @@ pub fn print_detailed(
     }
 }
 
+/// JSON-serializable wrapper combining metrics and duplicate group details.
 #[derive(Serialize)]
 struct JsonOutput<'a> {
     metrics: JsonMetrics,
     groups: &'a [DuplicateGroup],
 }
 
+/// JSON-serializable summary of duplication metrics with assessment label.
 #[derive(Serialize)]
 struct JsonMetrics {
     total_code_lines: usize,

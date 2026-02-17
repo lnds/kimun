@@ -1,3 +1,7 @@
+/// Report formatters for indentation complexity analysis.
+///
+/// Displays per-file indentation stddev and max depth, classified by
+/// Adam Tornhill's complexity thresholds ("Your Code as a Crime Scene").
 use std::path::PathBuf;
 
 use serde::Serialize;
@@ -5,6 +9,7 @@ use serde::Serialize;
 use super::analyzer::ComplexityLevel;
 use crate::report_helpers;
 
+/// Per-file indentation metrics with classification.
 pub struct FileIndentMetrics {
     pub path: PathBuf,
     pub code_lines: usize,
@@ -14,6 +19,7 @@ pub struct FileIndentMetrics {
     pub complexity: ComplexityLevel,
 }
 
+/// Print a table of per-file indentation complexity sorted by stddev.
 pub fn print_report(files: &[FileIndentMetrics]) {
     if files.is_empty() {
         println!("No recognized source files found.");
@@ -53,6 +59,7 @@ pub fn print_report(files: &[FileIndentMetrics]) {
     println!(" \"Your Code as a Crime Scene\", Ch.6). Thresholds are heuristic.");
 }
 
+/// JSON-serializable representation of a file's indentation metrics.
 #[derive(Serialize)]
 struct JsonFileEntry {
     path: String,
@@ -62,6 +69,7 @@ struct JsonFileEntry {
     complexity: ComplexityLevel,
 }
 
+/// Serialize indentation metrics as pretty-printed JSON to stdout.
 pub fn print_json(files: &[FileIndentMetrics]) -> Result<(), Box<dyn std::error::Error>> {
     let entries: Vec<JsonFileEntry> = files
         .iter()
