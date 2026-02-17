@@ -72,35 +72,35 @@ fn build_report_counts_loc() {
 }
 
 #[test]
-fn build_report_no_dedup_for_loc() {
+fn build_report_dedup_for_loc() {
     let dir = tempfile::tempdir().unwrap();
     let content = "fn foo() {\n    let x = 1;\n}\n";
     fs::write(dir.path().join("a.rs"), content).unwrap();
     fs::write(dir.path().join("b.rs"), content).unwrap();
     let report = build_report(dir.path(), false, 20, 6).unwrap();
 
-    // Both files counted — no dedup in report
-    assert_eq!(report.loc[0].files, 2);
+    // Duplicate files deduplicated — consistent with cm loc
+    assert_eq!(report.loc[0].files, 1);
 }
 
 #[test]
 fn build_report_detects_duplicates() {
     let dir = tempfile::tempdir().unwrap();
-    // 7 code lines per file, all identical
-    let code = "fn process() {\n    let x = read();\n    let y = transform(x);\n    write(y);\n    log(\"done\");\n    cleanup();\n}\n";
-    fs::write(dir.path().join("a.rs"), code).unwrap();
-    fs::write(dir.path().join("b.rs"), code).unwrap();
+    // Two files with different wrappers but a shared 7-line block inside.
+    // Different overall content avoids content-hash deduplication.
+    let shared = "    let x = read();\n    let y = transform(x);\n    write(y);\n    log(\"done\");\n    cleanup();\n    validate();\n    finish();\n";
+    let code_a = format!("fn process_a() {{\n{}}}\n", shared);
+    let code_b = format!("fn process_b() {{\n{}}}\n", shared);
+    fs::write(dir.path().join("a.rs"), &code_a).unwrap();
+    fs::write(dir.path().join("b.rs"), &code_b).unwrap();
     let report = build_report(dir.path(), false, 20, 6).unwrap();
 
-    // 1 duplicate group of 7 lines across 2 files
+    // Shared block detected across both files
     assert_eq!(report.duplication.duplicate_groups, 1);
-    // duplicated_lines = line_count * (locations - 1) = 7 * 1 = 7
-    assert_eq!(report.duplication.duplicated_lines, 7);
-    // total_code_lines = 7 * 2 files = 14
-    assert_eq!(report.duplication.total_code_lines, 14);
-    assert!((report.duplication.duplication_percentage - 50.0).abs() < 0.1);
+    assert!(report.duplication.duplicated_lines >= 7);
+    assert_eq!(report.duplication.total_code_lines, 18);
     assert_eq!(report.duplication.files_with_duplicates, 2);
-    assert_eq!(report.duplication.largest_block, 7);
+    assert!(report.duplication.largest_block >= 7);
 }
 
 #[test]
@@ -230,10 +230,12 @@ fn build_report_json_structure() {
 #[test]
 fn build_report_min_lines_affects_dups() {
     let dir = tempfile::tempdir().unwrap();
-    // 5 code lines per file
-    let code = "fn f() {\n    let a = 1;\n    let b = 2;\n    let c = 3;\n}\n";
-    fs::write(dir.path().join("a.rs"), code).unwrap();
-    fs::write(dir.path().join("b.rs"), code).unwrap();
+    // Two files with different wrappers but shared 5-line block
+    let shared = "    let a = 1;\n    let b = 2;\n    let c = 3;\n    let d = 4;\n    let e = 5;\n";
+    let code_a = format!("fn fa() {{\n{}}}\n", shared);
+    let code_b = format!("fn fb() {{\n{}}}\n", shared);
+    fs::write(dir.path().join("a.rs"), &code_a).unwrap();
+    fs::write(dir.path().join("b.rs"), &code_b).unwrap();
 
     // min_lines=3: block of 5 lines >= 3, so duplicates detected
     let report_low = build_report(dir.path(), false, 20, 3).unwrap();

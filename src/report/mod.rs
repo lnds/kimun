@@ -8,13 +8,14 @@ pub(crate) mod data;
 mod json;
 mod markdown;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::path::Path;
 
 use crate::dups;
 use crate::loc::counter::FileStats;
 use crate::loc::report::LanguageReport;
+use crate::util::hash_file;
 use crate::walk;
 
 pub use data::*;
@@ -94,8 +95,9 @@ pub fn build_report(
     top: usize,
     min_lines: usize,
 ) -> Result<ProjectReport, Box<dyn Error>> {
-    // LOC aggregation — counts all files without deduplication.
+    // LOC aggregation — deduplicates files by content hash (consistent with cm loc).
     let mut stats_by_lang: HashMap<&'static str, (usize, FileStats)> = HashMap::new();
+    let mut seen_hashes: HashSet<u64> = HashSet::new();
     let mut dup_files: Vec<dups::detector::NormalizedFile> = Vec::new();
     let mut total_code_lines: usize = 0;
 
@@ -106,6 +108,12 @@ pub fn build_report(
     let mut mi_vf_results: Vec<MiVerifysoftEntry> = Vec::new();
 
     for (file_path, spec) in walk::source_files(path, !include_tests) {
+        // Skip duplicate files (same content), matching cm loc behavior.
+        if let Some(h) = hash_file(&file_path)
+            && !seen_hashes.insert(h)
+        {
+            continue;
+        }
         let result = match analyze_file_for_report(&file_path, spec) {
             Some(r) => r,
             None => continue,
