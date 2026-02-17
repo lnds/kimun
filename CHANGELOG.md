@@ -1,3 +1,19 @@
+## 0.12.0 (2026-02-16)
+
+### Feat
+
+- install claude skill
+- ai claude provider
+
+### Fix
+
+- dups now strips #[cfg(test)] blocks when excluding tests, matching score behavior
+
+### Refactor
+
+- read_and_classify and piecewise
+- remove dups
+
 ## 0.11.0 (2026-02-16)
 
 ### Feat
