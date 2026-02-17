@@ -49,11 +49,9 @@ fn main() {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Loc {
-            path,
-            verbose,
-            json,
-        } => run_command(path, |t| loc::run(t, verbose, json)),
+        Commands::Loc { common, verbose } => run_command(common.path, |t| {
+            loc::run(t, verbose, common.json, common.include_tests)
+        }),
         Commands::Dups {
             common,
             report,

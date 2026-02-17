@@ -54,6 +54,19 @@ const MAX_OCCURRENCES: usize = 100;
 /// A set of (file_index, line_offset) pairs identifying where a window appears.
 type LocationSet = Vec<(usize, usize)>;
 
+/// Hash a LocationSet into a u64 using FNV-1a for efficient HashMap/HashSet keys.
+/// Avoids O(n) hashing of the full Vec on every lookup.
+fn hash_location_set(locs: &[(usize, usize)]) -> u64 {
+    let mut hash: u64 = 0xcbf29ce484222325;
+    for (f, o) in locs {
+        hash ^= *f as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
+        hash ^= *o as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    hash
+}
+
 /// Compute FNV-1a hash of a window of normalized code lines.
 ///
 /// Uses a 0xFF separator between lines to prevent collisions where line
@@ -103,8 +116,8 @@ fn validate_hashes(
     files: &[NormalizedFile],
     min_lines: usize,
     quiet: bool,
-) -> (HashMap<LocationSet, u64>, Vec<(u64, LocationSet)>) {
-    let mut location_to_hash: HashMap<LocationSet, u64> = HashMap::new();
+) -> (HashMap<u64, u64>, Vec<(u64, LocationSet)>) {
+    let mut location_to_hash: HashMap<u64, u64> = HashMap::new();
     let mut valid_hashes: Vec<(u64, LocationSet)> = Vec::new();
     let mut skipped_common = 0usize;
 
@@ -137,7 +150,7 @@ fn validate_hashes(
             continue;
         }
 
-        location_to_hash.insert(locations.clone(), hash);
+        location_to_hash.insert(hash_location_set(&locations), hash);
         valid_hashes.push((hash, locations));
     }
 
@@ -158,8 +171,8 @@ fn validate_hashes(
 /// prevent re-processing. Returns the new start locations and backward count.
 fn extend_backward(
     locations: &[(usize, usize)],
-    location_to_hash: &HashMap<LocationSet, u64>,
-    consumed: &mut HashSet<LocationSet>,
+    location_to_hash: &HashMap<u64, u64>,
+    consumed: &mut HashSet<u64>,
 ) -> (LocationSet, usize) {
     let mut start_locs = locations.to_vec();
     let mut backward_ext = 0usize;
@@ -168,8 +181,9 @@ fn extend_backward(
             break;
         }
         let prev_locs: LocationSet = start_locs.iter().map(|(f, o)| (*f, o - 1)).collect();
-        if location_to_hash.contains_key(&prev_locs) {
-            consumed.insert(prev_locs.clone());
+        let prev_key = hash_location_set(&prev_locs);
+        if location_to_hash.contains_key(&prev_key) {
+            consumed.insert(prev_key);
             start_locs = prev_locs;
             backward_ext += 1;
         } else {
@@ -186,15 +200,16 @@ fn extend_backward(
 /// Returns the number of forward extension steps taken.
 fn extend_forward(
     locations: &[(usize, usize)],
-    location_to_hash: &HashMap<LocationSet, u64>,
-    consumed: &mut HashSet<LocationSet>,
+    location_to_hash: &HashMap<u64, u64>,
+    consumed: &mut HashSet<u64>,
 ) -> usize {
     let mut current_locs = locations.to_vec();
     let mut forward_ext = 0usize;
     loop {
         let next_locs: LocationSet = current_locs.iter().map(|(f, o)| (*f, o + 1)).collect();
-        if location_to_hash.contains_key(&next_locs) {
-            consumed.insert(next_locs.clone());
+        let next_key = hash_location_set(&next_locs);
+        if location_to_hash.contains_key(&next_key) {
+            consumed.insert(next_key);
             current_locs = next_locs;
             forward_ext += 1;
         } else {
@@ -286,14 +301,15 @@ pub fn detect_duplicates(
     let (location_to_hash, valid_hashes) = validate_hashes(hash_map, files, min_lines, quiet);
 
     // Phase 3: extension-based merging — see doc comment above for details.
-    let mut consumed: HashSet<LocationSet> = HashSet::new();
+    let mut consumed: HashSet<u64> = HashSet::new();
     let mut groups: Vec<DuplicateGroup> = Vec::new();
 
     for (_hash, locations) in &valid_hashes {
-        if consumed.contains(locations) {
+        let loc_key = hash_location_set(locations);
+        if consumed.contains(&loc_key) {
             continue;
         }
-        consumed.insert(locations.clone());
+        consumed.insert(loc_key);
 
         let (start_locs, backward_ext) =
             extend_backward(locations, &location_to_hash, &mut consumed);

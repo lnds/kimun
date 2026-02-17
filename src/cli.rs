@@ -34,16 +34,12 @@ pub struct CommonArgs {
 pub enum Commands {
     /// Count lines of code (blank, comment, code) by language
     Loc {
-        /// Directory to analyze (default: current directory)
-        path: Option<PathBuf>,
+        #[command(flatten)]
+        common: CommonArgs,
 
         /// Show summary stats (files read, unique, ignored, elapsed time)
         #[arg(short, long)]
         verbose: bool,
-
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
     },
 
     /// Detect duplicate code across files

@@ -28,9 +28,17 @@ use report::{print_json, print_report};
 /// (combines Halstead volume, cyclomatic complexity, LOC, and comment ratio).
 /// Halstead Effort (15%) uses per-LOC normalization to avoid penalizing large files.
 /// Comment Ratio was removed (verifysoft MI already includes a comment weight term).
+///
+/// **Known overlap:** MI's formula includes a `0.23 * G` cyclomatic term, so
+/// cyclomatic complexity is partially counted twice: once inside MI (30%) and
+/// once as its own dimension (15%). This is intentional — MI captures the
+/// *interaction* between metrics (how complexity combines with volume and LOC),
+/// while the cyclomatic dimension highlights complexity *independently* of
+/// file size. The lower cyclomatic weight (15% vs 20% originally) compensates
+/// for this overlap.
 const W_MI: f64 = 0.30;
-const W_CYCOM: f64 = 0.20;
-const W_DUP: f64 = 0.15;
+const W_CYCOM: f64 = 0.15;
+const W_DUP: f64 = 0.20;
 const W_INDENT: f64 = 0.15;
 const W_HAL: f64 = 0.15;
 const W_SIZE: f64 = 0.05;

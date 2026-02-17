@@ -21,14 +21,19 @@ use report::{LanguageReport, VerboseStats, print_json, print_report};
 
 /// Walk source files, deduplicate by content hash, count lines per
 /// language, and print a summary table (or JSON when `json` is true).
-pub fn run(path: &Path, verbose: bool, json: bool) -> Result<(), Box<dyn Error>> {
+pub fn run(
+    path: &Path,
+    verbose: bool,
+    json: bool,
+    include_tests: bool,
+) -> Result<(), Box<dyn Error>> {
     let start = Instant::now();
     let mut stats_by_lang: HashMap<&'static str, (usize, FileStats)> = HashMap::new();
     let mut seen_hashes: HashSet<u64> = HashSet::new();
     let mut total_files: usize = 0;
     let mut unique_files: usize = 0;
 
-    for (file_path, spec) in walk::source_files(path, false) {
+    for (file_path, spec) in walk::source_files(path, !include_tests) {
         total_files += 1;
 
         // Skip duplicate files (same content)

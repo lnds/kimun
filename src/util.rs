@@ -1,6 +1,5 @@
 use std::error::Error;
 use std::fs::File;
-use std::hash::Hasher;
 use std::io::{self, BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
 use std::time::SystemTime;
@@ -19,21 +18,25 @@ pub fn is_binary_reader<R: Read + Seek>(reader: &mut R) -> io::Result<bool> {
     Ok(header[..n].contains(&0))
 }
 
-/// Compute a content hash for a file using streaming FNV via `DefaultHasher`.
+/// Compute a content hash for a file using streaming FNV-1a.
+/// Deterministic across Rust versions (unlike `DefaultHasher`).
 /// Returns `None` if the file cannot be opened or read.
 pub fn hash_file(path: &Path) -> Option<u64> {
     let file = File::open(path).ok()?;
     let mut reader = BufReader::new(file);
-    let mut hasher = std::hash::DefaultHasher::new();
+    let mut hash: u64 = 0xcbf29ce484222325; // FNV offset basis
     let mut buf = [0u8; 8192];
     loop {
         let n = reader.read(&mut buf).ok()?;
         if n == 0 {
             break;
         }
-        hasher.write(&buf[..n]);
+        for &byte in &buf[..n] {
+            hash ^= byte as u64;
+            hash = hash.wrapping_mul(0x100000001b3); // FNV prime
+        }
     }
-    Some(hasher.finish())
+    Some(hash)
 }
 
 /// Replace the contents of string and char literals with spaces,

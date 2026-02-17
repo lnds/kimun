@@ -5,6 +5,7 @@
 /// by the hotspots, knowledge, and temporal coupling modules.
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
+use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 
 use git2::{BlameOptions, DiffOptions, Repository, Sort};
@@ -49,10 +50,12 @@ impl GitRepo {
 
     /// Iterate non-merge commits in reverse chronological order, optionally
     /// filtered by a `since` timestamp. Calls `f` for each qualifying commit.
+    /// The callback returns `ControlFlow::Continue(())` to keep walking or
+    /// `ControlFlow::Break(())` to stop early.
     fn walk_commits(
         &self,
         since: Option<i64>,
-        mut f: impl FnMut(&git2::Commit) -> Result<(), Box<dyn Error>>,
+        mut f: impl FnMut(&git2::Commit) -> Result<ControlFlow<()>, Box<dyn Error>>,
     ) -> Result<(), Box<dyn Error>> {
         let mut revwalk = self.repo.revwalk()?;
         revwalk.push_head()?;
@@ -60,6 +63,7 @@ impl GitRepo {
 
         for oid in revwalk {
             let commit = self.repo.find_commit(oid?)?;
+            // Skip merge commits — they don't represent individual file changes.
             if commit.parent_count() > 1 {
                 continue;
             }
@@ -68,7 +72,9 @@ impl GitRepo {
             if since.is_some_and(|ts| commit.time().seconds() < ts) {
                 break;
             }
-            f(&commit)?;
+            if f(&commit)?.is_break() {
+                break;
+            }
         }
         Ok(())
     }
@@ -101,7 +107,7 @@ impl GitRepo {
                         last_commit: time,
                     });
             }
-            Ok(())
+            Ok(ControlFlow::Continue(()))
         })?;
 
         let mut result: Vec<FileFrequency> = map.into_values().collect();
@@ -122,7 +128,7 @@ impl GitRepo {
             if paths.len() >= 2 {
                 result.push(paths);
             }
-            Ok(())
+            Ok(ControlFlow::Continue(()))
         })?;
 
         Ok(result)
@@ -176,7 +182,7 @@ impl GitRepo {
             if let Some(email) = commit.author().email() {
                 authors.insert(email.to_string());
             }
-            Ok(())
+            Ok(ControlFlow::Continue(()))
         })?;
 
         Ok(authors)
