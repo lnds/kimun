@@ -59,6 +59,7 @@ fn agentic_loop(
     project_path: &Path,
     output: Option<&Path>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let http_client = client::build_client()?;
     let path_str = project_path.to_string_lossy();
 
     let mut messages = vec![Message {
@@ -76,7 +77,15 @@ fn agentic_loop(
         };
 
         eprintln!("Calling Claude API (turn {})...", iteration + 1);
-        let response = client::send_message(api_key, &request)?;
+        let response = client::send_message(&http_client, api_key, &request)?;
+
+        // Handle truncated responses (max_tokens reached mid-generation)
+        if response.stop_reason == "max_tokens" {
+            eprintln!("warning: response truncated (max_tokens reached)");
+            return Err("API response was truncated due to max_tokens limit. \
+                        Try again or increase MAX_TOKENS."
+                .into());
+        }
 
         // Collect tool use blocks
         let has_tool_use = response

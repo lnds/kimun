@@ -103,7 +103,7 @@ fn find_function_body<'a>(
             }
         }
 
-        if found_open && brace_depth <= 0 {
+        if found_open && brace_depth == 0 {
             break;
         }
         j += 1;

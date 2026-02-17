@@ -53,7 +53,8 @@ fn print_report_with_verbose_stats() {
     let stats = VerboseStats {
         total_files: 5,
         unique_files: 2,
-        skipped_files: 3,
+        duplicate_files: 2,
+        binary_files: 1,
         elapsed: Duration::from_millis(1234),
     };
     // Should not panic
@@ -66,7 +67,8 @@ fn print_report_verbose_zero_elapsed() {
     let stats = VerboseStats {
         total_files: 0,
         unique_files: 0,
-        skipped_files: 0,
+        duplicate_files: 0,
+        binary_files: 0,
         elapsed: Duration::from_secs(0),
     };
     // Division by zero guard should work

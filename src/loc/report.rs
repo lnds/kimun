@@ -22,7 +22,8 @@ pub struct LanguageReport {
 pub struct VerboseStats {
     pub total_files: usize,
     pub unique_files: usize,
-    pub skipped_files: usize,
+    pub duplicate_files: usize,
+    pub binary_files: usize,
     pub elapsed: Duration,
 }
 
@@ -46,7 +47,8 @@ pub fn print_report(mut reports: Vec<LanguageReport>, verbose: Option<VerboseSta
         };
         println!("{:>8} text files.", stats.total_files);
         println!("{:>8} unique files.", stats.unique_files);
-        println!("{:>8} files skipped.", stats.skipped_files);
+        println!("{:>8} files ignored (duplicates).", stats.duplicate_files);
+        println!("{:>8} files ignored (binary).", stats.binary_files);
         println!(
             "T={:.2} s ({:.1} files/s, {:.1} lines/s)",
             secs, files_per_sec, lines_per_sec

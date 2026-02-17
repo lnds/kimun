@@ -32,6 +32,8 @@ pub fn run(
     let mut seen_hashes: HashSet<u64> = HashSet::new();
     let mut total_files: usize = 0;
     let mut unique_files: usize = 0;
+    let mut duplicate_files: usize = 0;
+    let mut binary_files: usize = 0;
 
     for (file_path, spec) in walk::source_files(path, !include_tests) {
         total_files += 1;
@@ -40,6 +42,7 @@ pub fn run(
         if let Some(h) = hash_file(&file_path)
             && !seen_hashes.insert(h)
         {
+            duplicate_files += 1;
             continue;
         }
 
@@ -54,7 +57,9 @@ pub fn run(
                 entry.1.comment += file_stats.comment;
                 entry.1.code += file_stats.code;
             }
-            Ok(None) => {} // binary, skip
+            Ok(None) => {
+                binary_files += 1;
+            }
             Err(err) => {
                 eprintln!("warning: {}: {err}", file_path.display());
             }
@@ -88,7 +93,8 @@ pub fn run(
             Some(VerboseStats {
                 total_files,
                 unique_files,
-                skipped_files: total_files - unique_files,
+                duplicate_files,
+                binary_files,
                 elapsed: start.elapsed(),
             })
         } else {

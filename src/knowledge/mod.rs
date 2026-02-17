@@ -78,13 +78,14 @@ pub fn run(
     let exclude_tests = !include_tests;
     let mut results: Vec<FileOwnership> = Vec::new();
 
-    for (file_path, spec) in walk::source_files(path, exclude_tests) {
+    for (file_path, spec) in walk::source_files(&walk_root, exclude_tests) {
         if is_generated(&file_path) {
             continue;
         }
 
-        // Compute path relative to git root
-        let rel_to_walk = file_path.strip_prefix(path).unwrap_or(&file_path);
+        // Compute path relative to git root.
+        // Walk from canonical walk_root so strip_prefix always matches.
+        let rel_to_walk = file_path.strip_prefix(&walk_root).unwrap_or(&file_path);
         let rel_path = if walk_prefix.as_os_str().is_empty() {
             rel_to_walk.to_path_buf()
         } else {

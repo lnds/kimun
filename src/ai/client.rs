@@ -66,15 +66,20 @@ pub struct ApiResponse {
     pub stop_reason: String,
 }
 
+/// Build a reusable HTTP client with the configured timeout.
+pub fn build_client() -> Result<reqwest::blocking::Client, Box<dyn std::error::Error>> {
+    Ok(reqwest::blocking::Client::builder()
+        .timeout(REQUEST_TIMEOUT)
+        .build()?)
+}
+
 /// Send a request to the Anthropic Messages API and return the parsed response.
 /// Fails with a descriptive error on HTTP errors or deserialization failures.
 pub fn send_message(
+    client: &reqwest::blocking::Client,
     api_key: &str,
     request: &ApiRequest,
 ) -> Result<ApiResponse, Box<dyn std::error::Error>> {
-    let client = reqwest::blocking::Client::builder()
-        .timeout(REQUEST_TIMEOUT)
-        .build()?;
     let resp = client
         .post(API_URL)
         .header("x-api-key", api_key)
