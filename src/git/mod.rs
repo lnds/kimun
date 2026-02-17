@@ -63,8 +63,10 @@ impl GitRepo {
             if commit.parent_count() > 1 {
                 continue;
             }
+            // Commits are in reverse chronological order; once we hit one
+            // older than the cutoff, all remaining commits are older too.
             if since.is_some_and(|ts| commit.time().seconds() < ts) {
-                continue;
+                break;
             }
             f(&commit)?;
         }

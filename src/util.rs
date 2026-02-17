@@ -87,8 +87,10 @@ pub fn read_and_classify(path: &Path, spec: &LanguageSpec) -> io::Result<Option<
     }
 
     let content = io::read_to_string(reader)?;
-    let lines: Vec<String> = content.lines().map(String::from).collect();
-    let kinds = classify_reader(content.as_bytes(), spec);
+    // Normalize CRLF → LF before splitting, so the FSM never sees trailing \r.
+    let normalized = content.replace("\r\n", "\n");
+    let lines: Vec<String> = normalized.lines().map(String::from).collect();
+    let kinds = classify_reader(normalized.as_bytes(), spec);
 
     Ok(Some((lines, kinds)))
 }

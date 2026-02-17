@@ -130,7 +130,7 @@ fn classify_risk(contributors: &[AuthorContribution]) -> RiskLevel {
 
     // Check if top 2-3 contributors combine for >80%
     let top_combined: f64 = contributors.iter().take(3).map(|c| c.percentage).sum();
-    if contributors.len() <= 3 && top_combined >= 80.0 {
+    if top_combined >= 80.0 {
         return RiskLevel::Medium;
     }
 

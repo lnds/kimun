@@ -94,7 +94,10 @@ pub fn run(
         // Run blame
         let blames = match git_repo.blame_file(&rel_path) {
             Ok(b) => b,
-            Err(_) => continue,
+            Err(e) => {
+                eprintln!("warning: blame {}: {e}", rel_path.display());
+                continue;
+            }
         };
 
         let ownership = compute_ownership(rel_path, spec.name, &blames, &recent_authors);
