@@ -18,13 +18,28 @@ mod walk;
 
 use std::path::PathBuf;
 
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(name = "cm", version, about = "Code metrics tools")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
+}
+
+/// Common arguments shared by most analysis commands.
+#[derive(Args)]
+struct CommonArgs {
+    /// Directory to analyze (default: current directory)
+    path: Option<PathBuf>,
+
+    /// Output as JSON
+    #[arg(long)]
+    json: bool,
+
+    /// Include test files and directories in analysis (excluded by default)
+    #[arg(long)]
+    include_tests: bool,
 }
 
 #[derive(Subcommand)]
@@ -45,8 +60,8 @@ enum Commands {
 
     /// Detect duplicate code across files
     Dups {
-        /// Directory to analyze (default: current directory)
-        path: Option<PathBuf>,
+        #[command(flatten)]
+        common: CommonArgs,
 
         /// Show detailed report with duplicate locations
         #[arg(short, long)]
@@ -59,28 +74,12 @@ enum Commands {
         /// Minimum lines for a duplicate block (default: 6)
         #[arg(long, default_value = "6")]
         min_lines: usize,
-
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-
-        /// Include test files and directories in analysis (excluded by default)
-        #[arg(long)]
-        include_tests: bool,
     },
 
     /// Analyze indentation complexity (stddev and max depth per file)
     Indent {
-        /// Directory to analyze (default: current directory)
-        path: Option<PathBuf>,
-
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-
-        /// Include test files and directories in analysis (excluded by default)
-        #[arg(long)]
-        include_tests: bool,
+        #[command(flatten)]
+        common: CommonArgs,
     },
 
     /// Analyze Halstead complexity metrics per file
@@ -105,16 +104,8 @@ Derived metrics:
 
 Higher effort/volume/bugs indicate more complex and error-prone code.")]
     Hal {
-        /// Directory to analyze (default: current directory)
-        path: Option<PathBuf>,
-
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-
-        /// Include test files and directories in analysis (excluded by default)
-        #[arg(long)]
-        include_tests: bool,
+        #[command(flatten)]
+        common: CommonArgs,
 
         /// Show only the top N files (default: 20)
         #[arg(long, default_value = "20")]
@@ -127,16 +118,8 @@ Higher effort/volume/bugs indicate more complex and error-prone code.")]
 
     /// Analyze cyclomatic complexity per file and per function
     Cycom {
-        /// Directory to analyze (default: current directory)
-        path: Option<PathBuf>,
-
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-
-        /// Include test files and directories in analysis (excluded by default)
-        #[arg(long)]
-        include_tests: bool,
+        #[command(flatten)]
+        common: CommonArgs,
 
         /// Minimum max-complexity to include a file (default: 1)
         #[arg(long, default_value = "1")]
@@ -172,16 +155,8 @@ Thresholds:
   10-19   yellow  -- moderate maintainability
   0-9     red     -- low maintainability")]
     Mi {
-        /// Directory to analyze (default: current directory)
-        path: Option<PathBuf>,
-
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-
-        /// Include test files and directories in analysis (excluded by default)
-        #[arg(long)]
-        include_tests: bool,
+        #[command(flatten)]
+        common: CommonArgs,
 
         /// Show only the top N files (default: 20)
         #[arg(long, default_value = "20")]
@@ -194,16 +169,8 @@ Thresholds:
 
     /// Generate a comprehensive report combining all code metrics
     Report {
-        /// Directory to analyze (default: current directory)
-        path: Option<PathBuf>,
-
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-
-        /// Include test files and directories in analysis (excluded by default)
-        #[arg(long)]
-        include_tests: bool,
+        #[command(flatten)]
+        common: CommonArgs,
 
         /// Show only the top N files per section (default: 20)
         #[arg(long, default_value = "20")]
@@ -239,16 +206,8 @@ Thresholds:
   65-84   moderate     -- reasonable maintainability
   <65     difficult    -- hard to maintain")]
     Miv {
-        /// Directory to analyze (default: current directory)
-        path: Option<PathBuf>,
-
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-
-        /// Include test files and directories in analysis (excluded by default)
-        #[arg(long)]
-        include_tests: bool,
+        #[command(flatten)]
+        common: CommonArgs,
 
         /// Show only the top N files (default: 20)
         #[arg(long, default_value = "20")]
@@ -282,16 +241,8 @@ Examples:
   cm hotspots --since 1y --sort-by commits
   cm hotspots --json             # machine-readable output")]
     Hotspots {
-        /// Directory to analyze (default: current directory)
-        path: Option<PathBuf>,
-
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-
-        /// Include test files and directories in analysis (excluded by default)
-        #[arg(long)]
-        include_tests: bool,
+        #[command(flatten)]
+        common: CommonArgs,
 
         /// Show only the top N files (default: 20)
         #[arg(long, default_value = "20")]
@@ -335,16 +286,8 @@ Examples:
   cm knowledge --since 6m --risk-only   # knowledge loss detection
   cm knowledge --json                   # machine-readable output")]
     Knowledge {
-        /// Directory to analyze (default: current directory)
-        path: Option<PathBuf>,
-
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-
-        /// Include test files and directories in analysis (excluded by default)
-        #[arg(long)]
-        include_tests: bool,
+        #[command(flatten)]
+        common: CommonArgs,
 
         /// Show only the top N files (default: 20)
         #[arg(long, default_value = "20")]
@@ -390,16 +333,8 @@ Examples:
   cm tc --min-strength 0.5       # only strong coupling
   cm tc --json                   # machine-readable output")]
     Tc {
-        /// Directory to analyze (default: current directory)
-        path: Option<PathBuf>,
-
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-
-        /// Include test files and directories in analysis (excluded by default)
-        #[arg(long)]
-        include_tests: bool,
+        #[command(flatten)]
+        common: CommonArgs,
 
         /// Show only the top N file pairs (default: 20)
         #[arg(long, default_value = "20")]
@@ -460,16 +395,8 @@ Examples:
   cm score --bottom 20           # show 20 worst files
   cm score --include-tests       # include test files")]
     Score {
-        /// File or directory to analyze (default: current directory)
-        path: Option<PathBuf>,
-
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-
-        /// Include test files and directories in analysis (excluded by default)
-        #[arg(long)]
-        include_tests: bool,
+        #[command(flatten)]
+        common: CommonArgs,
 
         /// Number of worst files to show in "needs attention" (default: 10)
         #[arg(long, default_value = "10")]
@@ -562,40 +489,41 @@ fn main() {
             json,
         } => run_command(path, |t| loc::run(t, verbose, json)),
         Commands::Dups {
-            path,
+            common,
             report,
             show_all,
             min_lines,
-            json,
-            include_tests,
-        } => run_command(path, |t| {
-            dups::run(t, min_lines, report, show_all, json, !include_tests)
+        } => run_command(common.path, |t| {
+            dups::run(
+                t,
+                min_lines,
+                report,
+                show_all,
+                common.json,
+                !common.include_tests,
+            )
         }),
-        Commands::Indent {
-            path,
-            json,
-            include_tests,
-        } => run_command(path, |t| indent::run(t, json, include_tests)),
+        Commands::Indent { common } => run_command(common.path, |t| {
+            indent::run(t, common.json, common.include_tests)
+        }),
         Commands::Hal {
-            path,
-            json,
-            include_tests,
+            common,
             top,
             sort_by,
-        } => run_command(path, |t| hal::run(t, json, include_tests, top, &sort_by)),
+        } => run_command(common.path, |t| {
+            hal::run(t, common.json, common.include_tests, top, &sort_by)
+        }),
         Commands::Cycom {
-            path,
-            json,
-            include_tests,
+            common,
             min_complexity,
             top,
             per_function,
             sort_by,
-        } => run_command(path, |t| {
+        } => run_command(common.path, |t| {
             cycom::run(
                 t,
-                json,
-                include_tests,
+                common.json,
+                common.include_tests,
                 min_complexity,
                 top,
                 per_function,
@@ -603,45 +531,47 @@ fn main() {
             )
         }),
         Commands::Mi {
-            path,
-            json,
-            include_tests,
+            common,
             top,
             sort_by,
-        } => run_command(path, |t| mi::run(t, json, include_tests, top, &sort_by)),
+        } => run_command(common.path, |t| {
+            mi::run(t, common.json, common.include_tests, top, &sort_by)
+        }),
         Commands::Report {
-            path,
-            json,
-            include_tests,
+            common,
             top,
             min_lines,
             full,
         } => {
             let effective_top = if full { usize::MAX } else { top };
-            run_command(path, |t| {
-                report::run(t, json, include_tests, effective_top, min_lines)
+            run_command(common.path, |t| {
+                report::run(
+                    t,
+                    common.json,
+                    common.include_tests,
+                    effective_top,
+                    min_lines,
+                )
             });
         }
         Commands::Miv {
-            path,
-            json,
-            include_tests,
+            common,
             top,
             sort_by,
-        } => run_command(path, |t| miv::run(t, json, include_tests, top, &sort_by)),
+        } => run_command(common.path, |t| {
+            miv::run(t, common.json, common.include_tests, top, &sort_by)
+        }),
         Commands::Hotspots {
-            path,
-            json,
-            include_tests,
+            common,
             top,
             sort_by,
             since,
             complexity,
-        } => run_command(path, |t| {
+        } => run_command(common.path, |t| {
             hotspots::run(
                 t,
-                json,
-                include_tests,
+                common.json,
+                common.include_tests,
                 top,
                 &sort_by,
                 since.as_deref(),
@@ -649,18 +579,16 @@ fn main() {
             )
         }),
         Commands::Knowledge {
-            path,
-            json,
-            include_tests,
+            common,
             top,
             sort_by,
             since,
             risk_only,
-        } => run_command(path, |t| {
+        } => run_command(common.path, |t| {
             knowledge::run(
                 t,
-                json,
-                include_tests,
+                common.json,
+                common.include_tests,
                 top,
                 &sort_by,
                 since.as_deref(),
@@ -668,19 +596,17 @@ fn main() {
             )
         }),
         Commands::Tc {
-            path,
-            json,
-            include_tests,
+            common,
             top,
             sort_by,
             since,
             min_degree,
             min_strength,
-        } => run_command(path, |t| {
+        } => run_command(common.path, |t| {
             tc::run(
                 t,
-                json,
-                include_tests,
+                common.json,
+                common.include_tests,
                 top,
                 &sort_by,
                 since.as_deref(),
@@ -689,13 +615,11 @@ fn main() {
             )
         }),
         Commands::Score {
-            path,
-            json,
-            include_tests,
+            common,
             bottom,
             min_lines,
-        } => run_command(path, |t| {
-            score::run(t, json, include_tests, bottom, min_lines)
+        } => run_command(common.path, |t| {
+            score::run(t, common.json, common.include_tests, bottom, min_lines)
         }),
         Commands::Ai { command } => match command {
             AiCommands::Analyze {

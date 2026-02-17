@@ -3,8 +3,6 @@ mod markdown;
 
 use std::collections::HashMap;
 use std::error::Error;
-use std::fs::File;
-use std::io::BufReader;
 use std::path::Path;
 
 use serde::Serialize;
@@ -13,11 +11,11 @@ use crate::cycom;
 use crate::dups;
 use crate::hal;
 use crate::indent;
-use crate::loc::counter::{FileStats, LineKind, classify_reader};
+use crate::loc::counter::{FileStats, LineKind};
 use crate::loc::report::LanguageReport;
 use crate::mi;
 use crate::miv;
-use crate::util::is_binary_reader;
+use crate::util::read_and_classify;
 use crate::walk;
 
 /// Comprehensive project report combining all code metrics.
@@ -151,6 +149,18 @@ const DESC_MI_VF: &str = "Maintainability Index (Verifysoft variant with comment
     Thresholds: good (85+), moderate (65-84), difficult (<65). \
     Reference: verifysoft.com Maintainability Index.";
 
+/// Sort a vector, record its total length, then truncate to `top` entries.
+fn sort_truncate<T>(
+    v: &mut Vec<T>,
+    top: usize,
+    cmp: impl Fn(&T, &T) -> std::cmp::Ordering,
+) -> usize {
+    v.sort_by(cmp);
+    let total = v.len();
+    v.truncate(top);
+    total
+}
+
 pub fn run(
     path: &Path,
     json: bool,
@@ -167,6 +177,114 @@ pub fn run(
     }
 
     Ok(())
+}
+
+/// Per-file analysis results collected by `analyze_file_for_report`.
+struct FileReportData {
+    blank: usize,
+    comment_lines: usize,
+    code_lines: usize,
+    dup_normalized: Vec<dups::detector::NormalizedLine>,
+    indent: Option<IndentEntry>,
+    halstead: Option<HalsteadEntry>,
+    cycom: Option<CycomEntry>,
+    mi_vs: Option<MiVisualStudioEntry>,
+    mi_vf: Option<MiVerifysoftEntry>,
+}
+
+/// Read, classify, and run all analyzers on a single file.
+/// Returns `None` for binary files or on I/O errors.
+fn analyze_file_for_report(
+    file_path: &Path,
+    spec: &crate::loc::language::LanguageSpec,
+) -> Option<FileReportData> {
+    let (lines, kinds) = match read_and_classify(file_path, spec) {
+        Ok(Some(v)) => v,
+        Ok(None) => return None,
+        Err(e) => {
+            eprintln!("warning: {}: {e}", file_path.display());
+            return None;
+        }
+    };
+
+    let blank = kinds.iter().filter(|k| **k == LineKind::Blank).count();
+    let comment_lines = kinds.iter().filter(|k| **k == LineKind::Comment).count();
+    let code_lines = kinds.iter().filter(|k| **k == LineKind::Code).count();
+
+    let dup_normalized = dups::normalize_content(&lines, &kinds);
+
+    let indent = indent::analyzer::analyze(&lines, &kinds, 4).map(|m| IndentEntry {
+        path: file_path.display().to_string(),
+        code_lines: m.code_lines,
+        stddev: m.stddev,
+        max_depth: m.max_depth,
+        complexity: m.complexity.as_str().to_string(),
+    });
+
+    let path_str = file_path.display().to_string();
+    let (halstead, volume_opt) = if let Some(h) = hal::analyze_content(&lines, &kinds, spec) {
+        let vol = h.volume;
+        (
+            Some(HalsteadEntry {
+                path: path_str.clone(),
+                volume: h.volume,
+                effort: h.effort,
+                bugs: h.bugs,
+                time: h.time,
+            }),
+            Some(vol),
+        )
+    } else {
+        (None, None)
+    };
+
+    let (cycom, complexity_opt) = if let Some(c) = cycom::analyze_content(&lines, &kinds, spec) {
+        (
+            Some(CycomEntry {
+                path: path_str.clone(),
+                functions: c.functions.len(),
+                total: c.total_complexity,
+                max: c.max_complexity,
+                avg: c.avg_complexity,
+                level: c.level.as_str().to_string(),
+            }),
+            Some(c.total_complexity),
+        )
+    } else {
+        (None, None)
+    };
+
+    let (mi_vs, mi_vf) = if let (Some(volume), Some(complexity)) = (volume_opt, complexity_opt) {
+        let vs =
+            mi::analyzer::compute_mi(volume, complexity, code_lines).map(|m| MiVisualStudioEntry {
+                path: path_str.clone(),
+                mi_score: m.mi_score,
+                level: m.level.as_str().to_string(),
+            });
+        let vf =
+            miv::analyzer::compute_mi(volume, complexity, code_lines, comment_lines).map(|m| {
+                MiVerifysoftEntry {
+                    path: path_str,
+                    mi_score: m.mi_score,
+                    level: m.level.as_str().to_string(),
+                }
+            });
+        (vs, vf)
+    } else {
+        (None, None)
+    };
+
+    Some(FileReportData {
+        blank,
+        comment_lines,
+        code_lines,
+        dup_normalized,
+        indent,
+        halstead,
+        cycom,
+        mi_vs,
+        mi_vf,
+    })
 }
 
 /// Build the full project report by walking the file tree once and running
@@ -194,115 +312,44 @@ pub fn build_report(
     let mut mi_vf_results: Vec<MiVerifysoftEntry> = Vec::new();
 
     for (file_path, spec) in walk::source_files(path, !include_tests) {
-        // --- Single read: open, binary check, read content, classify ---
-        let file = match File::open(&file_path) {
-            Ok(f) => f,
-            Err(err) => {
-                eprintln!("warning: {}: {err}", file_path.display());
-                continue;
-            }
+        let result = match analyze_file_for_report(&file_path, spec) {
+            Some(r) => r,
+            None => continue,
         };
-        let mut reader = BufReader::new(file);
-        match is_binary_reader(&mut reader) {
-            Ok(true) => continue,
-            Err(err) => {
-                eprintln!("warning: {}: {err}", file_path.display());
-                continue;
-            }
-            Ok(false) => {}
-        }
 
-        let content = match std::io::read_to_string(reader) {
-            Ok(c) => c,
-            Err(err) => {
-                eprintln!("warning: {}: {err}", file_path.display());
-                continue;
-            }
-        };
-        let lines: Vec<String> = content.lines().map(String::from).collect();
-        let kinds = classify_reader(content.as_bytes(), spec);
-
-        // --- LOC (derived from kinds) ---
-        let blank = kinds.iter().filter(|k| **k == LineKind::Blank).count();
-        let comment_lines = kinds.iter().filter(|k| **k == LineKind::Comment).count();
-        let code_lines = kinds.iter().filter(|k| **k == LineKind::Code).count();
+        // LOC
         {
             let entry = stats_by_lang
                 .entry(spec.name)
                 .or_insert_with(|| (0, FileStats::default()));
             entry.0 += 1;
-            entry.1.blank += blank;
-            entry.1.comment += comment_lines;
-            entry.1.code += code_lines;
+            entry.1.blank += result.blank;
+            entry.1.comment += result.comment_lines;
+            entry.1.code += result.code_lines;
         }
 
-        // --- Dups (from content) ---
-        let normalized = dups::normalize_content(&lines, &kinds);
-        total_code_lines += normalized.len();
+        // Dups
+        total_code_lines += result.dup_normalized.len();
         dup_files.push(dups::detector::NormalizedFile {
             path: file_path.to_path_buf(),
-            lines: normalized,
+            lines: result.dup_normalized,
         });
 
-        // --- Indent (from content) ---
-        if let Some(m) = indent::analyzer::analyze(&lines, &kinds, 4) {
-            indent_results.push(IndentEntry {
-                path: file_path.display().to_string(),
-                code_lines: m.code_lines,
-                stddev: m.stddev,
-                max_depth: m.max_depth,
-                complexity: m.complexity.as_str().to_string(),
-            });
+        // Per-file metric results
+        if let Some(e) = result.indent {
+            indent_results.push(e);
         }
-
-        // --- Halstead (from content) ---
-        let volume_opt = if let Some(h) = hal::analyze_content(&lines, &kinds, spec) {
-            hal_results.push(HalsteadEntry {
-                path: file_path.display().to_string(),
-                volume: h.volume,
-                effort: h.effort,
-                bugs: h.bugs,
-                time: h.time,
-            });
-            Some(h.volume)
-        } else {
-            None
-        };
-
-        // --- Cyclomatic (from content) ---
-        let complexity_opt = if let Some(c) = cycom::analyze_content(&lines, &kinds, spec) {
-            cycom_results.push(CycomEntry {
-                path: file_path.display().to_string(),
-                functions: c.functions.len(),
-                total: c.total_complexity,
-                max: c.max_complexity,
-                avg: c.avg_complexity,
-                level: c.level.as_str().to_string(),
-            });
-            Some(c.total_complexity)
-        } else {
-            None
-        };
-
-        // --- MI computation (requires both Halstead volume and cyclomatic complexity) ---
-        if let (Some(volume), Some(complexity)) = (volume_opt, complexity_opt) {
-            let path_str = file_path.display().to_string();
-            if let Some(m) = mi::analyzer::compute_mi(volume, complexity, code_lines) {
-                mi_vs_results.push(MiVisualStudioEntry {
-                    path: path_str.clone(),
-                    mi_score: m.mi_score,
-                    level: m.level.as_str().to_string(),
-                });
-            }
-            if let Some(m) =
-                miv::analyzer::compute_mi(volume, complexity, code_lines, comment_lines)
-            {
-                mi_vf_results.push(MiVerifysoftEntry {
-                    path: path_str,
-                    mi_score: m.mi_score,
-                    level: m.level.as_str().to_string(),
-                });
-            }
+        if let Some(e) = result.halstead {
+            hal_results.push(e);
+        }
+        if let Some(e) = result.cycom {
+            cycom_results.push(e);
+        }
+        if let Some(e) = result.mi_vs {
+            mi_vs_results.push(e);
+        }
+        if let Some(e) = result.mi_vf {
+            mi_vf_results.push(e);
         }
     }
 
@@ -343,25 +390,17 @@ pub fn build_report(
     };
 
     // --- Sort, record totals, and truncate ---
-    indent_results.sort_by(|a, b| b.stddev.total_cmp(&a.stddev));
-    let indent_total = indent_results.len();
-    indent_results.truncate(top);
-
-    hal_results.sort_by(|a, b| b.effort.total_cmp(&a.effort));
-    let hal_total = hal_results.len();
-    hal_results.truncate(top);
-
-    cycom_results.sort_by(|a, b| b.total.cmp(&a.total));
-    let cycom_total = cycom_results.len();
-    cycom_results.truncate(top);
-
-    mi_vs_results.sort_by(|a, b| a.mi_score.total_cmp(&b.mi_score));
-    let mi_vs_total = mi_vs_results.len();
-    mi_vs_results.truncate(top);
-
-    mi_vf_results.sort_by(|a, b| a.mi_score.total_cmp(&b.mi_score));
-    let mi_vf_total = mi_vf_results.len();
-    mi_vf_results.truncate(top);
+    let indent_total = sort_truncate(&mut indent_results, top, |a, b| {
+        b.stddev.total_cmp(&a.stddev)
+    });
+    let hal_total = sort_truncate(&mut hal_results, top, |a, b| b.effort.total_cmp(&a.effort));
+    let cycom_total = sort_truncate(&mut cycom_results, top, |a, b| b.total.cmp(&a.total));
+    let mi_vs_total = sort_truncate(&mut mi_vs_results, top, |a, b| {
+        a.mi_score.total_cmp(&b.mi_score)
+    });
+    let mi_vf_total = sort_truncate(&mut mi_vf_results, top, |a, b| {
+        a.mi_score.total_cmp(&b.mi_score)
+    });
 
     Ok(ProjectReport {
         path: path.display().to_string(),
@@ -407,250 +446,5 @@ pub fn build_report(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs;
-
-    #[test]
-    fn run_on_empty_dir() {
-        let dir = tempfile::tempdir().unwrap();
-        run(dir.path(), false, false, 20, 6).unwrap();
-    }
-
-    #[test]
-    fn run_on_empty_dir_json() {
-        let dir = tempfile::tempdir().unwrap();
-        run(dir.path(), true, false, 20, 6).unwrap();
-    }
-
-    #[test]
-    fn run_on_rust_file() {
-        let dir = tempfile::tempdir().unwrap();
-        fs::write(
-            dir.path().join("main.rs"),
-            "fn main() {\n    let x = 1;\n    let y = x + 2;\n    println!(\"{}\", y);\n}\n",
-        )
-        .unwrap();
-        run(dir.path(), false, false, 20, 6).unwrap();
-    }
-
-    #[test]
-    fn run_json_output() {
-        let dir = tempfile::tempdir().unwrap();
-        fs::write(
-            dir.path().join("main.rs"),
-            "fn main() {\n    let x = 1;\n    let y = x + 2;\n    println!(\"{}\", y);\n}\n",
-        )
-        .unwrap();
-        run(dir.path(), true, false, 20, 6).unwrap();
-    }
-
-    #[test]
-    fn run_skips_binary() {
-        let dir = tempfile::tempdir().unwrap();
-        fs::write(dir.path().join("data.c"), b"hello\x00world").unwrap();
-        run(dir.path(), false, false, 20, 6).unwrap();
-    }
-
-    // --- Tests that verify actual report structure ---
-
-    #[test]
-    fn build_report_empty_dir() {
-        let dir = tempfile::tempdir().unwrap();
-        let report = build_report(dir.path(), false, 20, 6).unwrap();
-        assert!(report.loc.is_empty());
-        assert_eq!(report.duplication.total_code_lines, 0);
-        assert_eq!(report.indent.total_count, 0);
-        assert!(report.indent.entries.is_empty());
-    }
-
-    #[test]
-    fn build_report_counts_loc() {
-        let dir = tempfile::tempdir().unwrap();
-        fs::write(
-            dir.path().join("main.rs"),
-            "// comment\nfn main() {\n    let x = 1;\n}\n",
-        )
-        .unwrap();
-        let report = build_report(dir.path(), false, 20, 6).unwrap();
-
-        assert_eq!(report.loc.len(), 1);
-        assert_eq!(report.loc[0].name, "Rust");
-        assert_eq!(report.loc[0].files, 1);
-        assert_eq!(report.loc[0].comment, 1);
-        assert_eq!(report.loc[0].code, 3);
-    }
-
-    #[test]
-    fn build_report_no_dedup_for_loc() {
-        let dir = tempfile::tempdir().unwrap();
-        let content = "fn foo() {\n    let x = 1;\n}\n";
-        fs::write(dir.path().join("a.rs"), content).unwrap();
-        fs::write(dir.path().join("b.rs"), content).unwrap();
-        let report = build_report(dir.path(), false, 20, 6).unwrap();
-
-        // Both files counted — no dedup in report
-        assert_eq!(report.loc[0].files, 2);
-    }
-
-    #[test]
-    fn build_report_detects_duplicates() {
-        let dir = tempfile::tempdir().unwrap();
-        // 7 code lines per file, all identical
-        let code = "fn process() {\n    let x = read();\n    let y = transform(x);\n    write(y);\n    log(\"done\");\n    cleanup();\n}\n";
-        fs::write(dir.path().join("a.rs"), code).unwrap();
-        fs::write(dir.path().join("b.rs"), code).unwrap();
-        let report = build_report(dir.path(), false, 20, 6).unwrap();
-
-        // 1 duplicate group of 7 lines across 2 files
-        assert_eq!(report.duplication.duplicate_groups, 1);
-        // duplicated_lines = line_count * (locations - 1) = 7 * 1 = 7
-        assert_eq!(report.duplication.duplicated_lines, 7);
-        // total_code_lines = 7 * 2 files = 14
-        assert_eq!(report.duplication.total_code_lines, 14);
-        assert!((report.duplication.duplication_percentage - 50.0).abs() < 0.1);
-        assert_eq!(report.duplication.files_with_duplicates, 2);
-        assert_eq!(report.duplication.largest_block, 7);
-    }
-
-    #[test]
-    fn build_report_top_truncates() {
-        let dir = tempfile::tempdir().unwrap();
-        // Create 3 files with different content so all produce indent results
-        fs::write(dir.path().join("a.rs"), "fn a() {\n    let x = 1;\n}\n").unwrap();
-        fs::write(
-            dir.path().join("b.rs"),
-            "fn b() {\n    let x = 1;\n    let y = 2;\n}\n",
-        )
-        .unwrap();
-        fs::write(
-            dir.path().join("c.rs"),
-            "fn c() {\n    let x = 1;\n    let y = 2;\n    let z = 3;\n}\n",
-        )
-        .unwrap();
-        let report = build_report(dir.path(), false, 2, 6).unwrap();
-
-        // 3 files analyzed, but only top 2 shown
-        assert_eq!(report.indent.total_count, 3);
-        assert_eq!(report.indent.entries.len(), 2);
-    }
-
-    #[test]
-    fn build_report_full_shows_all() {
-        let dir = tempfile::tempdir().unwrap();
-        fs::write(dir.path().join("a.rs"), "fn a() {\n    let x = 1;\n}\n").unwrap();
-        fs::write(
-            dir.path().join("b.rs"),
-            "fn b() {\n    let x = 1;\n    let y = 2;\n}\n",
-        )
-        .unwrap();
-        fs::write(
-            dir.path().join("c.rs"),
-            "fn c() {\n    let x = 1;\n    let y = 2;\n    let z = 3;\n}\n",
-        )
-        .unwrap();
-        let report = build_report(dir.path(), false, usize::MAX, 6).unwrap();
-
-        // all 3 files shown when top is usize::MAX (--full mode)
-        assert_eq!(report.indent.total_count, 3);
-        assert_eq!(report.indent.entries.len(), 3);
-    }
-
-    #[test]
-    fn build_report_excludes_tests() {
-        let dir = tempfile::tempdir().unwrap();
-        fs::create_dir(dir.path().join("tests")).unwrap();
-        fs::write(
-            dir.path().join("tests/integration.rs"),
-            "fn test() {\n    assert!(true);\n}\n",
-        )
-        .unwrap();
-        let report = build_report(dir.path(), false, 20, 6).unwrap();
-
-        // Test file in tests/ dir should be excluded
-        assert!(report.loc.is_empty());
-    }
-
-    #[test]
-    fn build_report_includes_tests_with_flag() {
-        let dir = tempfile::tempdir().unwrap();
-        fs::create_dir(dir.path().join("tests")).unwrap();
-        fs::write(
-            dir.path().join("tests/integration.rs"),
-            "fn test() {\n    assert!(true);\n}\n",
-        )
-        .unwrap();
-        let report = build_report(dir.path(), true, 20, 6).unwrap();
-
-        assert!(!report.loc.is_empty());
-    }
-
-    #[test]
-    fn build_report_mi_computed() {
-        let dir = tempfile::tempdir().unwrap();
-        fs::write(
-            dir.path().join("main.rs"),
-            "fn main() {\n    let x = 1;\n    let y = x + 2;\n    println!(\"{}\", y);\n}\n",
-        )
-        .unwrap();
-        let report = build_report(dir.path(), false, 20, 6).unwrap();
-
-        assert_eq!(report.mi_visual_studio.entries.len(), 1);
-        assert_eq!(report.mi_verifysoft.entries.len(), 1);
-
-        let vs = &report.mi_visual_studio.entries[0];
-        // VS MI ~71.07 for this simple function — green level
-        assert!((vs.mi_score - 71.07).abs() < 1.0);
-        assert_eq!(vs.level, "green");
-
-        let vf = &report.mi_verifysoft.entries[0];
-        // Verifysoft MI ~121.54 — good level (no comments, so MIcw is zero)
-        assert!((vf.mi_score - 121.54).abs() < 1.0);
-        assert_eq!(vf.level, "good");
-    }
-
-    #[test]
-    fn build_report_json_structure() {
-        let dir = tempfile::tempdir().unwrap();
-        fs::write(
-            dir.path().join("main.rs"),
-            "// comment\nfn main() {\n    let x = 1;\n}\n",
-        )
-        .unwrap();
-        let report = build_report(dir.path(), false, 20, 6).unwrap();
-
-        // Serialize to JSON and parse back to verify structure
-        let json_str = serde_json::to_string(&report).unwrap();
-        let value: serde_json::Value = serde_json::from_str(&json_str).unwrap();
-
-        assert!(value["path"].is_string());
-        assert_eq!(value["top"], 20);
-        assert_eq!(value["include_tests"], false);
-        assert_eq!(value["min_lines"], 6);
-        assert!(value["loc"].is_array());
-        assert!(value["duplication"]["total_code_lines"].is_number());
-        assert!(value["indent"]["total_count"].is_number());
-        assert!(value["indent"]["entries"].is_array());
-        assert!(value["halstead"]["total_count"].is_number());
-        assert!(value["cyclomatic"]["total_count"].is_number());
-        assert!(value["mi_visual_studio"]["total_count"].is_number());
-        assert!(value["mi_verifysoft"]["total_count"].is_number());
-    }
-
-    #[test]
-    fn build_report_min_lines_affects_dups() {
-        let dir = tempfile::tempdir().unwrap();
-        // 5 code lines per file
-        let code = "fn f() {\n    let a = 1;\n    let b = 2;\n    let c = 3;\n}\n";
-        fs::write(dir.path().join("a.rs"), code).unwrap();
-        fs::write(dir.path().join("b.rs"), code).unwrap();
-
-        // min_lines=3: block of 5 lines >= 3, so duplicates detected
-        let report_low = build_report(dir.path(), false, 20, 3).unwrap();
-        assert!(report_low.duplication.duplicate_groups > 0);
-
-        // min_lines=100: block of 5 lines < 100, so no duplicates detected
-        let report_high = build_report(dir.path(), false, 20, 100).unwrap();
-        assert_eq!(report_high.duplication.duplicate_groups, 0);
-    }
-}
+#[path = "mod_test.rs"]
+mod tests;

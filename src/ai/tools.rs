@@ -2,18 +2,23 @@ use serde_json::{Value, json};
 use std::path::Path;
 use std::process::Command;
 
+/// JSON schema property for the `path` parameter shared by all tools.
 fn path_prop() -> Value {
     json!({"type": "string", "description": "Directory to analyze (default: project root)"})
 }
 
+/// JSON schema property for the `top` parameter (limit number of results).
 fn top_prop() -> Value {
     json!({"type": "integer", "description": "Show only the top N files (default: 20)"})
 }
 
+/// JSON schema property for the `since` parameter (time range filter).
 fn since_prop() -> Value {
     json!({"type": "string", "description": "Only consider commits since this time (e.g. 6m, 1y, 30d)"})
 }
 
+/// Build a tool definition JSON object with the standard `path` property
+/// plus any extra properties specific to that tool.
 fn tool(name: &str, desc: &str, extra_props: &[(&str, Value)]) -> Value {
     let mut props = serde_json::Map::new();
     props.insert("path".into(), path_prop());
@@ -31,6 +36,8 @@ fn tool(name: &str, desc: &str, extra_props: &[(&str, Value)]) -> Value {
     })
 }
 
+/// Return the list of all 11 `cm` tool definitions for the AI provider,
+/// each with name, description, and input JSON schema.
 pub fn tool_definitions() -> Vec<Value> {
     vec![
         tool(
@@ -106,6 +113,8 @@ pub fn tool_definitions() -> Vec<Value> {
     ]
 }
 
+/// Execute a `cm` subcommand by name, passing `--json` and any extra arguments
+/// extracted from the AI tool input. Returns the JSON output or an error message.
 pub fn execute_tool(tool_name: &str, input: &Value, project_path: &Path) -> String {
     let cm_binary = std::env::current_exe().unwrap_or_else(|_| "cm".into());
 
@@ -150,6 +159,9 @@ pub fn execute_tool(tool_name: &str, input: &Value, project_path: &Path) -> Stri
     }
 }
 
+/// Resolve the `path` field from the AI input to a safe, canonical path
+/// within the project root. Falls back to the project root if the path
+/// is missing, invalid, or outside the project.
 fn resolve_path(input: &Value, project_path: &Path) -> String {
     let raw = input.get("path").and_then(|v| v.as_str()).unwrap_or("");
 
@@ -181,6 +193,8 @@ fn resolve_path(input: &Value, project_path: &Path) -> String {
     resolved.to_string_lossy().into_owned()
 }
 
+/// Build the CLI argument list from the AI tool input. Converts named
+/// parameters to `--flag value` pairs and appends the resolved path.
 fn build_args(input: &Value, named: &[&str], project_path: &Path) -> Vec<String> {
     let mut args = Vec::new();
 
@@ -208,103 +222,5 @@ fn build_args(input: &Value, named: &[&str], project_path: &Path) -> Vec<String>
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-    use std::path::PathBuf;
-
-    #[test]
-    fn build_args_no_named_uses_project_path() {
-        let project = PathBuf::from("/tmp/project");
-        let input = json!({});
-        let args = build_args(&input, &[], &project);
-        assert_eq!(args, vec!["/tmp/project"]);
-    }
-
-    #[test]
-    fn build_args_with_named_integer() {
-        let project = PathBuf::from("/tmp/project");
-        let input = json!({"top": 10});
-        let args = build_args(&input, &["top"], &project);
-        assert_eq!(args, vec!["--top", "10", "/tmp/project"]);
-    }
-
-    #[test]
-    fn build_args_with_named_string() {
-        let project = PathBuf::from("/tmp/project");
-        let input = json!({"since": "6m"});
-        let args = build_args(&input, &["since"], &project);
-        assert_eq!(args, vec!["--since", "6m", "/tmp/project"]);
-    }
-
-    #[test]
-    fn build_args_ignores_missing_named() {
-        let project = PathBuf::from("/tmp/project");
-        let input = json!({});
-        let args = build_args(&input, &["top", "since"], &project);
-        assert_eq!(args, vec!["/tmp/project"]);
-    }
-
-    #[test]
-    fn resolve_path_empty_returns_project() {
-        let project = PathBuf::from("/tmp/project");
-        let input = json!({});
-        assert_eq!(resolve_path(&input, &project), "/tmp/project");
-    }
-
-    #[test]
-    fn resolve_path_rejects_absolute_outside_project() {
-        let project = std::env::current_dir().unwrap();
-        let input = json!({"path": "/etc"});
-        let result = resolve_path(&input, &project);
-        assert_eq!(result, project.to_string_lossy());
-    }
-
-    #[test]
-    fn resolve_path_rejects_traversal() {
-        let project = std::env::current_dir().unwrap();
-        let input = json!({"path": "../../../../etc"});
-        let result = resolve_path(&input, &project);
-        assert_eq!(result, project.to_string_lossy());
-    }
-
-    #[test]
-    fn resolve_path_accepts_subdirectory() {
-        let project = std::env::current_dir().unwrap();
-        let input = json!({"path": "src"});
-        let result = resolve_path(&input, &project);
-        let expected = project.join("src").canonicalize().unwrap();
-        assert_eq!(result, expected.to_string_lossy());
-    }
-
-    #[test]
-    fn resolve_path_nonexistent_falls_back() {
-        let project = std::env::current_dir().unwrap();
-        let input = json!({"path": "nonexistent_dir_xyz_12345"});
-        let result = resolve_path(&input, &project);
-        assert_eq!(result, project.to_string_lossy());
-    }
-
-    #[test]
-    fn execute_tool_unknown_returns_error() {
-        let project = PathBuf::from("/tmp/project");
-        let input = json!({});
-        let result = execute_tool("cm_unknown", &input, &project);
-        assert!(result.starts_with("Unknown tool:"));
-    }
-
-    #[test]
-    fn tool_definitions_has_11_tools() {
-        let defs = tool_definitions();
-        assert_eq!(defs.len(), 11);
-    }
-
-    #[test]
-    fn tool_definitions_all_have_required_fields() {
-        for def in tool_definitions() {
-            assert!(def.get("name").is_some(), "missing name");
-            assert!(def.get("description").is_some(), "missing description");
-            assert!(def.get("input_schema").is_some(), "missing input_schema");
-        }
-    }
-}
+#[path = "tools_test.rs"]
+mod tests;

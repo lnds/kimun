@@ -1,24 +1,23 @@
 pub(crate) mod analyzer;
+mod normalize;
 mod report;
 
 use std::error::Error;
-use std::fs::File;
-use std::io::BufReader;
 use std::path::Path;
 
 use crate::cycom;
 use crate::dups;
 use crate::hal;
 use crate::indent;
-use crate::loc::counter::{LineKind, classify_reader};
+use crate::loc::counter::LineKind;
 use crate::miv;
-use crate::util::{find_test_block_start, is_binary_reader};
+use crate::util::{find_test_block_start, read_and_classify};
 use crate::walk;
 
-use analyzer::{
-    DimensionScore, FileScore, ProjectScore, compute_project_score, normalize_complexity,
-    normalize_duplication, normalize_file_size, normalize_halstead, normalize_indent, normalize_mi,
-    score_to_grade,
+use analyzer::{DimensionScore, FileScore, ProjectScore, compute_project_score, score_to_grade};
+use normalize::{
+    normalize_complexity, normalize_duplication, normalize_file_size, normalize_halstead,
+    normalize_indent, normalize_mi,
 };
 use report::{print_json, print_report};
 
@@ -77,6 +76,78 @@ pub fn run(
     Ok(())
 }
 
+/// Result of analyzing a single file for scoring.
+struct SingleFileResult {
+    metrics: FileMetrics,
+    dup_file: dups::detector::NormalizedFile,
+    normalized_count: usize,
+}
+
+/// Analyze a single source file: read, classify, compute metrics, normalize for dups.
+/// Returns `None` for binary files, non-code files, or on I/O errors.
+fn analyze_single_file(
+    file_path: &Path,
+    spec: &crate::loc::language::LanguageSpec,
+    exclude_tests: bool,
+) -> Option<SingleFileResult> {
+    let (lines, kinds) = match read_and_classify(file_path, spec) {
+        Ok(Some(v)) => v,
+        Ok(None) => return None,
+        Err(e) => {
+            eprintln!("warning: {}: {e}", file_path.display());
+            return None;
+        }
+    };
+
+    let code_lines = kinds.iter().filter(|k| **k == LineKind::Code).count();
+    let comment_lines = kinds.iter().filter(|k| **k == LineKind::Comment).count();
+
+    let indent_stddev = indent::analyzer::analyze(&lines, &kinds, 4).map(|m| m.stddev);
+
+    let hal_metrics = hal::analyze_content(&lines, &kinds, spec);
+    let halstead_effort = hal_metrics.as_ref().map(|h| h.effort);
+    let volume = hal_metrics.map(|h| h.volume);
+
+    let cycom_result = cycom::analyze_content(&lines, &kinds, spec);
+    let max_complexity = cycom_result.as_ref().map(|c| c.max_complexity);
+    let total_complexity = cycom_result.map(|c| c.total_complexity);
+
+    let mi_score = if let (Some(vol), Some(compl)) = (volume, total_complexity) {
+        miv::analyzer::compute_mi(vol, compl, code_lines, comment_lines).map(|m| m.mi_score)
+    } else {
+        None
+    };
+
+    // Skip non-code files (Markdown, TOML, JSON, etc.)
+    if mi_score.is_none() && max_complexity.is_none() && halstead_effort.is_none() {
+        return None;
+    }
+
+    let dup_end = if exclude_tests {
+        find_test_block_start(&lines)
+    } else {
+        lines.len()
+    };
+    let normalized = dups::normalize_content(&lines[..dup_end], &kinds[..dup_end]);
+    let normalized_count = normalized.len();
+
+    Some(SingleFileResult {
+        metrics: FileMetrics {
+            path: file_path.to_path_buf(),
+            code_lines,
+            mi_score,
+            max_complexity,
+            indent_stddev,
+            halstead_effort,
+        },
+        dup_file: dups::detector::NormalizedFile {
+            path: file_path.to_path_buf(),
+            lines: normalized,
+        },
+        normalized_count,
+    })
+}
+
 fn compute_score(
     path: &Path,
     include_tests: bool,
@@ -89,82 +160,11 @@ fn compute_score(
     let mut total_code_lines: usize = 0;
 
     for (file_path, spec) in walk::source_files(path, exclude_tests) {
-        let file = match File::open(&file_path) {
-            Ok(f) => f,
-            Err(err) => {
-                eprintln!("warning: {}: {err}", file_path.display());
-                continue;
-            }
-        };
-        let mut reader = BufReader::new(file);
-        match is_binary_reader(&mut reader) {
-            Ok(true) => continue,
-            Err(err) => {
-                eprintln!("warning: {}: {err}", file_path.display());
-                continue;
-            }
-            Ok(false) => {}
+        if let Some(result) = analyze_single_file(&file_path, spec, exclude_tests) {
+            total_code_lines += result.normalized_count;
+            dup_files.push(result.dup_file);
+            file_metrics.push(result.metrics);
         }
-
-        let content = match std::io::read_to_string(reader) {
-            Ok(c) => c,
-            Err(err) => {
-                eprintln!("warning: {}: {err}", file_path.display());
-                continue;
-            }
-        };
-        let lines: Vec<String> = content.lines().map(String::from).collect();
-        let kinds = classify_reader(content.as_bytes(), spec);
-
-        let code_lines = kinds.iter().filter(|k| **k == LineKind::Code).count();
-        let comment_lines = kinds.iter().filter(|k| **k == LineKind::Comment).count();
-
-        // Indent
-        let indent_stddev = indent::analyzer::analyze(&lines, &kinds, 4).map(|m| m.stddev);
-
-        // Halstead
-        let hal_metrics = hal::analyze_content(&lines, &kinds, spec);
-        let halstead_effort = hal_metrics.as_ref().map(|h| h.effort);
-        let volume = hal_metrics.map(|h| h.volume);
-
-        // Cyclomatic
-        let cycom_result = cycom::analyze_content(&lines, &kinds, spec);
-        let max_complexity = cycom_result.as_ref().map(|c| c.max_complexity);
-        let total_complexity = cycom_result.map(|c| c.total_complexity);
-
-        // MI (verifysoft variant)
-        let mi_score = if let (Some(vol), Some(compl)) = (volume, total_complexity) {
-            miv::analyzer::compute_mi(vol, compl, code_lines, comment_lines).map(|m| m.mi_score)
-        } else {
-            None
-        };
-
-        // Skip non-code files (Markdown, TOML, JSON, etc.) — no analyzable metrics
-        if mi_score.is_none() && max_complexity.is_none() && halstead_effort.is_none() {
-            continue;
-        }
-
-        // Dups: strip inline #[cfg(test)] blocks before normalization (Rust-specific)
-        let dup_end = if exclude_tests {
-            find_test_block_start(&lines)
-        } else {
-            lines.len()
-        };
-        let normalized = dups::normalize_content(&lines[..dup_end], &kinds[..dup_end]);
-        total_code_lines += normalized.len();
-        dup_files.push(dups::detector::NormalizedFile {
-            path: file_path.to_path_buf(),
-            lines: normalized,
-        });
-
-        file_metrics.push(FileMetrics {
-            path: file_path.to_path_buf(),
-            code_lines,
-            mi_score,
-            max_complexity,
-            indent_stddev,
-            halstead_effort,
-        });
     }
 
     // Duplication (project-level)
@@ -249,53 +249,53 @@ fn build_dimensions(
     ]
 }
 
+/// Normalize an optional metric, push an issue if the score is below threshold.
+fn score_dim<T: Copy>(
+    value: Option<T>,
+    normalize: impl Fn(T) -> f64,
+    label: impl Fn(T) -> String,
+    issues: &mut Vec<String>,
+) -> f64 {
+    match value {
+        Some(v) => {
+            let s = normalize(v);
+            if s < 60.0 {
+                issues.push(label(v));
+            }
+            s
+        }
+        None => MISSING_DIM_SCORE,
+    }
+}
+
 fn score_file(f: &FileMetrics) -> FileScore {
     let mut issues: Vec<String> = Vec::new();
     let file_weight_sum: f64 = FILE_WEIGHTS.iter().map(|(w, _)| w).sum();
 
-    let mi_s = f
-        .mi_score
-        .map(|mi| {
-            let s = normalize_mi(mi);
-            if s < 60.0 {
-                issues.push(format!("MI: {mi:.0}"));
-            }
-            s
-        })
-        .unwrap_or(MISSING_DIM_SCORE);
-
-    let cycom_s = f
-        .max_complexity
-        .map(|c| {
-            let s = normalize_complexity(c);
-            if s < 60.0 {
-                issues.push(format!("Complexity: {c}"));
-            }
-            s
-        })
-        .unwrap_or(MISSING_DIM_SCORE);
-
-    let indent_s = f
-        .indent_stddev
-        .map(|sd| {
-            let s = normalize_indent(sd);
-            if s < 60.0 {
-                issues.push(format!("Indent: {sd:.1}"));
-            }
-            s
-        })
-        .unwrap_or(MISSING_DIM_SCORE);
-
-    let hal_s = f
-        .halstead_effort
-        .map(|e| {
-            let s = normalize_halstead(e, f.code_lines);
-            if s < 60.0 {
-                issues.push(format!("Effort: {e:.0}"));
-            }
-            s
-        })
-        .unwrap_or(MISSING_DIM_SCORE);
+    let mi_s = score_dim(
+        f.mi_score,
+        normalize_mi,
+        |v| format!("MI: {v:.0}"),
+        &mut issues,
+    );
+    let cycom_s = score_dim(
+        f.max_complexity,
+        normalize_complexity,
+        |v| format!("Complexity: {v}"),
+        &mut issues,
+    );
+    let indent_s = score_dim(
+        f.indent_stddev,
+        normalize_indent,
+        |v| format!("Indent: {v:.1}"),
+        &mut issues,
+    );
+    let hal_s = score_dim(
+        f.halstead_effort,
+        |e| normalize_halstead(e, f.code_lines),
+        |v| format!("Effort: {v:.0}"),
+        &mut issues,
+    );
 
     let size_s = normalize_file_size(f.code_lines);
     if f.code_lines > 1000 {
@@ -345,255 +345,5 @@ fn build_empty_dimensions() -> Vec<DimensionScore> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs;
-
-    #[test]
-    fn weights_sum_to_one() {
-        let total = W_MI + W_CYCOM + W_DUP + W_INDENT + W_HAL + W_SIZE;
-        assert!(
-            (total - 1.0).abs() < 1e-10,
-            "dimension weights must sum to 1.0, got {total}"
-        );
-    }
-
-    #[test]
-    fn file_weights_match_constants() {
-        // Ensure FILE_WEIGHTS stays in sync with the individual constants
-        let file_sum: f64 = FILE_WEIGHTS.iter().map(|(w, _)| w).sum();
-        let expected = W_MI + W_CYCOM + W_INDENT + W_HAL + W_SIZE;
-        assert!(
-            (file_sum - expected).abs() < 1e-10,
-            "FILE_WEIGHTS sum should match non-dup constants"
-        );
-    }
-
-    #[test]
-    fn weighted_mean_all_none() {
-        let files = vec![FileMetrics {
-            path: "a.rs".into(),
-            code_lines: 100,
-
-            mi_score: None,
-            max_complexity: None,
-            indent_stddev: None,
-            halstead_effort: None,
-        }];
-        let result = weighted_mean(&files, 100, |_| None);
-        assert!((result - 0.0).abs() < 0.01, "all None → 0, got {result}");
-    }
-
-    #[test]
-    fn weighted_mean_total_loc_zero() {
-        let files: Vec<FileMetrics> = vec![];
-        let result = weighted_mean(&files, 0, |_| Some(80.0));
-        assert!((result - 0.0).abs() < 0.01, "total_loc=0 → 0, got {result}");
-    }
-
-    #[test]
-    fn weighted_mean_single_file() {
-        let files = vec![FileMetrics {
-            path: "a.rs".into(),
-            code_lines: 100,
-
-            mi_score: Some(85.0),
-            max_complexity: Some(5),
-            indent_stddev: Some(1.0),
-            halstead_effort: Some(1000.0),
-        }];
-        let result = weighted_mean(&files, 100, |f| f.mi_score);
-        assert!(
-            (result - 85.0).abs() < 0.01,
-            "single file → same value, got {result}"
-        );
-    }
-
-    #[test]
-    fn weighted_mean_loc_weighted() {
-        let files = vec![
-            FileMetrics {
-                path: "small.rs".into(),
-                code_lines: 10,
-
-                mi_score: Some(100.0),
-                max_complexity: None,
-                indent_stddev: None,
-                halstead_effort: None,
-            },
-            FileMetrics {
-                path: "big.rs".into(),
-                code_lines: 90,
-
-                mi_score: Some(50.0),
-                max_complexity: None,
-                indent_stddev: None,
-                halstead_effort: None,
-            },
-        ];
-        let result = weighted_mean(&files, 100, |f| f.mi_score);
-        // (100*10 + 50*90) / 100 = (1000 + 4500) / 100 = 55
-        assert!(
-            (result - 55.0).abs() < 0.01,
-            "LOC-weighted → 55, got {result}"
-        );
-    }
-
-    #[test]
-    fn run_on_empty_dir() {
-        let dir = tempfile::tempdir().unwrap();
-        run(dir.path(), false, false, 10, 6).unwrap();
-    }
-
-    #[test]
-    fn run_on_rust_file() {
-        let dir = tempfile::tempdir().unwrap();
-        fs::write(
-            dir.path().join("main.rs"),
-            "// a module\nfn main() {\n    let x = 1;\n    let y = x + 2;\n    println!(\"{}\", y);\n}\n",
-        )
-        .unwrap();
-        let score = compute_score(dir.path(), false, 10, 6).unwrap();
-        assert!(
-            score.score > 50.0,
-            "simple code should score well, got {}",
-            score.score
-        );
-        assert_eq!(score.files_analyzed, 1);
-        assert!(score.total_loc > 0);
-        assert_eq!(score.dimensions.len(), 6);
-    }
-
-    #[test]
-    fn run_json_output() {
-        let dir = tempfile::tempdir().unwrap();
-        fs::write(
-            dir.path().join("main.rs"),
-            "fn main() {\n    let x = 1;\n}\n",
-        )
-        .unwrap();
-        run(dir.path(), true, false, 10, 6).unwrap();
-    }
-
-    #[test]
-    fn run_includes_tests_with_flag() {
-        let dir = tempfile::tempdir().unwrap();
-        fs::create_dir(dir.path().join("tests")).unwrap();
-        fs::write(
-            dir.path().join("tests/integration.rs"),
-            "fn test() {\n    assert!(true);\n}\n",
-        )
-        .unwrap();
-        let score = compute_score(dir.path(), true, 10, 6).unwrap();
-        assert_eq!(score.files_analyzed, 1);
-    }
-
-    #[test]
-    fn run_excludes_tests_by_default() {
-        let dir = tempfile::tempdir().unwrap();
-        fs::create_dir(dir.path().join("tests")).unwrap();
-        fs::write(
-            dir.path().join("tests/integration.rs"),
-            "fn test() {\n    assert!(true);\n}\n",
-        )
-        .unwrap();
-        let score = compute_score(dir.path(), false, 10, 6).unwrap();
-        assert_eq!(score.files_analyzed, 0);
-    }
-
-    #[test]
-    fn run_on_current_repo() {
-        // Smoke test on the actual repo
-        run(Path::new("."), false, false, 5, 6).unwrap();
-    }
-
-    #[test]
-    fn find_test_block_start_finds_cfg_test() {
-        let lines = vec![
-            "fn foo() {}".to_string(),
-            "#[cfg(test)]".to_string(),
-            "mod tests {}".to_string(),
-        ];
-        assert_eq!(find_test_block_start(&lines), 1);
-    }
-
-    #[test]
-    fn find_test_block_start_with_leading_spaces() {
-        let lines = vec![
-            "fn foo() {}".to_string(),
-            "  #[cfg(test)]  ".to_string(),
-            "mod tests {}".to_string(),
-        ];
-        assert_eq!(find_test_block_start(&lines), 1);
-    }
-
-    #[test]
-    fn find_test_block_start_no_match() {
-        let lines = vec!["fn foo() {}".to_string(), "fn bar() {}".to_string()];
-        assert_eq!(find_test_block_start(&lines), 2);
-    }
-
-    #[test]
-    fn find_test_block_start_empty() {
-        let lines: Vec<String> = vec![];
-        assert_eq!(find_test_block_start(&lines), 0);
-    }
-
-    #[test]
-    fn excludes_markdown_files() {
-        let dir = tempfile::tempdir().unwrap();
-        fs::write(dir.path().join("README.md"), "# Hello\n\nWorld\n").unwrap();
-        let score = compute_score(dir.path(), false, 10, 6).unwrap();
-        assert_eq!(score.files_analyzed, 0, "Markdown should be excluded");
-    }
-
-    #[test]
-    fn excludes_toml_files() {
-        let dir = tempfile::tempdir().unwrap();
-        fs::write(
-            dir.path().join("Cargo.toml"),
-            "[package]\nname = \"test\"\n",
-        )
-        .unwrap();
-        let score = compute_score(dir.path(), false, 10, 6).unwrap();
-        assert_eq!(score.files_analyzed, 0, "TOML should be excluded");
-    }
-
-    #[test]
-    fn excludes_json_files() {
-        let dir = tempfile::tempdir().unwrap();
-        fs::write(dir.path().join("data.json"), "{\"key\": \"value\"}\n").unwrap();
-        let score = compute_score(dir.path(), false, 10, 6).unwrap();
-        assert_eq!(score.files_analyzed, 0, "JSON should be excluded");
-    }
-
-    #[test]
-    fn run_on_single_file() {
-        let dir = tempfile::tempdir().unwrap();
-        let file = dir.path().join("lib.rs");
-        fs::write(
-            &file,
-            "/// Docs\nfn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n",
-        )
-        .unwrap();
-        let score = compute_score(&file, false, 10, 6).unwrap();
-        assert_eq!(score.files_analyzed, 1);
-        assert!(score.total_loc > 0);
-    }
-
-    #[test]
-    fn dimensions_sum_to_100_percent() {
-        let dir = tempfile::tempdir().unwrap();
-        fs::write(
-            dir.path().join("main.rs"),
-            "fn main() {\n    let x = 1;\n}\n",
-        )
-        .unwrap();
-        let score = compute_score(dir.path(), false, 10, 6).unwrap();
-        let total_weight: f64 = score.dimensions.iter().map(|d| d.weight).sum();
-        assert!(
-            (total_weight - 1.0).abs() < 0.001,
-            "weights should sum to 1.0, got {total_weight}"
-        );
-    }
-}
+#[path = "mod_test.rs"]
+mod tests;

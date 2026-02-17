@@ -1,7 +1,15 @@
+/// Language-specific tokens used to compute cyclomatic complexity.
+/// Each field defines the syntactic elements that increase branching.
 pub struct ComplexityMarkers {
+    /// Branch keywords that increase complexity (e.g. "if", "for", "while").
+    /// Multi-word entries like "else if" must appear before their prefixes.
     pub keywords: &'static [&'static str],
+    /// Boolean operators that add decision points (e.g. "&&", "||").
     pub operators: &'static [&'static str],
+    /// Tokens that mark function definitions (e.g. "fn ", "def ").
+    /// Each function starts with a base complexity of 1.
     pub function_markers: &'static [&'static str],
+    /// Whether functions are delimited by braces (true) or indentation (false).
     pub brace_scoped: bool,
 }
 
@@ -160,6 +168,9 @@ static CLOJURE: ComplexityMarkers = ComplexityMarkers {
     brace_scoped: false,
 };
 
+/// Look up the complexity markers for a given language name.
+/// Returns `None` for languages without cyclomatic complexity support
+/// (e.g. JSON, HTML, Markdown).
 pub fn markers_for(language_name: &str) -> Option<&'static ComplexityMarkers> {
     match language_name {
         "Rust" => Some(&RUST),
@@ -188,52 +199,5 @@ pub fn markers_for(language_name: &str) -> Option<&'static ComplexityMarkers> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn rust_markers_exist() {
-        let m = markers_for("Rust").unwrap();
-        assert!(m.brace_scoped);
-        assert!(m.keywords.contains(&"if"));
-        assert!(m.function_markers.contains(&"fn "));
-    }
-
-    #[test]
-    fn json_returns_none() {
-        assert!(markers_for("JSON").is_none());
-    }
-
-    #[test]
-    fn html_returns_none() {
-        assert!(markers_for("HTML").is_none());
-    }
-
-    #[test]
-    fn python_is_indent_scoped() {
-        let m = markers_for("Python").unwrap();
-        assert!(!m.brace_scoped);
-        assert!(m.keywords.contains(&"elif"));
-    }
-
-    #[test]
-    fn c_family_shared() {
-        let java = markers_for("Java").unwrap();
-        let c = markers_for("C").unwrap();
-        assert!(std::ptr::eq(java, c));
-    }
-
-    #[test]
-    fn shell_variants() {
-        assert!(markers_for("Bourne Shell").is_some());
-        assert!(markers_for("Bourne Again Shell").is_some());
-        assert!(markers_for("Zsh").is_some());
-    }
-
-    #[test]
-    fn unknown_language_returns_none() {
-        assert!(markers_for("Unknown").is_none());
-        assert!(markers_for("Markdown").is_none());
-        assert!(markers_for("TOML").is_none());
-    }
-}
+#[path = "markers_test.rs"]
+mod tests;

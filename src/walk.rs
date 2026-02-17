@@ -92,6 +92,26 @@ pub fn source_files(path: &Path, exclude_tests: bool) -> Vec<(PathBuf, &'static 
     result
 }
 
+/// Walk source files, analyze each with `f`, and collect successful results.
+/// Handles the common Ok(Some)/Ok(None)/Err pattern used across modules.
+pub fn collect_analysis<T>(
+    path: &Path,
+    exclude_tests: bool,
+    f: impl Fn(&Path, &LanguageSpec) -> Result<Option<T>, Box<dyn std::error::Error>>,
+) -> Vec<T> {
+    let mut results = Vec::new();
+    for (file_path, spec) in source_files(path, exclude_tests) {
+        match f(&file_path, spec) {
+            Ok(Some(m)) => results.push(m),
+            Ok(None) => {}
+            Err(err) => {
+                eprintln!("warning: {}: {err}", file_path.display());
+            }
+        }
+    }
+    results
+}
+
 /// Build a directory walker that respects `.gitignore`, skips `.git`,
 /// and optionally excludes test directories.
 pub fn walk(path: &Path, exclude_tests: bool) -> ignore::Walk {
