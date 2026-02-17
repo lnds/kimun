@@ -144,6 +144,10 @@ struct Breakpoint {
 /// Piecewise linear interpolation.  Values below the first breakpoint clamp to its score;
 /// values above the last clamp to its score.
 fn piecewise(value: f64, curve: &[Breakpoint]) -> f64 {
+    debug_assert!(
+        curve.windows(2).all(|w| w[0].input <= w[1].input),
+        "Breakpoints must be sorted by input in ascending order"
+    );
     if curve.is_empty() {
         return 0.0;
     }

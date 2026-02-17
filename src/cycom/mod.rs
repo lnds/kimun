@@ -32,7 +32,7 @@ pub(crate) fn analyze_file(
         None => return Ok(None),
     };
 
-    let (_content, lines, kinds) = match read_and_classify(path, spec)? {
+    let (lines, kinds) = match read_and_classify(path, spec)? {
         Some(v) => v,
         None => return Ok(None),
     };

@@ -16,7 +16,7 @@ pub(crate) fn analyze_file(
     path: &Path,
     spec: &LanguageSpec,
 ) -> Result<Option<FileIndentMetrics>, Box<dyn Error>> {
-    let (_content, lines, kinds) = match read_and_classify(path, spec)? {
+    let (lines, kinds) = match read_and_classify(path, spec)? {
         Some(v) => v,
         None => return Ok(None),
     };

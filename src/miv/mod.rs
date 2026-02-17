@@ -27,7 +27,7 @@ use analyzer::compute_mi;
 use report::{FileMIMetrics, print_json, print_report};
 
 fn analyze_file(path: &Path, spec: &LanguageSpec) -> Result<Option<FileMIMetrics>, Box<dyn Error>> {
-    let (_content, _lines, kinds) = match read_and_classify(path, spec)? {
+    let (_lines, kinds) = match read_and_classify(path, spec)? {
         Some(v) => v,
         None => return Ok(None),
     };
