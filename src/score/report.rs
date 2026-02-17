@@ -1,9 +1,10 @@
 use serde::Serialize;
 
 use super::analyzer::{Grade, ProjectScore};
+use crate::report_helpers;
 
 pub fn print_report(score: &ProjectScore, bottom: usize, target: Option<&str>) {
-    let separator = "\u{2500}".repeat(66);
+    let separator = report_helpers::separator(66);
 
     let header = match target {
         Some(t) if score.files_analyzed == 1 => format!("File Score: {t}"),
@@ -150,8 +151,7 @@ pub fn print_json(
             })
             .collect(),
     };
-    println!("{}", serde_json::to_string_pretty(&json)?);
-    Ok(())
+    report_helpers::print_json_stdout(&json)
 }
 
 #[cfg(test)]

@@ -11,7 +11,6 @@ use crate::dups;
 use crate::hal;
 use crate::indent;
 use crate::loc::counter::{LineKind, classify_reader};
-use crate::loc::language::detect;
 use crate::miv;
 use crate::util::is_binary_reader;
 use crate::walk;
@@ -89,34 +88,8 @@ fn compute_score(
     let mut dup_files: Vec<dups::detector::NormalizedFile> = Vec::new();
     let mut total_code_lines: usize = 0;
 
-    for entry in walk::walk(path, exclude_tests) {
-        let entry = match entry {
-            Ok(e) => e,
-            Err(err) => {
-                eprintln!("warning: {err}");
-                continue;
-            }
-        };
-
-        if !entry.file_type().is_some_and(|ft| ft.is_file()) {
-            continue;
-        }
-
-        let file_path = entry.path();
-
-        if exclude_tests && walk::is_test_file(file_path) {
-            continue;
-        }
-
-        let spec = match detect(file_path) {
-            Some(s) => s,
-            None => match walk::try_detect_shebang(file_path) {
-                Some(s) => s,
-                None => continue,
-            },
-        };
-
-        let file = match File::open(file_path) {
+    for (file_path, spec) in walk::source_files(path, exclude_tests) {
+        let file = match File::open(&file_path) {
             Ok(f) => f,
             Err(err) => {
                 eprintln!("warning: {}: {err}", file_path.display());
@@ -222,140 +195,9 @@ fn compute_score(
         });
     }
 
-    // Aggregate each dimension as LOC-weighted mean
-    let mi_dim = weighted_mean(&file_metrics, total_loc, |f| f.mi_score.map(normalize_mi));
-    let cycom_dim = weighted_mean(&file_metrics, total_loc, |f| {
-        f.max_complexity.map(normalize_complexity)
-    });
-    let indent_dim = weighted_mean(&file_metrics, total_loc, |f| {
-        f.indent_stddev.map(normalize_indent)
-    });
-    let hal_dim = weighted_mean(&file_metrics, total_loc, |f| {
-        f.halstead_effort
-            .map(|e| normalize_halstead(e, f.code_lines))
-    });
-    let size_dim = weighted_mean(&file_metrics, total_loc, |f| {
-        Some(normalize_file_size(f.code_lines))
-    });
-    let dup_dim = normalize_duplication(dup_percent);
-
-    let dimensions = vec![
-        DimensionScore {
-            name: "Maintainability Index",
-            weight: W_MI,
-            score: mi_dim,
-            grade: score_to_grade(mi_dim),
-        },
-        DimensionScore {
-            name: "Cyclomatic Complexity",
-            weight: W_CYCOM,
-            score: cycom_dim,
-            grade: score_to_grade(cycom_dim),
-        },
-        DimensionScore {
-            name: "Duplication",
-            weight: W_DUP,
-            score: dup_dim,
-            grade: score_to_grade(dup_dim),
-        },
-        DimensionScore {
-            name: "Indentation Complexity",
-            weight: W_INDENT,
-            score: indent_dim,
-            grade: score_to_grade(indent_dim),
-        },
-        DimensionScore {
-            name: "Halstead Effort",
-            weight: W_HAL,
-            score: hal_dim,
-            grade: score_to_grade(hal_dim),
-        },
-        DimensionScore {
-            name: "File Size",
-            weight: W_SIZE,
-            score: size_dim,
-            grade: score_to_grade(size_dim),
-        },
-    ];
-
+    let dimensions = build_dimensions(&file_metrics, total_loc, dup_percent);
     let project_score = compute_project_score(&dimensions);
-
-    // Per-file scores for "needs attention".
-    // Uses fixed weights for all files. Missing dimensions default to MISSING_DIM_SCORE
-    // so that files with fewer analyzable metrics are not artificially inflated.
-    // Note: duplication is project-level and not included in per-file scores.
-    let file_weight_sum: f64 = FILE_WEIGHTS.iter().map(|(w, _)| w).sum();
-    let mut file_scores: Vec<FileScore> = file_metrics
-        .iter()
-        .map(|f| {
-            let mut issues: Vec<String> = Vec::new();
-
-            let mi_s = f
-                .mi_score
-                .map(|mi| {
-                    let s = normalize_mi(mi);
-                    if s < 60.0 {
-                        issues.push(format!("MI: {mi:.0}"));
-                    }
-                    s
-                })
-                .unwrap_or(MISSING_DIM_SCORE);
-
-            let cycom_s = f
-                .max_complexity
-                .map(|c| {
-                    let s = normalize_complexity(c);
-                    if s < 60.0 {
-                        issues.push(format!("Complexity: {c}"));
-                    }
-                    s
-                })
-                .unwrap_or(MISSING_DIM_SCORE);
-
-            let indent_s = f
-                .indent_stddev
-                .map(|sd| {
-                    let s = normalize_indent(sd);
-                    if s < 60.0 {
-                        issues.push(format!("Indent: {sd:.1}"));
-                    }
-                    s
-                })
-                .unwrap_or(MISSING_DIM_SCORE);
-
-            let hal_s = f
-                .halstead_effort
-                .map(|e| {
-                    let s = normalize_halstead(e, f.code_lines);
-                    if s < 60.0 {
-                        issues.push(format!("Effort: {e:.0}"));
-                    }
-                    s
-                })
-                .unwrap_or(MISSING_DIM_SCORE);
-
-            let size_s = normalize_file_size(f.code_lines);
-            if f.code_lines > 1000 {
-                issues.push(format!("Size: {} LOC", f.code_lines));
-            }
-
-            let weighted_sum = mi_s * W_MI
-                + cycom_s * W_CYCOM
-                + indent_s * W_INDENT
-                + hal_s * W_HAL
-                + size_s * W_SIZE;
-            let file_score = weighted_sum / file_weight_sum;
-
-            FileScore {
-                path: f.path.clone(),
-                score: file_score,
-                grade: score_to_grade(file_score),
-                loc: f.code_lines,
-                issues,
-            }
-        })
-        .collect();
-
+    let mut file_scores: Vec<FileScore> = file_metrics.iter().map(score_file).collect();
     file_scores.sort_by(|a, b| a.score.total_cmp(&b.score));
     file_scores.truncate(bottom);
 
@@ -367,6 +209,110 @@ fn compute_score(
         dimensions,
         needs_attention: file_scores,
     })
+}
+
+fn build_dimensions(
+    file_metrics: &[FileMetrics],
+    total_loc: usize,
+    dup_percent: f64,
+) -> Vec<DimensionScore> {
+    let mi_dim = weighted_mean(file_metrics, total_loc, |f| f.mi_score.map(normalize_mi));
+    let cycom_dim = weighted_mean(file_metrics, total_loc, |f| {
+        f.max_complexity.map(normalize_complexity)
+    });
+    let indent_dim = weighted_mean(file_metrics, total_loc, |f| {
+        f.indent_stddev.map(normalize_indent)
+    });
+    let hal_dim = weighted_mean(file_metrics, total_loc, |f| {
+        f.halstead_effort
+            .map(|e| normalize_halstead(e, f.code_lines))
+    });
+    let size_dim = weighted_mean(file_metrics, total_loc, |f| {
+        Some(normalize_file_size(f.code_lines))
+    });
+    let dup_dim = normalize_duplication(dup_percent);
+
+    let dim = |name, weight, score| DimensionScore {
+        name,
+        weight,
+        score,
+        grade: score_to_grade(score),
+    };
+
+    vec![
+        dim("Maintainability Index", W_MI, mi_dim),
+        dim("Cyclomatic Complexity", W_CYCOM, cycom_dim),
+        dim("Duplication", W_DUP, dup_dim),
+        dim("Indentation Complexity", W_INDENT, indent_dim),
+        dim("Halstead Effort", W_HAL, hal_dim),
+        dim("File Size", W_SIZE, size_dim),
+    ]
+}
+
+fn score_file(f: &FileMetrics) -> FileScore {
+    let mut issues: Vec<String> = Vec::new();
+    let file_weight_sum: f64 = FILE_WEIGHTS.iter().map(|(w, _)| w).sum();
+
+    let mi_s = f
+        .mi_score
+        .map(|mi| {
+            let s = normalize_mi(mi);
+            if s < 60.0 {
+                issues.push(format!("MI: {mi:.0}"));
+            }
+            s
+        })
+        .unwrap_or(MISSING_DIM_SCORE);
+
+    let cycom_s = f
+        .max_complexity
+        .map(|c| {
+            let s = normalize_complexity(c);
+            if s < 60.0 {
+                issues.push(format!("Complexity: {c}"));
+            }
+            s
+        })
+        .unwrap_or(MISSING_DIM_SCORE);
+
+    let indent_s = f
+        .indent_stddev
+        .map(|sd| {
+            let s = normalize_indent(sd);
+            if s < 60.0 {
+                issues.push(format!("Indent: {sd:.1}"));
+            }
+            s
+        })
+        .unwrap_or(MISSING_DIM_SCORE);
+
+    let hal_s = f
+        .halstead_effort
+        .map(|e| {
+            let s = normalize_halstead(e, f.code_lines);
+            if s < 60.0 {
+                issues.push(format!("Effort: {e:.0}"));
+            }
+            s
+        })
+        .unwrap_or(MISSING_DIM_SCORE);
+
+    let size_s = normalize_file_size(f.code_lines);
+    if f.code_lines > 1000 {
+        issues.push(format!("Size: {} LOC", f.code_lines));
+    }
+
+    let weighted_sum =
+        mi_s * W_MI + cycom_s * W_CYCOM + indent_s * W_INDENT + hal_s * W_HAL + size_s * W_SIZE;
+    let file_score = weighted_sum / file_weight_sum;
+
+    FileScore {
+        path: f.path.clone(),
+        score: file_score,
+        grade: score_to_grade(file_score),
+        loc: f.code_lines,
+        issues,
+    }
 }
 
 /// LOC-weighted mean of a normalized dimension across all files.
@@ -395,44 +341,7 @@ fn weighted_mean(
 }
 
 fn build_empty_dimensions() -> Vec<DimensionScore> {
-    vec![
-        DimensionScore {
-            name: "Maintainability Index",
-            weight: W_MI,
-            score: 0.0,
-            grade: score_to_grade(0.0),
-        },
-        DimensionScore {
-            name: "Cyclomatic Complexity",
-            weight: W_CYCOM,
-            score: 0.0,
-            grade: score_to_grade(0.0),
-        },
-        DimensionScore {
-            name: "Duplication",
-            weight: W_DUP,
-            score: 0.0,
-            grade: score_to_grade(0.0),
-        },
-        DimensionScore {
-            name: "Indentation Complexity",
-            weight: W_INDENT,
-            score: 0.0,
-            grade: score_to_grade(0.0),
-        },
-        DimensionScore {
-            name: "Halstead Effort",
-            weight: W_HAL,
-            score: 0.0,
-            grade: score_to_grade(0.0),
-        },
-        DimensionScore {
-            name: "File Size",
-            weight: W_SIZE,
-            score: 0.0,
-            grade: score_to_grade(0.0),
-        },
-    ]
+    build_dimensions(&[], 0, 0.0)
 }
 
 /// Find the line index where `#[cfg(test)]` starts (for stripping inline test blocks).

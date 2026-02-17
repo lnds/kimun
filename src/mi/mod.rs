@@ -17,27 +17,20 @@ pub(crate) mod analyzer;
 pub(crate) mod report;
 
 use std::error::Error;
-use std::fs::File;
-use std::io::{BufReader, Cursor};
 use std::path::Path;
 
-use crate::loc::counter::{LineKind, classify_reader};
-use crate::loc::language::{LanguageSpec, detect};
-use crate::util::is_binary_reader;
+use crate::loc::counter::LineKind;
+use crate::loc::language::LanguageSpec;
+use crate::util::read_and_classify;
 use crate::walk;
 use analyzer::compute_mi;
 use report::{FileMIMetrics, print_json, print_report};
 
 fn analyze_file(path: &Path, spec: &LanguageSpec) -> Result<Option<FileMIMetrics>, Box<dyn Error>> {
-    let file = File::open(path)?;
-    let mut reader = BufReader::new(file);
-
-    if is_binary_reader(&mut reader)? {
-        return Ok(None);
-    }
-
-    let content = std::io::read_to_string(reader)?;
-    let kinds = classify_reader(BufReader::new(Cursor::new(&content)), spec);
+    let (_content, _lines, kinds) = match read_and_classify(path, spec)? {
+        Some(v) => v,
+        None => return Ok(None),
+    };
     let code_lines = kinds.iter().filter(|k| **k == LineKind::Code).count();
 
     let volume = match crate::hal::analyze_file(path, spec)? {
@@ -74,34 +67,8 @@ pub fn run(
     let exclude_tests = !include_tests;
     let mut results: Vec<FileMIMetrics> = Vec::new();
 
-    for entry in walk::walk(path, exclude_tests) {
-        let entry = match entry {
-            Ok(e) => e,
-            Err(err) => {
-                eprintln!("warning: {err}");
-                continue;
-            }
-        };
-
-        if !entry.file_type().is_some_and(|ft| ft.is_file()) {
-            continue;
-        }
-
-        let file_path = entry.path();
-
-        if exclude_tests && walk::is_test_file(file_path) {
-            continue;
-        }
-
-        let spec = match detect(file_path) {
-            Some(s) => s,
-            None => match walk::try_detect_shebang(file_path) {
-                Some(s) => s,
-                None => continue,
-            },
-        };
-
-        match analyze_file(file_path, spec) {
+    for (file_path, spec) in walk::source_files(path, exclude_tests) {
+        match analyze_file(&file_path, spec) {
             Ok(Some(m)) => results.push(m),
             Ok(None) => {}
             Err(err) => {
@@ -142,6 +109,7 @@ pub fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::loc::language::detect;
     use std::fs;
 
     #[test]

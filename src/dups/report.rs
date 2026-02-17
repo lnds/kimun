@@ -1,6 +1,7 @@
 use serde::Serialize;
 
 use super::detector::{DuplicateGroup, DuplicationSeverity};
+use crate::report_helpers;
 
 #[derive(Serialize)]
 pub struct DuplicationMetrics {
@@ -36,7 +37,7 @@ fn assessment(percentage: f64) -> &'static str {
 }
 
 pub fn print_summary(metrics: &DuplicationMetrics, groups: &[DuplicateGroup]) {
-    let separator = "─".repeat(68);
+    let separator = report_helpers::separator(68);
     let pct = metrics.percentage();
 
     println!("{separator}");
@@ -117,7 +118,7 @@ pub fn print_detailed(
         return;
     }
 
-    let separator = "─".repeat(68);
+    let separator = report_helpers::separator(68);
 
     println!();
     println!(" Duplicate Groups (sorted by severity, then duplicated lines)");

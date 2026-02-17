@@ -5,7 +5,6 @@ use std::error::Error;
 use std::path::Path;
 
 use crate::git::GitRepo;
-use crate::loc::language::detect;
 use crate::util::parse_since;
 use crate::walk;
 
@@ -78,39 +77,13 @@ pub fn run(
     let exclude_tests = !include_tests;
     let mut results: Vec<FileOwnership> = Vec::new();
 
-    for entry in walk::walk(path, exclude_tests) {
-        let entry = match entry {
-            Ok(e) => e,
-            Err(err) => {
-                eprintln!("warning: {err}");
-                continue;
-            }
-        };
-
-        if !entry.file_type().is_some_and(|ft| ft.is_file()) {
+    for (file_path, spec) in walk::source_files(path, exclude_tests) {
+        if is_generated(&file_path) {
             continue;
         }
-
-        let file_path = entry.path();
-
-        if exclude_tests && walk::is_test_file(file_path) {
-            continue;
-        }
-
-        if is_generated(file_path) {
-            continue;
-        }
-
-        let spec = match detect(file_path) {
-            Some(s) => s,
-            None => match walk::try_detect_shebang(file_path) {
-                Some(s) => s,
-                None => continue,
-            },
-        };
 
         // Compute path relative to git root
-        let rel_to_walk = file_path.strip_prefix(path).unwrap_or(file_path);
+        let rel_to_walk = file_path.strip_prefix(path).unwrap_or(&file_path);
         let rel_path = if walk_prefix.as_os_str().is_empty() {
             rel_to_walk.to_path_buf()
         } else {

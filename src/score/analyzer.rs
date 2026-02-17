@@ -132,135 +132,198 @@ pub fn compute_project_score(dimensions: &[DimensionScore]) -> f64 {
     dimensions.iter().map(|d| d.score * d.weight).sum()
 }
 
-// --- Normalization functions ---
-// Each takes a raw metric value and returns a score in 0-100.
+// --- Piecewise linear normalization ---
+// Each normalizer maps a raw metric to a 0-100 score via linear interpolation
+// between breakpoints.  Breakpoints are (input, output) pairs in ascending input order.
 
-/// Normalize Maintainability Index (verifysoft variant).
-/// Calibrated against 18 well-known open source projects.
-/// Piecewise mapping:
-///   85+ (good) → 90-100, 65-85 (moderate) → 70-90,
-///   40-65 (difficult) → 50-70, 0-40 (very difficult) → 30-50,
-///   <0 (pathological) → 0-30.
+struct Breakpoint {
+    input: f64,
+    score: f64,
+}
+
+/// Piecewise linear interpolation.  Values below the first breakpoint clamp to its score;
+/// values above the last clamp to its score.
+fn piecewise(value: f64, curve: &[Breakpoint]) -> f64 {
+    if curve.is_empty() {
+        return 0.0;
+    }
+    if value <= curve[0].input {
+        return curve[0].score;
+    }
+    for w in curve.windows(2) {
+        if value <= w[1].input {
+            let frac = (value - w[0].input) / (w[1].input - w[0].input);
+            return w[0].score + frac * (w[1].score - w[0].score);
+        }
+    }
+    curve.last().unwrap().score
+}
+
+// Breakpoint tables — exactly reproduce the original piecewise functions.
+
+const MI_CURVE: &[Breakpoint] = &[
+    Breakpoint {
+        input: -100.0,
+        score: 0.0,
+    },
+    Breakpoint {
+        input: 0.0,
+        score: 30.0,
+    },
+    Breakpoint {
+        input: 40.0,
+        score: 50.0,
+    },
+    Breakpoint {
+        input: 65.0,
+        score: 70.0,
+    },
+    Breakpoint {
+        input: 85.0,
+        score: 90.0,
+    },
+    Breakpoint {
+        input: 171.0,
+        score: 100.0,
+    },
+];
+
+const COMPLEXITY_CURVE: &[Breakpoint] = &[
+    Breakpoint {
+        input: 5.0,
+        score: 100.0,
+    },
+    Breakpoint {
+        input: 6.0,
+        score: 90.0,
+    },
+    Breakpoint {
+        input: 10.0,
+        score: 80.0,
+    },
+    Breakpoint {
+        input: 20.0,
+        score: 50.0,
+    },
+    Breakpoint {
+        input: 50.0,
+        score: 5.0,
+    },
+    Breakpoint {
+        input: 51.0,
+        score: 0.0,
+    },
+];
+
+const DUPLICATION_CURVE: &[Breakpoint] = &[
+    Breakpoint {
+        input: 5.0,
+        score: 100.0,
+    },
+    Breakpoint {
+        input: 10.0,
+        score: 80.0,
+    },
+    Breakpoint {
+        input: 20.0,
+        score: 40.0,
+    },
+    Breakpoint {
+        input: 40.0,
+        score: 10.0,
+    },
+    Breakpoint {
+        input: 100.0,
+        score: 0.0,
+    },
+];
+
+const INDENT_CURVE: &[Breakpoint] = &[
+    Breakpoint {
+        input: 1.0,
+        score: 100.0,
+    },
+    Breakpoint {
+        input: 1.5,
+        score: 80.0,
+    },
+    Breakpoint {
+        input: 2.0,
+        score: 50.0,
+    },
+    Breakpoint {
+        input: 3.0,
+        score: 20.0,
+    },
+    Breakpoint {
+        input: 5.0,
+        score: 0.0,
+    },
+];
+
+const HALSTEAD_EPL_CURVE: &[Breakpoint] = &[
+    Breakpoint {
+        input: 1000.0,
+        score: 100.0,
+    },
+    Breakpoint {
+        input: 5000.0,
+        score: 70.0,
+    },
+    Breakpoint {
+        input: 10000.0,
+        score: 40.0,
+    },
+    Breakpoint {
+        input: 20000.0,
+        score: 0.0,
+    },
+];
+
+const FILE_SIZE_CURVE: &[Breakpoint] = &[
+    Breakpoint {
+        input: 500.0,
+        score: 100.0,
+    },
+    Breakpoint {
+        input: 1000.0,
+        score: 60.0,
+    },
+    Breakpoint {
+        input: 2000.0,
+        score: 20.0,
+    },
+    Breakpoint {
+        input: 4000.0,
+        score: 0.0,
+    },
+];
+
 pub fn normalize_mi(mi_score: f64) -> f64 {
-    if mi_score >= 171.0 {
-        100.0
-    } else if mi_score >= 85.0 {
-        // good: 85→90, 171→100
-        90.0 + (mi_score - 85.0) * 10.0 / 86.0
-    } else if mi_score >= 65.0 {
-        // moderate: 65→70, 85→90
-        70.0 + (mi_score - 65.0)
-    } else if mi_score >= 40.0 {
-        // difficult: 40→50, 65→70
-        50.0 + (mi_score - 40.0) * 20.0 / 25.0
-    } else if mi_score >= 0.0 {
-        // very difficult: 0→30, 40→50
-        30.0 + mi_score * 20.0 / 40.0
-    } else {
-        // pathological: -100→0, 0→30
-        (30.0 + mi_score * 30.0 / 100.0).max(0.0)
-    }
+    piecewise(mi_score, MI_CURVE)
 }
 
-/// Normalize max cyclomatic complexity per file.
-/// Piecewise: ≤5→100, 6-10→80-90, 11-20→50-80, 21-50→5-50, 51+→0.
 pub fn normalize_complexity(max_complexity: usize) -> f64 {
-    let c = max_complexity as f64;
-    if c <= 5.0 {
-        100.0
-    } else if c <= 10.0 {
-        // 6→90, 10→80 — linear interpolation
-        90.0 - (c - 6.0) * 10.0 / 4.0
-    } else if c <= 20.0 {
-        // 11→80, 20→50
-        80.0 - (c - 10.0) * 30.0 / 10.0
-    } else if c <= 50.0 {
-        // 21→50, 50→5
-        50.0 - (c - 20.0) * 45.0 / 30.0
-    } else {
-        0.0
-    }
+    piecewise(max_complexity as f64, COMPLEXITY_CURVE)
 }
 
-/// Normalize project duplication percentage.
-/// Calibrated: <5%→100, 5-10%→80-100, 10-20%→40-80, 20-40%→10-40, ≥40%→0-10.
 pub fn normalize_duplication(dup_percent: f64) -> f64 {
-    if dup_percent < 5.0 {
-        100.0
-    } else if dup_percent < 10.0 {
-        // 5→100, 10→80
-        100.0 - (dup_percent - 5.0) * 20.0 / 5.0
-    } else if dup_percent < 20.0 {
-        // 10→80, 20→40
-        80.0 - (dup_percent - 10.0) * 40.0 / 10.0
-    } else if dup_percent < 40.0 {
-        // 20→40, 40→10
-        40.0 - (dup_percent - 20.0) * 30.0 / 20.0
-    } else {
-        // 40→10, 100→0
-        (10.0 - (dup_percent - 40.0) * 10.0 / 60.0).max(0.0)
-    }
+    piecewise(dup_percent, DUPLICATION_CURVE)
 }
 
-/// Normalize indentation complexity (stddev).
-/// <1.0→100, 1.0-1.5→80-100, 1.5-2.0→50-80, 2.0-3.0→20-50, ≥3.0→0-20.
 pub fn normalize_indent(stddev: f64) -> f64 {
-    if stddev < 1.0 {
-        100.0
-    } else if stddev < 1.5 {
-        // 1.0→100, 1.5→80
-        100.0 - (stddev - 1.0) * 20.0 / 0.5
-    } else if stddev < 2.0 {
-        // 1.5→80, 2.0→50
-        80.0 - (stddev - 1.5) * 30.0 / 0.5
-    } else if stddev < 3.0 {
-        // 2.0→50, 3.0→20
-        50.0 - (stddev - 2.0) * 30.0 / 1.0
-    } else {
-        // 3.0→20, linear to 0
-        (20.0 - (stddev - 3.0) * 20.0 / 2.0).max(0.0)
-    }
+    piecewise(stddev, INDENT_CURVE)
 }
 
-/// Normalize Halstead effort per LOC (effort / code_lines).
-/// Piecewise: ≤1000→100, 1000-5000→70-100, 5000-10000→40-70, 10000-20000→0-40, ≥20000→0.
 pub fn normalize_halstead(effort: f64, code_lines: usize) -> f64 {
     if effort <= 0.0 || code_lines == 0 {
         return 50.0; // neutral for missing data
     }
-    let epl = effort / code_lines as f64;
-    if epl <= 1000.0 {
-        100.0
-    } else if epl <= 5000.0 {
-        // 1000→100, 5000→70
-        100.0 - (epl - 1000.0) * 30.0 / 4000.0
-    } else if epl <= 10000.0 {
-        // 5000→70, 10000→40
-        70.0 - (epl - 5000.0) * 30.0 / 5000.0
-    } else if epl <= 20000.0 {
-        // 10000→40, 20000→0
-        40.0 - (epl - 10000.0) * 40.0 / 10000.0
-    } else {
-        0.0
-    }
+    piecewise(effort / code_lines as f64, HALSTEAD_EPL_CURVE)
 }
 
-/// Normalize file size (code lines). Optimal range ≤500 → 100.
-/// Calibrated: penalizes only files >500 LOC. Most well-structured files are <500.
 pub fn normalize_file_size(code_lines: usize) -> f64 {
-    let loc = code_lines as f64;
-    if loc <= 500.0 {
-        100.0
-    } else if loc <= 1000.0 {
-        // 500→100, 1000→60
-        100.0 - (loc - 500.0) * 40.0 / 500.0
-    } else if loc <= 2000.0 {
-        // 1000→60, 2000→20
-        60.0 - (loc - 1000.0) * 40.0 / 1000.0
-    } else {
-        // >2000: continues down to 0
-        (20.0 - (loc - 2000.0) * 20.0 / 2000.0).max(0.0)
-    }
+    piecewise(code_lines as f64, FILE_SIZE_CURVE)
 }
 
 #[cfg(test)]

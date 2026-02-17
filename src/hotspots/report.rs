@@ -1,6 +1,7 @@
 use serde::Serialize;
 
 use super::FileHotspot;
+use crate::report_helpers;
 
 fn complexity_label(metric: &str) -> &'static str {
     match metric {
@@ -24,15 +25,10 @@ pub fn print_report(files: &[FileHotspot], metric: &str) {
 
     let label = complexity_label(metric);
 
-    let max_path_len = files
-        .iter()
-        .map(|f| f.path.display().to_string().len())
-        .max()
-        .unwrap_or(4);
-
+    let max_path_len = report_helpers::max_path_width(files.iter().map(|f| f.path.as_path()), 4);
     // 1 (leading space) + path + 2 + 10 + 1 + 7 + 1 + 12 + 1 + 10 = path + 45
     let header_width = max_path_len + 45;
-    let separator = "─".repeat(header_width.max(78));
+    let separator = report_helpers::separator(header_width.max(78));
 
     println!("Hotspots (Commits × {label} Complexity)");
     println!("{separator}");
@@ -88,8 +84,7 @@ pub fn print_json(files: &[FileHotspot], metric: &str) -> Result<(), Box<dyn std
         })
         .collect();
 
-    println!("{}", serde_json::to_string_pretty(&entries)?);
-    Ok(())
+    report_helpers::print_json_stdout(&entries)
 }
 
 #[cfg(test)]

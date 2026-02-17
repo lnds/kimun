@@ -2,206 +2,107 @@ use serde_json::{Value, json};
 use std::path::Path;
 use std::process::Command;
 
+fn path_prop() -> Value {
+    json!({"type": "string", "description": "Directory to analyze (default: project root)"})
+}
+
+fn top_prop() -> Value {
+    json!({"type": "integer", "description": "Show only the top N files (default: 20)"})
+}
+
+fn since_prop() -> Value {
+    json!({"type": "string", "description": "Only consider commits since this time (e.g. 6m, 1y, 30d)"})
+}
+
+fn tool(name: &str, desc: &str, extra_props: &[(&str, Value)]) -> Value {
+    let mut props = serde_json::Map::new();
+    props.insert("path".into(), path_prop());
+    for (k, v) in extra_props {
+        props.insert((*k).into(), v.clone());
+    }
+    json!({
+        "name": name,
+        "description": desc,
+        "input_schema": {
+            "type": "object",
+            "properties": Value::Object(props),
+            "required": []
+        }
+    })
+}
+
 pub fn tool_definitions() -> Vec<Value> {
     vec![
-        json!({
-            "name": "cm_loc",
-            "description": "Count lines of code (blank, comment, code) by language. Returns per-language breakdown with totals.",
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Directory to analyze (default: project root)"
-                    }
-                },
-                "required": []
-            }
-        }),
-        json!({
-            "name": "cm_score",
-            "description": "Compute an overall code health score (A++ to F--) across 6 dimensions: maintainability, complexity, duplication, indentation, Halstead effort, and file size.",
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Directory to analyze (default: project root)"
-                    }
-                },
-                "required": []
-            }
-        }),
-        json!({
-            "name": "cm_hal",
-            "description": "Analyze Halstead complexity metrics per file: volume, difficulty, effort, estimated bugs, and development time.",
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Directory to analyze (default: project root)"
-                    },
-                    "top": {
-                        "type": "integer",
-                        "description": "Show only the top N files (default: 20)"
-                    }
-                },
-                "required": []
-            }
-        }),
-        json!({
-            "name": "cm_cycom",
-            "description": "Analyze cyclomatic complexity per file: total, max, and average complexity with per-function breakdown.",
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Directory to analyze (default: project root)"
-                    },
-                    "top": {
-                        "type": "integer",
-                        "description": "Show only the top N files (default: 20)"
-                    }
-                },
-                "required": []
-            }
-        }),
-        json!({
-            "name": "cm_indent",
-            "description": "Analyze indentation complexity per file: standard deviation and max depth of indentation.",
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Directory to analyze (default: project root)"
-                    }
-                },
-                "required": []
-            }
-        }),
-        json!({
-            "name": "cm_mi",
-            "description": "Compute Maintainability Index per file (Visual Studio variant, 0-100 scale). Green (20-100), Yellow (10-19), Red (0-9).",
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Directory to analyze (default: project root)"
-                    },
-                    "top": {
-                        "type": "integer",
-                        "description": "Show only the top N files (default: 20)"
-                    }
-                },
-                "required": []
-            }
-        }),
-        json!({
-            "name": "cm_miv",
-            "description": "Compute Maintainability Index per file (verifysoft variant, with comment weight). Good (85+), Moderate (65-84), Difficult (<65).",
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Directory to analyze (default: project root)"
-                    },
-                    "top": {
-                        "type": "integer",
-                        "description": "Show only the top N files (default: 20)"
-                    }
-                },
-                "required": []
-            }
-        }),
-        json!({
-            "name": "cm_dups",
-            "description": "Detect duplicate code blocks across files. Shows duplicate percentage and group details.",
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Directory to analyze (default: project root)"
-                    },
-                    "min_lines": {
-                        "type": "integer",
-                        "description": "Minimum lines for a duplicate block (default: 6)"
-                    }
-                },
-                "required": []
-            }
-        }),
-        json!({
-            "name": "cm_hotspots",
-            "description": "Find hotspots: files that change frequently AND have high complexity. Score = commits x complexity. Requires git repository.",
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Directory to analyze (default: project root)"
-                    },
-                    "top": {
-                        "type": "integer",
-                        "description": "Show only the top N files (default: 20)"
-                    },
-                    "since": {
-                        "type": "string",
-                        "description": "Only consider commits since this time (e.g. 6m, 1y, 30d)"
-                    }
-                },
-                "required": []
-            }
-        }),
-        json!({
-            "name": "cm_knowledge",
-            "description": "Analyze code ownership patterns via git blame (knowledge maps). Shows primary owner, concentration, and knowledge loss risk per file.",
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Directory to analyze (default: project root)"
-                    },
-                    "top": {
-                        "type": "integer",
-                        "description": "Show only the top N files (default: 20)"
-                    },
-                    "since": {
-                        "type": "string",
-                        "description": "Only consider recent activity since this time for knowledge loss detection (e.g. 6m, 1y, 30d)"
-                    }
-                },
-                "required": []
-            }
-        }),
-        json!({
-            "name": "cm_tc",
-            "description": "Analyze temporal coupling: files that change together in commits. Shows coupling strength between file pairs. Requires git repository.",
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Directory to analyze (default: project root)"
-                    },
-                    "top": {
-                        "type": "integer",
-                        "description": "Show only the top N file pairs (default: 20)"
-                    },
-                    "since": {
-                        "type": "string",
-                        "description": "Only consider commits since this time (e.g. 6m, 1y, 30d)"
-                    }
-                },
-                "required": []
-            }
-        }),
+        tool(
+            "cm_loc",
+            "Count lines of code (blank, comment, code) by language. Returns per-language breakdown with totals.",
+            &[],
+        ),
+        tool(
+            "cm_score",
+            "Compute an overall code health score (A++ to F--) across 6 dimensions: maintainability, complexity, duplication, indentation, Halstead effort, and file size.",
+            &[],
+        ),
+        tool(
+            "cm_hal",
+            "Analyze Halstead complexity metrics per file: volume, difficulty, effort, estimated bugs, and development time.",
+            &[("top", top_prop())],
+        ),
+        tool(
+            "cm_cycom",
+            "Analyze cyclomatic complexity per file: total, max, and average complexity with per-function breakdown.",
+            &[("top", top_prop())],
+        ),
+        tool(
+            "cm_indent",
+            "Analyze indentation complexity per file: standard deviation and max depth of indentation.",
+            &[],
+        ),
+        tool(
+            "cm_mi",
+            "Compute Maintainability Index per file (Visual Studio variant, 0-100 scale). Green (20-100), Yellow (10-19), Red (0-9).",
+            &[("top", top_prop())],
+        ),
+        tool(
+            "cm_miv",
+            "Compute Maintainability Index per file (verifysoft variant, with comment weight). Good (85+), Moderate (65-84), Difficult (<65).",
+            &[("top", top_prop())],
+        ),
+        tool(
+            "cm_dups",
+            "Detect duplicate code blocks across files. Shows duplicate percentage and group details.",
+            &[(
+                "min_lines",
+                json!({"type": "integer", "description": "Minimum lines for a duplicate block (default: 6)"}),
+            )],
+        ),
+        tool(
+            "cm_hotspots",
+            "Find hotspots: files that change frequently AND have high complexity. Score = commits x complexity. Requires git repository.",
+            &[("top", top_prop()), ("since", since_prop())],
+        ),
+        tool(
+            "cm_knowledge",
+            "Analyze code ownership patterns via git blame (knowledge maps). Shows primary owner, concentration, and knowledge loss risk per file.",
+            &[
+                ("top", top_prop()),
+                (
+                    "since",
+                    json!({"type": "string", "description": "Only consider recent activity since this time for knowledge loss detection (e.g. 6m, 1y, 30d)"}),
+                ),
+            ],
+        ),
+        tool(
+            "cm_tc",
+            "Analyze temporal coupling: files that change together in commits. Shows coupling strength between file pairs. Requires git repository.",
+            &[
+                (
+                    "top",
+                    json!({"type": "integer", "description": "Show only the top N file pairs (default: 20)"}),
+                ),
+                ("since", since_prop()),
+            ],
+        ),
     ]
 }
 

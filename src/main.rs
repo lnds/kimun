@@ -10,6 +10,7 @@ mod loc;
 mod mi;
 mod miv;
 mod report;
+mod report_helpers;
 mod score;
 mod tc;
 mod util;
@@ -540,6 +541,17 @@ Examples:
     },
 }
 
+fn run_command(
+    path: Option<PathBuf>,
+    f: impl FnOnce(&std::path::Path) -> Result<(), Box<dyn std::error::Error>>,
+) {
+    let target = path.unwrap_or_else(|| PathBuf::from("."));
+    if let Err(err) = f(&target) {
+        eprintln!("error: {err}");
+        std::process::exit(1);
+    }
+}
+
 fn main() {
     let cli = Cli::parse();
 
@@ -548,13 +560,7 @@ fn main() {
             path,
             verbose,
             json,
-        } => {
-            let target = path.unwrap_or_else(|| PathBuf::from("."));
-            if let Err(err) = loc::run(&target, verbose, json) {
-                eprintln!("error: {err}");
-                std::process::exit(1);
-            }
-        }
+        } => run_command(path, |t| loc::run(t, verbose, json)),
         Commands::Dups {
             path,
             report,
@@ -562,38 +568,21 @@ fn main() {
             min_lines,
             json,
             include_tests,
-        } => {
-            let target = path.unwrap_or_else(|| PathBuf::from("."));
-            if let Err(err) = dups::run(&target, min_lines, report, show_all, json, !include_tests)
-            {
-                eprintln!("error: {err}");
-                std::process::exit(1);
-            }
-        }
+        } => run_command(path, |t| {
+            dups::run(t, min_lines, report, show_all, json, !include_tests)
+        }),
         Commands::Indent {
             path,
             json,
             include_tests,
-        } => {
-            let target = path.unwrap_or_else(|| PathBuf::from("."));
-            if let Err(err) = indent::run(&target, json, include_tests) {
-                eprintln!("error: {err}");
-                std::process::exit(1);
-            }
-        }
+        } => run_command(path, |t| indent::run(t, json, include_tests)),
         Commands::Hal {
             path,
             json,
             include_tests,
             top,
             sort_by,
-        } => {
-            let target = path.unwrap_or_else(|| PathBuf::from("."));
-            if let Err(err) = hal::run(&target, json, include_tests, top, &sort_by) {
-                eprintln!("error: {err}");
-                std::process::exit(1);
-            }
-        }
+        } => run_command(path, |t| hal::run(t, json, include_tests, top, &sort_by)),
         Commands::Cycom {
             path,
             json,
@@ -602,34 +591,24 @@ fn main() {
             top,
             per_function,
             sort_by,
-        } => {
-            let target = path.unwrap_or_else(|| PathBuf::from("."));
-            if let Err(err) = cycom::run(
-                &target,
+        } => run_command(path, |t| {
+            cycom::run(
+                t,
                 json,
                 include_tests,
                 min_complexity,
                 top,
                 per_function,
                 &sort_by,
-            ) {
-                eprintln!("error: {err}");
-                std::process::exit(1);
-            }
-        }
+            )
+        }),
         Commands::Mi {
             path,
             json,
             include_tests,
             top,
             sort_by,
-        } => {
-            let target = path.unwrap_or_else(|| PathBuf::from("."));
-            if let Err(err) = mi::run(&target, json, include_tests, top, &sort_by) {
-                eprintln!("error: {err}");
-                std::process::exit(1);
-            }
-        }
+        } => run_command(path, |t| mi::run(t, json, include_tests, top, &sort_by)),
         Commands::Report {
             path,
             json,
@@ -638,12 +617,10 @@ fn main() {
             min_lines,
             full,
         } => {
-            let target = path.unwrap_or_else(|| PathBuf::from("."));
             let effective_top = if full { usize::MAX } else { top };
-            if let Err(err) = report::run(&target, json, include_tests, effective_top, min_lines) {
-                eprintln!("error: {err}");
-                std::process::exit(1);
-            }
+            run_command(path, |t| {
+                report::run(t, json, include_tests, effective_top, min_lines)
+            });
         }
         Commands::Miv {
             path,
@@ -651,13 +628,7 @@ fn main() {
             include_tests,
             top,
             sort_by,
-        } => {
-            let target = path.unwrap_or_else(|| PathBuf::from("."));
-            if let Err(err) = miv::run(&target, json, include_tests, top, &sort_by) {
-                eprintln!("error: {err}");
-                std::process::exit(1);
-            }
-        }
+        } => run_command(path, |t| miv::run(t, json, include_tests, top, &sort_by)),
         Commands::Hotspots {
             path,
             json,
@@ -666,21 +637,17 @@ fn main() {
             sort_by,
             since,
             complexity,
-        } => {
-            let target = path.unwrap_or_else(|| PathBuf::from("."));
-            if let Err(err) = hotspots::run(
-                &target,
+        } => run_command(path, |t| {
+            hotspots::run(
+                t,
                 json,
                 include_tests,
                 top,
                 &sort_by,
                 since.as_deref(),
                 &complexity,
-            ) {
-                eprintln!("error: {err}");
-                std::process::exit(1);
-            }
-        }
+            )
+        }),
         Commands::Knowledge {
             path,
             json,
@@ -689,21 +656,17 @@ fn main() {
             sort_by,
             since,
             risk_only,
-        } => {
-            let target = path.unwrap_or_else(|| PathBuf::from("."));
-            if let Err(err) = knowledge::run(
-                &target,
+        } => run_command(path, |t| {
+            knowledge::run(
+                t,
                 json,
                 include_tests,
                 top,
                 &sort_by,
                 since.as_deref(),
                 risk_only,
-            ) {
-                eprintln!("error: {err}");
-                std::process::exit(1);
-            }
-        }
+            )
+        }),
         Commands::Tc {
             path,
             json,
@@ -713,10 +676,9 @@ fn main() {
             since,
             min_degree,
             min_strength,
-        } => {
-            let target = path.unwrap_or_else(|| PathBuf::from("."));
-            if let Err(err) = tc::run(
-                &target,
+        } => run_command(path, |t| {
+            tc::run(
+                t,
                 json,
                 include_tests,
                 top,
@@ -724,37 +686,26 @@ fn main() {
                 since.as_deref(),
                 min_degree,
                 min_strength,
-            ) {
-                eprintln!("error: {err}");
-                std::process::exit(1);
-            }
-        }
+            )
+        }),
         Commands::Score {
             path,
             json,
             include_tests,
             bottom,
             min_lines,
-        } => {
-            let target = path.unwrap_or_else(|| PathBuf::from("."));
-            if let Err(err) = score::run(&target, json, include_tests, bottom, min_lines) {
-                eprintln!("error: {err}");
-                std::process::exit(1);
-            }
-        }
+        } => run_command(path, |t| {
+            score::run(t, json, include_tests, bottom, min_lines)
+        }),
         Commands::Ai { command } => match command {
             AiCommands::Analyze {
                 provider,
                 path,
                 model,
                 output,
-            } => {
-                let target = path.unwrap_or_else(|| PathBuf::from("."));
-                if let Err(err) = ai::run(&provider, &target, model.as_deref(), output.as_deref()) {
-                    eprintln!("error: {err}");
-                    std::process::exit(1);
-                }
-            }
+            } => run_command(path, |t| {
+                ai::run(&provider, t, model.as_deref(), output.as_deref())
+            }),
             AiCommands::Skill { provider } => {
                 if let Err(err) = ai::skill::install(&provider) {
                     eprintln!("error: {err}");

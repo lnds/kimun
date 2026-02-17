@@ -1,6 +1,7 @@
 use serde::Serialize;
 
 use super::analyzer::FileCoupling;
+use crate::report_helpers;
 
 pub fn print_report(pairs: &[FileCoupling], total: usize) {
     if pairs.is_empty() {
@@ -8,22 +9,10 @@ pub fn print_report(pairs: &[FileCoupling], total: usize) {
         return;
     }
 
-    let max_a_len = pairs
-        .iter()
-        .map(|p| p.file_a.display().to_string().len())
-        .max()
-        .unwrap_or(6)
-        .max(6);
-
-    let max_b_len = pairs
-        .iter()
-        .map(|p| p.file_b.display().to_string().len())
-        .max()
-        .unwrap_or(6)
-        .max(6);
-
+    let max_a_len = report_helpers::max_path_width(pairs.iter().map(|p| p.file_a.as_path()), 6);
+    let max_b_len = report_helpers::max_path_width(pairs.iter().map(|p| p.file_b.as_path()), 6);
     let header_width = max_a_len + max_b_len + 35;
-    let separator = "─".repeat(header_width.max(78));
+    let separator = report_helpers::separator(header_width.max(78));
 
     println!("Temporal Coupling — Files That Change Together");
     println!("{separator}");
@@ -87,8 +76,7 @@ pub fn print_json(pairs: &[FileCoupling]) -> Result<(), Box<dyn std::error::Erro
         })
         .collect();
 
-    println!("{}", serde_json::to_string_pretty(&entries)?);
-    Ok(())
+    report_helpers::print_json_stdout(&entries)
 }
 
 #[cfg(test)]

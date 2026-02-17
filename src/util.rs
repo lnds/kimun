@@ -5,6 +5,11 @@ use std::io::{self, BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
 use std::time::SystemTime;
 
+use crate::loc::counter::{LineKind, classify_reader};
+use crate::loc::language::LanguageSpec;
+
+pub type ClassifiedSource = (String, Vec<String>, Vec<LineKind>);
+
 /// Check whether a reader points to a binary file by looking for null bytes
 /// in the first 512 bytes. Resets the reader position to the start afterward.
 pub fn is_binary_reader<R: Read + Seek>(reader: &mut R) -> io::Result<bool> {
@@ -68,6 +73,24 @@ pub fn mask_strings(line: &str) -> String {
 
     // SAFETY: we only replaced ASCII bytes with ASCII spaces
     String::from_utf8(result).unwrap_or_else(|_| line.to_string())
+}
+
+/// Read a source file, check for binary content, and classify lines.
+/// Returns None for binary files. On success returns the raw content,
+/// the split lines, and the per-line classification.
+pub fn read_and_classify(path: &Path, spec: &LanguageSpec) -> io::Result<Option<ClassifiedSource>> {
+    let file = File::open(path)?;
+    let mut reader = BufReader::new(file);
+
+    if is_binary_reader(&mut reader)? {
+        return Ok(None);
+    }
+
+    let content = io::read_to_string(reader)?;
+    let lines: Vec<String> = content.lines().map(String::from).collect();
+    let kinds = classify_reader(content.as_bytes(), spec);
+
+    Ok(Some((content, lines, kinds)))
 }
 
 /// Parse a duration string like "6m", "1y", "30d" into a Unix timestamp

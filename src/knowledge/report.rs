@@ -1,6 +1,7 @@
 use serde::Serialize;
 
 use super::analyzer::FileOwnership;
+use crate::report_helpers;
 
 pub fn print_report(files: &[FileOwnership]) {
     if files.is_empty() {
@@ -8,13 +9,7 @@ pub fn print_report(files: &[FileOwnership]) {
         return;
     }
 
-    let max_path_len = files
-        .iter()
-        .map(|f| f.path.display().to_string().len())
-        .max()
-        .unwrap_or(4)
-        .max(4);
-
+    let max_path_len = report_helpers::max_path_width(files.iter().map(|f| f.path.as_path()), 4);
     let max_owner_len = files
         .iter()
         .map(|f| f.primary_owner.len())
@@ -24,7 +19,7 @@ pub fn print_report(files: &[FileOwnership]) {
 
     // path + 2 + lang(10) + 1 + lines(7) + 1 + owner + 1 + own%(5) + 1 + contrib(7) + 1 + risk(8) + 1
     let header_width = max_path_len + max_owner_len + 45;
-    let separator = "─".repeat(header_width.max(78));
+    let separator = report_helpers::separator(header_width.max(78));
 
     println!("Knowledge Map — Code Ownership");
     println!("{separator}");
@@ -96,8 +91,7 @@ pub fn print_json(files: &[FileOwnership]) -> Result<(), Box<dyn std::error::Err
         })
         .collect();
 
-    println!("{}", serde_json::to_string_pretty(&entries)?);
-    Ok(())
+    report_helpers::print_json_stdout(&entries)
 }
 
 #[cfg(test)]

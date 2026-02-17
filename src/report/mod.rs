@@ -14,7 +14,6 @@ use crate::dups;
 use crate::hal;
 use crate::indent;
 use crate::loc::counter::{FileStats, LineKind, classify_reader};
-use crate::loc::language::detect;
 use crate::loc::report::LanguageReport;
 use crate::mi;
 use crate::miv;
@@ -194,37 +193,9 @@ pub fn build_report(
     let mut mi_vs_results: Vec<MiVisualStudioEntry> = Vec::new();
     let mut mi_vf_results: Vec<MiVerifysoftEntry> = Vec::new();
 
-    for entry in walk::walk(path, !include_tests) {
-        let entry = match entry {
-            Ok(e) => e,
-            Err(err) => {
-                eprintln!("warning: {err}");
-                continue;
-            }
-        };
-
-        if !entry.file_type().is_some_and(|ft| ft.is_file()) {
-            continue;
-        }
-
-        let file_path = entry.path();
-
-        // walk::walk filters test directories, but individual test files
-        // (e.g. foo_test.rs in a non-test directory) need a filename check.
-        if !include_tests && walk::is_test_file(file_path) {
-            continue;
-        }
-
-        let spec = match detect(file_path) {
-            Some(s) => s,
-            None => match walk::try_detect_shebang(file_path) {
-                Some(s) => s,
-                None => continue,
-            },
-        };
-
+    for (file_path, spec) in walk::source_files(path, !include_tests) {
         // --- Single read: open, binary check, read content, classify ---
-        let file = match File::open(file_path) {
+        let file = match File::open(&file_path) {
             Ok(f) => f,
             Err(err) => {
                 eprintln!("warning: {}: {err}", file_path.display());

@@ -1,10 +1,10 @@
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use ignore::WalkBuilder;
 
-use crate::loc::language::{LanguageSpec, detect_by_shebang};
+use crate::loc::language::{LanguageSpec, detect, detect_by_shebang};
 
 /// Test directory names to exclude when `--exclude-tests` is active.
 pub const TEST_DIRS: &[&str] = &["tests", "test", "__tests__", "spec"];
@@ -58,6 +58,38 @@ pub fn try_detect_shebang(path: &Path) -> Option<&'static LanguageSpec> {
     let mut first_line = String::new();
     reader.read_line(&mut first_line).ok()?;
     detect_by_shebang(&first_line)
+}
+
+/// Walk the directory tree and return all recognized source files with their
+/// detected language spec. Handles errors, filters non-files, excludes test
+/// files when requested, and detects language by extension or shebang.
+pub fn source_files(path: &Path, exclude_tests: bool) -> Vec<(PathBuf, &'static LanguageSpec)> {
+    let mut result = Vec::new();
+    for entry in walk(path, exclude_tests) {
+        let entry = match entry {
+            Ok(e) => e,
+            Err(err) => {
+                eprintln!("warning: {err}");
+                continue;
+            }
+        };
+        if !entry.file_type().is_some_and(|ft| ft.is_file()) {
+            continue;
+        }
+        let file_path = entry.path();
+        if exclude_tests && is_test_file(file_path) {
+            continue;
+        }
+        let spec = match detect(file_path) {
+            Some(s) => s,
+            None => match try_detect_shebang(file_path) {
+                Some(s) => s,
+                None => continue,
+            },
+        };
+        result.push((file_path.to_path_buf(), spec));
+    }
+    result
 }
 
 /// Build a directory walker that respects `.gitignore`, skips `.git`,

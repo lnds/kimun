@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use serde::Serialize;
 
 use super::analyzer::ComplexityLevel;
+use crate::report_helpers;
 
 pub struct FileIndentMetrics {
     pub path: PathBuf,
@@ -19,15 +20,9 @@ pub fn print_report(files: &[FileIndentMetrics]) {
         return;
     }
 
-    let max_path_len = files
-        .iter()
-        .map(|f| f.path.display().to_string().len())
-        .max()
-        .unwrap_or(4)
-        .max(4);
-
+    let max_path_len = report_helpers::max_path_width(files.iter().map(|f| f.path.as_path()), 4);
     let header_width = max_path_len + 42; // path + numbers + complexity
-    let separator = "─".repeat(header_width.max(68));
+    let separator = report_helpers::separator(header_width.max(68));
 
     println!("{separator}");
     println!(
@@ -79,8 +74,7 @@ pub fn print_json(files: &[FileIndentMetrics]) -> Result<(), Box<dyn std::error:
         })
         .collect();
 
-    println!("{}", serde_json::to_string_pretty(&entries)?);
-    Ok(())
+    report_helpers::print_json_stdout(&entries)
 }
 
 #[cfg(test)]

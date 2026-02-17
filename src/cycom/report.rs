@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use serde::Serialize;
 
 use super::analyzer::{CyclomaticLevel, FunctionComplexity};
+use crate::report_helpers;
 
 pub struct FileCycomMetrics {
     pub path: PathBuf,
@@ -21,15 +22,9 @@ pub fn print_report(files: &[FileCycomMetrics]) {
         return;
     }
 
-    let max_path_len = files
-        .iter()
-        .map(|f| f.path.display().to_string().len())
-        .max()
-        .unwrap_or(4)
-        .max(4);
-
+    let max_path_len = report_helpers::max_path_width(files.iter().map(|f| f.path.as_path()), 4);
     let header_width = max_path_len + 55;
-    let separator = "\u{2500}".repeat(header_width.max(78));
+    let separator = report_helpers::separator(header_width.max(78));
 
     println!("Cyclomatic Complexity");
     println!("{separator}");
@@ -86,7 +81,7 @@ pub fn print_per_function(files: &[FileCycomMetrics]) {
         return;
     }
 
-    let separator = "\u{2500}".repeat(78);
+    let separator = report_helpers::separator(78);
     println!("Cyclomatic Complexity (per function)");
     println!("{separator}");
 
@@ -160,8 +155,7 @@ pub fn print_json(files: &[FileCycomMetrics]) -> Result<(), Box<dyn std::error::
         })
         .collect();
 
-    println!("{}", serde_json::to_string_pretty(&entries)?);
-    Ok(())
+    report_helpers::print_json_stdout(&entries)
 }
 
 #[cfg(test)]

@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use serde::Serialize;
 
 use super::analyzer::{MILevel, MIMetrics};
+use crate::report_helpers;
 
 pub struct FileMIMetrics {
     pub path: PathBuf,
@@ -16,17 +17,11 @@ pub fn print_report(files: &[FileMIMetrics]) {
         return;
     }
 
-    let max_path_len = files
-        .iter()
-        .map(|f| f.path.display().to_string().len())
-        .max()
-        .unwrap_or(4)
-        .max(4);
-
+    let max_path_len = report_helpers::max_path_width(files.iter().map(|f| f.path.as_path()), 4);
     // Width derived from the header format string below:
     // " {path}  {Volume:>9} {Cyclo:>5} {LOC:>5} {MI:>6}  Level"
     let header_width = 1 + max_path_len + 2 + 9 + 1 + 5 + 1 + 5 + 1 + 6 + 2 + 5;
-    let separator = "\u{2500}".repeat(header_width.max(70));
+    let separator = report_helpers::separator(header_width.max(70));
 
     println!("Maintainability Index (Visual Studio)");
     println!("{separator}");
@@ -100,8 +95,7 @@ pub fn print_json(files: &[FileMIMetrics]) -> Result<(), Box<dyn std::error::Err
         })
         .collect();
 
-    println!("{}", serde_json::to_string_pretty(&entries)?);
-    Ok(())
+    report_helpers::print_json_stdout(&entries)
 }
 
 #[cfg(test)]

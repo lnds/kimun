@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use serde::Serialize;
 
 use super::analyzer::HalsteadMetrics;
+use crate::report_helpers;
 
 pub struct FileHalsteadMetrics {
     pub path: PathBuf,
@@ -35,15 +36,9 @@ pub fn print_report(files: &[FileHalsteadMetrics]) {
         return;
     }
 
-    let max_path_len = files
-        .iter()
-        .map(|f| f.path.display().to_string().len())
-        .max()
-        .unwrap_or(4)
-        .max(4);
-
+    let max_path_len = report_helpers::max_path_width(files.iter().map(|f| f.path.as_path()), 4);
     let header_width = max_path_len + 72;
-    let separator = "\u{2500}".repeat(header_width.max(88));
+    let separator = report_helpers::separator(header_width.max(88));
 
     println!("Halstead Complexity Metrics");
     println!("{separator}");
@@ -144,8 +139,7 @@ pub fn print_json(files: &[FileHalsteadMetrics]) -> Result<(), Box<dyn std::erro
         })
         .collect();
 
-    println!("{}", serde_json::to_string_pretty(&entries)?);
-    Ok(())
+    report_helpers::print_json_stdout(&entries)
 }
 
 #[cfg(test)]

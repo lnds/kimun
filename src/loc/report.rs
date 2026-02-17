@@ -2,6 +2,8 @@ use std::time::Duration;
 
 use serde::Serialize;
 
+use crate::report_helpers;
+
 #[derive(Debug, Serialize)]
 pub struct LanguageReport {
     pub name: String,
@@ -44,7 +46,7 @@ pub fn print_report(mut reports: Vec<LanguageReport>, verbose: Option<VerboseSta
         println!();
     }
 
-    let separator = "─".repeat(68);
+    let separator = report_helpers::separator(68);
 
     println!("{separator}");
     println!(
@@ -106,7 +108,7 @@ pub fn print_json(mut reports: Vec<LanguageReport>) {
         totals,
     };
 
-    println!("{}", serde_json::to_string_pretty(&output).unwrap());
+    report_helpers::print_json_stdout(&output).unwrap();
 }
 
 #[cfg(test)]

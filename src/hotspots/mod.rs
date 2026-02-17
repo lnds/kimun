@@ -5,7 +5,6 @@ use std::error::Error;
 use std::path::{Path, PathBuf};
 
 use crate::git::GitRepo;
-use crate::loc::language::detect;
 use crate::util::parse_since;
 use crate::walk;
 use report::{print_json, print_report};
@@ -88,35 +87,9 @@ pub fn run(
     let exclude_tests = !include_tests;
     let mut results: Vec<FileHotspot> = Vec::new();
 
-    for entry in walk::walk(path, exclude_tests) {
-        let entry = match entry {
-            Ok(e) => e,
-            Err(err) => {
-                eprintln!("warning: {err}");
-                continue;
-            }
-        };
-
-        if !entry.file_type().is_some_and(|ft| ft.is_file()) {
-            continue;
-        }
-
-        let file_path = entry.path();
-
-        if exclude_tests && walk::is_test_file(file_path) {
-            continue;
-        }
-
-        let spec = match detect(file_path) {
-            Some(s) => s,
-            None => match walk::try_detect_shebang(file_path) {
-                Some(s) => s,
-                None => continue,
-            },
-        };
-
+    for (file_path, spec) in walk::source_files(path, exclude_tests) {
         // Compute path relative to git root using the pre-computed prefix.
-        let rel_to_walk = file_path.strip_prefix(path).unwrap_or(file_path);
+        let rel_to_walk = file_path.strip_prefix(path).unwrap_or(&file_path);
         let rel_path = if walk_prefix.as_os_str().is_empty() {
             rel_to_walk.to_path_buf()
         } else {
@@ -130,7 +103,7 @@ pub fn run(
         };
 
         // Compute complexity (only for files with git history)
-        let complexity = match compute_complexity(file_path, spec, complexity_metric) {
+        let complexity = match compute_complexity(&file_path, spec, complexity_metric) {
             Ok(Some(c)) => c,
             Ok(None) => continue,
             Err(err) => {

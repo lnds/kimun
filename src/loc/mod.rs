@@ -1,4 +1,5 @@
 pub(crate) mod counter;
+mod fsm;
 pub(crate) mod language;
 pub(crate) mod report;
 
@@ -10,7 +11,6 @@ use std::time::Instant;
 use crate::util::hash_file;
 use crate::walk;
 use counter::{FileStats, count_lines};
-use language::detect;
 use report::{LanguageReport, VerboseStats, print_json, print_report};
 
 pub fn run(path: &Path, verbose: bool, json: bool) -> Result<(), Box<dyn Error>> {
@@ -20,40 +20,17 @@ pub fn run(path: &Path, verbose: bool, json: bool) -> Result<(), Box<dyn Error>>
     let mut total_files: usize = 0;
     let mut unique_files: usize = 0;
 
-    for entry in walk::walk(path, false) {
-        let entry = match entry {
-            Ok(e) => e,
-            Err(err) => {
-                eprintln!("warning: {err}");
-                continue;
-            }
-        };
-
-        if !entry.file_type().is_some_and(|ft| ft.is_file()) {
-            continue;
-        }
-
+    for (file_path, spec) in walk::source_files(path, false) {
         total_files += 1;
-        let file_path = entry.path();
-        let spec = match detect(file_path) {
-            Some(s) => s,
-            None => {
-                // Fallback: try shebang detection
-                match walk::try_detect_shebang(file_path) {
-                    Some(s) => s,
-                    None => continue,
-                }
-            }
-        };
 
         // Skip duplicate files (same content)
-        if let Some(h) = hash_file(file_path)
+        if let Some(h) = hash_file(&file_path)
             && !seen_hashes.insert(h)
         {
             continue;
         }
 
-        match count_lines(file_path, spec) {
+        match count_lines(&file_path, spec) {
             Ok(Some(file_stats)) => {
                 unique_files += 1;
                 let entry = stats_by_lang
