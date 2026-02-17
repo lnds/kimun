@@ -146,12 +146,9 @@ impl GitRepo {
             let sig = hunk.final_signature();
             let email = sig.email().unwrap_or("unknown").to_string();
             let author = sig.name().unwrap_or("unknown").to_string();
-            let time = hunk.final_commit_id();
-            let commit_time = self
-                .repo
-                .find_commit(time)
-                .map(|c| c.time().seconds())
-                .unwrap_or(0);
+            // Use the signature timestamp directly — avoids an O(1) git
+            // object lookup per hunk that would otherwise be O(N) total.
+            let commit_time = sig.when().seconds();
             let lines = hunk.lines_in_hunk();
 
             map.entry(email.clone())

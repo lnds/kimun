@@ -11,6 +11,10 @@ pub struct ComplexityMarkers {
     pub function_markers: &'static [&'static str],
     /// Whether functions are delimited by braces (true) or indentation (false).
     pub brace_scoped: bool,
+    /// Line comment markers for this language (used to strip comment text
+    /// before masking strings, preventing unmatched quotes in comments from
+    /// confusing the string masker).
+    pub line_comments: &'static [&'static str],
 }
 
 static RUST: ComplexityMarkers = ComplexityMarkers {
@@ -18,6 +22,7 @@ static RUST: ComplexityMarkers = ComplexityMarkers {
     operators: &["&&", "||"],
     function_markers: &["fn "],
     brace_scoped: true,
+    line_comments: &["//"],
 };
 
 static PYTHON: ComplexityMarkers = ComplexityMarkers {
@@ -25,6 +30,7 @@ static PYTHON: ComplexityMarkers = ComplexityMarkers {
     operators: &[],
     function_markers: &["async def ", "def "],
     brace_scoped: false,
+    line_comments: &["#"],
 };
 
 static JAVASCRIPT: ComplexityMarkers = ComplexityMarkers {
@@ -34,6 +40,7 @@ static JAVASCRIPT: ComplexityMarkers = ComplexityMarkers {
     operators: &["&&", "||", "??"],
     function_markers: &["function "],
     brace_scoped: true,
+    line_comments: &["//"],
 };
 
 static C_FAMILY: ComplexityMarkers = ComplexityMarkers {
@@ -43,6 +50,7 @@ static C_FAMILY: ComplexityMarkers = ComplexityMarkers {
     operators: &["&&", "||"],
     function_markers: &[],
     brace_scoped: true,
+    line_comments: &["//"],
 };
 
 static GO: ComplexityMarkers = ComplexityMarkers {
@@ -50,6 +58,7 @@ static GO: ComplexityMarkers = ComplexityMarkers {
     operators: &["&&", "||"],
     function_markers: &["func "],
     brace_scoped: true,
+    line_comments: &["//"],
 };
 
 static RUBY: ComplexityMarkers = ComplexityMarkers {
@@ -59,6 +68,7 @@ static RUBY: ComplexityMarkers = ComplexityMarkers {
     operators: &["&&", "||"],
     function_markers: &["def "],
     brace_scoped: false,
+    line_comments: &["#"],
 };
 
 static KOTLIN: ComplexityMarkers = ComplexityMarkers {
@@ -66,6 +76,7 @@ static KOTLIN: ComplexityMarkers = ComplexityMarkers {
     operators: &["&&", "||"],
     function_markers: &["fun "],
     brace_scoped: true,
+    line_comments: &["//"],
 };
 
 static SWIFT: ComplexityMarkers = ComplexityMarkers {
@@ -75,6 +86,7 @@ static SWIFT: ComplexityMarkers = ComplexityMarkers {
     operators: &["&&", "||"],
     function_markers: &["func "],
     brace_scoped: true,
+    line_comments: &["//"],
 };
 
 static SCALA: ComplexityMarkers = ComplexityMarkers {
@@ -82,6 +94,7 @@ static SCALA: ComplexityMarkers = ComplexityMarkers {
     operators: &["&&", "||"],
     function_markers: &["def "],
     brace_scoped: true,
+    line_comments: &["//"],
 };
 
 static SHELL: ComplexityMarkers = ComplexityMarkers {
@@ -89,6 +102,7 @@ static SHELL: ComplexityMarkers = ComplexityMarkers {
     operators: &["&&", "||"],
     function_markers: &[],
     brace_scoped: false,
+    line_comments: &["#"],
 };
 
 static HASKELL: ComplexityMarkers = ComplexityMarkers {
@@ -96,6 +110,7 @@ static HASKELL: ComplexityMarkers = ComplexityMarkers {
     operators: &[],
     function_markers: &[],
     brace_scoped: false,
+    line_comments: &["--"],
 };
 
 static ELIXIR: ComplexityMarkers = ComplexityMarkers {
@@ -103,6 +118,7 @@ static ELIXIR: ComplexityMarkers = ComplexityMarkers {
     operators: &[],
     function_markers: &["defp ", "def "],
     brace_scoped: false,
+    line_comments: &["#"],
 };
 
 static LUA: ComplexityMarkers = ComplexityMarkers {
@@ -110,6 +126,7 @@ static LUA: ComplexityMarkers = ComplexityMarkers {
     operators: &[],
     function_markers: &["function "],
     brace_scoped: false,
+    line_comments: &["--"],
 };
 
 static PERL: ComplexityMarkers = ComplexityMarkers {
@@ -117,6 +134,7 @@ static PERL: ComplexityMarkers = ComplexityMarkers {
     operators: &["&&", "||"],
     function_markers: &["sub "],
     brace_scoped: true,
+    line_comments: &["#"],
 };
 
 static ERLANG: ComplexityMarkers = ComplexityMarkers {
@@ -124,6 +142,7 @@ static ERLANG: ComplexityMarkers = ComplexityMarkers {
     operators: &[],
     function_markers: &[],
     brace_scoped: false,
+    line_comments: &["%"],
 };
 
 static OCAML: ComplexityMarkers = ComplexityMarkers {
@@ -131,6 +150,7 @@ static OCAML: ComplexityMarkers = ComplexityMarkers {
     operators: &[],
     function_markers: &["let "],
     brace_scoped: false,
+    line_comments: &[],
 };
 
 static R: ComplexityMarkers = ComplexityMarkers {
@@ -138,6 +158,7 @@ static R: ComplexityMarkers = ComplexityMarkers {
     operators: &["&&", "||"],
     function_markers: &[],
     brace_scoped: true,
+    line_comments: &["#"],
 };
 
 static JULIA: ComplexityMarkers = ComplexityMarkers {
@@ -145,6 +166,7 @@ static JULIA: ComplexityMarkers = ComplexityMarkers {
     operators: &["&&", "||"],
     function_markers: &["function "],
     brace_scoped: false,
+    line_comments: &["#"],
 };
 
 static NIM: ComplexityMarkers = ComplexityMarkers {
@@ -152,6 +174,7 @@ static NIM: ComplexityMarkers = ComplexityMarkers {
     operators: &[],
     function_markers: &["proc ", "func "],
     brace_scoped: false,
+    line_comments: &["#"],
 };
 
 static ZIG: ComplexityMarkers = ComplexityMarkers {
@@ -159,6 +182,7 @@ static ZIG: ComplexityMarkers = ComplexityMarkers {
     operators: &[],
     function_markers: &["fn "],
     brace_scoped: true,
+    line_comments: &["//"],
 };
 
 static CLOJURE: ComplexityMarkers = ComplexityMarkers {
@@ -166,6 +190,7 @@ static CLOJURE: ComplexityMarkers = ComplexityMarkers {
     operators: &[],
     function_markers: &["defn "],
     brace_scoped: false,
+    line_comments: &[";"],
 };
 
 /// Look up the complexity markers for a given language name.

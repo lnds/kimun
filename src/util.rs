@@ -39,15 +39,35 @@ pub fn hash_file(path: &Path) -> Option<u64> {
     Some(hash)
 }
 
-/// Replace the contents of string and char literals with spaces,
-/// so that keywords/braces inside literals are not counted.
-pub fn mask_strings(line: &str) -> String {
+/// Replace the contents of string/char literals and line comments with spaces,
+/// so that keywords/braces inside literals or comments are not counted.
+///
+/// When `line_comments` is non-empty, everything from a line comment marker
+/// (outside a string) to end-of-line is masked. This prevents unmatched quotes
+/// in comments (e.g. `x = 5; // don't`) from confusing the string masking.
+pub fn mask_strings(line: &str, line_comments: &[&str]) -> String {
     let bytes = line.as_bytes();
     let len = bytes.len();
     let mut result = bytes.to_vec();
     let mut i = 0;
 
     while i < len {
+        // Check for line comment markers before string delimiters,
+        // so that quotes inside comments are never treated as strings.
+        if !line_comments.is_empty() {
+            let found_comment = line_comments.iter().any(|marker| {
+                let mb = marker.as_bytes();
+                i + mb.len() <= len && &bytes[i..i + mb.len()] == mb
+            });
+            if found_comment {
+                // Mask everything from the comment marker to end of line.
+                for byte in &mut result[i..len] {
+                    *byte = b' ';
+                }
+                break;
+            }
+        }
+
         let ch = bytes[i];
         if ch == b'"' || ch == b'\'' {
             let quote = ch;

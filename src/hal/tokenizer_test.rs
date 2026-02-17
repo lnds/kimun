@@ -20,7 +20,7 @@ fn rules_for_unknown_language() {
 fn rust_simple_function() {
     let rules = rules_for("Rust").unwrap();
     let lines = vec!["fn foo() {", "    let x = 1;", "    let y = x + 2;", "}"];
-    let counts = count_tokens(&lines, rules);
+    let counts = count_tokens(&lines, rules, &[]);
 
     // Operators: (, ), {, =, ;, =, +, ;, }
     assert!(counts.total_operators > 0);
@@ -39,7 +39,7 @@ fn rust_simple_function() {
 fn keywords_in_strings_not_counted() {
     let rules = rules_for("Rust").unwrap();
     let lines = vec!["let s = \"if for while match\";"];
-    let counts = count_tokens(&lines, rules);
+    let counts = count_tokens(&lines, rules, &[]);
 
     // "if", "for", "while", "match" are inside a string — not operators
     assert!(!counts.distinct_operators.contains("if"));
@@ -52,7 +52,7 @@ fn keywords_in_strings_not_counted() {
 fn function_names_are_operands() {
     let rules = rules_for("Rust").unwrap();
     let lines = vec!["foo(x, y);"];
-    let counts = count_tokens(&lines, rules);
+    let counts = count_tokens(&lines, rules, &[]);
 
     // foo is an operand; () , ; are operators
     assert!(counts.distinct_operands.contains("foo"));
@@ -67,7 +67,7 @@ fn function_names_are_operands() {
 fn numeric_literals_are_operands() {
     let rules = rules_for("Rust").unwrap();
     let lines = vec!["let x = 42;", "let y = 0xff;"];
-    let counts = count_tokens(&lines, rules);
+    let counts = count_tokens(&lines, rules, &[]);
 
     assert!(counts.distinct_operands.contains("42"));
     assert!(counts.distinct_operands.contains("0xff"));
@@ -77,7 +77,7 @@ fn numeric_literals_are_operands() {
 fn multi_char_symbols() {
     let rules = rules_for("Rust").unwrap();
     let lines = vec!["if x && y || z == w {"];
-    let counts = count_tokens(&lines, rules);
+    let counts = count_tokens(&lines, rules, &[]);
 
     assert!(counts.distinct_operators.contains("&&"));
     assert!(counts.distinct_operators.contains("||"));
@@ -88,7 +88,7 @@ fn multi_char_symbols() {
 fn python_tokens() {
     let rules = rules_for("Python").unwrap();
     let lines = vec!["def foo(x):", "    if x > 0:", "        return x + 1"];
-    let counts = count_tokens(&lines, rules);
+    let counts = count_tokens(&lines, rules, &[]);
 
     // def is a declaration → ignored
     assert!(!counts.distinct_operators.contains("def"));
@@ -106,7 +106,7 @@ fn python_tokens() {
 fn empty_input() {
     let rules = rules_for("Rust").unwrap();
     let lines: Vec<&str> = vec![];
-    let counts = count_tokens(&lines, rules);
+    let counts = count_tokens(&lines, rules, &[]);
 
     assert_eq!(counts.total_operators, 0);
     assert_eq!(counts.total_operands, 0);
@@ -149,7 +149,7 @@ fn operator_symbols_sorted_longest_first() {
 fn longest_match_for_symbols() {
     let rules = rules_for("Rust").unwrap();
     let lines = vec!["x >>= y;"];
-    let counts = count_tokens(&lines, rules);
+    let counts = count_tokens(&lines, rules, &[]);
 
     // Should match ">>=" as a single operator, not ">>" + "="
     assert!(counts.distinct_operators.contains(">>="));
@@ -161,7 +161,7 @@ fn longest_match_for_symbols() {
 fn ignored_keywords_not_counted() {
     let rules = rules_for("Rust").unwrap();
     let lines = vec!["pub fn foo(x: i32) -> bool {"];
-    let counts = count_tokens(&lines, rules);
+    let counts = count_tokens(&lines, rules, &[]);
 
     // pub, fn, i32, bool are all ignored (declarations, modifiers, types)
     assert!(!counts.distinct_operators.contains("pub"));

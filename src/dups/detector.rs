@@ -219,6 +219,40 @@ fn extend_forward(
     forward_ext
 }
 
+/// Verify that the extended block has identical text content at all locations.
+///
+/// This guards against hash collisions in `hash_location_set` during extension.
+/// If a collision caused a false extension, we shrink the block back to the
+/// largest verified size (at least `min_lines` from the original match).
+fn verify_extended_block(
+    files: &[NormalizedFile],
+    start_locs: &[(usize, usize)],
+    block_size: usize,
+) -> usize {
+    if start_locs.len() < 2 {
+        return block_size;
+    }
+    let (first_fi, first_off) = start_locs[0];
+    let first_file = &files[first_fi];
+    let first_end = (first_off + block_size).min(first_file.lines.len());
+    let first_lines = &first_file.lines[first_off..first_end];
+
+    // Check each other location line-by-line; return the min matching length.
+    let mut verified = first_lines.len();
+    for &(fi, off) in &start_locs[1..] {
+        let other_file = &files[fi];
+        let other_end = (off + block_size).min(other_file.lines.len());
+        let other_lines = &other_file.lines[off..other_end];
+        let matching = first_lines
+            .iter()
+            .zip(other_lines.iter())
+            .take_while(|(a, b)| a.content == b.content)
+            .count();
+        verified = verified.min(matching);
+    }
+    verified.max(1)
+}
+
 /// Build a `DuplicateGroup` from the extended start locations and block size.
 ///
 /// Maps each (file_index, offset) pair back to original line numbers via
@@ -316,7 +350,11 @@ pub fn detect_duplicates(
         let forward_ext = extend_forward(locations, &location_to_hash, &mut consumed);
         let block_size = min_lines + backward_ext + forward_ext;
 
-        groups.push(build_group(files, &start_locs, block_size));
+        // Post-extension content verification: confirm the extended block
+        // is truly identical at all locations (guards against hash collisions
+        // in location_to_hash that could produce false extensions).
+        let verified_size = verify_extended_block(files, &start_locs, block_size);
+        groups.push(build_group(files, &start_locs, verified_size));
     }
 
     // Sort by severity (Critical first), then by duplicated lines descending

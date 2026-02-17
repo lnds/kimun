@@ -176,7 +176,7 @@ fn count_operators_in_line(stripped: &str, markers: &ComplexityMarkers) -> usize
 /// before single-word keywords to avoid double-counting. Finally counts
 /// boolean operators (`&&`, `||`).
 fn count_line_complexity(line: &str, markers: &ComplexityMarkers) -> usize {
-    let stripped = mask_strings(line);
+    let stripped = mask_strings(line, markers.line_comments);
     let (mw_count, masked) = count_multiword_keywords(&stripped, markers);
     mw_count
         + count_singleword_keywords(&masked, markers)

@@ -82,6 +82,7 @@ pub fn extract_function_name(trimmed: &str, markers: &ComplexityMarkers) -> Stri
 fn find_function_body<'a>(
     code_lines: &[(usize, &'a str)],
     start: usize,
+    line_comments: &[&str],
 ) -> (Vec<(usize, &'a str)>, usize) {
     let mut brace_depth: isize = 0;
     let mut found_open = false;
@@ -92,7 +93,7 @@ fn find_function_body<'a>(
         let (jidx, jline) = code_lines[j];
         func_code_lines.push((jidx, jline));
 
-        let masked = mask_strings(jline);
+        let masked = mask_strings(jline, line_comments);
         for ch in masked.bytes() {
             if ch == b'{' {
                 brace_depth += 1;
@@ -158,7 +159,7 @@ fn detect_brace_scoped(
 
         if is_function_declaration(trimmed, markers) {
             let name = extract_function_name(trimmed, markers);
-            let (func_code_lines, end) = find_function_body(code_lines, i);
+            let (func_code_lines, end) = find_function_body(code_lines, i, markers.line_comments);
             let complexity = count_complexity_for_lines(&func_code_lines, markers);
             let level = CyclomaticLevel::from_complexity(complexity);
             functions.push(FunctionComplexity {

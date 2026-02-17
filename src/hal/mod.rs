@@ -43,7 +43,7 @@ pub(crate) fn analyze_content(
         return None;
     }
 
-    let counts = count_tokens(&code_lines, rules);
+    let counts = count_tokens(&code_lines, rules, spec.line_comments);
     compute(&counts)
 }
 
@@ -77,7 +77,7 @@ pub(crate) fn analyze_file(
         return Ok(None);
     }
 
-    let counts = count_tokens(&code_lines, rules);
+    let counts = count_tokens(&code_lines, rules, spec.line_comments);
     let metrics = match compute(&counts) {
         Some(m) => m,
         None => return Ok(None),

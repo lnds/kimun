@@ -55,7 +55,11 @@ pub use super::rules::rules_for;
 /// - **Identifiers and numeric literals** → counted as operands
 ///
 /// Symbolic operators use longest-match semantics via `try_match_symbol`.
-pub fn count_tokens(code_lines: &[&str], rules: &TokenRules) -> TokenCounts {
+pub fn count_tokens(
+    code_lines: &[&str],
+    rules: &TokenRules,
+    line_comments: &[&str],
+) -> TokenCounts {
     let mut counts = TokenCounts {
         distinct_operators: HashSet::new(),
         distinct_operands: HashSet::new(),
@@ -64,7 +68,7 @@ pub fn count_tokens(code_lines: &[&str], rules: &TokenRules) -> TokenCounts {
     };
 
     for line in code_lines {
-        let masked = mask_strings(line);
+        let masked = mask_strings(line, line_comments);
         let bytes = masked.as_bytes();
         let len = bytes.len();
         let mut i = 0;
