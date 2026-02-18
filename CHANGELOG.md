@@ -1,3 +1,9 @@
+## 0.12.2 (2026-02-18)
+
+### Fix
+
+- address nitpicks from code review
+
 ## 0.12.1 (2026-02-18)
 
 ### Fix
