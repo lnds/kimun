@@ -34,6 +34,8 @@ pub enum Grade {
     DMinus,
     #[serde(rename = "F")]
     F,
+    #[serde(rename = "F-")]
+    FMinus,
     #[serde(rename = "F--")]
     FMinusMinus,
 }

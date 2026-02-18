@@ -1,3 +1,18 @@
+## 0.12.1 (2026-02-18)
+
+### Fix
+
+- address serious issues from second code review
+- deduplicate files by content hash in cm report (consistent with cm loc)
+- address blocking issues from second code review
+- critical bugs found in code review
+
+### Refactor
+
+- address design issues from code review
+- split large modules and add docs to reach A-
+- improve test structure to move to B+
+
 ## 0.12.0 (2026-02-16)
 
 ### Feat
