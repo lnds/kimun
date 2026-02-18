@@ -58,6 +58,7 @@ impl Grade {
             Self::D => "D",
             Self::DMinus => "D-",
             Self::F => "F",
+            Self::FMinus => "F-",
             Self::FMinusMinus => "F--",
         }
     }
@@ -98,8 +99,10 @@ pub fn score_to_grade(score: f64) -> Grade {
         Grade::D
     } else if score >= 57.0 {
         Grade::DMinus
-    } else if score >= 40.0 {
+    } else if score >= 50.0 {
         Grade::F
+    } else if score >= 40.0 {
+        Grade::FMinus
     } else {
         Grade::FMinusMinus
     }

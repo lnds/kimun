@@ -151,7 +151,10 @@ impl GitRepo {
             let commit_time = sig.when().seconds();
             let lines = hunk.lines_in_hunk();
 
-            map.entry(email.clone())
+            // Use name+email as key to avoid collisions when multiple
+            // authors share the same "unknown" email.
+            let key = format!("{author} <{email}>");
+            map.entry(key)
                 .and_modify(|info| {
                     info.lines += lines;
                     if commit_time > info.last_commit_time {

@@ -29,7 +29,9 @@ fn test_score_to_grade_all_boundaries() {
     assert_eq!(score_to_grade(59.9), Grade::DMinus);
     assert_eq!(score_to_grade(57.0), Grade::DMinus);
     assert_eq!(score_to_grade(56.9), Grade::F);
-    assert_eq!(score_to_grade(40.0), Grade::F);
+    assert_eq!(score_to_grade(50.0), Grade::F);
+    assert_eq!(score_to_grade(49.9), Grade::FMinus);
+    assert_eq!(score_to_grade(40.0), Grade::FMinus);
     assert_eq!(score_to_grade(39.9), Grade::FMinusMinus);
     assert_eq!(score_to_grade(0.0), Grade::FMinusMinus);
 }

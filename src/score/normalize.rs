@@ -59,7 +59,7 @@ const MI_CURVE: &[Breakpoint] = &[
 
 /// Cyclomatic complexity curve: max per-function complexity mapped to 0–100.
 /// Simple (≤5) → 100, moderate (6–10) → 80–90, complex (10–20) → 50–80,
-/// highly complex (20–50) → 5–50, untestable (>50) → 0.
+/// highly complex (20–50) → 5–50, extreme (50–100) → 5–0.
 const COMPLEXITY_CURVE: &[Breakpoint] = &[
     Breakpoint {
         input: 5.0,
@@ -82,7 +82,7 @@ const COMPLEXITY_CURVE: &[Breakpoint] = &[
         score: 5.0,
     },
     Breakpoint {
-        input: 51.0,
+        input: 100.0,
         score: 0.0,
     },
 ];
