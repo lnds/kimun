@@ -1,7 +1,18 @@
+//! Piecewise linear normalization curves for the code health score.
+//!
+//! Each quality dimension (MI, complexity, duplication, indent, Halstead,
+//! file size) uses a curve of breakpoints to map raw metric values to a
+//! 0–100 score. Breakpoints are calibrated based on industry thresholds
+//! and empirical testing across diverse codebases. Values between
+//! breakpoints are linearly interpolated; values beyond the endpoints
+//! are clamped.
+
 /// A single point on a piecewise linear curve, mapping an `input` metric
 /// value to an output `score` (0–100).
 struct Breakpoint {
+    /// Raw metric value (e.g. MI score, complexity count, dup percentage).
     input: f64,
+    /// Corresponding normalized score on the 0–100 scale.
     score: f64,
 }
 

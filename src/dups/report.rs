@@ -1,18 +1,32 @@
-/// Report formatters for duplicate code detection.
-///
-/// Provides summary, detailed, and JSON output modes showing duplicate
-/// groups with severity classification (Rule of Three analysis).
+//! Report formatters for duplicate code detection.
+//!
+//! Provides three output modes:
+//! - **Summary**: compact overview with duplication %, group count, and
+//!   Rule of Three breakdown (critical vs. tolerable).
+//! - **Detailed**: summary plus a listing of each duplicate group with
+//!   file locations, severity label, and a code sample (up to 5 lines).
+//! - **JSON**: machine-readable output combining metrics and group data.
+//!
+//! The Rule of Three analysis classifies duplicates as **Critical** (3+
+//! occurrences, indicating a pattern that should be extracted into a shared
+//! function/module) or **Tolerable** (2 occurrences, acceptable in many
+//! codebases). This distinction guides refactoring priorities.
 use serde::Serialize;
 
 use super::detector::{DuplicateGroup, DuplicationSeverity};
 use crate::report_helpers;
 
-/// Breakdown of duplicate groups and lines by severity level.
+/// Counts of groups and duplicated lines split by severity level.
+/// Computed in a single pass over the duplicate groups.
 #[derive(Default)]
 struct SeverityBreakdown {
+    /// Groups with 3+ occurrences (should be extracted into shared code).
     critical_groups: usize,
+    /// Groups with exactly 2 occurrences (often acceptable).
     tolerable_groups: usize,
+    /// Total duplicated lines in critical groups.
     critical_lines: usize,
+    /// Total duplicated lines in tolerable groups.
     tolerable_lines: usize,
 }
 
@@ -36,16 +50,26 @@ fn severity_breakdown(groups: &[DuplicateGroup]) -> SeverityBreakdown {
 }
 
 /// Summary metrics for the duplication analysis.
+///
+/// Aggregated from all detected duplicate groups and used by both
+/// the table and JSON output formatters.
 #[derive(Serialize)]
 pub struct DuplicationMetrics {
+    /// Total production code lines analyzed (excluding blanks/comments).
     pub total_code_lines: usize,
+    /// Lines that appear in at least one duplicate group.
     pub duplicated_lines: usize,
+    /// Number of distinct duplicate groups found.
     pub duplicate_groups: usize,
+    /// Number of files that contain at least one duplicated block.
     pub files_with_duplicates: usize,
+    /// Line count of the largest single duplicate block.
     pub largest_block: usize,
 }
 
 impl DuplicationMetrics {
+    /// Calculate duplication as a percentage of total code lines.
+    /// Returns 0.0 when no code lines exist (avoids division by zero).
     pub fn percentage(&self) -> f64 {
         if self.total_code_lines == 0 {
             0.0
@@ -56,6 +80,8 @@ impl DuplicationMetrics {
 }
 
 /// Classify duplication percentage into a human-readable assessment label.
+/// Thresholds are based on industry heuristics: <3% is exceptional for most
+/// projects, while >20% signals systemic copy-paste patterns.
 fn assessment(percentage: f64) -> &'static str {
     if percentage < 3.0 {
         "Excellent"
@@ -203,12 +229,19 @@ struct JsonOutput<'a> {
 /// JSON-serializable summary of duplication metrics with assessment label.
 #[derive(Serialize)]
 struct JsonMetrics {
+    /// Total production code lines analyzed.
     total_code_lines: usize,
+    /// Lines appearing in at least one duplicate group.
     duplicated_lines: usize,
+    /// Duplication as percentage of total code lines.
     duplication_percentage: f64,
+    /// Number of distinct duplicate groups.
     duplicate_groups: usize,
+    /// Files containing at least one duplicated block.
     files_with_duplicates: usize,
+    /// Line count of the largest single duplicate block.
     largest_block: usize,
+    /// Human-readable quality label (Excellent/Good/Moderate/High/Very High).
     assessment: &'static str,
 }
 

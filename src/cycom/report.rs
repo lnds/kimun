@@ -1,8 +1,10 @@
-/// Report formatters for cyclomatic complexity analysis.
-///
-/// Provides three output modes: per-file table, per-function breakdown,
-/// and JSON. Complexity levels (Simple, Moderate, Complex, HighlyComplex)
-/// help identify functions that are hard to test.
+//! Report formatters for cyclomatic complexity analysis.
+//!
+//! Provides three output modes: per-file table, per-function breakdown,
+//! and JSON. Complexity levels (Simple, Moderate, Complex, HighlyComplex)
+//! help identify functions that are hard to test. The per-function mode
+//! lists each function with its individual complexity, useful for finding
+//! the specific functions that drive high file-level totals.
 use std::path::PathBuf;
 
 use serde::Serialize;
@@ -22,9 +24,11 @@ pub struct FileCycomMetrics {
     pub functions: Vec<FunctionComplexity>,
 }
 
-/// Print a table of per-file cyclomatic complexity with totals row.
-/// Print a table of per-file cyclomatic complexity with a totals row
-/// showing aggregate function count, average, max, and total complexity.
+/// Print a table of per-file cyclomatic complexity with a totals row.
+///
+/// Columns: File, Functions (count), Avg (average complexity per function),
+/// Max (highest single function), Total (sum), Level (classification of max).
+/// The totals row aggregates across all files.
 pub fn print_report(files: &[FileCycomMetrics]) {
     if files.is_empty() {
         println!("No recognized source files found.");

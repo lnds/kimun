@@ -1,8 +1,10 @@
-/// Duplicate code detection module.
-///
-/// Finds repeated code blocks across files using content-hash based matching.
-/// Normalizes lines (strips whitespace, filters non-code) before comparison,
-/// optionally excluding inline `#[cfg(test)]` blocks.
+//! Duplicate code detection module.
+//!
+//! Finds repeated code blocks across files using content-hash based matching.
+//! Normalizes lines (strips whitespace, filters non-code) before comparison,
+//! optionally excluding inline `#[cfg(test)]` blocks. The detection algorithm
+//! uses a sliding-window fingerprint to identify identical code sequences,
+//! then groups them by severity (Critical for 3+ occurrences, Tolerable for 2).
 pub(crate) mod detector;
 pub(crate) mod report;
 

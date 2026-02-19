@@ -1,3 +1,8 @@
+/// Report formatters for the Visual Studio Maintainability Index.
+///
+/// Provides table and JSON output showing per-file MI scores with
+/// Halstead volume, cyclomatic complexity, LOC, and traffic-light level
+/// (green/yellow/red). The table includes a totals row with average MI.
 use std::path::PathBuf;
 
 use serde::Serialize;
@@ -5,12 +10,17 @@ use serde::Serialize;
 use super::analyzer::{MILevel, MIMetrics};
 use crate::report_helpers;
 
+/// Per-file MI analysis result bundled with filesystem path and language.
 pub struct FileMIMetrics {
     pub path: PathBuf,
     pub language: String,
     pub metrics: MIMetrics,
 }
 
+/// Print a table of per-file MI metrics with a totals row.
+///
+/// Columns: File, Volume, Cyclomatic, LOC, MI score, Level.
+/// The totals row shows total LOC and average MI across all files.
 pub fn print_report(files: &[FileMIMetrics]) {
     if files.is_empty() {
         println!("No recognized source files found.");
@@ -67,6 +77,7 @@ pub fn print_report(files: &[FileMIMetrics]) {
     );
 }
 
+/// JSON-serializable representation of a file's MI metrics.
 #[derive(Serialize)]
 struct JsonEntry {
     path: String,
@@ -78,6 +89,7 @@ struct JsonEntry {
     level: MILevel,
 }
 
+/// Serialize per-file MI data as pretty-printed JSON to stdout.
 pub fn print_json(files: &[FileMIMetrics]) -> Result<(), Box<dyn std::error::Error>> {
     let entries: Vec<JsonEntry> = files
         .iter()

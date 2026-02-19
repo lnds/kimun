@@ -1,8 +1,9 @@
-/// Indentation complexity analysis module (Thornhill method).
-///
-/// Measures the standard deviation of indentation depth per file
-/// as a proxy for structural complexity. Higher stddev indicates
-/// deeply nested control flow that may be hard to follow.
+//! Indentation complexity analysis module (Thornhill method).
+//!
+//! Measures the standard deviation of indentation depth per file
+//! as a proxy for structural complexity. Higher stddev indicates
+//! deeply nested control flow that may be hard to follow.
+//! Based on Adam Thornhill's approach in "Your Code as a Crime Scene".
 pub(crate) mod analyzer;
 pub(crate) mod report;
 

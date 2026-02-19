@@ -1,8 +1,9 @@
-/// Filesystem walking with `.gitignore` support and test exclusion.
-///
-/// Provides directory traversal that respects `.gitignore` rules, skips
-/// `.git` directories, filters test directories/files when requested,
-/// and detects source file languages by extension or shebang line.
+//! Filesystem walking with `.gitignore` support and test exclusion.
+//!
+//! Provides directory traversal that respects `.gitignore` rules, skips
+//! `.git` directories, filters test directories/files when requested,
+//! and detects source file languages by extension or shebang line.
+//! Uses the `ignore` crate for efficient `.gitignore`-aware traversal.
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
@@ -13,6 +14,78 @@ use crate::loc::language::{LanguageSpec, detect, detect_by_shebang};
 
 /// Test directory names to exclude when `--exclude-tests` is active.
 pub const TEST_DIRS: &[&str] = &["tests", "test", "__tests__", "spec"];
+
+/// Mapping from file extension to test-file naming patterns.
+/// Used to identify and exclude test files based on naming conventions.
+struct TestPattern {
+    exts: &'static [&'static str],
+    suffixes: &'static [&'static str],
+    prefixes: &'static [&'static str],
+}
+
+/// Data-driven test file detection patterns, grouped by naming convention.
+const TEST_PATTERNS: &[TestPattern] = &[
+    // snake_case _test suffix: Rust, Go, Elixir, Dart
+    TestPattern {
+        exts: &["rs", "go", "exs", "dart"],
+        suffixes: &["_test"],
+        prefixes: &[],
+    },
+    // Python: test_ prefix or _test suffix
+    TestPattern {
+        exts: &["py"],
+        suffixes: &["_test"],
+        prefixes: &["test_"],
+    },
+    // Ruby: _test or _spec suffix
+    TestPattern {
+        exts: &["rb"],
+        suffixes: &["_test", "_spec"],
+        prefixes: &[],
+    },
+    // PHP: PascalCase Test or snake_case _test
+    TestPattern {
+        exts: &["php"],
+        suffixes: &["Test", "_test"],
+        prefixes: &[],
+    },
+    // JS/TS family: .test. or .spec. double extension
+    TestPattern {
+        exts: &["js", "jsx", "mjs", "cjs", "ts", "tsx", "mts", "cts"],
+        suffixes: &[".test", ".spec"],
+        prefixes: &[],
+    },
+    // JVM + C# + Swift: PascalCase Test/Tests suffix
+    TestPattern {
+        exts: &["java", "kt", "kts", "cs", "swift"],
+        suffixes: &["Test", "Tests"],
+        prefixes: &[],
+    },
+    // Scala: PascalCase Test or Spec suffix
+    TestPattern {
+        exts: &["scala"],
+        suffixes: &["Test", "Spec"],
+        prefixes: &[],
+    },
+    // C: snake_case only (no PascalCase Test)
+    TestPattern {
+        exts: &["c"],
+        suffixes: &["_test", "_unittest"],
+        prefixes: &["test_"],
+    },
+    // C++: snake_case + PascalCase Test
+    TestPattern {
+        exts: &["cc", "cpp", "cxx"],
+        suffixes: &["_test", "_unittest", "Test"],
+        prefixes: &["test_"],
+    },
+    // Haskell: PascalCase Test or Spec
+    TestPattern {
+        exts: &["hs"],
+        suffixes: &["Test", "Spec"],
+        prefixes: &[],
+    },
+];
 
 /// Check whether a file matches a test naming pattern based on its extension.
 pub fn is_test_file(path: &Path) -> bool {
@@ -27,33 +100,18 @@ pub fn is_test_file(path: &Path) -> bool {
     let ext = &file_name[dot + 1..];
     let base = &file_name[..dot];
 
-    match ext {
-        // suffix _test: Rust, Go, Python, Ruby, PHP, Elixir, Dart
-        "rs" | "go" | "exs" | "dart" => base.ends_with("_test"),
-        "py" => base.starts_with("test_") || base.ends_with("_test"),
-        "rb" => base.ends_with("_test") || base.ends_with("_spec"),
-        "php" => base.ends_with("Test") || base.ends_with("_test"),
-        // double-ext .test./.spec.: JS/TS family
-        "js" | "jsx" | "mjs" | "cjs" | "ts" | "tsx" | "mts" | "cts" => {
-            base.ends_with(".test") || base.ends_with(".spec")
+    for pattern in TEST_PATTERNS {
+        if !pattern.exts.contains(&ext) {
+            continue;
         }
-        // PascalCase suffixes: Java, Kotlin, C#, Swift, Scala
-        "java" | "kt" | "kts" => base.ends_with("Test") || base.ends_with("Tests"),
-        "cs" => base.ends_with("Test") || base.ends_with("Tests"),
-        "swift" => base.ends_with("Test") || base.ends_with("Tests"),
-        "scala" => base.ends_with("Test") || base.ends_with("Spec"),
-        // C/C++
-        "c" => base.ends_with("_test") || base.starts_with("test_") || base.ends_with("_unittest"),
-        "cc" | "cpp" | "cxx" => {
-            base.ends_with("_test")
-                || base.starts_with("test_")
-                || base.ends_with("_unittest")
-                || base.ends_with("Test")
+        if pattern.suffixes.iter().any(|s| base.ends_with(s)) {
+            return true;
         }
-        // Haskell
-        "hs" => base.ends_with("Test") || base.ends_with("Spec"),
-        _ => false,
+        if pattern.prefixes.iter().any(|p| base.starts_with(p)) {
+            return true;
+        }
     }
+    false
 }
 
 /// Try to detect a language by reading the shebang line of a file.

@@ -8,10 +8,9 @@
 //! file I/O and parsing logic. Changes to hal/cycom `analyze_file` signatures
 //! must be coordinated with this module.
 //!
-//! Each file is read three times: once for LOC classification, once for
-//! Halstead metrics (via `hal::analyze_file`), once for cyclomatic complexity
-//! (via `cycom::analyze_file`). This is suboptimal but acceptable given the
-//! existing per-module architecture where each analyzer owns its file I/O.
+//! Each file is read once via `read_and_classify`, then the resulting lines
+//! and line kinds are passed to `hal::analyze_content` and
+//! `cycom::analyze_content` for Halstead and cyclomatic analysis respectively.
 
 pub(crate) mod analyzer;
 pub(crate) mod report;

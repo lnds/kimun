@@ -1,7 +1,11 @@
-/// Report formatters for Halstead complexity metrics.
-///
-/// Displays per-file operator/operand counts, volume, effort, estimated
-/// bugs, and development time in both table and JSON formats.
+//! Report formatters for Halstead complexity metrics.
+//!
+//! Displays per-file operator/operand counts (η₁, η₂, N₁, N₂), derived
+//! metrics (volume, effort, estimated bugs, development time), and a
+//! totals row. Supports both table output (with Unicode Greek letters
+//! for headers) and machine-readable JSON. Development time is formatted
+//! as a human-readable duration (seconds → days).
+
 use std::path::PathBuf;
 
 use serde::Serialize;
@@ -9,14 +13,20 @@ use serde::Serialize;
 use super::analyzer::HalsteadMetrics;
 use crate::report_helpers;
 
-/// Per-file Halstead metrics with path and detected language.
+/// Per-file Halstead metrics bundled with filesystem path and language.
+/// Used as the result type for `hal::analyze_file` and consumed by both
+/// the table and JSON formatters.
 pub struct FileHalsteadMetrics {
     pub path: PathBuf,
     pub language: String,
     pub metrics: HalsteadMetrics,
 }
 
-/// Format seconds as a human-readable duration (e.g. "45s", "3m 20s", "2h 15m", "1d 4h").
+/// Format seconds as a human-readable duration string.
+///
+/// Uses the largest appropriate unit: seconds for <60s, minutes+seconds
+/// for <1h, hours+minutes for <1d, days+hours for ≥1d.
+/// Examples: "45s", "3m 20s", "2h 15m", "1d 4h".
 pub(crate) fn format_time(seconds: f64) -> String {
     if seconds < 60.0 {
         format!("{seconds:.0}s")
@@ -35,7 +45,12 @@ pub(crate) fn format_time(seconds: f64) -> String {
     }
 }
 
-/// Print a table of per-file Halstead metrics with totals row.
+/// Print a table of per-file Halstead metrics with a totals row.
+///
+/// Columns: File, η₁ (distinct operators), η₂ (distinct operands),
+/// N₁ (total operators), N₂ (total operands), Volume, Effort, Bugs, Time.
+/// The totals row sums N₁, N₂, Volume, Effort, Bugs, and Time across files
+/// (η₁/η₂ are omitted since distinct counts don't sum meaningfully).
 pub fn print_report(files: &[FileHalsteadMetrics]) {
     if files.is_empty() {
         println!("No recognized source files found.");

@@ -1,3 +1,10 @@
+//! Grading system and data structures for the code health score.
+//!
+//! Defines the 16-level letter grade scale (A++ through F--),
+//! dimension/file/project score types, and the weighted aggregation
+//! function. Grade thresholds follow a 3-point spacing pattern:
+//! A++ ≥97, A+ ≥93, A ≥90, ..., F-- <40.
+
 use std::fmt;
 use std::path::PathBuf;
 

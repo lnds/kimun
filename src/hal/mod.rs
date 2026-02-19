@@ -1,8 +1,9 @@
-/// Halstead complexity metrics module.
-///
-/// Tokenizes source code (excluding comments and multi-line strings),
-/// counts distinct and total operators/operands, and computes volume,
-/// difficulty, effort, estimated bugs, and implementation time.
+//! Halstead complexity metrics module.
+//!
+//! Tokenizes source code (excluding comments and multi-line strings),
+//! counts distinct and total operators/operands, and computes volume,
+//! difficulty, effort, estimated bugs, and implementation time.
+//! Reference: Halstead, M.H. (1977) Elements of Software Science.
 mod analyzer;
 pub(crate) mod report;
 mod rules;

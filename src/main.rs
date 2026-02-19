@@ -1,26 +1,51 @@
-/// `cm` — a CLI tool for comprehensive code metrics analysis.
-///
-/// Supports lines of code counting, duplicate detection, Halstead
-/// complexity, cyclomatic complexity, indentation analysis,
-/// Maintainability Index, hotspots, knowledge maps, temporal coupling,
-/// and an overall code health score (A++ to F--).
+//! `cm` — a CLI tool for comprehensive code metrics analysis.
+//!
+//! Supports 12 analysis commands covering static metrics (LOC, duplication,
+//! Halstead, cyclomatic, indentation, MI, code health score) and git-based
+//! metrics (hotspots, knowledge maps, temporal coupling). Each command is
+//! a standalone module that handles its own analysis and reporting.
+//!
+//! The dispatch pattern is uniform: parse CLI args with `clap`, resolve
+//! the target path (defaulting to "."), and delegate to the module's `run()`
+//! function. All errors are printed to stderr and cause exit code 1.
+
+/// AI-powered analysis via external LLM providers.
 mod ai;
+/// CLI argument definitions using `clap` derive macros.
 mod cli;
+/// Long help text constants extracted from CLI definitions.
+mod cli_help;
+/// Cyclomatic complexity analysis (per-file and per-function).
 mod cycom;
+/// Duplicate code detection using sliding-window fingerprinting.
 mod dups;
+/// Git repository access via libgit2 (change frequency, blame, coupling).
 mod git;
+/// Halstead complexity metrics (volume, effort, bugs, time).
 mod hal;
+/// Hotspot analysis: change frequency × complexity.
 mod hotspots;
+/// Indentation complexity (stddev and max depth).
 mod indent;
+/// Knowledge maps: code ownership via git blame.
 mod knowledge;
+/// Lines of code counting with FSM-based line classification.
 mod loc;
+/// Maintainability Index (Visual Studio variant, 0–100 scale).
 mod mi;
+/// Maintainability Index (verifysoft variant, with comment weight).
 mod miv;
+/// Combined report (`cm report`) aggregating all metrics.
 mod report;
+/// Shared report formatting utilities (separators, path widths, JSON output).
 mod report_helpers;
+/// Overall code health score (A++ to F--, 6 weighted dimensions).
 mod score;
+/// Temporal coupling analysis (co-changing files in git history).
 mod tc;
+/// Shared utilities (string masking, file reading, since parsing).
 mod util;
+/// Filesystem walking with .gitignore support and test exclusion.
 mod walk;
 
 use std::path::PathBuf;

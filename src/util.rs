@@ -1,3 +1,10 @@
+//! Shared utilities used across multiple modules.
+//!
+//! Provides binary file detection, streaming file hashing (for dedup),
+//! string masking (for complexity analysis), file reading with line
+//! classification, time-period parsing for `--since` flags, and
+//! `#[cfg(test)]` block detection for duplication exclusion.
+
 use std::error::Error;
 use std::fs::File;
 use std::io::{self, BufReader, Read, Seek, SeekFrom};
@@ -7,6 +14,7 @@ use std::time::SystemTime;
 use crate::loc::counter::{LineKind, classify_reader};
 use crate::loc::language::LanguageSpec;
 
+/// Lines of source code with per-line kind classification (blank/comment/code).
 pub type ClassifiedSource = (Vec<String>, Vec<LineKind>);
 
 /// Check whether a reader points to a binary file by looking for null bytes

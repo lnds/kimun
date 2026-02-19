@@ -1,10 +1,21 @@
+//! Report formatters for the overall code health score.
+//!
+//! Provides two output modes: a formatted table showing per-dimension
+//! breakdown and worst-scoring files, and a JSON format for machine
+//! consumption. The table includes thousand-separated LOC counts and
+//! truncated file paths for readability.
+
 use serde::Serialize;
 
 use super::analyzer::{Grade, ProjectScore};
 use crate::report_helpers;
 
-/// Print the project health score as a formatted table, showing per-dimension
-/// breakdown and the worst-scoring files that need attention.
+/// Print the project health score as a formatted table.
+///
+/// Shows the overall grade, per-dimension breakdown (name, weight, score,
+/// grade), and a "needs attention" section listing the worst-scoring files
+/// with their issues. File paths are truncated with `...` prefix when they
+/// exceed the column width.
 pub fn print_report(score: &ProjectScore, bottom: usize, target: Option<&str>) {
     let separator = report_helpers::separator(66);
 
@@ -98,31 +109,46 @@ fn format_thousands(n: usize) -> String {
 /// JSON-serializable representation of a single score dimension.
 #[derive(Serialize)]
 struct JsonDimension {
+    /// Human-readable dimension name (e.g. "Maintainability Index").
     name: String,
+    /// Relative weight in the final score (0.0–1.0, all sum to 1.0).
     weight: f64,
+    /// Normalized score for this dimension (0–100 scale).
     score: f64,
+    /// Letter grade derived from the normalized score.
     grade: Grade,
 }
 
 /// JSON-serializable representation of a per-file score with issues.
 #[derive(Serialize)]
 struct JsonFileScore {
+    /// Relative file path from the analysis root.
     path: String,
+    /// Weighted per-file score (0–100 scale).
     score: f64,
+    /// Letter grade for this file's health.
     grade: Grade,
+    /// Human-readable issue descriptions (e.g. "low MI: 45.2").
     issues: Vec<String>,
 }
 
 /// JSON-serializable representation of the full project score output.
 #[derive(Serialize)]
 struct JsonProjectScore {
+    /// Target path or file name (omitted when analyzing "." default).
     #[serde(skip_serializing_if = "Option::is_none")]
     target: Option<String>,
+    /// Overall weighted project score (0–100 scale).
     score: f64,
+    /// Overall letter grade (A++ to F--).
     grade: Grade,
+    /// Number of source files included in the analysis.
     files_analyzed: usize,
+    /// Total lines of code across all analyzed files.
     total_loc: usize,
+    /// Per-dimension breakdown of the score.
     dimensions: Vec<JsonDimension>,
+    /// Worst-scoring files that need attention.
     needs_attention: Vec<JsonFileScore>,
 }
 

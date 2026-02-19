@@ -1,3 +1,14 @@
+//! Cyclomatic complexity computation per file and per function.
+//!
+//! Counts linearly independent paths through code by scanning for
+//! decision-point keywords (`if`, `for`, `while`, `match`, `catch`)
+//! and boolean operators (`&&`, `||`). Each function starts at a
+//! baseline complexity of 1. String literals are masked before
+//! scanning to avoid false positives from keywords in strings.
+//!
+//! Levels: Simple (1-5), Moderate (6-10), Complex (11-20),
+//! HighlyComplex (21-50), Extreme (>50).
+
 use serde::Serialize;
 
 use crate::loc::counter::LineKind;
@@ -6,6 +17,7 @@ use crate::util::mask_strings;
 use super::detection::detect_functions;
 use super::markers::ComplexityMarkers;
 
+/// Complexity level classification based on McCabe thresholds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CyclomaticLevel {
@@ -17,6 +29,7 @@ pub enum CyclomaticLevel {
 }
 
 impl CyclomaticLevel {
+    /// Map a numeric complexity value to a level classification.
     pub fn from_complexity(c: usize) -> Self {
         match c {
             0..=5 => Self::Simple,
@@ -27,6 +40,7 @@ impl CyclomaticLevel {
         }
     }
 
+    /// Human-readable label for display in reports and JSON.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Simple => "simple",
@@ -38,14 +52,18 @@ impl CyclomaticLevel {
     }
 }
 
+/// Per-function complexity result with source location.
 #[derive(Debug, Clone)]
 pub struct FunctionComplexity {
     pub name: String,
-    pub start_line: usize, // 1-based
+    /// 1-based line number where the function declaration starts.
+    pub start_line: usize,
     pub complexity: usize,
     pub level: CyclomaticLevel,
 }
 
+/// Aggregate complexity for an entire file: per-function breakdown
+/// plus summary statistics (total, max, average).
 #[derive(Debug, Clone)]
 pub struct FileComplexity {
     pub functions: Vec<FunctionComplexity>,

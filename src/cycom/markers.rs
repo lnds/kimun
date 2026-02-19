@@ -1,5 +1,9 @@
 /// Language-specific tokens used to compute cyclomatic complexity.
-/// Each field defines the syntactic elements that increase branching.
+///
+/// Cyclomatic complexity counts independent paths through code. Each
+/// keyword or operator that creates a branch adds 1 to the complexity.
+/// The classification below determines what counts as a branch point
+/// for each language.
 pub struct ComplexityMarkers {
     /// Branch keywords that increase complexity (e.g. "if", "for", "while").
     /// Multi-word entries like "else if" must appear before their prefixes.
@@ -17,6 +21,10 @@ pub struct ComplexityMarkers {
     pub line_comments: &'static [&'static str],
 }
 
+/// Rust: `loop` is a keyword (unconditional loop = 1 path). `match` adds
+/// 1 per arm via the `match` keyword itself (arms are counted separately
+/// by the analyzer). `&&`/`||` are short-circuit operators that create
+/// additional decision points within boolean expressions.
 static RUST: ComplexityMarkers = ComplexityMarkers {
     keywords: &["else if", "if", "for", "while", "loop", "match"],
     operators: &["&&", "||"],
@@ -25,6 +33,11 @@ static RUST: ComplexityMarkers = ComplexityMarkers {
     line_comments: &["//"],
 };
 
+/// Python: `brace_scoped` is false because Python uses indentation for
+/// scoping, not braces. Boolean operators `and`/`or` are keywords (not
+/// symbols) so they appear in `keywords` rather than `operators`.
+/// `except` is a branch (exception handler path). `async def` must
+/// appear before `def` in function_markers to match first.
 static PYTHON: ComplexityMarkers = ComplexityMarkers {
     keywords: &["elif", "if", "for", "while", "except", "and", "or"],
     operators: &[],
@@ -33,6 +46,10 @@ static PYTHON: ComplexityMarkers = ComplexityMarkers {
     line_comments: &["#"],
 };
 
+/// JavaScript/TypeScript: `??` (nullish coalescing) is an operator that
+/// creates a branch (null check path). `case` in switch statements each
+/// adds a decision point. Arrow functions are detected separately by the
+/// analyzer, so only `function` appears in function_markers.
 static JAVASCRIPT: ComplexityMarkers = ComplexityMarkers {
     keywords: &[
         "else if", "if", "for", "while", "do", "switch", "case", "catch",
@@ -43,6 +60,10 @@ static JAVASCRIPT: ComplexityMarkers = ComplexityMarkers {
     line_comments: &["//"],
 };
 
+/// C-family (C, C++, Java, C#, Objective-C, PHP, Dart): no function_markers
+/// because function definitions vary too widely across these languages
+/// (return type before name in C/C++, annotations in Java, etc.).
+/// Function detection falls back to brace-counting heuristics instead.
 static C_FAMILY: ComplexityMarkers = ComplexityMarkers {
     keywords: &[
         "else if", "if", "for", "while", "do", "switch", "case", "catch",
@@ -53,6 +74,9 @@ static C_FAMILY: ComplexityMarkers = ComplexityMarkers {
     line_comments: &["//"],
 };
 
+/// Go: `select` is included because it multiplexes channel operations,
+/// creating one path per `case`. Go has no `while` or `do` — `for` covers
+/// all loop forms. There is no ternary operator in Go.
 static GO: ComplexityMarkers = ComplexityMarkers {
     keywords: &["else if", "if", "for", "switch", "case", "select"],
     operators: &["&&", "||"],
@@ -61,6 +85,10 @@ static GO: ComplexityMarkers = ComplexityMarkers {
     line_comments: &["//"],
 };
 
+/// Ruby: `brace_scoped` is false because Ruby uses `end` for scoping.
+/// `unless` and `until` are negated conditionals/loops that each create
+/// a branch. `when` is Ruby's case-arm keyword. `rescue` handles
+/// exceptions (an alternative execution path).
 static RUBY: ComplexityMarkers = ComplexityMarkers {
     keywords: &[
         "elsif", "if", "unless", "for", "while", "until", "when", "rescue",
@@ -105,6 +133,11 @@ static SHELL: ComplexityMarkers = ComplexityMarkers {
     line_comments: &["#"],
 };
 
+/// Haskell: minimal markers because most branching uses pattern matching
+/// (which doesn't use keywords captured here). Only `if` and `case`
+/// expressions add complexity. No function markers — Haskell function
+/// definitions are identified by the `=` sign at the top level, which
+/// is too ambiguous for simple keyword matching.
 static HASKELL: ComplexityMarkers = ComplexityMarkers {
     keywords: &["if", "case"],
     operators: &[],
@@ -113,6 +146,11 @@ static HASKELL: ComplexityMarkers = ComplexityMarkers {
     line_comments: &["--"],
 };
 
+/// Elixir: `cond` is a multi-way conditional (like chained if-else).
+/// `defp` (private function) must appear before `def` in function_markers
+/// to match first. No boolean operators — Elixir uses `and`/`or` which
+/// are already covered as keywords would be, but these are less common
+/// than pattern matching for branching.
 static ELIXIR: ComplexityMarkers = ComplexityMarkers {
     keywords: &["if", "cond", "case", "for", "rescue"],
     operators: &[],
@@ -194,8 +232,12 @@ static CLOJURE: ComplexityMarkers = ComplexityMarkers {
 };
 
 /// Look up the complexity markers for a given language name.
+///
 /// Returns `None` for languages without cyclomatic complexity support
-/// (e.g. JSON, HTML, Markdown).
+/// (e.g. JSON, HTML, Markdown — these are data/markup formats with no
+/// control flow). Languages that share similar syntax are grouped:
+/// C/C++/Java/C#/ObjC/PHP/Dart all use `C_FAMILY`, and OCaml/F# share
+/// the `OCAML` markers.
 pub fn markers_for(language_name: &str) -> Option<&'static ComplexityMarkers> {
     match language_name {
         "Rust" => Some(&RUST),

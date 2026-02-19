@@ -1,8 +1,16 @@
+//! Temporal coupling analysis: detects files that change together in git.
+//!
+//! Processes co-changing commit data to find implicit dependencies between
+//! files. Coupling strength = shared_commits / min(commits_a, commits_b),
+//! classified as Strong (≥0.5), Moderate (0.3–0.5), or Weak (<0.3).
+//! High coupling between unrelated modules suggests hidden dependencies.
+
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 use serde::Serialize;
 
+/// Coupling strength classification based on shared commit frequency.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum CouplingLevel {
     Strong,
@@ -11,6 +19,7 @@ pub enum CouplingLevel {
 }
 
 impl CouplingLevel {
+    /// Human-readable uppercase label for display in reports.
     pub fn label(&self) -> &'static str {
         match self {
             CouplingLevel::Strong => "STRONG",
@@ -20,6 +29,7 @@ impl CouplingLevel {
     }
 }
 
+/// Classify a coupling strength value into Strong, Moderate, or Weak.
 pub fn classify_level(strength: f64) -> CouplingLevel {
     if strength >= 0.5 {
         CouplingLevel::Strong
@@ -30,16 +40,27 @@ pub fn classify_level(strength: f64) -> CouplingLevel {
     }
 }
 
+/// A pair of files with their temporal coupling metrics.
+/// Pairs are ordered lexicographically (file_a < file_b).
 pub struct FileCoupling {
     pub file_a: PathBuf,
     pub file_b: PathBuf,
+    /// Number of commits that modified both files.
     pub shared_commits: usize,
+    /// Total commits that modified file_a.
     pub commits_a: usize,
+    /// Total commits that modified file_b.
     pub commits_b: usize,
+    /// Coupling strength: shared / min(commits_a, commits_b).
     pub strength: f64,
     pub level: CouplingLevel,
 }
 
+/// Compute temporal coupling for all file pairs from co-change data.
+///
+/// For each commit, generates all pairs of eligible files (those with
+/// at least `min_degree` total commits), counts shared commits per pair,
+/// and returns results sorted by strength descending.
 pub fn compute_coupling(
     co_changes: &[Vec<PathBuf>],
     freq_map: &HashMap<PathBuf, usize>,

@@ -1,3 +1,9 @@
+//! Hotspot analysis — identifies high-risk files that change often and are complex.
+//!
+//! Combines git change frequency with cyclomatic or indentation complexity
+//! to produce a hotspot score (commits x complexity). Files with high scores
+//! are the most impactful refactoring targets.
+
 mod report;
 
 use std::collections::HashMap;
@@ -53,10 +59,7 @@ pub fn run(
     let git_repo =
         GitRepo::open(path).map_err(|e| format!("not a git repository (or any parent): {e}"))?;
 
-    let since_ts = match since {
-        Some(s) => Some(parse_since(s)?),
-        None => None,
-    };
+    let since_ts = since.map(parse_since).transpose()?;
 
     // Build a HashMap of relative path → commits
     let freqs = git_repo.file_frequencies(since_ts)?;
@@ -71,36 +74,13 @@ pub fn run(
     let freq_map: HashMap<PathBuf, usize> =
         freqs.into_iter().map(|f| (f.path, f.commits)).collect();
 
-    // Canonicalize paths ONCE at the top, not per-file in the loop.
-    let git_root = git_repo
-        .root()
-        .canonicalize()
-        .map_err(|e| format!("cannot resolve git root: {e}"))?;
-    let walk_root = path
-        .canonicalize()
-        .map_err(|e| format!("cannot resolve target path {}: {e}", path.display()))?;
-    // Compute the prefix that maps walk-relative paths to git-relative paths.
-    // Examples:
-    //   git_root=/a/b, walk_root=/a/b/src → prefix="src"
-    //   git_root=/a/b, walk_root=/a/b     → prefix=""
-    //   git_root=/a/b, walk_root=/x/y     → prefix="" (fallback; files won't match freq_map)
-    let walk_prefix = walk_root
-        .strip_prefix(&git_root)
-        .unwrap_or(Path::new(""))
-        .to_path_buf();
+    let (walk_root, walk_prefix) = git_repo.walk_prefix(path)?;
 
     let exclude_tests = !include_tests;
     let mut results: Vec<FileHotspot> = Vec::new();
 
     for (file_path, spec) in walk::source_files(&walk_root, exclude_tests) {
-        // Compute path relative to git root using the pre-computed prefix.
-        // Walk from canonical walk_root so strip_prefix always matches.
-        let rel_to_walk = file_path.strip_prefix(&walk_root).unwrap_or(&file_path);
-        let rel_path = if walk_prefix.as_os_str().is_empty() {
-            rel_to_walk.to_path_buf()
-        } else {
-            walk_prefix.join(rel_to_walk)
-        };
+        let rel_path = GitRepo::to_git_path(&walk_root, &walk_prefix, &file_path);
 
         // Look up commits from git history (before expensive analysis)
         let commits = match freq_map.get(&rel_path) {

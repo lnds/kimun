@@ -1,3 +1,9 @@
+//! Temporal coupling analysis — finds files that change together in git.
+//!
+//! Identifies implicit dependencies between files by analyzing commit
+//! co-occurrence. High coupling between unrelated files may indicate
+//! hidden dependencies that should be made explicit or decoupled.
+
 pub mod analyzer;
 mod report;
 
@@ -41,10 +47,7 @@ pub fn run(
     let git_repo =
         GitRepo::open(path).map_err(|e| format!("not a git repository (or any parent): {e}"))?;
 
-    let since_ts = match since {
-        Some(s) => Some(parse_since(s)?),
-        None => None,
-    };
+    let since_ts = since.map(parse_since).transpose()?;
 
     // Build freq_map: path → commits, filtering by min_degree and optionally test files
     let freqs = git_repo.file_frequencies(since_ts)?;

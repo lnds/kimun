@@ -1,5 +1,12 @@
+//! Maintainability Index computation (Visual Studio variant).
+//!
+//! Implements the VS formula: `MI = MAX(0, (171 - 5.2*ln(V) - 0.23*G -
+//! 16.2*ln(LOC)) * 100/171)`. Normalizes to 0–100 with no comment weight.
+//! Traffic-light levels: Green (≥20), Yellow (10-19), Red (<10).
+
 use serde::Serialize;
 
+/// Traffic-light level for the Visual Studio MI scale.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MILevel {
@@ -9,6 +16,7 @@ pub enum MILevel {
 }
 
 impl MILevel {
+    /// Classify a normalized MI score (0–100) into a traffic-light level.
     pub fn from_score(score: f64) -> Self {
         if score >= 20.0 {
             Self::Green
@@ -19,6 +27,7 @@ impl MILevel {
         }
     }
 
+    /// Human-readable label for display in reports.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Green => "green",
@@ -34,6 +43,8 @@ impl std::fmt::Display for MILevel {
     }
 }
 
+/// Per-file MI metrics: input values (volume, complexity, LOC) and
+/// the computed MI score with its traffic-light classification.
 #[derive(Debug, Clone)]
 pub struct MIMetrics {
     pub halstead_volume: f64,

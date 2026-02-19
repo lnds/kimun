@@ -1,9 +1,16 @@
-/// Markdown report formatter for the combined `cm report` command.
-///
-/// Generates a single markdown document with sections for lines of code,
-/// duplication, indentation, Halstead, cyclomatic complexity, and
-/// maintainability index (both Visual Studio and verifysoft variants).
+//! Markdown report formatter for the combined `cm report` command.
+//!
+//! Generates a single markdown document with seven sections: lines of code
+//! (language breakdown), duplication (project-wide stats), indentation
+//! complexity, Halstead complexity, cyclomatic complexity, and two MI
+//! variants (Visual Studio and verifysoft). Each section includes a
+//! description, a markdown table of the top N files sorted by the most
+//! relevant metric (worst first), and a note when entries are truncated.
+//!
+//! Paths and special characters are escaped for correct markdown rendering.
+
 use super::ProjectReport;
+use super::data::SectionResult;
 use crate::hal::report::format_time;
 
 /// Escape backslashes and pipe characters in file paths so markdown tables
@@ -42,6 +49,8 @@ pub fn print_markdown(report: &ProjectReport) {
     );
 
     // --- Lines of Code ---
+    // Language breakdown table with per-language counts and a totals row.
+    // Languages sorted by code lines descending in the builder.
     println!();
     println!("## Lines of Code");
     println!();
@@ -76,6 +85,8 @@ pub fn print_markdown(report: &ProjectReport) {
     }
 
     // --- Duplication ---
+    // Project-level stats: dup %, group count, largest block.
+    // Calculated after the full walk using cross-file fingerprint matching.
     println!();
     println!("## Code Duplication");
     println!();
@@ -93,7 +104,8 @@ pub fn print_markdown(report: &ProjectReport) {
     println!("| Files with duplicates | {} |", d.files_with_duplicates);
     println!("| Largest block | {} lines |", d.largest_block);
 
-    // --- Indentation (sorted by stddev descending) ---
+    // --- Indentation ---
+    // Worst first: highest stddev indicates deeply nested control flow.
     let indent = &report.indent;
     println!();
     println!(
@@ -120,7 +132,8 @@ pub fn print_markdown(report: &ProjectReport) {
         }
     }
 
-    // --- Halstead (sorted by effort descending) ---
+    // --- Halstead ---
+    // Worst first: highest effort indicates most mental cost to understand.
     let hal = &report.halstead;
     println!();
     println!(
@@ -147,7 +160,8 @@ pub fn print_markdown(report: &ProjectReport) {
         }
     }
 
-    // --- Cyclomatic (sorted by total descending) ---
+    // --- Cyclomatic ---
+    // Worst first: highest total complexity indicates most decision paths.
     let cycom = &report.cyclomatic;
     println!();
     println!(
@@ -175,53 +189,42 @@ pub fn print_markdown(report: &ProjectReport) {
         }
     }
 
-    // --- Maintainability Index: Visual Studio (sorted by MI ascending, worst first) ---
-    let mi_vs = &report.mi_visual_studio;
-    println!();
-    println!(
-        "## Maintainability Index \u{2014} Visual Studio ({}, by MI asc)",
-        top_of(mi_vs.entries.len(), mi_vs.total_count)
-    );
-    println!();
-    println!("{}", mi_vs.description);
-    println!();
-    if mi_vs.entries.is_empty() {
-        println!("No data.");
-    } else {
-        println!("| File | MI | Level |");
-        println!("|------|---:|-------|");
-        for f in &mi_vs.entries {
-            println!(
-                "| {} | {:.1} | {} |",
-                escape_md(&f.path),
-                f.mi_score,
-                f.level
-            );
-        }
-    }
+    // --- MI sections ---
+    // Both variants share the same File | MI | Level table format via
+    // the generic print_mi_section() helper.
+    print_mi_section("Visual Studio", &report.mi_visual_studio, |e| {
+        (&e.path, e.mi_score, &e.level)
+    });
+    print_mi_section("Verifysoft", &report.mi_verifysoft, |e| {
+        (&e.path, e.mi_score, &e.level)
+    });
+}
 
-    // --- Maintainability Index: Verifysoft (sorted by MI ascending, worst first) ---
-    let mi_vf = &report.mi_verifysoft;
+/// Print a Maintainability Index section (File | MI | Level table).
+/// Used for both the Visual Studio and verifysoft MI variants.
+/// The `fields` closure extracts (path, score, level) from the generic entry type.
+fn print_mi_section<T>(
+    variant: &str,
+    section: &SectionResult<T>,
+    fields: impl Fn(&T) -> (&str, f64, &str),
+) {
     println!();
     println!(
-        "## Maintainability Index \u{2014} Verifysoft ({}, by MI asc)",
-        top_of(mi_vf.entries.len(), mi_vf.total_count)
+        "## Maintainability Index \u{2014} {} ({}, by MI asc)",
+        variant,
+        top_of(section.entries.len(), section.total_count)
     );
     println!();
-    println!("{}", mi_vf.description);
+    println!("{}", section.description);
     println!();
-    if mi_vf.entries.is_empty() {
+    if section.entries.is_empty() {
         println!("No data.");
     } else {
         println!("| File | MI | Level |");
         println!("|------|---:|-------|");
-        for f in &mi_vf.entries {
-            println!(
-                "| {} | {:.1} | {} |",
-                escape_md(&f.path),
-                f.mi_score,
-                f.level
-            );
+        for entry in &section.entries {
+            let (path, mi_score, level) = fields(entry);
+            println!("| {} | {:.1} | {} |", escape_md(path), mi_score, level);
         }
     }
 }

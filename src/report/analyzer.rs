@@ -1,8 +1,9 @@
-/// Per-file analysis for the combined report.
-///
-/// Reads, classifies, and runs all metric analyzers (indentation,
-/// Halstead, cyclomatic, MI) on a single file, producing a
-/// `FileReportData` bundle for aggregation.
+//! Per-file analysis for the combined report.
+//!
+//! Reads, classifies, and runs all metric analyzers (indentation,
+//! Halstead, cyclomatic, MI) on a single file, producing a
+//! `FileReportData` bundle for aggregation. Called once per source
+//! file during the report builder's filesystem walk.
 use std::path::Path;
 
 use crate::cycom;
@@ -16,15 +17,27 @@ use crate::util::read_and_classify;
 use super::data::{CycomEntry, HalsteadEntry, IndentEntry, MiVerifysoftEntry, MiVisualStudioEntry};
 
 /// Per-file analysis results collected during report building.
+///
+/// Each field is `Option` because not all analyzers succeed on every file
+/// (e.g., empty files produce no Halstead or cyclomatic metrics).
 pub struct FileReportData {
+    /// Number of blank lines in the file.
     pub blank: usize,
+    /// Number of comment-only lines.
     pub comment_lines: usize,
+    /// Number of code lines (lines with at least some executable content).
     pub code_lines: usize,
+    /// Normalized code lines for project-level duplicate detection.
     pub dup_normalized: Vec<crate::dups::detector::NormalizedLine>,
+    /// Indentation complexity result (stddev, max depth).
     pub indent: Option<IndentEntry>,
+    /// Halstead metrics result (volume, effort, bugs, time).
     pub halstead: Option<HalsteadEntry>,
+    /// Cyclomatic complexity result (total, max, average).
     pub cycom: Option<CycomEntry>,
+    /// Visual Studio MI result (0–100 normalized scale).
     pub mi_vs: Option<MiVisualStudioEntry>,
+    /// Verifysoft MI result (unbounded scale with comment weight).
     pub mi_vf: Option<MiVerifysoftEntry>,
 }
 

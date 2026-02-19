@@ -1,14 +1,18 @@
-/// Function detection and complexity analysis for cyclomatic metrics.
-///
-/// Detects function boundaries using either brace-scoped languages
-/// (C, Rust, Java, etc.) or indent-scoped languages (Python, Ruby),
-/// then counts control-flow keywords per function body.
+//! Function detection and cyclomatic complexity analysis.
+//!
+//! Detects function boundaries using either brace-scoped languages
+//! (C, Rust, Java, etc.) or indent-scoped languages (Python, Ruby),
+//! then counts control-flow keywords per function body. Brace-scoped
+//! detection tracks `{`/`}` depth with string masking to avoid false
+//! matches inside string literals. Indent-scoped detection uses
+//! indentation level to determine where function bodies end.
 use crate::util::mask_strings;
 
 use super::markers::ComplexityMarkers;
 
 /// Control-flow keywords that should NOT be treated as function definitions
-/// in the C-family heuristic.
+/// in the C-family heuristic. If the first word of a line matches one of
+/// these, it is treated as a control statement rather than a function.
 const CONTROL_KEYWORDS: &[&str] = &[
     "if", "for", "while", "switch", "else", "do", "catch", "return", "case",
 ];

@@ -1,13 +1,32 @@
+//! AI-powered code analysis module.
+//!
+//! Implements an agentic loop that calls an LLM provider (currently Claude)
+//! with access to `cm` tool definitions. The LLM decides which tools to
+//! run, receives the JSON output, and produces a comprehensive analysis.
+//!
+//! The loop iterates up to `MAX_ITERATIONS` turns, executing tool calls
+//! on each turn until the model produces a final text response (no more
+//! tool_use blocks). This design lets the model explore the codebase
+//! incrementally, running multiple tools across several turns.
+
+/// HTTP client and API types for the Claude Messages API.
 mod client;
+/// Tool executor: maps tool calls to `cm` subprocess invocations.
+mod executor;
+/// Tool definitions: JSON Schema descriptions of all 11 `cm` subcommands.
+pub(crate) mod schema;
+/// Claude Code skill installer (`cm ai skill claude`).
 pub mod skill;
-mod tools;
 
 use client::{ApiRequest, ContentBlock, Message, MessageContent};
 use std::fs;
 use std::path::Path;
 
+/// Default model used when `--model` is not specified.
 const DEFAULT_MODEL: &str = "claude-sonnet-4-5-20250929";
+/// Maximum tokens per API response (prevents runaway generation).
 const MAX_TOKENS: u32 = 4096;
+/// Safety limit on agentic loop iterations to prevent infinite loops.
 const MAX_ITERATIONS: usize = 15;
 
 const SYSTEM_PROMPT: &str = "\
@@ -47,9 +66,48 @@ pub fn run(
         .map_err(|e| format!("Cannot resolve path '{}': {e}", path.display()))?;
 
     let model = model.unwrap_or(DEFAULT_MODEL).to_string();
-    let tool_defs = tools::tool_definitions();
+    let tool_defs = schema::tool_definitions();
 
     agentic_loop(&api_key, &model, &tool_defs, &canonical_path, output)
+}
+
+/// Extract all text blocks from a response into a single string.
+fn collect_final_text(content: &[ContentBlock]) -> String {
+    let mut text = String::new();
+    for block in content {
+        if let ContentBlock::Text { text: t } = block {
+            text.push_str(t);
+        }
+    }
+    text
+}
+
+/// Save analysis text to a file, if an output path was provided.
+fn save_output(text: &str, output: Option<&Path>) -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(path) = output {
+        fs::write(path, text)?;
+        eprintln!("Report saved to {}", path.display());
+    }
+    Ok(())
+}
+
+/// Execute every tool-use block in `content` and return the corresponding results.
+fn execute_tool_uses(content: &[ContentBlock], project_path: &Path) -> Vec<ContentBlock> {
+    content
+        .iter()
+        .filter_map(|block| {
+            if let ContentBlock::ToolUse { id, name, input } = block {
+                eprintln!("  Running tool: {name}");
+                let result = executor::execute_tool(name, input, project_path);
+                Some(ContentBlock::ToolResult {
+                    tool_use_id: id.clone(),
+                    content: result,
+                })
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 fn agentic_loop(
@@ -79,7 +137,6 @@ fn agentic_loop(
         eprintln!("Calling Claude API (turn {})...", iteration + 1);
         let response = client::send_message(&http_client, api_key, &request)?;
 
-        // Handle truncated responses (max_tokens reached mid-generation)
         if response.stop_reason == "max_tokens" {
             eprintln!("warning: response truncated (max_tokens reached)");
             return Err("API response was truncated due to max_tokens limit. \
@@ -87,47 +144,24 @@ fn agentic_loop(
                 .into());
         }
 
-        // Collect tool use blocks
         let has_tool_use = response
             .content
             .iter()
             .any(|b| matches!(b, ContentBlock::ToolUse { .. }));
 
         if !has_tool_use {
-            // No tools requested — collect final text
-            let mut analysis = String::new();
-            for block in &response.content {
-                if let ContentBlock::Text { text } = block {
-                    analysis.push_str(text);
-                }
-            }
+            let analysis = collect_final_text(&response.content);
             println!("{analysis}");
-            if let Some(out_path) = output {
-                fs::write(out_path, &analysis)?;
-                eprintln!("Report saved to {}", out_path.display());
-            }
+            save_output(&analysis, output)?;
             return Ok(());
         }
 
-        // Append assistant message
         messages.push(Message {
             role: "assistant".to_string(),
             content: MessageContent::Blocks(response.content.clone()),
         });
 
-        // Execute tools and collect results
-        let mut tool_results = Vec::new();
-        for block in &response.content {
-            if let ContentBlock::ToolUse { id, name, input } = block {
-                eprintln!("  Running tool: {name}");
-                let result = tools::execute_tool(name, input, project_path);
-                tool_results.push(ContentBlock::ToolResult {
-                    tool_use_id: id.clone(),
-                    content: result,
-                });
-            }
-        }
-
+        let tool_results = execute_tool_uses(&response.content, project_path);
         messages.push(Message {
             role: "user".to_string(),
             content: MessageContent::Blocks(tool_results),

@@ -1,4 +1,5 @@
 use super::*;
+use crate::ai::schema::tool_definitions;
 use serde_json::json;
 use std::path::PathBuf;
 

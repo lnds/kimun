@@ -1,8 +1,12 @@
-/// Git repository access via libgit2.
-///
-/// Provides file change frequencies, co-changing commit analysis,
-/// git blame for ownership, and recent author detection — all used
-/// by the hotspots, knowledge, and temporal coupling modules.
+//! Git repository access via libgit2.
+//!
+//! Provides file change frequencies, co-changing commit analysis,
+//! git blame for ownership, and recent author detection — all used
+//! by the hotspots, knowledge, and temporal coupling modules.
+//! The `GitRepo` wrapper encapsulates `git2::Repository` and its
+//! resolved working directory root, providing a safe API for walking
+//! commits, diffing trees, and resolving paths between the filesystem
+//! walk and git's path namespace.
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::ops::ControlFlow;
@@ -18,17 +22,25 @@ pub struct GitRepo {
 
 /// How often a file was changed in git history.
 pub struct FileFrequency {
+    /// Repository-relative file path.
     pub path: PathBuf,
+    /// Number of non-merge commits that touched this file.
     pub commits: usize,
+    /// Unix timestamp of the earliest commit touching this file.
     pub first_commit: i64,
+    /// Unix timestamp of the most recent commit touching this file.
     pub last_commit: i64,
 }
 
 /// Per-author blame contribution for a single file.
 pub struct BlameInfo {
+    /// Author display name from git signature.
     pub author: String,
+    /// Author email from git signature.
     pub email: String,
+    /// Number of lines attributed to this author.
     pub lines: usize,
+    /// Unix timestamp of this author's most recent commit to the file.
     pub last_commit_time: i64,
 }
 
@@ -41,11 +53,6 @@ impl GitRepo {
             .ok_or("bare repositories are not supported")?
             .to_path_buf();
         Ok(Self { repo, root })
-    }
-
-    /// Return the working directory root of the repository.
-    pub fn root(&self) -> &Path {
-        &self.root
     }
 
     /// Iterate non-merge commits in reverse chronological order, optionally
@@ -186,6 +193,38 @@ impl GitRepo {
         })?;
 
         Ok(authors)
+    }
+
+    /// Canonicalize the git root and walk root, then compute the relative prefix
+    /// that maps walk-relative paths to git-relative paths.
+    ///
+    /// Returns `(canonical_walk_root, prefix)`. For example:
+    ///   - `git_root=/a/b`, `walk_root=/a/b/src` → prefix = `"src"`
+    ///   - `git_root=/a/b`, `walk_root=/a/b`     → prefix = `""`
+    pub fn walk_prefix(&self, walk_root: &Path) -> Result<(PathBuf, PathBuf), Box<dyn Error>> {
+        let git_root = self
+            .root
+            .canonicalize()
+            .map_err(|e| format!("cannot resolve git root: {e}"))?;
+        let canonical_walk = walk_root
+            .canonicalize()
+            .map_err(|e| format!("cannot resolve target path {}: {e}", walk_root.display()))?;
+        let prefix = canonical_walk
+            .strip_prefix(&git_root)
+            .unwrap_or(Path::new(""))
+            .to_path_buf();
+        Ok((canonical_walk, prefix))
+    }
+
+    /// Convert a file path from walk-relative to git-relative using a
+    /// pre-computed prefix from [`walk_prefix`].
+    pub fn to_git_path(walk_root: &Path, prefix: &Path, file_path: &Path) -> PathBuf {
+        let rel = file_path.strip_prefix(walk_root).unwrap_or(file_path);
+        if prefix.as_os_str().is_empty() {
+            rel.to_path_buf()
+        } else {
+            prefix.join(rel)
+        }
     }
 
     /// Diff a commit against its parent to get the list of changed file paths.

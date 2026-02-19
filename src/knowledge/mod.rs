@@ -1,3 +1,10 @@
+//! Knowledge maps: code ownership analysis via git blame.
+//!
+//! Identifies bus factor risk by analyzing who owns each file's code.
+//! Risk levels: Critical (one person >80%), High (60-80%), Medium
+//! (2-3 people >80% combined), Low (well-distributed). Generated
+//! files (lock files, minified JS) are automatically excluded.
+
 pub mod analyzer;
 mod report;
 
@@ -12,7 +19,8 @@ use crate::report_helpers;
 use analyzer::{FileOwnership, compute_ownership};
 use report::{print_json, print_report};
 
-/// Filenames and patterns for generated files that should be excluded.
+/// Check if a file is machine-generated (lock files, minified assets,
+/// protobuf output) and should be excluded from ownership analysis.
 fn is_generated(path: &Path) -> bool {
     let file_name = match path.file_name().and_then(|n| n.to_str()) {
         Some(n) => n,
@@ -38,6 +46,8 @@ fn is_generated(path: &Path) -> bool {
         || file_name.contains(".generated.")
 }
 
+/// Run knowledge map analysis: walk source files, blame each one,
+/// compute ownership concentration and risk, then output results.
 pub fn run(
     path: &Path,
     json: bool,
@@ -50,10 +60,7 @@ pub fn run(
     let git_repo =
         GitRepo::open(path).map_err(|e| format!("not a git repository (or any parent): {e}"))?;
 
-    let since_ts = match since {
-        Some(s) => Some(parse_since(s)?),
-        None => None,
-    };
+    let since_ts = since.map(parse_since).transpose()?;
 
     // Collect recent authors (for knowledge loss detection)
     let recent_authors = if since_ts.is_some() {
@@ -62,18 +69,7 @@ pub fn run(
         std::collections::HashSet::new()
     };
 
-    // Canonicalize paths ONCE at the top
-    let git_root = git_repo
-        .root()
-        .canonicalize()
-        .map_err(|e| format!("cannot resolve git root: {e}"))?;
-    let walk_root = path
-        .canonicalize()
-        .map_err(|e| format!("cannot resolve target path {}: {e}", path.display()))?;
-    let walk_prefix = walk_root
-        .strip_prefix(&git_root)
-        .unwrap_or(Path::new(""))
-        .to_path_buf();
+    let (walk_root, walk_prefix) = git_repo.walk_prefix(path)?;
 
     let exclude_tests = !include_tests;
     let mut results: Vec<FileOwnership> = Vec::new();
@@ -83,14 +79,7 @@ pub fn run(
             continue;
         }
 
-        // Compute path relative to git root.
-        // Walk from canonical walk_root so strip_prefix always matches.
-        let rel_to_walk = file_path.strip_prefix(&walk_root).unwrap_or(&file_path);
-        let rel_path = if walk_prefix.as_os_str().is_empty() {
-            rel_to_walk.to_path_buf()
-        } else {
-            walk_prefix.join(rel_to_walk)
-        };
+        let rel_path = GitRepo::to_git_path(&walk_root, &walk_prefix, &file_path);
 
         // Run blame
         let blames = match git_repo.blame_file(&rel_path) {

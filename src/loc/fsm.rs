@@ -1,8 +1,11 @@
-/// Finite state machine steps for source line classification.
-///
-/// Implements the core character-by-character logic for detecting
-/// comments, strings, and pragmas. Called by `counter.rs` which
-/// drives the FSM line by line.
+//! Finite state machine steps for source line classification.
+//!
+//! Implements the core character-by-character logic for detecting
+//! comments, strings, and pragmas. Called by `counter.rs` which
+//! drives the FSM line by line. Each `step_*` function examines the
+//! current byte position and returns a `StepResult` indicating how
+//! many bytes to advance, any state transition, and whether the
+//! current line contains code or comment content.
 use super::language::LanguageSpec;
 
 /// The kind of string literal currently being parsed.
@@ -89,12 +92,19 @@ fn skip_pragma(bytes: &[u8], start: usize, pclose: &str) -> usize {
 }
 
 /// Process one byte in Normal state. Detection priority:
-/// 1. Triple-quote strings (Python `"""` / `'''`)
-/// 2. Pragmas (Haskell `{-# ... #-}`) — before block comments
-/// 3. Block comment open (`/*`, `{-`)
-/// 4. Line comments (`//`, `--`, `#`) with `not_before` guard
-/// 5. String delimiters (`"`, `'`)
-/// 6. Regular character (code if non-whitespace)
+///
+/// 1. **Triple-quote strings** (Python `"""` / `'''`) — checked before
+///    regular quotes so that `"""` is not parsed as empty string + quote.
+/// 2. **Pragmas** (Haskell `{-# ... #-}`) — must come before block
+///    comments because `{-#` is a prefix of `{-`. Without this ordering,
+///    pragmas would be misclassified as block comments.
+/// 3. **Block comment open** (`/*`, `{-`) — transitions to InBlockComment.
+/// 4. **Line comments** (`//`, `--`, `#`) with `not_before` guard — the
+///    guard prevents Haskell's `-->` operator from matching as `--` comment.
+/// 5. **String delimiters** (`"`, `'`) — single-quote strings are opt-in
+///    via `single_quote_strings` to avoid Rust lifetime annotations (`'a`)
+///    being parsed as string delimiters.
+/// 6. **Regular character** — code if non-whitespace, ignored otherwise.
 pub(super) fn step_normal(
     rest: &[u8],
     spec: &LanguageSpec,

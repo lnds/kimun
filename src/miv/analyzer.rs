@@ -1,5 +1,13 @@
+//! Maintainability Index computation (verifysoft variant with comment weight).
+//!
+//! Implements the SEI/verifysoft formula: `MI = MIwoc + MIcw` where
+//! `MIwoc = 171 - 5.2*ln(V) - 0.23*G - 16.2*ln(LOC)` and
+//! `MIcw = 50 * sin(sqrt(2.46 * radians(PerCM)))`. Unbounded scale;
+//! comment percentage boosts the score via the MIcw term.
+
 use serde::Serialize;
 
+/// Quality level for the verifysoft MI scale.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MILevel {
@@ -9,6 +17,7 @@ pub enum MILevel {
 }
 
 impl MILevel {
+    /// Classify a raw MI score into a quality level.
     pub fn from_score(score: f64) -> Self {
         if score >= 85.0 {
             Self::Good
@@ -19,6 +28,7 @@ impl MILevel {
         }
     }
 
+    /// Human-readable label for display in reports.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Good => "good",
@@ -34,6 +44,8 @@ impl std::fmt::Display for MILevel {
     }
 }
 
+/// Per-file MI metrics including both the without-comments (MIwoc) and
+/// with-comments (MIcw) components, plus comment statistics.
 #[derive(Debug, Clone)]
 pub struct MIMetrics {
     pub halstead_volume: f64,

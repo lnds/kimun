@@ -1,8 +1,11 @@
-/// Language specification registry and detection.
-///
-/// Defines 40+ programming languages via the `lang!` macro, each with
-/// file extension/filename mappings, comment syntax (line, block, nested),
-/// string delimiter rules, pragma support, and shebang patterns.
+//! Language specification registry and detection.
+//!
+//! Defines 40+ programming languages via the `lang!` macro, each with
+//! file extension/filename mappings, comment syntax (line, block, nested),
+//! string delimiter rules, pragma support, and shebang patterns.
+//! Language detection uses a two-phase lookup: first by filename (for
+//! files like `Makefile`, `CMakeLists.txt`), then by extension. Shebang
+//! detection is the final fallback for extensionless scripts.
 use std::path::Path;
 
 use super::lang_macro::lang_spec;
@@ -14,19 +17,29 @@ use super::lang_macro::lang_spec;
 /// or shebang line.
 #[derive(Debug)]
 pub struct LanguageSpec {
+    /// Display name (e.g. "Rust", "Python", "JavaScript").
     pub name: &'static str,
+    /// File extensions that identify this language (without leading dot).
     pub extensions: &'static [&'static str],
+    /// Exact filenames that identify this language (e.g. "Makefile").
     pub filenames: &'static [&'static str],
+    /// Line comment markers (e.g. `["//"]` or `["#"]`).
     pub line_comments: &'static [&'static str],
     /// Characters that, if immediately following a line comment marker,
     /// prevent it from being treated as a comment. Used for Haskell where
     /// `-->` is an operator but `-- comment` is a comment.
     pub line_comment_not_before: &'static str,
+    /// Block comment delimiters: `Some(("/*", "*/"))` or `None`.
     pub block_comment: Option<(&'static str, &'static str)>,
+    /// Whether block comments can nest (e.g. Rust `/* /* */ */`).
     pub nested_block_comments: bool,
+    /// Whether single quotes delimit strings (false for Rust lifetimes).
     pub single_quote_strings: bool,
+    /// Whether triple quotes delimit multi-line strings (Python).
     pub triple_quote_strings: bool,
+    /// Pragma delimiters that override block comment detection (Haskell).
     pub pragma: Option<(&'static str, &'static str)>,
+    /// Shebang interpreter names for extensionless script detection.
     pub shebangs: &'static [&'static str],
 }
 
