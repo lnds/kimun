@@ -1,3 +1,9 @@
+## 0.12.3 (2026-02-19)
+
+### Refactor
+
+- improve code health score from C- to A (68→90)
+
 ## 0.12.2 (2026-02-18)
 
 ### Fix
