@@ -166,19 +166,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a822ea5bc7590f9d40f1ba12c0dc3c2760f3482c6984db1573ad11031420831"
 
 [[package]]
-name = "code-metrics"
-version = "0.12.3"
-dependencies = [
- "clap",
- "git2",
- "ignore",
- "reqwest",
- "serde",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
 name = "colorchoice"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -772,6 +759,19 @@ checksum = "8c942ebf8e95485ca0d52d97da7c5a2c387d0e7f0ba4c35e93bfcaee045955b3"
 dependencies = [
  "once_cell",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "kimun"
+version = "0.13.0"
+dependencies = [
+ "clap",
+ "git2",
+ "ignore",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]

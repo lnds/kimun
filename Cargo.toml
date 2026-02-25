@@ -1,7 +1,13 @@
 [package]
-name = "code-metrics"
-version = "0.12.3"
+name = "kimun"
+version = "0.13.0"
 edition = "2024"
+description = "Code metrics tool — health score, complexity, duplication, hotspots, ownership"
+license = "MIT"
+repository = "https://github.com/lnds/kimun"
+homepage = "https://github.com/lnds/kimun"
+keywords = ["code-metrics", "complexity", "loc", "halstead", "maintainability"]
+categories = ["command-line-utilities", "development-tools"]
 
 [[bin]]
 name = "km"
