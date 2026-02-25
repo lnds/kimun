@@ -15,7 +15,7 @@
 ### Fix
 
 - address serious issues from second code review
-- deduplicate files by content hash in cm report (consistent with cm loc)
+- deduplicate files by content hash in km report (consistent with km loc)
 - address blocking issues from second code review
 - critical bugs found in code review
 
@@ -80,7 +80,7 @@
 
 ### Feat
 
-- implement cm report command
+- implement km report command
 - full report
 
 ## 0.6.1 (2026-02-09)

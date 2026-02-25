@@ -1,4 +1,4 @@
-# cm (code-metrics)
+# Kimün (km)
 
 A fast command-line tool for code analysis, written in Rust. Counts lines of code by language (inspired by [cloc](https://github.com/AlDanial/cloc)), detects duplicate code blocks, and computes complexity metrics (Halstead, cyclomatic, indentation, maintainability index).
 
@@ -8,26 +8,26 @@ A fast command-line tool for code analysis, written in Rust. Counts lines of cod
 cargo install --path .
 ```
 
-This installs the `cm` binary.
+This installs the `km` binary.
 
 ## Commands
 
-### `cm loc` -- Count lines of code
+### `km loc` -- Count lines of code
 
 ```bash
-cm loc [path]
+km loc [path]
 ```
 
 Run on the current directory:
 
 ```bash
-cm loc
+km loc
 ```
 
 Run on a specific path:
 
 ```bash
-cm loc src/
+km loc src/
 ```
 
 Options:
@@ -50,14 +50,14 @@ Example output:
 ────────────────────────────────────────────────────────────────────
 ```
 
-### `cm dups` -- Detect duplicate code
+### `km dups` -- Detect duplicate code
 
 Finds duplicate code blocks across files using a sliding window approach. Applies the **Rule of Three**: duplicates appearing 3+ times are marked as **CRITICAL** (refactor recommended), while those appearing twice are **TOLERABLE**.
 
 Test files and directories are excluded by default, since tests often contain intentional repetition.
 
 ```bash
-cm dups [path]
+km dups [path]
 ```
 
 Options:
@@ -123,19 +123,19 @@ Example detailed output (`--report`):
 
 #### Excluded test patterns
 
-By default, `cm dups` skips files matching common test conventions:
+By default, `km dups` skips files matching common test conventions:
 
 - **Directories**: `tests/`, `test/`, `__tests__/`, `spec/`
 - **By extension**: `*_test.rs`, `*_test.go`, `test_*.py`, `*.test.js`, `*.spec.ts`, `*Test.java`, `*_test.cpp`, and more
 
 Use `--include-tests` to analyze test files as well.
 
-### `cm indent` -- Indentation complexity
+### `km indent` -- Indentation complexity
 
 Measures indentation-based complexity per file: standard deviation of indentation depths and maximum depth. Higher stddev suggests more complex control flow.
 
 ```bash
-cm indent [path]
+km indent [path]
 ```
 
 Options:
@@ -145,12 +145,12 @@ Options:
 | `--json` | Output as JSON |
 | `--include-tests` | Include test files in analysis (excluded by default) |
 
-### `cm hal` -- Halstead complexity metrics
+### `km hal` -- Halstead complexity metrics
 
 Computes [Halstead complexity metrics](https://en.wikipedia.org/wiki/Halstead_complexity_measures) per file by extracting operators and operands from source code.
 
 ```bash
-cm hal [path]
+km hal [path]
 ```
 
 #### Metrics
@@ -197,12 +197,12 @@ Halstead Complexity Metrics
 
 Rust, Python, JavaScript, TypeScript, Go, C, C++, C#, Java, Objective-C, PHP, Dart, Ruby, Kotlin, Swift, Shell (Bash/Zsh).
 
-### `cm cycom` -- Cyclomatic complexity
+### `km cycom` -- Cyclomatic complexity
 
 Computes cyclomatic complexity per file and per function by counting decision points (`if`, `for`, `while`, `match`, `&&`, `||`, etc.).
 
 ```bash
-cm cycom [path]
+km cycom [path]
 ```
 
 Options:
@@ -215,12 +215,12 @@ Options:
 | `--min-complexity N` | Minimum max-complexity to include a file (default: 1) |
 | `--per-function` | Show per-function breakdown |
 
-### `cm mi` -- Maintainability Index (Visual Studio variant)
+### `km mi` -- Maintainability Index (Visual Studio variant)
 
 Computes the [Maintainability Index](https://learn.microsoft.com/en-us/visualstudio/code-quality/code-metrics-maintainability-index-range-and-meaning) per file using the Visual Studio formula. MI is normalized to a 0–100 scale with no comment-weight term.
 
 ```bash
-cm mi [path]
+km mi [path]
 ```
 
 #### Formula
@@ -262,14 +262,14 @@ Maintainability Index (Visual Studio)
  Total (3 files)                         1157   13.2
 ```
 
-### `cm miv` -- Maintainability Index (verifysoft variant)
+### `km miv` -- Maintainability Index (verifysoft variant)
 
 Computes the [Maintainability Index](https://www.verifysoft.com/en_maintainability.html) per file. MI combines Halstead Volume, Cyclomatic Complexity, lines of code, and comment ratio into a single maintainability score.
 
 This is the verifysoft.com variant, which includes a comment-weight term (MIcw) that rewards well-commented code.
 
 ```bash
-cm miv [path]
+km miv [path]
 ```
 
 #### Formula
@@ -313,12 +313,12 @@ Maintainability Index
  Total (3 files)                         1011                  51.9
 ```
 
-### `cm hotspots` -- Hotspot analysis
+### `km hotspots` -- Hotspot analysis
 
 Finds hotspots: files that change frequently AND have high complexity. Based on Adam Thornhill's method ("Your Code as a Crime Scene").
 
 ```bash
-cm hotspots [path]
+km hotspots [path]
 ```
 
 #### Formula
@@ -382,12 +382,12 @@ Score = Commits × Cyclomatic Complexity.
 High-score files are change-prone and complex — prime refactoring targets.
 ```
 
-### `cm knowledge` -- Code ownership analysis
+### `km knowledge` -- Code ownership analysis
 
 Analyzes code ownership patterns via git blame (knowledge maps). Based on Adam Thornhill's method ("Your Code as a Crime Scene" chapters 8-9).
 
 ```bash
-cm knowledge [path]
+km knowledge [path]
 ```
 
 Identifies bus factor risk and knowledge concentration per file. Generated files (lock files, minified JS, etc.) are automatically excluded.
@@ -432,12 +432,12 @@ Files with knowledge loss risk (primary owner inactive): 1
   src/legacy.rs (Former Dev)
 ```
 
-### `cm tc` -- Temporal coupling analysis
+### `km tc` -- Temporal coupling analysis
 
 Analyzes temporal coupling between files via git history. Based on Adam Thornhill's method ("Your Code as a Crime Scene" ch. 7): files that frequently change together in the same commits have implicit coupling, even without direct imports.
 
 ```bash
-cm tc [path]
+km tc [path]
 ```
 
 #### Formula
@@ -485,14 +485,14 @@ Strong coupling (>= 0.5) suggests hidden dependencies — consider extracting sh
 
 **Note:** File renames are not tracked across git history. Renamed files appear as separate entries.
 
-### `cm score` -- Code health score
+### `km score` -- Code health score
 
 Computes an overall code health score for the project, grading it from A++ (exceptional) to F-- (severe issues). Analyzes 6 dimensions of code quality using only static metrics (no git required).
 
 Non-code files (Markdown, TOML, JSON, etc.) are automatically excluded. Inline test blocks (`#[cfg(test)]`) are excluded from duplication analysis.
 
 ```bash
-cm score [path]
+km score [path]
 ```
 
 #### Dimensions and weights

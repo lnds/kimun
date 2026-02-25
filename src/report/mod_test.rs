@@ -79,7 +79,7 @@ fn build_report_dedup_for_loc() {
     fs::write(dir.path().join("b.rs"), content).unwrap();
     let report = build_report(dir.path(), false, 20, 6).unwrap();
 
-    // Duplicate files deduplicated — consistent with cm loc
+    // Duplicate files deduplicated — consistent with km loc
     assert_eq!(report.loc[0].files, 1);
 }
 

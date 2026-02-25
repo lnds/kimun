@@ -1,7 +1,7 @@
 //! Tool executor for AI-powered analysis.
 //!
-//! Maps tool call names (e.g. `"cm_loc"`) to `cm` subprocess invocations.
-//! Each tool runs `cm <subcmd> --json <path>` and returns the stdout output.
+//! Maps tool call names (e.g. `"km_loc"`) to `km` subprocess invocations.
+//! Each tool runs `km <subcmd> --json <path>` and returns the stdout output.
 //! Named parameters from the AI input (like `top`, `since`, `min_lines`)
 //! are converted to `--flag value` CLI arguments.
 
@@ -9,33 +9,33 @@ use serde_json::Value;
 use std::path::Path;
 use std::process::Command;
 
-/// Execute a `cm` subcommand by name, passing `--json` and any extra arguments
+/// Execute a `km` subcommand by name, passing `--json` and any extra arguments
 /// extracted from the AI tool input. Returns the JSON output or an error message.
 pub fn execute_tool(tool_name: &str, input: &Value, project_path: &Path) -> String {
-    let cm_binary = std::env::current_exe().unwrap_or_else(|_| "cm".into());
+    let km_binary = std::env::current_exe().unwrap_or_else(|_| "km".into());
 
     let (subcmd, args) = match tool_name {
-        "cm_loc" => ("loc", build_args(input, &[], project_path)),
-        "cm_score" => ("score", build_args(input, &[], project_path)),
-        "cm_hal" => ("hal", build_args(input, &["top"], project_path)),
-        "cm_cycom" => ("cycom", build_args(input, &["top"], project_path)),
-        "cm_indent" => ("indent", build_args(input, &[], project_path)),
-        "cm_mi" => ("mi", build_args(input, &["top"], project_path)),
-        "cm_miv" => ("miv", build_args(input, &["top"], project_path)),
-        "cm_dups" => ("dups", build_args(input, &["min_lines"], project_path)),
-        "cm_hotspots" => (
+        "km_loc" => ("loc", build_args(input, &[], project_path)),
+        "km_score" => ("score", build_args(input, &[], project_path)),
+        "km_hal" => ("hal", build_args(input, &["top"], project_path)),
+        "km_cycom" => ("cycom", build_args(input, &["top"], project_path)),
+        "km_indent" => ("indent", build_args(input, &[], project_path)),
+        "km_mi" => ("mi", build_args(input, &["top"], project_path)),
+        "km_miv" => ("miv", build_args(input, &["top"], project_path)),
+        "km_dups" => ("dups", build_args(input, &["min_lines"], project_path)),
+        "km_hotspots" => (
             "hotspots",
             build_args(input, &["top", "since"], project_path),
         ),
-        "cm_knowledge" => (
+        "km_knowledge" => (
             "knowledge",
             build_args(input, &["top", "since"], project_path),
         ),
-        "cm_tc" => ("tc", build_args(input, &["top", "since"], project_path)),
+        "km_tc" => ("tc", build_args(input, &["top", "since"], project_path)),
         _ => return format!("Unknown tool: {tool_name}"),
     };
 
-    let mut cmd = Command::new(&cm_binary);
+    let mut cmd = Command::new(&km_binary);
     cmd.arg(subcmd).arg("--json");
     for arg in &args {
         cmd.arg(arg);
@@ -48,10 +48,10 @@ pub fn execute_tool(tool_name: &str, input: &Value, project_path: &Path) -> Stri
             if output.status.success() {
                 stdout.into_owned()
             } else {
-                format!("Error running cm {subcmd}: {stderr}")
+                format!("Error running km {subcmd}: {stderr}")
             }
         }
-        Err(e) => format!("Failed to execute cm {subcmd}: {e}"),
+        Err(e) => format!("Failed to execute km {subcmd}: {e}"),
     }
 }
 

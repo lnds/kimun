@@ -1,4 +1,4 @@
-//! Combined report module (`cm report` command).
+//! Combined report module (`km report` command).
 //!
 //! Walks all source files once, runs every analyzer (LOC, duplication,
 //! indentation, Halstead, cyclomatic, MI), and produces a unified

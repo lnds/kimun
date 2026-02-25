@@ -1,4 +1,4 @@
-//! `cm` — a CLI tool for comprehensive code metrics analysis.
+//! `km` (Kimün) — a CLI tool for comprehensive code metrics analysis.
 //!
 //! Supports 12 analysis commands covering static metrics (LOC, duplication,
 //! Halstead, cyclomatic, indentation, MI, code health score) and git-based
@@ -35,7 +35,7 @@ mod loc;
 mod mi;
 /// Maintainability Index (verifysoft variant, with comment weight).
 mod miv;
-/// Combined report (`cm report`) aggregating all metrics.
+/// Combined report (`km report`) aggregating all metrics.
 mod report;
 /// Shared report formatting utilities (separators, path widths, JSON output).
 mod report_helpers;

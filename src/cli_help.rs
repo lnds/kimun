@@ -32,7 +32,7 @@ pub const MI: &str = "\
 Compute Maintainability Index (MI) per file using the Visual Studio variant.
 
 This variant normalizes MI to a 0-100 scale with no comment-weight term.
-For the verifysoft variant (with comment weight), use `cm miv` instead.
+For the verifysoft variant (with comment weight), use `km miv` instead.
 
 Formula:
   MI = MAX(0, (171 - 5.2 * ln(V) - 0.23 * G - 16.2 * ln(LOC)) * 100 / 171)
@@ -51,7 +51,7 @@ Compute Maintainability Index (MI) per file using the verifysoft.com variant.
 
 This variant includes a comment-weight term (MIcw) that rewards well-commented
 code. For the simpler Visual Studio variant (0-100 scale, no comment weight),
-use `cm mi` instead.
+use `km mi` instead.
 
 Formula:
   MIwoc = 171 - 5.2 * ln(V) - 0.23 * G - 16.2 * ln(LOC)
@@ -84,11 +84,11 @@ Requires a git repository. Use --since to limit the analysis window
 (approximations: 1 month = 30 days, 1 year = 365 days).
 
 Examples:
-  cm hotspots                    # indentation complexity (default)
-  cm hotspots --complexity cycom # cyclomatic complexity
-  cm hotspots --since 6m         # last 6 months
-  cm hotspots --since 1y --sort-by commits
-  cm hotspots --json             # machine-readable output";
+  km hotspots                    # indentation complexity (default)
+  km hotspots --complexity cycom # cyclomatic complexity
+  km hotspots --since 6m         # last 6 months
+  km hotspots --since 1y --sort-by commits
+  km hotspots --json             # machine-readable output";
 
 /// Knowledge maps: code ownership analysis via git blame.
 /// Identifies bus factor risk and knowledge concentration per file.
@@ -111,10 +111,10 @@ Requires a git repository. Generated files (lock files, minified JS, etc.)
 are automatically excluded.
 
 Examples:
-  cm knowledge                          # ownership by concentration
-  cm knowledge --sort-by risk           # highest risk first
-  cm knowledge --since 6m --risk-only   # knowledge loss detection
-  cm knowledge --json                   # machine-readable output";
+  km knowledge                          # ownership by concentration
+  km knowledge --sort-by risk           # highest risk first
+  km knowledge --since 6m --risk-only   # knowledge loss detection
+  km knowledge --json                   # machine-readable output";
 
 /// Temporal coupling: files that change together in git commits.
 /// Reveals hidden dependencies between modules.
@@ -138,11 +138,11 @@ or architectural issues \u{2014} consider extracting shared abstractions.
 Requires a git repository. File renames are not tracked across history.
 
 Examples:
-  cm tc                          # default: min 3 shared commits
-  cm tc --min-degree 5           # stricter filter
-  cm tc --since 6m               # last 6 months only
-  cm tc --min-strength 0.5       # only strong coupling
-  cm tc --json                   # machine-readable output";
+  km tc                          # default: min 3 shared commits
+  km tc --min-degree 5           # stricter filter
+  km tc --since 6m               # last 6 months only
+  km tc --min-strength 0.5       # only strong coupling
+  km tc --json                   # machine-readable output";
 
 /// Overall code health score: weighted aggregate of 6 quality dimensions.
 /// Produces a letter grade from A++ (exceptional) to F-- (severe issues).
@@ -177,18 +177,18 @@ that need the most attention (lowest per-file scores).
 Uses only static code metrics (no git history required).
 
 Examples:
-  cm score                       # score current directory
-  cm score src/                  # score a subdirectory
-  cm score --json                # machine-readable output
-  cm score --bottom 20           # show 20 worst files
-  cm score --include-tests       # include test files";
+  km score                       # score current directory
+  km score src/                  # score a subdirectory
+  km score --json                # machine-readable output
+  km score --bottom 20           # show 20 worst files
+  km score --include-tests       # include test files";
 
 /// AI-powered repository analysis using an external LLM provider.
-/// The model runs cm tools and produces a comprehensive report.
+/// The model runs km tools and produces a comprehensive report.
 pub const AI_ANALYZE: &str = "\
 Analyze a repository using an AI provider.
 
-Invokes an AI model that uses cm tools to analyze the repository and produce
+Invokes an AI model that uses km tools to analyze the repository and produce
 a comprehensive report including code health, complexity hotspots,
 maintainability issues, and actionable recommendations.
 
@@ -196,17 +196,17 @@ Supported providers:
   claude  \u{2014} Anthropic Claude (requires ANTHROPIC_API_KEY env var)
 
 Examples:
-  cm ai analyze claude                           # analyze current directory
-  cm ai analyze claude src/                      # analyze a subdirectory
-  cm ai analyze claude --model claude-sonnet-4-5-20250929  # use specific model
-  cm ai analyze claude --output report.md       # save report to file";
+  km ai analyze claude                           # analyze current directory
+  km ai analyze claude src/                      # analyze a subdirectory
+  km ai analyze claude --model claude-sonnet-4-5-20250929  # use specific model
+  km ai analyze claude --output report.md       # save report to file";
 
-/// Claude Code skill installer for cm integration.
-/// Enables Claude Code to use cm for code analysis without an API key.
+/// Claude Code skill installer for km integration.
+/// Enables Claude Code to use km for code analysis without an API key.
 pub const AI_SKILL: &str = "\
-Install a Claude Code skill that enables Claude Code to use cm for code analysis.
+Install a Claude Code skill that enables Claude Code to use km for code analysis.
 
-The skill teaches Claude Code how to run cm subcommands and interpret
+The skill teaches Claude Code how to run km subcommands and interpret
 their JSON output to produce comprehensive code analysis reports.
 
 No API key is needed \u{2014} Claude Code itself acts as the LLM.
@@ -215,4 +215,4 @@ Supported providers:
   claude  \u{2014} installs a Claude Code skill
 
 Examples:
-  cm ai skill claude                    # install the skill";
+  km ai skill claude                    # install the skill";

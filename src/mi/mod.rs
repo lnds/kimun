@@ -1,7 +1,7 @@
 //! Maintainability Index computation (Visual Studio variant).
 //!
 //! Computes MI per file using the Visual Studio formula: no comment weight,
-//! normalized to 0–100 scale, clamped at 0. Invoked via `cm mi`.
+//! normalized to 0–100 scale, clamped at 0. Invoked via `km mi`.
 //!
 //! This module directly calls `hal::analyze_file` and `cycom::analyze_file`
 //! (pub(crate) functions). This creates tight coupling but avoids duplicating

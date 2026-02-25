@@ -1,7 +1,7 @@
 //! AI-powered code analysis module.
 //!
 //! Implements an agentic loop that calls an LLM provider (currently Claude)
-//! with access to `cm` tool definitions. The LLM decides which tools to
+//! with access to `km` tool definitions. The LLM decides which tools to
 //! run, receives the JSON output, and produces a comprehensive analysis.
 //!
 //! The loop iterates up to `MAX_ITERATIONS` turns, executing tool calls
@@ -11,11 +11,11 @@
 
 /// HTTP client and API types for the Claude Messages API.
 mod client;
-/// Tool executor: maps tool calls to `cm` subprocess invocations.
+/// Tool executor: maps tool calls to `km` subprocess invocations.
 mod executor;
-/// Tool definitions: JSON Schema descriptions of all 11 `cm` subcommands.
+/// Tool definitions: JSON Schema descriptions of all 11 `km` subcommands.
 pub(crate) mod schema;
-/// Claude Code skill installer (`cm ai skill claude`).
+/// Claude Code skill installer (`km ai skill claude`).
 pub mod skill;
 
 use client::{ApiRequest, ContentBlock, Message, MessageContent};
@@ -30,7 +30,7 @@ const MAX_TOKENS: u32 = 4096;
 const MAX_ITERATIONS: usize = 15;
 
 const SYSTEM_PROMPT: &str = "\
-You are a code analysis expert. You have access to the `cm` code metrics tool \
+You are a code analysis expert. You have access to the `km` code metrics tool \
 which can analyze a software repository across multiple dimensions: lines of code, \
 complexity, maintainability, duplication, hotspots, ownership, and temporal coupling.
 

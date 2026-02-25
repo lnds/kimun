@@ -12,11 +12,11 @@ cargo test <test_name>       # run a single test, e.g. cargo test haskell_arrow_
 cargo fmt                    # format code — always run before clippy
 cargo clippy                 # lint — must pass with zero warnings before committing
 cargo tarpaulin --out stdout # coverage report (currently ~92%)
-cargo run --bin cm -- loc    # run on current directory
-cargo run --bin cm -- loc src/  # run on specific path
+cargo run --bin km -- loc    # run on current directory
+cargo run --bin km -- loc src/  # run on specific path
 ```
 
-The binary is named `cm` (configured in `[[bin]]` in Cargo.toml). After `cargo install --path .` it installs as `cm`.
+The binary is named `km` (configured in `[[bin]]` in Cargo.toml). After `cargo install --path .` it installs as `km`.
 
 ## Architecture
 
@@ -60,7 +60,7 @@ Optional flags: `nested: true`, `sq: true` (single-quote strings), `tq: true` (t
 
 ### Module structure: `src/mi/`
 
-Maintainability Index (Visual Studio variant, 0–100 scale). Invoked via `cm mi`.
+Maintainability Index (Visual Studio variant, 0–100 scale). Invoked via `km mi`.
 
 - **`analyzer.rs`** — `MILevel` enum (Green/Yellow/Red), `MIMetrics` struct, `compute_mi()` with VS formula: `MAX(0, raw * 100/171)`.
 - **`report.rs`** — Table and JSON output formatters.
@@ -68,7 +68,7 @@ Maintainability Index (Visual Studio variant, 0–100 scale). Invoked via `cm mi
 
 ### Module structure: `src/miv/`
 
-Maintainability Index (verifysoft variant with comment weight). Invoked via `cm miv`.
+Maintainability Index (verifysoft variant with comment weight). Invoked via `km miv`.
 
 - **`analyzer.rs`** — `MILevel` enum (Good/Moderate/Difficult), `MIMetrics` struct, `compute_mi()` function implementing the verifysoft formula with radians conversion for comment percentage.
 - **`report.rs`** — Table and JSON output formatters (`FileMIMetrics`, `print_report`, `print_json`).
@@ -76,7 +76,7 @@ Maintainability Index (verifysoft variant with comment weight). Invoked via `cm 
 
 ### Module structure: `src/knowledge/`
 
-Knowledge maps (Thornhill, code ownership via git blame). Invoked via `cm knowledge`.
+Knowledge maps (Thornhill, code ownership via git blame). Invoked via `km knowledge`.
 
 - **`analyzer.rs`** — `RiskLevel` enum (Critical/High/Medium/Low), `FileOwnership` struct, `compute_ownership()` function that calculates primary owner, concentration, and knowledge loss risk.
 - **`report.rs`** — Table and JSON output formatters.
@@ -84,7 +84,7 @@ Knowledge maps (Thornhill, code ownership via git blame). Invoked via `cm knowle
 
 ### Module structure: `src/tc/`
 
-Temporal coupling analysis (Thornhill, files that change together). Invoked via `cm tc`.
+Temporal coupling analysis (Thornhill, files that change together). Invoked via `km tc`.
 
 - **`analyzer.rs`** — `CouplingLevel` enum (Strong/Moderate/Weak), `FileCoupling` struct, `compute_coupling()` function that pairs co-changing files, calculates strength = shared_commits / min(commits_a, commits_b), and classifies by threshold (0.5 strong, 0.3 moderate).
 - **`report.rs`** — Table and JSON output formatters.
@@ -92,7 +92,7 @@ Temporal coupling analysis (Thornhill, files that change together). Invoked via 
 
 ### Module structure: `src/score/`
 
-Overall code health score (A++ to F--). Invoked via `cm score`. Static metrics only (no git).
+Overall code health score (A++ to F--). Invoked via `km score`. Static metrics only (no git).
 
 - **`analyzer.rs`** — `Grade` enum (15 grades from A++ to F--), `DimensionScore`/`FileScore`/`ProjectScore` structs, `score_to_grade()`, `compute_project_score()`, and 6 normalization functions (`normalize_mi`, `normalize_complexity`, `normalize_duplication`, `normalize_indent`, `normalize_halstead`, `normalize_file_size`). Halstead normalization uses effort-per-LOC.
 - **`report.rs`** — Table and JSON output formatters.

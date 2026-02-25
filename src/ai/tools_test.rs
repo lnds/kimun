@@ -79,7 +79,7 @@ fn resolve_path_nonexistent_falls_back() {
 fn execute_tool_unknown_returns_error() {
     let project = PathBuf::from("/tmp/project");
     let input = json!({});
-    let result = execute_tool("cm_unknown", &input, &project);
+    let result = execute_tool("km_unknown", &input, &project);
     assert!(result.starts_with("Unknown tool:"));
 }
 

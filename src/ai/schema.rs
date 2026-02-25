@@ -1,6 +1,6 @@
 //! Tool schema definitions for the AI analysis module.
 //!
-//! Defines the 11 `cm` subcommands as Claude tool-use schemas in JSON Schema
+//! Defines the 11 `km` subcommands as Claude tool-use schemas in JSON Schema
 //! format. Each tool has a name, description, and an `input_schema` object
 //! with the shared `path` property plus any tool-specific parameters.
 //! Shared property builders (`path_prop`, `top_prop`, `since_prop`) avoid
@@ -42,47 +42,47 @@ fn tool(name: &str, desc: &str, extra_props: &[(&str, Value)]) -> Value {
     })
 }
 
-/// Return the list of all 11 `cm` tool definitions for the AI provider,
+/// Return the list of all 11 `km` tool definitions for the AI provider,
 /// each with name, description, and input JSON schema.
 pub fn tool_definitions() -> Vec<Value> {
     vec![
         tool(
-            "cm_loc",
+            "km_loc",
             "Count lines of code (blank, comment, code) by language. Returns per-language breakdown with totals.",
             &[],
         ),
         tool(
-            "cm_score",
+            "km_score",
             "Compute an overall code health score (A++ to F--) across 6 dimensions: maintainability, complexity, duplication, indentation, Halstead effort, and file size.",
             &[],
         ),
         tool(
-            "cm_hal",
+            "km_hal",
             "Analyze Halstead complexity metrics per file: volume, difficulty, effort, estimated bugs, and development time.",
             &[("top", top_prop())],
         ),
         tool(
-            "cm_cycom",
+            "km_cycom",
             "Analyze cyclomatic complexity per file: total, max, and average complexity with per-function breakdown.",
             &[("top", top_prop())],
         ),
         tool(
-            "cm_indent",
+            "km_indent",
             "Analyze indentation complexity per file: standard deviation and max depth of indentation.",
             &[],
         ),
         tool(
-            "cm_mi",
+            "km_mi",
             "Compute Maintainability Index per file (Visual Studio variant, 0-100 scale). Green (20-100), Yellow (10-19), Red (0-9).",
             &[("top", top_prop())],
         ),
         tool(
-            "cm_miv",
+            "km_miv",
             "Compute Maintainability Index per file (verifysoft variant, with comment weight). Good (85+), Moderate (65-84), Difficult (<65).",
             &[("top", top_prop())],
         ),
         tool(
-            "cm_dups",
+            "km_dups",
             "Detect duplicate code blocks across files. Shows duplicate percentage and group details.",
             &[(
                 "min_lines",
@@ -90,12 +90,12 @@ pub fn tool_definitions() -> Vec<Value> {
             )],
         ),
         tool(
-            "cm_hotspots",
+            "km_hotspots",
             "Find hotspots: files that change frequently AND have high complexity. Score = commits x complexity. Requires git repository.",
             &[("top", top_prop()), ("since", since_prop())],
         ),
         tool(
-            "cm_knowledge",
+            "km_knowledge",
             "Analyze code ownership patterns via git blame (knowledge maps). Shows primary owner, concentration, and knowledge loss risk per file.",
             &[
                 ("top", top_prop()),
@@ -106,7 +106,7 @@ pub fn tool_definitions() -> Vec<Value> {
             ],
         ),
         tool(
-            "cm_tc",
+            "km_tc",
             "Analyze temporal coupling: files that change together in commits. Shows coupling strength between file pairs. Requires git repository.",
             &[
                 (

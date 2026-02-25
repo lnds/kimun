@@ -1,4 +1,4 @@
-/// CLI argument definitions for the `cm` command.
+/// CLI argument definitions for the `km` command.
 ///
 /// Defines all subcommands and their arguments using the `clap` derive macros.
 /// Long help text is stored in `cli_help.rs` to keep this file focused on structure.
@@ -10,7 +10,7 @@ use crate::cli_help;
 
 /// Top-level CLI parser with a single subcommand selector.
 #[derive(Parser)]
-#[command(name = "cm", version, about = "Code metrics tools")]
+#[command(name = "km", version, about = "Kimün — code metrics tools")]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
@@ -269,7 +269,7 @@ pub enum AiCommands {
         output: Option<PathBuf>,
     },
 
-    /// Install a Claude Code skill for cm
+    /// Install a Claude Code skill for km
     #[command(long_about = cli_help::AI_SKILL)]
     Skill {
         /// Provider for the skill (e.g. claude)

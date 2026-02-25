@@ -1,7 +1,7 @@
 //! Maintainability Index computation (verifysoft variant with comment weight).
 //!
 //! Combines Halstead Volume, Cyclomatic Complexity, LOC, and comment ratio
-//! into a single maintainability score per file. Invoked via `cm miv`.
+//! into a single maintainability score per file. Invoked via `km miv`.
 //!
 //! This module directly calls `hal::analyze_file` and `cycom::analyze_file`
 //! (pub(crate) functions). This creates tight coupling but avoids duplicating

@@ -1,4 +1,4 @@
-//! Markdown report formatter for the combined `cm report` command.
+//! Markdown report formatter for the combined `km report` command.
 //!
 //! Generates a single markdown document with seven sections: lines of code
 //! (language breakdown), duplication (project-wide stats), indentation
