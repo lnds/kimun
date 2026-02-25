@@ -1,6 +1,6 @@
 [package]
 name = "kimun"
-version = "0.13.1"
+version = "0.13.2"
 edition = "2024"
 description = "Code metrics tool — health score, complexity, duplication, hotspots, ownership"
 license = "MIT"
@@ -20,6 +20,9 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 git2 = "0.19"
 reqwest = { version = "0.12", features = ["json", "blocking"] }
+
+[features]
+vendored-openssl = ["git2/vendored-openssl"]
 
 [dev-dependencies]
 tempfile = "3"
