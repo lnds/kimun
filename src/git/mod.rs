@@ -9,10 +9,11 @@
 //! walk and git's path namespace.
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
+use std::fs;
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 
-use git2::{BlameOptions, DiffOptions, Repository, Sort};
+use git2::{BlameOptions, DiffOptions, ObjectType, Repository, Sort, Tree};
 
 /// Wrapper around a `git2::Repository` with its resolved root path.
 pub struct GitRepo {
@@ -225,6 +226,45 @@ impl GitRepo {
         } else {
             prefix.join(rel)
         }
+    }
+
+    /// Extract the file tree at a given git ref (e.g. "HEAD", "main~3") into
+    /// a destination directory. Writes blobs as files and recurses into subtrees.
+    /// Skips submodules and symlinks.
+    pub fn extract_tree_to_dir(&self, refspec: &str, dest: &Path) -> Result<(), Box<dyn Error>> {
+        let obj = self
+            .repo
+            .revparse_single(refspec)
+            .map_err(|e| format!("cannot resolve ref '{refspec}': {e}"))?;
+        let commit = obj
+            .peel_to_commit()
+            .map_err(|e| format!("'{refspec}' is not a commit: {e}"))?;
+        let tree = commit.tree()?;
+        self.write_tree_recursive(&tree, dest)
+    }
+
+    /// Recursively write a git tree to a filesystem directory.
+    fn write_tree_recursive(&self, tree: &Tree, dest: &Path) -> Result<(), Box<dyn Error>> {
+        for entry in tree.iter() {
+            let name = entry
+                .name()
+                .ok_or_else(|| format!("non-UTF-8 entry in tree: {:?}", entry.id()))?;
+            let path = dest.join(name);
+
+            match entry.kind() {
+                Some(ObjectType::Blob) => {
+                    let blob = self.repo.find_blob(entry.id())?;
+                    fs::write(&path, blob.content())?;
+                }
+                Some(ObjectType::Tree) => {
+                    let subtree = self.repo.find_tree(entry.id())?;
+                    fs::create_dir_all(&path)?;
+                    self.write_tree_recursive(&subtree, &path)?;
+                }
+                _ => {} // skip submodules, symlinks, etc.
+            }
+        }
+        Ok(())
     }
 
     /// Diff a commit against its parent to get the list of changed file paths.

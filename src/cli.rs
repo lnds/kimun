@@ -229,6 +229,9 @@ pub enum Commands {
     /// Compute an overall code health score for the project (A++ to F--)
     #[command(long_about = cli_help::SCORE)]
     Score {
+        #[command(subcommand)]
+        subcommand: Option<ScoreCommands>,
+
         #[command(flatten)]
         common: CommonArgs,
 
@@ -245,6 +248,37 @@ pub enum Commands {
     Ai {
         #[command(subcommand)]
         command: AiCommands,
+    },
+}
+
+/// Score subcommands (diff).
+#[derive(Subcommand)]
+pub enum ScoreCommands {
+    /// Compare the current code health score against a git ref
+    #[command(long_about = cli_help::SCORE_DIFF)]
+    Diff {
+        /// Git ref to compare against (default: HEAD)
+        #[arg(long, value_name = "REF", default_value = "HEAD")]
+        git_ref: String,
+
+        /// Directory to analyze (default: current directory)
+        path: Option<PathBuf>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Include test files and directories in analysis (excluded by default)
+        #[arg(long)]
+        include_tests: bool,
+
+        /// Number of worst files to show in "needs attention" (default: 10)
+        #[arg(long, default_value = "10")]
+        bottom: usize,
+
+        /// Minimum lines for a duplicate block (default: 6)
+        #[arg(long, default_value = "6")]
+        min_lines: usize,
     },
 }
 

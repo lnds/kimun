@@ -52,7 +52,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 
-use cli::{AiCommands, Cli, Commands};
+use cli::{AiCommands, Cli, Commands, ScoreCommands};
 
 /// Resolve an optional path to a default of "." and run an analysis
 /// command, printing errors to stderr and exiting with code 1 on failure.
@@ -204,11 +204,26 @@ fn main() {
             )
         }),
         Commands::Score {
+            subcommand: None,
             common,
             bottom,
             min_lines,
         } => run_command(common.path, |t| {
             score::run(t, common.json, common.include_tests, bottom, min_lines)
+        }),
+        Commands::Score {
+            subcommand:
+                Some(ScoreCommands::Diff {
+                    git_ref,
+                    path,
+                    json,
+                    include_tests,
+                    bottom,
+                    min_lines,
+                }),
+            ..
+        } => run_command(path, |t| {
+            score::run_diff(t, &git_ref, json, include_tests, bottom, min_lines)
         }),
         Commands::Ai { command } => match command {
             AiCommands::Analyze {

@@ -12,6 +12,10 @@
 pub(crate) mod analyzer;
 /// Single-file metric extraction (reads once, computes all dimensions).
 mod collector;
+/// Diff data types and computation for comparing two ProjectScore snapshots.
+mod diff;
+/// Table and JSON formatters for score diff output.
+mod diff_report;
 /// Piecewise linear normalization curves mapping raw metrics to 0–100.
 mod normalize;
 /// Table and JSON output formatters for the score report.
@@ -23,6 +27,7 @@ use std::error::Error;
 use std::path::Path;
 
 use crate::dups;
+use crate::git::GitRepo;
 use crate::walk;
 
 use analyzer::{FileScore, ProjectScore, compute_project_score, score_to_grade};
@@ -54,6 +59,46 @@ pub fn run(
         print_json(&score, target.as_deref())?;
     } else {
         print_report(&score, bottom, target.as_deref());
+    }
+
+    Ok(())
+}
+
+/// Entry point for `km score diff`: compare current working tree against a git ref.
+pub fn run_diff(
+    path: &Path,
+    git_ref: &str,
+    json: bool,
+    include_tests: bool,
+    bottom: usize,
+    min_lines: usize,
+) -> Result<(), Box<dyn Error>> {
+    // Score the current working tree.
+    let after = compute_score(path, include_tests, bottom, min_lines)?;
+
+    // Open the git repo and extract the ref tree into a temp directory.
+    let repo = GitRepo::open(path)?;
+    let tmpdir = tempfile::tempdir()?;
+    repo.extract_tree_to_dir(git_ref, tmpdir.path())?;
+
+    // Handle subdirectory case: if the user pointed at a subdir of the repo,
+    // analyze the corresponding subdir inside the extracted tree.
+    let (_, prefix) = repo.walk_prefix(path)?;
+    let tmp_path = if prefix.as_os_str().is_empty() {
+        tmpdir.path().to_path_buf()
+    } else {
+        tmpdir.path().join(&prefix)
+    };
+
+    // Score the ref tree.
+    let before = compute_score(&tmp_path, include_tests, bottom, min_lines)?;
+
+    let score_diff = diff::compute_diff(git_ref, &before, &after);
+
+    if json {
+        diff_report::print_json(&score_diff)?;
+    } else {
+        diff_report::print_report(&score_diff);
     }
 
     Ok(())

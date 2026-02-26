@@ -183,6 +183,33 @@ Examples:
   km score --bottom 20           # show 20 worst files
   km score --include-tests       # include test files";
 
+/// Score diff: compare current code health against a git ref.
+/// Shows per-dimension deltas with colored output.
+pub const SCORE_DIFF: &str = "\
+Compare the current code health score against a git ref.
+
+Extracts the file tree at the given ref into a temporary directory,
+computes the score for both snapshots, and displays a delta table
+showing how each dimension changed.
+
+Useful for checking how uncommitted changes (vs HEAD) or recent
+commits (vs HEAD~N, a branch, or a tag) impact code quality.
+
+The output shows:
+  - Overall score and grade change
+  - Files and LOC change
+  - Per-dimension before/after with colored delta
+    (green = improvement, red = regression)
+
+Requires a git repository.
+
+Examples:
+  km score diff                          # compare vs HEAD
+  km score diff --git-ref HEAD~1         # compare vs previous commit
+  km score diff --git-ref main           # compare vs main branch
+  km score diff --json                   # machine-readable output
+  km score diff src/                     # compare a subdirectory";
+
 /// AI-powered repository analysis using an external LLM provider.
 /// The model runs km tools and produces a comprehensive report.
 pub const AI_ANALYZE: &str = "\

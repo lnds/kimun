@@ -82,3 +82,37 @@ jobs:
           files: |
             km-*
             checksums-sha256.txt
+
+  update-homebrew:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Download source tarball and compute sha256
+        id: sha
+        run: |
+          curl -sL "https://github.com/${{ github.repository }}/archive/refs/tags/${GITHUB_REF_NAME}.tar.gz" -o source.tar.gz
+          sha=$(sha256sum source.tar.gz | cut -d' ' -f1)
+          echo "sha256=${sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Update Homebrew formula
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/lnds/homebrew-kimun.git" tap
+          cd tap
+
+          VERSION="${{ steps.version.outputs.version }}"
+          SHA256="${{ steps.sha.outputs.sha256 }}"
+
+          sed -i "s|url \".*\"|url \"https://github.com/${{ github.repository }}/archive/refs/tags/${GITHUB_REF_NAME}.tar.gz\"|" Formula/kimun.rb
+          sed -i "s|sha256 \".*\"|sha256 \"${SHA256}\"|" Formula/kimun.rb
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/kimun.rb
+          git commit -m "bump kimun to ${VERSION}"
+          git push
