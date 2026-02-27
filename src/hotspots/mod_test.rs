@@ -1,4 +1,5 @@
 use super::*;
+use crate::walk::{ExcludeFilter, WalkConfig};
 use std::fs;
 use std::path::Path as StdPath;
 use std::time::SystemTime;
@@ -136,7 +137,9 @@ fn run_on_non_git_dir() {
     let dir = tempfile::tempdir().unwrap();
     let sub = dir.path().join("not_a_repo");
     fs::create_dir_all(&sub).unwrap();
-    let err = run(&sub, false, false, 20, "score", None, "indent").unwrap_err();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(&sub, false, &filter);
+    let err = run(&cfg, false, 20, "score", None, "indent").unwrap_err();
     assert!(
         err.to_string().contains("not a git repository"),
         "should mention not a git repository, got: {err}"
@@ -145,7 +148,9 @@ fn run_on_non_git_dir() {
 
 #[test]
 fn run_json_output_indent() {
-    let result = run(StdPath::new("."), true, false, 5, "score", None, "indent");
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(StdPath::new("."), false, &filter);
+    let result = run(&cfg, true, 5, "score", None, "indent");
     assert!(
         result.is_ok(),
         "hotspots (indent) should succeed on a git repo"
@@ -154,7 +159,9 @@ fn run_json_output_indent() {
 
 #[test]
 fn run_json_output_cycom() {
-    let result = run(StdPath::new("."), true, false, 5, "score", None, "cycom");
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(StdPath::new("."), false, &filter);
+    let result = run(&cfg, true, 5, "score", None, "cycom");
     assert!(
         result.is_ok(),
         "hotspots (cycom) should succeed on a git repo"
@@ -213,7 +220,9 @@ fn integration_indent_scores() {
         "update main",
     );
 
-    let result = run(dir.path(), false, false, 20, "score", None, "indent");
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run(&cfg, false, 20, "score", None, "indent");
     assert!(result.is_ok(), "indent hotspots should succeed");
 }
 
@@ -229,7 +238,9 @@ fn integration_cycom_scores() {
         "add main",
     );
 
-    let result = run(dir.path(), false, false, 20, "score", None, "cycom");
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run(&cfg, false, 20, "score", None, "cycom");
     assert!(result.is_ok(), "cycom hotspots should succeed");
 }
 
@@ -252,7 +263,9 @@ fn integration_sort_by_commits() {
         "c3",
     );
 
-    let result = run(dir.path(), false, false, 20, "commits", None, "indent");
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run(&cfg, false, 20, "commits", None, "indent");
     assert!(result.is_ok(), "sort by commits should work");
 }
 
@@ -266,14 +279,18 @@ fn integration_since_filters_commits() {
     );
 
     // Commits at epoch 2023 → --since 1d from 2026 excludes all
-    let result = run(dir.path(), false, false, 20, "score", Some("1d"), "indent");
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run(&cfg, false, 20, "score", Some("1d"), "indent");
     assert!(result.is_ok(), "since filter should not crash");
 }
 
 #[test]
 fn integration_empty_repo() {
     let (dir, _repo) = create_test_repo();
-    let result = run(dir.path(), false, false, 20, "score", None, "indent");
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run(&cfg, false, 20, "score", None, "indent");
     // Empty repo: file_frequencies fails, which is ok
     assert!(
         result.is_ok() || result.is_err(),
@@ -292,6 +309,8 @@ fn integration_json_structure() {
         )],
         "add main",
     );
-    let result = run(dir.path(), true, false, 20, "score", None, "indent");
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run(&cfg, true, 20, "score", None, "indent");
     assert!(result.is_ok(), "JSON output should succeed");
 }

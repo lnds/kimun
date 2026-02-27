@@ -11,22 +11,16 @@ pub(crate) mod report;
 
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
-use std::path::Path;
 use std::time::Instant;
 
 use crate::util::hash_file;
-use crate::walk;
+use crate::walk::WalkConfig;
 use counter::{FileStats, count_lines};
 use report::{LanguageReport, VerboseStats, print_json, print_report};
 
 /// Walk source files, deduplicate by content hash, count lines per
 /// language, and print a summary table (or JSON when `json` is true).
-pub fn run(
-    path: &Path,
-    verbose: bool,
-    json: bool,
-    include_tests: bool,
-) -> Result<(), Box<dyn Error>> {
+pub fn run(cfg: &WalkConfig<'_>, verbose: bool, json: bool) -> Result<(), Box<dyn Error>> {
     let start = Instant::now();
     let mut stats_by_lang: HashMap<&'static str, (usize, FileStats)> = HashMap::new();
     let mut seen_hashes: HashSet<u64> = HashSet::new();
@@ -35,7 +29,7 @@ pub fn run(
     let mut duplicate_files: usize = 0;
     let mut binary_files: usize = 0;
 
-    for (file_path, spec) in walk::source_files(path, !include_tests) {
+    for (file_path, spec) in cfg.source_files() {
         total_files += 1;
 
         // Skip duplicate files (same content)

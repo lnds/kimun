@@ -17,7 +17,7 @@ use crate::loc::counter::LineKind;
 use crate::loc::language::LanguageSpec;
 use crate::report_helpers;
 use crate::util::read_and_classify;
-use crate::walk;
+use crate::walk::WalkConfig;
 use analyzer::compute;
 use report::{FileHalsteadMetrics, print_json, print_report};
 use string_mask::multi_line_string_mask;
@@ -94,14 +94,12 @@ pub(crate) fn analyze_file(
 /// Walk source files, compute Halstead metrics for each, sort by the
 /// chosen metric (effort, volume, or bugs), and print results.
 pub fn run(
-    path: &Path,
+    cfg: &WalkConfig<'_>,
     json: bool,
-    include_tests: bool,
     top: usize,
     sort_by: &str,
 ) -> Result<(), Box<dyn Error>> {
-    let exclude_tests = !include_tests;
-    let mut results = walk::collect_analysis(path, exclude_tests, analyze_file);
+    let mut results = cfg.collect_analysis(analyze_file);
 
     // Sort by chosen metric descending
     match sort_by {
