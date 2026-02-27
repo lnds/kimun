@@ -22,7 +22,7 @@ use crate::loc::counter::LineKind;
 use crate::loc::language::LanguageSpec;
 use crate::report_helpers;
 use crate::util::read_and_classify;
-use crate::walk;
+use crate::walk::WalkConfig;
 use analyzer::compute_mi;
 use report::{FileMIMetrics, print_json, print_report};
 
@@ -58,14 +58,12 @@ fn analyze_file(path: &Path, spec: &LanguageSpec) -> Result<Option<FileMIMetrics
 }
 
 pub fn run(
-    path: &Path,
+    cfg: &WalkConfig<'_>,
     json: bool,
-    include_tests: bool,
     top: usize,
     sort_by: &str,
 ) -> Result<(), Box<dyn Error>> {
-    let exclude_tests = !include_tests;
-    let mut results = walk::collect_analysis(path, exclude_tests, analyze_file);
+    let mut results = cfg.collect_analysis(analyze_file);
 
     // Sort: mi ascending (worst first), volume/complexity/loc descending
     match sort_by {

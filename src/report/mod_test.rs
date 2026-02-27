@@ -1,16 +1,21 @@
 use super::*;
+use crate::walk::{ExcludeFilter, WalkConfig};
 use std::fs;
 
 #[test]
 fn run_on_empty_dir() {
     let dir = tempfile::tempdir().unwrap();
-    run(dir.path(), false, false, 20, 6).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, false, 20, 6).unwrap();
 }
 
 #[test]
 fn run_on_empty_dir_json() {
     let dir = tempfile::tempdir().unwrap();
-    run(dir.path(), true, false, 20, 6).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, true, 20, 6).unwrap();
 }
 
 #[test]
@@ -21,7 +26,9 @@ fn run_on_rust_file() {
         "fn main() {\n    let x = 1;\n    let y = x + 2;\n    println!(\"{}\", y);\n}\n",
     )
     .unwrap();
-    run(dir.path(), false, false, 20, 6).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, false, 20, 6).unwrap();
 }
 
 #[test]
@@ -32,14 +39,18 @@ fn run_json_output() {
         "fn main() {\n    let x = 1;\n    let y = x + 2;\n    println!(\"{}\", y);\n}\n",
     )
     .unwrap();
-    run(dir.path(), true, false, 20, 6).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, true, 20, 6).unwrap();
 }
 
 #[test]
 fn run_skips_binary() {
     let dir = tempfile::tempdir().unwrap();
     fs::write(dir.path().join("data.c"), b"hello\x00world").unwrap();
-    run(dir.path(), false, false, 20, 6).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, false, 20, 6).unwrap();
 }
 
 // --- Tests that verify actual report structure ---
@@ -47,7 +58,9 @@ fn run_skips_binary() {
 #[test]
 fn build_report_empty_dir() {
     let dir = tempfile::tempdir().unwrap();
-    let report = build_report(dir.path(), false, 20, 6).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let report = build_report(&cfg, 20, 6).unwrap();
     assert!(report.loc.is_empty());
     assert_eq!(report.duplication.total_code_lines, 0);
     assert_eq!(report.indent.total_count, 0);
@@ -62,7 +75,9 @@ fn build_report_counts_loc() {
         "// comment\nfn main() {\n    let x = 1;\n}\n",
     )
     .unwrap();
-    let report = build_report(dir.path(), false, 20, 6).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let report = build_report(&cfg, 20, 6).unwrap();
 
     assert_eq!(report.loc.len(), 1);
     assert_eq!(report.loc[0].name, "Rust");
@@ -77,7 +92,9 @@ fn build_report_dedup_for_loc() {
     let content = "fn foo() {\n    let x = 1;\n}\n";
     fs::write(dir.path().join("a.rs"), content).unwrap();
     fs::write(dir.path().join("b.rs"), content).unwrap();
-    let report = build_report(dir.path(), false, 20, 6).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let report = build_report(&cfg, 20, 6).unwrap();
 
     // Duplicate files deduplicated — consistent with km loc
     assert_eq!(report.loc[0].files, 1);
@@ -93,7 +110,9 @@ fn build_report_detects_duplicates() {
     let code_b = format!("fn process_b() {{\n{}}}\n", shared);
     fs::write(dir.path().join("a.rs"), &code_a).unwrap();
     fs::write(dir.path().join("b.rs"), &code_b).unwrap();
-    let report = build_report(dir.path(), false, 20, 6).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let report = build_report(&cfg, 20, 6).unwrap();
 
     // Shared block detected across both files
     assert_eq!(report.duplication.duplicate_groups, 1);
@@ -118,7 +137,9 @@ fn build_report_top_truncates() {
         "fn c() {\n    let x = 1;\n    let y = 2;\n    let z = 3;\n}\n",
     )
     .unwrap();
-    let report = build_report(dir.path(), false, 2, 6).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let report = build_report(&cfg, 2, 6).unwrap();
 
     // 3 files analyzed, but only top 2 shown
     assert_eq!(report.indent.total_count, 3);
@@ -139,7 +160,9 @@ fn build_report_full_shows_all() {
         "fn c() {\n    let x = 1;\n    let y = 2;\n    let z = 3;\n}\n",
     )
     .unwrap();
-    let report = build_report(dir.path(), false, usize::MAX, 6).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let report = build_report(&cfg, usize::MAX, 6).unwrap();
 
     // all 3 files shown when top is usize::MAX (--full mode)
     assert_eq!(report.indent.total_count, 3);
@@ -155,7 +178,9 @@ fn build_report_excludes_tests() {
         "fn test() {\n    assert!(true);\n}\n",
     )
     .unwrap();
-    let report = build_report(dir.path(), false, 20, 6).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let report = build_report(&cfg, 20, 6).unwrap();
 
     // Test file in tests/ dir should be excluded
     assert!(report.loc.is_empty());
@@ -170,7 +195,9 @@ fn build_report_includes_tests_with_flag() {
         "fn test() {\n    assert!(true);\n}\n",
     )
     .unwrap();
-    let report = build_report(dir.path(), true, 20, 6).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), true, &filter);
+    let report = build_report(&cfg, 20, 6).unwrap();
 
     assert!(!report.loc.is_empty());
 }
@@ -183,7 +210,9 @@ fn build_report_mi_computed() {
         "fn main() {\n    let x = 1;\n    let y = x + 2;\n    println!(\"{}\", y);\n}\n",
     )
     .unwrap();
-    let report = build_report(dir.path(), false, 20, 6).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let report = build_report(&cfg, 20, 6).unwrap();
 
     assert_eq!(report.mi_visual_studio.entries.len(), 1);
     assert_eq!(report.mi_verifysoft.entries.len(), 1);
@@ -207,7 +236,9 @@ fn build_report_json_structure() {
         "// comment\nfn main() {\n    let x = 1;\n}\n",
     )
     .unwrap();
-    let report = build_report(dir.path(), false, 20, 6).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let report = build_report(&cfg, 20, 6).unwrap();
 
     // Serialize to JSON and parse back to verify structure
     let json_str = serde_json::to_string(&report).unwrap();
@@ -238,10 +269,13 @@ fn build_report_min_lines_affects_dups() {
     fs::write(dir.path().join("b.rs"), &code_b).unwrap();
 
     // min_lines=3: block of 5 lines >= 3, so duplicates detected
-    let report_low = build_report(dir.path(), false, 20, 3).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg_low = WalkConfig::new(dir.path(), false, &filter);
+    let report_low = build_report(&cfg_low, 20, 3).unwrap();
     assert!(report_low.duplication.duplicate_groups > 0);
 
     // min_lines=100: block of 5 lines < 100, so no duplicates detected
-    let report_high = build_report(dir.path(), false, 20, 100).unwrap();
+    let cfg_high = WalkConfig::new(dir.path(), false, &filter);
+    let report_high = build_report(&cfg_high, 20, 100).unwrap();
     assert_eq!(report_high.duplication.duplicate_groups, 0);
 }

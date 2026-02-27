@@ -13,7 +13,7 @@ use std::path::Path;
 
 use crate::git::GitRepo;
 use crate::util::parse_since;
-use crate::walk;
+use crate::walk::{self, WalkConfig};
 
 use crate::report_helpers;
 use analyzer::{FileOwnership, compute_ownership};
@@ -49,16 +49,15 @@ fn is_generated(path: &Path) -> bool {
 /// Run knowledge map analysis: walk source files, blame each one,
 /// compute ownership concentration and risk, then output results.
 pub fn run(
-    path: &Path,
+    cfg: &WalkConfig<'_>,
     json: bool,
-    include_tests: bool,
     top: usize,
     sort_by: &str,
     since: Option<&str>,
     risk_only: bool,
 ) -> Result<(), Box<dyn Error>> {
-    let git_repo =
-        GitRepo::open(path).map_err(|e| format!("not a git repository (or any parent): {e}"))?;
+    let git_repo = GitRepo::open(cfg.path)
+        .map_err(|e| format!("not a git repository (or any parent): {e}"))?;
 
     let since_ts = since.map(parse_since).transpose()?;
 
@@ -69,12 +68,11 @@ pub fn run(
         std::collections::HashSet::new()
     };
 
-    let (walk_root, walk_prefix) = git_repo.walk_prefix(path)?;
+    let (walk_root, walk_prefix) = git_repo.walk_prefix(cfg.path)?;
 
-    let exclude_tests = !include_tests;
     let mut results: Vec<FileOwnership> = Vec::new();
 
-    for (file_path, spec) in walk::source_files(&walk_root, exclude_tests) {
+    for (file_path, spec) in walk::source_files(&walk_root, cfg.exclude_tests(), cfg.filter) {
         if is_generated(&file_path) {
             continue;
         }

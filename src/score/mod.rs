@@ -24,11 +24,10 @@ mod report;
 mod scoring;
 
 use std::error::Error;
-use std::path::Path;
 
 use crate::dups;
 use crate::git::GitRepo;
-use crate::walk;
+use crate::walk::WalkConfig;
 
 use analyzer::{FileScore, ProjectScore, compute_project_score, score_to_grade};
 use collector::{FileMetrics, analyze_single_file};
@@ -44,16 +43,19 @@ pub(crate) use scoring::{
 /// Entry point: compute and display the project health score.
 /// Outputs either a formatted table or JSON depending on the `json` flag.
 pub fn run(
-    path: &Path,
+    cfg: &WalkConfig<'_>,
     json: bool,
-    include_tests: bool,
     bottom: usize,
     min_lines: usize,
 ) -> Result<(), Box<dyn Error>> {
-    let score = compute_score(path, include_tests, bottom, min_lines)?;
+    let score = compute_score(cfg, bottom, min_lines)?;
 
     // Show target in header when user specified an explicit path (not ".")
-    let target = path.to_str().filter(|s| *s != ".").map(|s| s.to_string());
+    let target = cfg
+        .path
+        .to_str()
+        .filter(|s| *s != ".")
+        .map(|s| s.to_string());
 
     if json {
         print_json(&score, target.as_deref())?;
@@ -66,24 +68,23 @@ pub fn run(
 
 /// Entry point for `km score diff`: compare current working tree against a git ref.
 pub fn run_diff(
-    path: &Path,
+    cfg: &WalkConfig<'_>,
     git_ref: &str,
     json: bool,
-    include_tests: bool,
     bottom: usize,
     min_lines: usize,
 ) -> Result<(), Box<dyn Error>> {
     // Score the current working tree.
-    let after = compute_score(path, include_tests, bottom, min_lines)?;
+    let after = compute_score(cfg, bottom, min_lines)?;
 
     // Open the git repo and extract the ref tree into a temp directory.
-    let repo = GitRepo::open(path)?;
+    let repo = GitRepo::open(cfg.path)?;
     let tmpdir = tempfile::tempdir()?;
     repo.extract_tree_to_dir(git_ref, tmpdir.path())?;
 
     // Handle subdirectory case: if the user pointed at a subdir of the repo,
     // analyze the corresponding subdir inside the extracted tree.
-    let (_, prefix) = repo.walk_prefix(path)?;
+    let (_, prefix) = repo.walk_prefix(cfg.path)?;
     let tmp_path = if prefix.as_os_str().is_empty() {
         tmpdir.path().to_path_buf()
     } else {
@@ -91,7 +92,8 @@ pub fn run_diff(
     };
 
     // Score the ref tree.
-    let before = compute_score(&tmp_path, include_tests, bottom, min_lines)?;
+    let ref_cfg = WalkConfig::new(&tmp_path, cfg.include_tests, cfg.filter);
+    let before = compute_score(&ref_cfg, bottom, min_lines)?;
 
     let score_diff = diff::compute_diff(git_ref, &before, &after);
 
@@ -107,17 +109,16 @@ pub fn run_diff(
 /// Walk all source files, compute per-file and project-level metrics,
 /// normalize each dimension, and produce the final `ProjectScore`.
 fn compute_score(
-    path: &Path,
-    include_tests: bool,
+    cfg: &WalkConfig<'_>,
     bottom: usize,
     min_lines: usize,
 ) -> Result<ProjectScore, Box<dyn Error>> {
-    let exclude_tests = !include_tests;
+    let exclude_tests = cfg.exclude_tests();
     let mut file_metrics: Vec<FileMetrics> = Vec::new();
     let mut dup_files: Vec<dups::detector::NormalizedFile> = Vec::new();
     let mut total_code_lines: usize = 0;
 
-    for (file_path, spec) in walk::source_files(path, exclude_tests) {
+    for (file_path, spec) in cfg.source_files() {
         if let Some(result) = analyze_single_file(&file_path, spec, exclude_tests) {
             total_code_lines += result.normalized_count;
             dup_files.push(result.dup_file);

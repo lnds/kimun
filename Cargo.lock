@@ -767,6 +767,7 @@ version = "0.13.3"
 dependencies = [
  "clap",
  "git2",
+ "globset",
  "ignore",
  "reqwest",
  "serde",

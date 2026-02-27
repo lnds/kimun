@@ -12,7 +12,7 @@ use std::path::Path;
 
 use crate::loc::language::LanguageSpec;
 use crate::util::read_and_classify;
-use crate::walk;
+use crate::walk::WalkConfig;
 use analyzer::analyze;
 use report::{FileIndentMetrics, print_json, print_report};
 
@@ -47,9 +47,8 @@ pub(crate) fn analyze_file(
 
 /// Walk source files, compute indentation metrics, sort by stddev
 /// descending, and print as a table or JSON.
-pub fn run(path: &Path, json: bool, include_tests: bool) -> Result<(), Box<dyn Error>> {
-    let exclude_tests = !include_tests;
-    let mut results = walk::collect_analysis(path, exclude_tests, analyze_file);
+pub fn run(cfg: &WalkConfig<'_>, json: bool) -> Result<(), Box<dyn Error>> {
+    let mut results = cfg.collect_analysis(analyze_file);
 
     // Sort by stddev descending
     results.sort_by(|a, b| b.stddev.total_cmp(&a.stddev));
