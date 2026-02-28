@@ -1,24 +1,22 @@
 /// Per-file metric collection for the score module.
 ///
 /// Reads and classifies each source file, computes per-file metrics
-/// (MI, cyclomatic, indent, Halstead), normalizes content for
+/// (cognitive complexity, indent, Halstead), normalizes content for
 /// duplication detection, and bundles results for project-level scoring.
 use std::path::Path;
 
-use crate::cycom;
+use crate::cogcom;
 use crate::dups;
 use crate::hal;
 use crate::indent;
 use crate::loc::counter::LineKind;
-use crate::miv;
 use crate::util::{find_test_block_start, read_and_classify};
 
 /// Per-file raw metrics collected during the walk.
 pub struct FileMetrics {
     pub path: std::path::PathBuf,
     pub code_lines: usize,
-    pub mi_score: Option<f64>,
-    pub max_complexity: Option<usize>,
+    pub max_cognitive: Option<usize>,
     pub indent_stddev: Option<f64>,
     pub halstead_effort: Option<f64>,
 }
@@ -48,26 +46,17 @@ pub fn analyze_single_file(
     };
 
     let code_lines = kinds.iter().filter(|k| **k == LineKind::Code).count();
-    let comment_lines = kinds.iter().filter(|k| **k == LineKind::Comment).count();
 
     let indent_stddev = indent::analyzer::analyze(&lines, &kinds, 4).map(|m| m.stddev);
 
     let hal_metrics = hal::analyze_content(&lines, &kinds, spec);
     let halstead_effort = hal_metrics.as_ref().map(|h| h.effort);
-    let volume = hal_metrics.map(|h| h.volume);
 
-    let cycom_result = cycom::analyze_content(&lines, &kinds, spec);
-    let max_complexity = cycom_result.as_ref().map(|c| c.max_complexity);
-    let total_complexity = cycom_result.map(|c| c.total_complexity);
-
-    let mi_score = if let (Some(vol), Some(compl)) = (volume, total_complexity) {
-        miv::analyzer::compute_mi(vol, compl, code_lines, comment_lines).map(|m| m.mi_score)
-    } else {
-        None
-    };
+    let cogcom_result = cogcom::analyze_content(&lines, &kinds, spec);
+    let max_cognitive = cogcom_result.as_ref().map(|c| c.max_complexity);
 
     // Skip non-code files (Markdown, TOML, JSON, etc.)
-    if mi_score.is_none() && max_complexity.is_none() && halstead_effort.is_none() {
+    if max_cognitive.is_none() && halstead_effort.is_none() {
         return None;
     }
 
@@ -83,8 +72,7 @@ pub fn analyze_single_file(
         metrics: FileMetrics {
             path: file_path.to_path_buf(),
             code_lines,
-            mi_score,
-            max_complexity,
+            max_cognitive,
             indent_stddev,
             halstead_effort,
         },

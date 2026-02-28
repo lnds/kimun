@@ -8,32 +8,24 @@
 use super::analyzer::{DimensionScore, FileScore, score_to_grade};
 use super::collector::FileMetrics;
 use super::normalize::{
-    normalize_complexity, normalize_duplication, normalize_file_size, normalize_halstead,
-    normalize_indent, normalize_mi,
+    normalize_cognitive, normalize_duplication, normalize_file_size, normalize_halstead,
+    normalize_indent,
 };
 
 /// Dimension weights (must sum to 1.0).
-/// MI gets the most weight (30%) because it's the most comprehensive metric
-/// (combines Halstead volume, cyclomatic complexity, LOC, and comment ratio).
-/// Halstead Effort (15%) uses per-LOC normalization to avoid penalizing large files.
-///
-/// **Known overlap:** MI's formula includes a `0.23 * G` cyclomatic term, so
-/// cyclomatic complexity is partially counted twice: once inside MI (30%) and
-/// once as its own dimension (15%). This is intentional — MI captures the
-/// *interaction* between metrics (how complexity combines with volume and LOC),
-/// while the cyclomatic dimension highlights complexity *independently* of
-/// file size.
-pub const W_MI: f64 = 0.30;
-pub const W_CYCOM: f64 = 0.15;
+/// Cognitive Complexity gets the most weight (30%) as the primary measure
+/// of code understandability. Halstead Effort (20%) captures implementation
+/// complexity. Duplication (20%) and File Size (15%) capture structural health.
+/// Indentation (15%) captures nesting depth independently.
+pub const W_COGCOM: f64 = 0.30;
 pub const W_DUP: f64 = 0.20;
 pub const W_INDENT: f64 = 0.15;
-pub const W_HAL: f64 = 0.15;
-pub const W_SIZE: f64 = 0.05;
+pub const W_HAL: f64 = 0.20;
+pub const W_SIZE: f64 = 0.15;
 
 /// All per-file dimension weights (excludes duplication, which is project-level).
-pub const FILE_WEIGHTS: [(f64, &str); 5] = [
-    (W_MI, "MI"),
-    (W_CYCOM, "Cycom"),
+pub const FILE_WEIGHTS: [(f64, &str); 4] = [
+    (W_COGCOM, "Cogcom"),
     (W_INDENT, "Indent"),
     (W_HAL, "Halstead"),
     (W_SIZE, "Size"),
@@ -42,16 +34,15 @@ pub const FILE_WEIGHTS: [(f64, &str); 5] = [
 /// Default score for missing dimensions (neutral).
 pub const MISSING_DIM_SCORE: f64 = 50.0;
 
-/// Build the six dimension scores from per-file metrics, using LOC-weighted
+/// Build the five dimension scores from per-file metrics, using LOC-weighted
 /// means for per-file dimensions and project-level normalization for duplication.
 pub fn build_dimensions(
     file_metrics: &[FileMetrics],
     total_loc: usize,
     dup_percent: f64,
 ) -> Vec<DimensionScore> {
-    let mi_dim = weighted_mean(file_metrics, total_loc, |f| f.mi_score.map(normalize_mi));
-    let cycom_dim = weighted_mean(file_metrics, total_loc, |f| {
-        f.max_complexity.map(normalize_complexity)
+    let cogcom_dim = weighted_mean(file_metrics, total_loc, |f| {
+        f.max_cognitive.map(normalize_cognitive)
     });
     let indent_dim = weighted_mean(file_metrics, total_loc, |f| {
         f.indent_stddev.map(normalize_indent)
@@ -73,8 +64,7 @@ pub fn build_dimensions(
     };
 
     vec![
-        dim("Maintainability Index", W_MI, mi_dim),
-        dim("Cyclomatic Complexity", W_CYCOM, cycom_dim),
+        dim("Cognitive Complexity", W_COGCOM, cogcom_dim),
         dim("Duplication", W_DUP, dup_dim),
         dim("Indentation Complexity", W_INDENT, indent_dim),
         dim("Halstead Effort", W_HAL, hal_dim),
@@ -112,16 +102,10 @@ pub fn score_file(f: &FileMetrics) -> FileScore {
     let mut issues: Vec<String> = Vec::new();
     let file_weight_sum: f64 = FILE_WEIGHTS.iter().map(|(w, _)| w).sum();
 
-    let mi_s = score_dim(
-        f.mi_score,
-        normalize_mi,
-        |v| format!("MI: {v:.0}"),
-        &mut issues,
-    );
-    let cycom_s = score_dim(
-        f.max_complexity,
-        normalize_complexity,
-        |v| format!("Complexity: {v}"),
+    let cogcom_s = score_dim(
+        f.max_cognitive,
+        normalize_cognitive,
+        |v| format!("Cognitive: {v}"),
         &mut issues,
     );
     let indent_s = score_dim(
@@ -142,8 +126,7 @@ pub fn score_file(f: &FileMetrics) -> FileScore {
         issues.push(format!("Size: {} LOC", f.code_lines));
     }
 
-    let weighted_sum =
-        mi_s * W_MI + cycom_s * W_CYCOM + indent_s * W_INDENT + hal_s * W_HAL + size_s * W_SIZE;
+    let weighted_sum = cogcom_s * W_COGCOM + indent_s * W_INDENT + hal_s * W_HAL + size_s * W_SIZE;
     let file_score = weighted_sum / file_weight_sum;
 
     FileScore {

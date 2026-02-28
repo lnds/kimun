@@ -1,110 +1,57 @@
 use super::*;
 
 #[test]
-fn test_normalize_mi_pathological() {
-    let s = normalize_mi(-100.0);
-    assert!((s - 0.0).abs() < 0.01, "MI=-100 should score 0, got {s}");
+fn test_normalize_cognitive_0() {
+    assert!((normalize_cognitive(0) - 100.0).abs() < 0.01);
 }
 
 #[test]
-fn test_normalize_mi_zero() {
-    let s = normalize_mi(0.0);
-    assert!((s - 30.0).abs() < 0.01, "MI=0 should score 30, got {s}");
+fn test_normalize_cognitive_4() {
+    assert!((normalize_cognitive(4) - 100.0).abs() < 0.01);
 }
 
 #[test]
-fn test_normalize_mi_very_difficult() {
-    let s = normalize_mi(20.0);
-    assert!((s - 40.0).abs() < 0.01, "MI=20 should score 40, got {s}");
+fn test_normalize_cognitive_9() {
+    let s = normalize_cognitive(9);
+    assert!((s - 85.0).abs() < 0.01, "cognitive=9 -> 85, got {s}");
 }
 
 #[test]
-fn test_normalize_mi_difficult() {
-    let s = normalize_mi(40.0);
-    assert!((s - 50.0).abs() < 0.01, "MI=40 should score 50, got {s}");
+fn test_normalize_cognitive_14() {
+    let s = normalize_cognitive(14);
+    assert!((s - 65.0).abs() < 0.01, "cognitive=14 -> 65, got {s}");
 }
 
 #[test]
-fn test_normalize_mi_moderate_boundary() {
-    let s = normalize_mi(65.0);
-    assert!((s - 70.0).abs() < 0.01, "MI=65 should score 70, got {s}");
+fn test_normalize_cognitive_24() {
+    let s = normalize_cognitive(24);
+    assert!((s - 35.0).abs() < 0.01, "cognitive=24 -> 35, got {s}");
 }
 
 #[test]
-fn test_normalize_mi_good_boundary() {
-    let s = normalize_mi(85.0);
-    assert!((s - 90.0).abs() < 0.01, "MI=85 should score 90, got {s}");
+fn test_normalize_cognitive_50() {
+    let s = normalize_cognitive(50);
+    assert!((s - 5.0).abs() < 0.01, "cognitive=50 -> 5, got {s}");
 }
 
 #[test]
-fn test_normalize_mi_max() {
-    let s = normalize_mi(171.0);
-    assert!((s - 100.0).abs() < 0.01, "MI=171 should score 100, got {s}");
+fn test_normalize_cognitive_100() {
+    assert!((normalize_cognitive(100) - 0.0).abs() < 0.01);
 }
 
 #[test]
-fn test_normalize_mi_below_min() {
-    let s = normalize_mi(-200.0);
-    assert!((s - 0.0).abs() < 0.01, "MI=-200 should clamp to 0, got {s}");
-}
-
-#[test]
-fn test_normalize_mi_above_max() {
-    let s = normalize_mi(200.0);
-    assert!(
-        (s - 100.0).abs() < 0.01,
-        "MI=200 should clamp to 100, got {s}"
-    );
-}
-
-#[test]
-fn test_normalize_mi_monotonic() {
-    let values = [
-        -100.0, -50.0, 0.0, 20.0, 40.0, 65.0, 75.0, 85.0, 120.0, 171.0,
-    ];
+fn test_normalize_cognitive_monotonic() {
+    let values = [0, 2, 4, 7, 9, 12, 14, 20, 24, 40, 50, 75, 100];
     for window in values.windows(2) {
-        let lo = normalize_mi(window[0]);
-        let hi = normalize_mi(window[1]);
+        let lo = normalize_cognitive(window[0]);
+        let hi = normalize_cognitive(window[1]);
         assert!(
-            hi >= lo,
-            "normalize_mi should be monotonic: MI={} -> {lo}, MI={} -> {hi}",
+            lo >= hi,
+            "normalize_cognitive should be monotonically decreasing: cogcom={} -> {lo}, cogcom={} -> {hi}",
             window[0],
             window[1]
         );
     }
-}
-
-#[test]
-fn test_normalize_complexity_1() {
-    assert!((normalize_complexity(1) - 100.0).abs() < 0.01);
-}
-
-#[test]
-fn test_normalize_complexity_5() {
-    assert!((normalize_complexity(5) - 100.0).abs() < 0.01);
-}
-
-#[test]
-fn test_normalize_complexity_10() {
-    let s = normalize_complexity(10);
-    assert!((s - 80.0).abs() < 0.01, "complexity=10 -> 80, got {s}");
-}
-
-#[test]
-fn test_normalize_complexity_20() {
-    let s = normalize_complexity(20);
-    assert!((s - 50.0).abs() < 0.01, "complexity=20 -> 50, got {s}");
-}
-
-#[test]
-fn test_normalize_complexity_50() {
-    let s = normalize_complexity(50);
-    assert!((s - 5.0).abs() < 0.01, "complexity=50 -> 5, got {s}");
-}
-
-#[test]
-fn test_normalize_complexity_100() {
-    assert!((normalize_complexity(100) - 0.0).abs() < 0.01);
 }
 
 #[test]

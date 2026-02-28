@@ -1,16 +1,15 @@
 //! Piecewise linear normalization curves for the code health score.
 //!
-//! Each quality dimension (MI, complexity, duplication, indent, Halstead,
-//! file size) uses a curve of breakpoints to map raw metric values to a
-//! 0–100 score. Breakpoints are calibrated based on industry thresholds
-//! and empirical testing across diverse codebases. Values between
-//! breakpoints are linearly interpolated; values beyond the endpoints
-//! are clamped.
+//! Each quality dimension (cognitive complexity, duplication, indent,
+//! Halstead, file size) uses a curve of breakpoints to map raw metric
+//! values to a 0–100 score. Breakpoints are calibrated based on industry
+//! thresholds and empirical testing. Values between breakpoints are
+//! linearly interpolated; values beyond the endpoints are clamped.
 
 /// A single point on a piecewise linear curve, mapping an `input` metric
 /// value to an output `score` (0–100).
 struct Breakpoint {
-    /// Raw metric value (e.g. MI score, complexity count, dup percentage).
+    /// Raw metric value (e.g. complexity count, dup percentage).
     input: f64,
     /// Corresponding normalized score on the 0–100 scale.
     score: f64,
@@ -38,55 +37,25 @@ fn piecewise(value: f64, curve: &[Breakpoint]) -> f64 {
     curve.last().unwrap().score
 }
 
-/// Maintainability Index curve: raw MI (0–171) mapped to 0–100.
-/// Ranges: <0 → 0–30 (very poor), 0–40 → 30–50, 40–65 → 50–70,
-/// 65–85 → 70–90 (good), 85–171 → 90–100 (excellent).
-const MI_CURVE: &[Breakpoint] = &[
+/// Cognitive complexity curve: max per-function cognitive complexity to 0–100.
+/// Based on SonarQube threshold (15) and Clippy threshold (25).
+/// ≤4 → 100 (simple), 9 → 85, 14 → 65, 24 → 35, 50 → 5, ≥100 → 0.
+const COGNITIVE_CURVE: &[Breakpoint] = &[
     Breakpoint {
-        input: -100.0,
-        score: 0.0,
-    },
-    Breakpoint {
-        input: 0.0,
-        score: 30.0,
-    },
-    Breakpoint {
-        input: 40.0,
-        score: 50.0,
-    },
-    Breakpoint {
-        input: 65.0,
-        score: 70.0,
-    },
-    Breakpoint {
-        input: 85.0,
-        score: 90.0,
-    },
-    Breakpoint {
-        input: 171.0,
-        score: 100.0,
-    },
-];
-
-/// Cyclomatic complexity curve: max per-function complexity mapped to 0–100.
-/// Simple (≤5) → 100, moderate (6–10) → 80–90, complex (10–20) → 50–80,
-/// highly complex (20–50) → 5–50, extreme (50–100) → 5–0.
-const COMPLEXITY_CURVE: &[Breakpoint] = &[
-    Breakpoint {
-        input: 5.0,
+        input: 4.0,
         score: 100.0,
     },
     Breakpoint {
-        input: 6.0,
-        score: 90.0,
+        input: 9.0,
+        score: 85.0,
     },
     Breakpoint {
-        input: 10.0,
-        score: 80.0,
+        input: 14.0,
+        score: 65.0,
     },
     Breakpoint {
-        input: 20.0,
-        score: 50.0,
+        input: 24.0,
+        score: 35.0,
     },
     Breakpoint {
         input: 50.0,
@@ -190,14 +159,9 @@ const FILE_SIZE_CURVE: &[Breakpoint] = &[
     },
 ];
 
-/// Normalize a raw Maintainability Index value to a 0–100 score.
-pub fn normalize_mi(mi_score: f64) -> f64 {
-    piecewise(mi_score, MI_CURVE)
-}
-
-/// Normalize max cyclomatic complexity to a 0–100 score (lower complexity = higher score).
-pub fn normalize_complexity(max_complexity: usize) -> f64 {
-    piecewise(max_complexity as f64, COMPLEXITY_CURVE)
+/// Normalize max cognitive complexity to a 0–100 score (lower complexity = higher score).
+pub fn normalize_cognitive(max_complexity: usize) -> f64 {
+    piecewise(max_complexity as f64, COGNITIVE_CURVE)
 }
 
 /// Normalize duplication percentage to a 0–100 score (lower duplication = higher score).

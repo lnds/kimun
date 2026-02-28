@@ -3,6 +3,42 @@
 //! Extracted from `cli.rs` to keep the argument definitions concise
 //! and reduce the Halstead token count of the main CLI module.
 
+/// Cognitive complexity: measures difficulty of understanding code.
+/// Based on SonarSource specification (2017), used in SonarQube and CodeClimate.
+pub const COGCOM: &str = "\
+Analyze cognitive complexity per file and per function.
+
+Cognitive complexity (SonarSource, 2017) measures how difficult code is to
+understand, unlike cyclomatic complexity which counts execution paths.
+
+Increments:
+  Structural keywords (if, for, while, match, catch):
+    +1 + current nesting depth (penalizes deep nesting)
+  Hybrid keywords (else if, elif):
+    +1 only (linear continuation, no nesting penalty)
+  Fundamental keywords (else):
+    +1 only, increases nesting for its body
+  Boolean operator sequences:
+    +1 per operator type change (a && b && c = 1, a && b || c = 2)
+
+Does NOT count: try, finally, return, break/continue, ternary (?)
+
+Levels:
+  0-4     simple       -- easy to understand
+  5-9     moderate     -- acceptable complexity
+  10-14   complex      -- consider simplifying
+  15-24   very complex -- should be refactored
+  25+     extreme      -- critical refactoring needed
+
+SonarQube default threshold: 15. Clippy default: 25.
+
+Examples:
+  km cogcom                           # cognitive complexity
+  km cogcom --per-function            # per-function breakdown
+  km cogcom --min-complexity 10       # only complex functions
+  km cogcom --sort-by max             # sort by worst function
+  km cogcom --json                    # machine-readable output";
+
 /// Halstead complexity: operator/operand analysis per file.
 /// Shows volume, difficulty, effort, estimated bugs, and development time.
 pub const HAL: &str = "\
@@ -75,7 +111,8 @@ Based on Adam Thornhill's method (\"Your Code as a Crime Scene\"):
   Score = commits \u{00d7} complexity
 
 By default, complexity is measured by total indentation (Thornhill's original
-method). Use --complexity cycom for cyclomatic complexity instead.
+method). Use --complexity cycom for cyclomatic complexity, or --complexity
+cogcom for cognitive complexity (SonarSource) instead.
 
 Files with high scores are both change-prone and complex \u{2014} they concentrate
 risk and are the highest-value refactoring targets.
@@ -84,11 +121,12 @@ Requires a git repository. Use --since to limit the analysis window
 (approximations: 1 month = 30 days, 1 year = 365 days).
 
 Examples:
-  km hotspots                    # indentation complexity (default)
-  km hotspots --complexity cycom # cyclomatic complexity
-  km hotspots --since 6m         # last 6 months
+  km hotspots                     # indentation complexity (default)
+  km hotspots --complexity cycom  # cyclomatic complexity
+  km hotspots --complexity cogcom # cognitive complexity
+  km hotspots --since 6m          # last 6 months
   km hotspots --since 1y --sort-by commits
-  km hotspots --json             # machine-readable output";
+  km hotspots --json              # machine-readable output";
 
 /// Knowledge maps: code ownership analysis via git blame.
 /// Identifies bus factor risk and knowledge concentration per file.
@@ -144,22 +182,21 @@ Examples:
   km tc --min-strength 0.5       # only strong coupling
   km tc --json                   # machine-readable output";
 
-/// Overall code health score: weighted aggregate of 6 quality dimensions.
+/// Overall code health score: weighted aggregate of 5 quality dimensions.
 /// Produces a letter grade from A++ (exceptional) to F-- (severe issues).
 pub const SCORE: &str = "\
 Compute an overall code health score for the project.
 
-Analyzes 6 dimensions of code quality and produces a letter grade
+Analyzes 5 dimensions of code quality and produces a letter grade
 from A++ (exceptional) to F-- (severe issues). Each dimension is
 scored 0-100 and weighted to produce a final project score.
 
 Dimensions and weights:
-  Maintainability Index   30%  (verifysoft MI, normalized to 0-100)
-  Cyclomatic Complexity   20%  (max complexity per file)
-  Duplication             15%  (project-wide duplicate code %)
+  Cognitive Complexity    30%  (SonarSource method, penalizes nesting)
+  Duplication             20%  (project-wide duplicate code %)
   Indentation Complexity  15%  (stddev of indentation depth)
-  Halstead Effort         15%  (mental effort per LOC)
-  File Size                5%  (optimal 50-300 LOC)
+  Halstead Effort         20%  (mental effort per LOC)
+  File Size               15%  (optimal 50-300 LOC)
 
 Non-code files (Markdown, TOML, JSON, etc.) are automatically excluded.
 Inline test blocks (#[cfg(test)]) are excluded from duplication analysis.

@@ -90,14 +90,14 @@ mod tests {
             total_loc: loc,
             dimensions: vec![
                 DimensionScore {
-                    name: "Maintainability Index",
+                    name: "Cognitive Complexity",
                     weight: 0.30,
                     score: dim_score,
                     grade: dim_grade,
                 },
                 DimensionScore {
-                    name: "Cyclomatic Complexity",
-                    weight: 0.15,
+                    name: "Duplication",
+                    weight: 0.20,
                     score: dim_score,
                     grade: dim_grade,
                 },

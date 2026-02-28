@@ -11,13 +11,13 @@ fn sample_score() -> ProjectScore {
         total_loc: 8432,
         dimensions: vec![
             DimensionScore {
-                name: "Maintainability Index",
-                weight: 0.25,
+                name: "Cognitive Complexity",
+                weight: 0.30,
                 score: 88.2,
                 grade: Grade::AMinus,
             },
             DimensionScore {
-                name: "Cyclomatic Complexity",
+                name: "Duplication",
                 weight: 0.20,
                 score: 82.4,
                 grade: Grade::BPlus,
@@ -28,7 +28,7 @@ fn sample_score() -> ProjectScore {
             score: 54.2,
             grade: Grade::F,
             loc: 500,
-            issues: vec!["Complexity: 87".to_string(), "MI: 12".to_string()],
+            issues: vec!["Cognitive: 87".to_string()],
         }],
     }
 }

@@ -1,6 +1,6 @@
 //! Overall code health score computation.
 //!
-//! Walks source files once, computes per-file metrics (MI, cyclomatic,
+//! Walks source files once, computes per-file metrics (cognitive complexity,
 //! indent, Halstead, file size), detects project-level duplication,
 //! normalizes each dimension to 0–100 via piecewise linear curves, and
 //! produces a LOC-weighted aggregate score with letter grade (A++ to F--).
@@ -38,7 +38,7 @@ use scoring::{build_dimensions, build_empty_dimensions, score_file};
 // Re-export scoring internals for tests.
 #[cfg(test)]
 pub(crate) use scoring::{
-    FILE_WEIGHTS, MISSING_DIM_SCORE, W_CYCOM, W_DUP, W_HAL, W_INDENT, W_MI, W_SIZE, weighted_mean,
+    FILE_WEIGHTS, W_COGCOM, W_DUP, W_HAL, W_INDENT, W_SIZE, weighted_mean,
 };
 
 /// Entry point: compute and display the project health score.

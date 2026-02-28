@@ -37,6 +37,10 @@ fn compute_complexity(
             Some(c) => Ok(Some(c.total_complexity)),
             None => Ok(None),
         },
+        "cogcom" => match crate::cogcom::analyze_file(file_path, spec)? {
+            Some(c) => Ok(Some(c.total_complexity)),
+            None => Ok(None),
+        },
         _ => match crate::indent::analyze_file(file_path, spec)? {
             Some(m) => Ok(Some(m.total_indent)),
             None => Ok(None),

@@ -105,6 +105,29 @@ pub enum Commands {
         sort_by: String,
     },
 
+    /// Analyze cognitive complexity per file and per function (SonarSource method)
+    #[command(long_about = cli_help::COGCOM)]
+    Cogcom {
+        #[command(flatten)]
+        common: CommonArgs,
+
+        /// Minimum max-complexity to include a file (default: 1)
+        #[arg(long, default_value = "1")]
+        min_complexity: usize,
+
+        /// Show only the top N files (default: 20)
+        #[arg(long, default_value = "20")]
+        top: usize,
+
+        /// Show per-function breakdown
+        #[arg(long)]
+        per_function: bool,
+
+        /// Sort by metric: total, max, or avg (default: total)
+        #[arg(long, default_value = "total", value_parser = ["total", "max", "avg"])]
+        sort_by: String,
+    },
+
     /// Compute Maintainability Index per file (Visual Studio variant, 0-100 scale)
     #[command(long_about = cli_help::MI)]
     Mi {
@@ -171,8 +194,8 @@ pub enum Commands {
         #[arg(long)]
         since: Option<String>,
 
-        /// Complexity metric: indent (default, Thornhill) or cycom (cyclomatic)
-        #[arg(long, default_value = "indent", value_parser = ["indent", "cycom"])]
+        /// Complexity metric: indent (default, Thornhill), cycom (cyclomatic), or cogcom (cognitive)
+        #[arg(long, default_value = "indent", value_parser = ["indent", "cycom", "cogcom"])]
         complexity: String,
     },
 

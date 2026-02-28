@@ -4,7 +4,7 @@ use std::fs;
 
 #[test]
 fn weights_sum_to_one() {
-    let total = W_MI + W_CYCOM + W_DUP + W_INDENT + W_HAL + W_SIZE;
+    let total = W_COGCOM + W_DUP + W_INDENT + W_HAL + W_SIZE;
     assert!(
         (total - 1.0).abs() < 1e-10,
         "dimension weights must sum to 1.0, got {total}"
@@ -15,7 +15,7 @@ fn weights_sum_to_one() {
 fn file_weights_match_constants() {
     // Ensure FILE_WEIGHTS stays in sync with the individual constants
     let file_sum: f64 = FILE_WEIGHTS.iter().map(|(w, _)| w).sum();
-    let expected = W_MI + W_CYCOM + W_INDENT + W_HAL + W_SIZE;
+    let expected = W_COGCOM + W_INDENT + W_HAL + W_SIZE;
     assert!(
         (file_sum - expected).abs() < 1e-10,
         "FILE_WEIGHTS sum should match non-dup constants"
@@ -27,9 +27,7 @@ fn weighted_mean_all_none() {
     let files = vec![FileMetrics {
         path: "a.rs".into(),
         code_lines: 100,
-
-        mi_score: None,
-        max_complexity: None,
+        max_cognitive: None,
         indent_stddev: None,
         halstead_effort: None,
     }];
@@ -49,15 +47,13 @@ fn weighted_mean_single_file() {
     let files = vec![FileMetrics {
         path: "a.rs".into(),
         code_lines: 100,
-
-        mi_score: Some(85.0),
-        max_complexity: Some(5),
+        max_cognitive: Some(5),
         indent_stddev: Some(1.0),
         halstead_effort: Some(1000.0),
     }];
-    let result = weighted_mean(&files, 100, |f| f.mi_score);
+    let result = weighted_mean(&files, 100, |f| f.max_cognitive.map(|c| c as f64));
     assert!(
-        (result - 85.0).abs() < 0.01,
+        (result - 5.0).abs() < 0.01,
         "single file → same value, got {result}"
     );
 }
@@ -68,23 +64,26 @@ fn weighted_mean_loc_weighted() {
         FileMetrics {
             path: "small.rs".into(),
             code_lines: 10,
-
-            mi_score: Some(100.0),
-            max_complexity: None,
+            max_cognitive: None,
             indent_stddev: None,
             halstead_effort: None,
         },
         FileMetrics {
             path: "big.rs".into(),
             code_lines: 90,
-
-            mi_score: Some(50.0),
-            max_complexity: None,
+            max_cognitive: None,
             indent_stddev: None,
             halstead_effort: None,
         },
     ];
-    let result = weighted_mean(&files, 100, |f| f.mi_score);
+    // Using a simple constant score fn
+    let result = weighted_mean(&files, 100, |f| {
+        if f.code_lines == 10 {
+            Some(100.0)
+        } else {
+            Some(50.0)
+        }
+    });
     // (100*10 + 50*90) / 100 = (1000 + 4500) / 100 = 55
     assert!(
         (result - 55.0).abs() < 0.01,
@@ -114,7 +113,7 @@ fn run_on_rust_file() {
     );
     assert_eq!(score.files_analyzed, 1);
     assert!(score.total_loc > 0);
-    assert_eq!(score.dimensions.len(), 6);
+    assert_eq!(score.dimensions.len(), 5);
 }
 
 #[test]

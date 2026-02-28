@@ -15,6 +15,8 @@ mod ai;
 mod cli;
 /// Long help text constants extracted from CLI definitions.
 mod cli_help;
+/// Cognitive complexity analysis (SonarSource, 2017).
+mod cogcom;
 /// Cyclomatic complexity analysis (per-file and per-function).
 mod cycom;
 /// Duplicate code detection using sliding-window fingerprinting.
@@ -39,7 +41,7 @@ mod miv;
 mod report;
 /// Shared report formatting utilities (separators, path widths, JSON output).
 mod report_helpers;
-/// Overall code health score (A++ to F--, 6 weighted dimensions).
+/// Overall code health score (A++ to F--, 5 weighted dimensions).
 mod score;
 /// Temporal coupling analysis (co-changing files in git history).
 mod tc;
@@ -110,6 +112,23 @@ fn main() {
             sort_by,
         } => run_command(common.path, |t| {
             cycom::run(
+                t,
+                common.json,
+                common.include_tests,
+                min_complexity,
+                top,
+                per_function,
+                &sort_by,
+            )
+        }),
+        Commands::Cogcom {
+            common,
+            min_complexity,
+            top,
+            per_function,
+            sort_by,
+        } => run_command(common.path, |t| {
+            cogcom::run(
                 t,
                 common.json,
                 common.include_tests,
