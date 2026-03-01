@@ -137,6 +137,20 @@ pub fn find_test_block_start(lines: &[String]) -> usize {
     lines.len()
 }
 
+/// Count leading whitespace as spaces (tabs count as 4 spaces).
+/// Used by complexity analyzers to determine indentation level.
+pub fn indent_level(line: &str) -> usize {
+    let mut spaces = 0;
+    for ch in line.chars() {
+        match ch {
+            ' ' => spaces += 1,
+            '\t' => spaces += 4,
+            _ => break,
+        }
+    }
+    spaces
+}
+
 /// Parse a duration string like "6m", "1y", "30d" into a Unix timestamp
 /// representing that far back from now.
 ///

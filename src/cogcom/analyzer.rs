@@ -284,17 +284,7 @@ fn count_indent_scoped(func_lines: &[(usize, &str)], markers: &CognitiveMarkers)
 }
 
 /// Count indentation in spaces (tabs = 4 spaces).
-fn indent_spaces(line: &str) -> usize {
-    let mut spaces = 0;
-    for ch in line.chars() {
-        match ch {
-            ' ' => spaces += 1,
-            '\t' => spaces += 4,
-            _ => break,
-        }
-    }
-    spaces
-}
+use crate::util::indent_level as indent_spaces;
 
 /// Classification result for a single line.
 #[derive(Debug, Clone, Copy, PartialEq)]

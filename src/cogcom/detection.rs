@@ -101,17 +101,7 @@ fn find_function_body<'a>(
 }
 
 /// Count the indentation level of a line in spaces (tabs count as 4).
-fn indent_level(line: &str) -> usize {
-    let mut spaces = 0;
-    for ch in line.chars() {
-        match ch {
-            ' ' => spaces += 1,
-            '\t' => spaces += 4,
-            _ => break,
-        }
-    }
-    spaces
-}
+use crate::util::indent_level;
 
 /// Detect function boundaries and compute per-function cognitive complexity.
 pub fn detect_functions(
