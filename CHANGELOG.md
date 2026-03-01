@@ -1,3 +1,13 @@
+## 0.14.0 (2026-03-01)
+
+### Feat
+
+- add `--model legacy` flag to `km score` for backward compatibility
+- add cognitive complexity (SonarSource 2017), replace MI+cyclomatic in score
+- add `km score diff` and auto-update homebrew on release
+
+## v0.13.3 (2026-02-25)
+
 ## 0.12.3 (2026-02-19)
 
 ### Refactor

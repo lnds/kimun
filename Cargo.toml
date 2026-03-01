@@ -1,6 +1,6 @@
 [package]
 name = "kimun"
-version = "0.13.3"
+version = "0.14.0"
 edition = "2024"
 description = "Code metrics tool — health score, complexity, duplication, hotspots, ownership"
 license = "MIT"
