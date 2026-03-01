@@ -32,8 +32,21 @@ Language breakdown: files, blank lines, comment lines, code lines.
 ### Code Health Score
 ```bash
 km score [PATH] --json
+km score [PATH] --json --model legacy
 ```
-Overall grade (A++ to F--) across 6 dimensions: maintainability, complexity, duplication, indentation, Halstead effort, file size.
+Overall grade (A++ to F--). Default model (cogcom): 5 dimensions — cognitive complexity, duplication, indentation, Halstead effort, file size. Legacy model (--model legacy): 6 dimensions — MI, cyclomatic complexity, duplication, indentation, Halstead effort, file size.
+
+### Score Diff (requires git)
+```bash
+km score diff [PATH] --json --git-ref HEAD~1
+```
+Compare current code health score against a git ref. Shows per-dimension deltas.
+
+### Cognitive Complexity
+```bash
+km cogcom [PATH] --json --top 20
+```
+SonarSource method (2017). Measures how difficult code is to understand, penalizing deep nesting.
 
 ### Cyclomatic Complexity
 ```bash
@@ -87,10 +100,11 @@ Files that change together in commits — hidden dependencies.
 
 1. Start with `km score` for the overall health grade
 2. Run `km loc` for project size and language breakdown
-3. Use `km cycom` and `km miv` to find the most complex/unmaintainable files
+3. Use `km cogcom`, `km cycom` and `km miv` to find the most complex/unmaintainable files
 4. Run `km hotspots` to find high-risk change-prone files
 5. Check `km dups` for code duplication opportunities
 6. Optionally run `km knowledge` and `km tc` for team/architecture insights
+7. Use `km score diff --git-ref HEAD~N` to track score changes over time
 
 ## Output Format
 
