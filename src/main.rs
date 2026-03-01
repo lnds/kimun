@@ -227,8 +227,16 @@ fn main() {
             common,
             bottom,
             min_lines,
+            model,
         } => run_command(common.path, |t| {
-            score::run(t, common.json, common.include_tests, bottom, min_lines)
+            score::run(
+                t,
+                common.json,
+                common.include_tests,
+                bottom,
+                min_lines,
+                &model,
+            )
         }),
         Commands::Score {
             subcommand:
@@ -239,10 +247,11 @@ fn main() {
                     include_tests,
                     bottom,
                     min_lines,
+                    model,
                 }),
             ..
         } => run_command(path, |t| {
-            score::run_diff(t, &git_ref, json, include_tests, bottom, min_lines)
+            score::run_diff(t, &git_ref, json, include_tests, bottom, min_lines, &model)
         }),
         Commands::Ai { command } => match command {
             AiCommands::Analyze {

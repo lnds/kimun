@@ -188,6 +188,72 @@ pub fn normalize_file_size(code_lines: usize) -> f64 {
     piecewise(code_lines as f64, FILE_SIZE_CURVE)
 }
 
+// --- Legacy model curves (v0.13: MI + Cyclomatic) ---
+
+/// Maintainability Index curve (legacy model): MI score (0–100+) to 0–100.
+/// 100→100 (excellent), 75→90, 50→60, 25→20, 0→0 (unmaintainable).
+const MI_CURVE: &[Breakpoint] = &[
+    Breakpoint {
+        input: 0.0,
+        score: 0.0,
+    },
+    Breakpoint {
+        input: 25.0,
+        score: 20.0,
+    },
+    Breakpoint {
+        input: 50.0,
+        score: 60.0,
+    },
+    Breakpoint {
+        input: 75.0,
+        score: 90.0,
+    },
+    Breakpoint {
+        input: 100.0,
+        score: 100.0,
+    },
+];
+
+/// Cyclomatic complexity curve (legacy model): max per-function complexity to 0–100.
+/// ≤5→100, 10→85, 15→65, 25→35, 50→5, ≥100→0.
+const COMPLEXITY_CURVE: &[Breakpoint] = &[
+    Breakpoint {
+        input: 5.0,
+        score: 100.0,
+    },
+    Breakpoint {
+        input: 10.0,
+        score: 85.0,
+    },
+    Breakpoint {
+        input: 15.0,
+        score: 65.0,
+    },
+    Breakpoint {
+        input: 25.0,
+        score: 35.0,
+    },
+    Breakpoint {
+        input: 50.0,
+        score: 5.0,
+    },
+    Breakpoint {
+        input: 100.0,
+        score: 0.0,
+    },
+];
+
+/// Normalize Maintainability Index to a 0–100 score (legacy model).
+pub fn normalize_mi(mi_score: f64) -> f64 {
+    piecewise(mi_score, MI_CURVE)
+}
+
+/// Normalize max cyclomatic complexity to a 0–100 score (legacy model).
+pub fn normalize_complexity(max_complexity: usize) -> f64 {
+    piecewise(max_complexity as f64, COMPLEXITY_CURVE)
+}
+
 #[cfg(test)]
 #[path = "normalize_test.rs"]
 mod tests;

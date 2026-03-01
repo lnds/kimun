@@ -146,8 +146,15 @@ pub struct ProjectScore {
     pub needs_attention: Vec<FileScore>,
 }
 
-/// Weighted sum of dimension scores.
+/// Weighted sum of dimension scores. Weights must sum to 1.0 when non-empty.
 pub fn compute_project_score(dimensions: &[DimensionScore]) -> f64 {
+    if !dimensions.is_empty() {
+        let weight_sum: f64 = dimensions.iter().map(|d| d.weight).sum();
+        debug_assert!(
+            (weight_sum - 1.0).abs() < 1e-9,
+            "dimension weights must sum to 1.0, got {weight_sum}"
+        );
+    }
     dimensions.iter().map(|d| d.score * d.weight).sum()
 }
 

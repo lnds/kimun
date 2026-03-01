@@ -182,21 +182,29 @@ Examples:
   km tc --min-strength 0.5       # only strong coupling
   km tc --json                   # machine-readable output";
 
-/// Overall code health score: weighted aggregate of 5 quality dimensions.
+/// Overall code health score: weighted aggregate of quality dimensions.
 /// Produces a letter grade from A++ (exceptional) to F-- (severe issues).
 pub const SCORE: &str = "\
 Compute an overall code health score for the project.
 
-Analyzes 5 dimensions of code quality and produces a letter grade
+Analyzes multiple dimensions of code quality and produces a letter grade
 from A++ (exceptional) to F-- (severe issues). Each dimension is
 scored 0-100 and weighted to produce a final project score.
 
-Dimensions and weights:
+Default model (cogcom, v0.14+) — 5 dimensions:
   Cognitive Complexity    30%  (SonarSource method, penalizes nesting)
   Duplication             20%  (project-wide duplicate code %)
   Indentation Complexity  15%  (stddev of indentation depth)
   Halstead Effort         20%  (mental effort per LOC)
   File Size               15%  (optimal 50-300 LOC)
+
+Legacy model (--model legacy, v0.13) — 6 dimensions:
+  Maintainability Index   30%  (verifysoft MI with comment weight)
+  Cyclomatic Complexity   20%  (max per-function decision points)
+  Duplication             15%  (project-wide duplicate code %)
+  Indentation Complexity  15%  (stddev of indentation depth)
+  Halstead Effort         15%  (mental effort per LOC)
+  File Size                5%  (optimal 50-300 LOC)
 
 Non-code files (Markdown, TOML, JSON, etc.) are automatically excluded.
 Inline test blocks (#[cfg(test)]) are excluded from duplication analysis.
@@ -216,6 +224,7 @@ Uses only static code metrics (no git history required).
 Examples:
   km score                       # score current directory
   km score src/                  # score a subdirectory
+  km score --model legacy        # use v0.13 scoring model
   km score --json                # machine-readable output
   km score --bottom 20           # show 20 worst files
   km score --include-tests       # include test files";
@@ -238,12 +247,16 @@ The output shows:
   - Per-dimension before/after with colored delta
     (green = improvement, red = regression)
 
+Use --model legacy to compare using the v0.13 scoring model
+(MI + cyclomatic complexity, 6 dimensions).
+
 Requires a git repository.
 
 Examples:
   km score diff                          # compare vs HEAD
   km score diff --git-ref HEAD~1         # compare vs previous commit
   km score diff --git-ref main           # compare vs main branch
+  km score diff --model legacy           # use v0.13 model
   km score diff --json                   # machine-readable output
   km score diff src/                     # compare a subdirectory";
 

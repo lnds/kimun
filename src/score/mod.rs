@@ -1,9 +1,14 @@
 //! Overall code health score computation.
 //!
-//! Walks source files once, computes per-file metrics (cognitive complexity,
-//! indent, Halstead, file size), detects project-level duplication,
-//! normalizes each dimension to 0–100 via piecewise linear curves, and
-//! produces a LOC-weighted aggregate score with letter grade (A++ to F--).
+//! Walks source files once, computes per-file metrics (cognitive complexity
+//! or MI+cyclomatic depending on model), indent, Halstead, file size),
+//! detects project-level duplication, normalizes each dimension to 0–100
+//! via piecewise linear curves, and produces a LOC-weighted aggregate
+//! score with letter grade (A++ to F--).
+//!
+//! Two scoring models are supported:
+//! - **Cognitive** (default, v0.14+): 5 dimensions with cognitive complexity.
+//! - **Legacy** (`--model legacy`, v0.13): 6 dimensions with MI + cyclomatic.
 //!
 //! The scoring pipeline: walk → per-file analysis → project-level
 //! duplication → normalize → LOC-weighted mean → grade assignment.
@@ -35,11 +40,28 @@ use collector::{FileMetrics, analyze_single_file};
 use report::{print_json, print_report};
 use scoring::{build_dimensions, build_empty_dimensions, score_file};
 
-// Re-export scoring internals for tests.
-#[cfg(test)]
-pub(crate) use scoring::{
-    FILE_WEIGHTS, W_COGCOM, W_DUP, W_HAL, W_INDENT, W_SIZE, weighted_mean,
-};
+/// Scoring model selection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScoringModel {
+    /// Cognitive complexity model (v0.14+, default): 5 dimensions.
+    Cognitive,
+    /// Legacy model (v0.13): MI + cyclomatic, 6 dimensions.
+    Legacy,
+}
+
+impl ScoringModel {
+    /// Parse a model name from CLI argument (validated by clap's value_parser).
+    pub fn from_arg(s: &str) -> Self {
+        match s {
+            "legacy" => Self::Legacy,
+            "cogcom" => Self::Cognitive,
+            other => {
+                debug_assert!(false, "unexpected scoring model: {other}");
+                Self::Cognitive
+            }
+        }
+    }
+}
 
 /// Entry point: compute and display the project health score.
 /// Outputs either a formatted table or JSON depending on the `json` flag.
@@ -49,8 +71,10 @@ pub fn run(
     include_tests: bool,
     bottom: usize,
     min_lines: usize,
+    model: &str,
 ) -> Result<(), Box<dyn Error>> {
-    let score = compute_score(path, include_tests, bottom, min_lines)?;
+    let scoring_model = ScoringModel::from_arg(model);
+    let score = compute_score(path, include_tests, bottom, min_lines, &scoring_model)?;
 
     // Show target in header when user specified an explicit path (not ".")
     let target = path.to_str().filter(|s| *s != ".").map(|s| s.to_string());
@@ -72,9 +96,12 @@ pub fn run_diff(
     include_tests: bool,
     bottom: usize,
     min_lines: usize,
+    model: &str,
 ) -> Result<(), Box<dyn Error>> {
+    let scoring_model = ScoringModel::from_arg(model);
+
     // Score the current working tree.
-    let after = compute_score(path, include_tests, bottom, min_lines)?;
+    let after = compute_score(path, include_tests, bottom, min_lines, &scoring_model)?;
 
     // Open the git repo and extract the ref tree into a temp directory.
     let repo = GitRepo::open(path)?;
@@ -91,7 +118,7 @@ pub fn run_diff(
     };
 
     // Score the ref tree.
-    let before = compute_score(&tmp_path, include_tests, bottom, min_lines)?;
+    let before = compute_score(&tmp_path, include_tests, bottom, min_lines, &scoring_model)?;
 
     let score_diff = diff::compute_diff(git_ref, &before, &after);
 
@@ -111,6 +138,7 @@ fn compute_score(
     include_tests: bool,
     bottom: usize,
     min_lines: usize,
+    model: &ScoringModel,
 ) -> Result<ProjectScore, Box<dyn Error>> {
     let exclude_tests = !include_tests;
     let mut file_metrics: Vec<FileMetrics> = Vec::new();
@@ -118,7 +146,7 @@ fn compute_score(
     let mut total_code_lines: usize = 0;
 
     for (file_path, spec) in walk::source_files(path, exclude_tests) {
-        if let Some(result) = analyze_single_file(&file_path, spec, exclude_tests) {
+        if let Some(result) = analyze_single_file(&file_path, spec, exclude_tests, model) {
             total_code_lines += result.normalized_count;
             dup_files.push(result.dup_file);
             file_metrics.push(result.metrics);
@@ -142,7 +170,7 @@ fn compute_score(
     let files_analyzed = file_metrics.len();
 
     if files_analyzed == 0 {
-        let dimensions = build_empty_dimensions();
+        let dimensions = build_empty_dimensions(model);
         return Ok(ProjectScore {
             score: 0.0,
             grade: score_to_grade(0.0),
@@ -153,9 +181,10 @@ fn compute_score(
         });
     }
 
-    let dimensions = build_dimensions(&file_metrics, total_loc, dup_percent);
+    let dimensions = build_dimensions(&file_metrics, total_loc, dup_percent, model);
     let project_score = compute_project_score(&dimensions);
-    let mut file_scores: Vec<FileScore> = file_metrics.iter().map(score_file).collect();
+    let mut file_scores: Vec<FileScore> =
+        file_metrics.iter().map(|f| score_file(f, model)).collect();
     file_scores.sort_by(|a, b| a.score.total_cmp(&b.score));
     file_scores.truncate(bottom);
 

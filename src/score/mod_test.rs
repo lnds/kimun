@@ -3,98 +3,9 @@ use crate::util::find_test_block_start;
 use std::fs;
 
 #[test]
-fn weights_sum_to_one() {
-    let total = W_COGCOM + W_DUP + W_INDENT + W_HAL + W_SIZE;
-    assert!(
-        (total - 1.0).abs() < 1e-10,
-        "dimension weights must sum to 1.0, got {total}"
-    );
-}
-
-#[test]
-fn file_weights_match_constants() {
-    // Ensure FILE_WEIGHTS stays in sync with the individual constants
-    let file_sum: f64 = FILE_WEIGHTS.iter().map(|(w, _)| w).sum();
-    let expected = W_COGCOM + W_INDENT + W_HAL + W_SIZE;
-    assert!(
-        (file_sum - expected).abs() < 1e-10,
-        "FILE_WEIGHTS sum should match non-dup constants"
-    );
-}
-
-#[test]
-fn weighted_mean_all_none() {
-    let files = vec![FileMetrics {
-        path: "a.rs".into(),
-        code_lines: 100,
-        max_cognitive: None,
-        indent_stddev: None,
-        halstead_effort: None,
-    }];
-    let result = weighted_mean(&files, 100, |_| None);
-    assert!((result - 0.0).abs() < 0.01, "all None → 0, got {result}");
-}
-
-#[test]
-fn weighted_mean_total_loc_zero() {
-    let files: Vec<FileMetrics> = vec![];
-    let result = weighted_mean(&files, 0, |_| Some(80.0));
-    assert!((result - 0.0).abs() < 0.01, "total_loc=0 → 0, got {result}");
-}
-
-#[test]
-fn weighted_mean_single_file() {
-    let files = vec![FileMetrics {
-        path: "a.rs".into(),
-        code_lines: 100,
-        max_cognitive: Some(5),
-        indent_stddev: Some(1.0),
-        halstead_effort: Some(1000.0),
-    }];
-    let result = weighted_mean(&files, 100, |f| f.max_cognitive.map(|c| c as f64));
-    assert!(
-        (result - 5.0).abs() < 0.01,
-        "single file → same value, got {result}"
-    );
-}
-
-#[test]
-fn weighted_mean_loc_weighted() {
-    let files = vec![
-        FileMetrics {
-            path: "small.rs".into(),
-            code_lines: 10,
-            max_cognitive: None,
-            indent_stddev: None,
-            halstead_effort: None,
-        },
-        FileMetrics {
-            path: "big.rs".into(),
-            code_lines: 90,
-            max_cognitive: None,
-            indent_stddev: None,
-            halstead_effort: None,
-        },
-    ];
-    // Using a simple constant score fn
-    let result = weighted_mean(&files, 100, |f| {
-        if f.code_lines == 10 {
-            Some(100.0)
-        } else {
-            Some(50.0)
-        }
-    });
-    // (100*10 + 50*90) / 100 = (1000 + 4500) / 100 = 55
-    assert!(
-        (result - 55.0).abs() < 0.01,
-        "LOC-weighted → 55, got {result}"
-    );
-}
-
-#[test]
 fn run_on_empty_dir() {
     let dir = tempfile::tempdir().unwrap();
-    run(dir.path(), false, false, 10, 6).unwrap();
+    run(dir.path(), false, false, 10, 6, "cogcom").unwrap();
 }
 
 #[test]
@@ -105,7 +16,8 @@ fn run_on_rust_file() {
         "// a module\nfn main() {\n    let x = 1;\n    let y = x + 2;\n    println!(\"{}\", y);\n}\n",
     )
     .unwrap();
-    let score = compute_score(dir.path(), false, 10, 6).unwrap();
+    let model = ScoringModel::Cognitive;
+    let score = compute_score(dir.path(), false, 10, 6, &model).unwrap();
     assert!(
         score.score > 50.0,
         "simple code should score well, got {}",
@@ -117,6 +29,28 @@ fn run_on_rust_file() {
 }
 
 #[test]
+fn run_on_rust_file_legacy_model() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("main.rs"),
+        "// a module\nfn main() {\n    let x = 1;\n    let y = x + 2;\n    println!(\"{}\", y);\n}\n",
+    )
+    .unwrap();
+    let model = ScoringModel::Legacy;
+    let score = compute_score(dir.path(), false, 10, 6, &model).unwrap();
+    assert!(
+        score.score > 50.0,
+        "simple code should score well with legacy model, got {}",
+        score.score
+    );
+    assert_eq!(score.files_analyzed, 1);
+    assert!(score.total_loc > 0);
+    assert_eq!(score.dimensions.len(), 6);
+    assert_eq!(score.dimensions[0].name, "Maintainability Index");
+    assert_eq!(score.dimensions[1].name, "Cyclomatic Complexity");
+}
+
+#[test]
 fn run_json_output() {
     let dir = tempfile::tempdir().unwrap();
     fs::write(
@@ -124,7 +58,7 @@ fn run_json_output() {
         "fn main() {\n    let x = 1;\n}\n",
     )
     .unwrap();
-    run(dir.path(), true, false, 10, 6).unwrap();
+    run(dir.path(), true, false, 10, 6, "cogcom").unwrap();
 }
 
 #[test]
@@ -136,7 +70,8 @@ fn run_includes_tests_with_flag() {
         "fn test() {\n    assert!(true);\n}\n",
     )
     .unwrap();
-    let score = compute_score(dir.path(), true, 10, 6).unwrap();
+    let model = ScoringModel::Cognitive;
+    let score = compute_score(dir.path(), true, 10, 6, &model).unwrap();
     assert_eq!(score.files_analyzed, 1);
 }
 
@@ -149,14 +84,21 @@ fn run_excludes_tests_by_default() {
         "fn test() {\n    assert!(true);\n}\n",
     )
     .unwrap();
-    let score = compute_score(dir.path(), false, 10, 6).unwrap();
+    let model = ScoringModel::Cognitive;
+    let score = compute_score(dir.path(), false, 10, 6, &model).unwrap();
     assert_eq!(score.files_analyzed, 0);
 }
 
 #[test]
 fn run_on_current_repo() {
     // Smoke test on the actual repo
-    run(Path::new("."), false, false, 5, 6).unwrap();
+    run(Path::new("."), false, false, 5, 6, "cogcom").unwrap();
+}
+
+#[test]
+fn run_on_current_repo_legacy() {
+    // Smoke test on the actual repo with legacy model
+    run(Path::new("."), false, false, 5, 6, "legacy").unwrap();
 }
 
 #[test]
@@ -195,7 +137,8 @@ fn find_test_block_start_empty() {
 fn excludes_markdown_files() {
     let dir = tempfile::tempdir().unwrap();
     fs::write(dir.path().join("README.md"), "# Hello\n\nWorld\n").unwrap();
-    let score = compute_score(dir.path(), false, 10, 6).unwrap();
+    let model = ScoringModel::Cognitive;
+    let score = compute_score(dir.path(), false, 10, 6, &model).unwrap();
     assert_eq!(score.files_analyzed, 0, "Markdown should be excluded");
 }
 
@@ -207,7 +150,8 @@ fn excludes_toml_files() {
         "[package]\nname = \"test\"\n",
     )
     .unwrap();
-    let score = compute_score(dir.path(), false, 10, 6).unwrap();
+    let model = ScoringModel::Cognitive;
+    let score = compute_score(dir.path(), false, 10, 6, &model).unwrap();
     assert_eq!(score.files_analyzed, 0, "TOML should be excluded");
 }
 
@@ -215,7 +159,8 @@ fn excludes_toml_files() {
 fn excludes_json_files() {
     let dir = tempfile::tempdir().unwrap();
     fs::write(dir.path().join("data.json"), "{\"key\": \"value\"}\n").unwrap();
-    let score = compute_score(dir.path(), false, 10, 6).unwrap();
+    let model = ScoringModel::Cognitive;
+    let score = compute_score(dir.path(), false, 10, 6, &model).unwrap();
     assert_eq!(score.files_analyzed, 0, "JSON should be excluded");
 }
 
@@ -228,7 +173,8 @@ fn run_on_single_file() {
         "/// Docs\nfn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n",
     )
     .unwrap();
-    let score = compute_score(&file, false, 10, 6).unwrap();
+    let model = ScoringModel::Cognitive;
+    let score = compute_score(&file, false, 10, 6, &model).unwrap();
     assert_eq!(score.files_analyzed, 1);
     assert!(score.total_loc > 0);
 }
@@ -241,10 +187,28 @@ fn dimensions_sum_to_100_percent() {
         "fn main() {\n    let x = 1;\n}\n",
     )
     .unwrap();
-    let score = compute_score(dir.path(), false, 10, 6).unwrap();
+    let model = ScoringModel::Cognitive;
+    let score = compute_score(dir.path(), false, 10, 6, &model).unwrap();
     let total_weight: f64 = score.dimensions.iter().map(|d| d.weight).sum();
     assert!(
         (total_weight - 1.0).abs() < 0.001,
         "weights should sum to 1.0, got {total_weight}"
+    );
+}
+
+#[test]
+fn legacy_dimensions_sum_to_100_percent() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("main.rs"),
+        "fn main() {\n    let x = 1;\n}\n",
+    )
+    .unwrap();
+    let model = ScoringModel::Legacy;
+    let score = compute_score(dir.path(), false, 10, 6, &model).unwrap();
+    let total_weight: f64 = score.dimensions.iter().map(|d| d.weight).sum();
+    assert!(
+        (total_weight - 1.0).abs() < 0.001,
+        "legacy weights should sum to 1.0, got {total_weight}"
     );
 }

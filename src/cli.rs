@@ -265,6 +265,10 @@ pub enum Commands {
         /// Minimum lines for a duplicate block (default: 6)
         #[arg(long, default_value = "6")]
         min_lines: usize,
+
+        /// Scoring model: cogcom (default, v0.14+) or legacy (MI + cyclomatic, v0.13)
+        #[arg(long, default_value = "cogcom", value_parser = ["cogcom", "legacy"])]
+        model: String,
     },
 
     /// AI-powered code analysis and tooling
@@ -302,6 +306,10 @@ pub enum ScoreCommands {
         /// Minimum lines for a duplicate block (default: 6)
         #[arg(long, default_value = "6")]
         min_lines: usize,
+
+        /// Scoring model: cogcom (default, v0.14+) or legacy (MI + cyclomatic, v0.13)
+        #[arg(long, default_value = "cogcom", value_parser = ["cogcom", "legacy"])]
+        model: String,
     },
 }
 

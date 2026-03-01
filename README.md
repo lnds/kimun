@@ -2,11 +2,11 @@
 
 > *Kimün* means "knowledge" or "wisdom" in Mapudungun, the language of the Mapuche people.
 
-A fast command-line tool for code analysis, written in Rust. Run `km score` on any project to get an overall health grade (A++ to F--) across six quality dimensions — maintainability, complexity, duplication, indentation depth, Halstead effort, and file size — with a list of the files that need the most attention.
+A fast command-line tool for code analysis, written in Rust. Run `km score` on any project to get an overall health grade (A++ to F--) across five quality dimensions — cognitive complexity, duplication, indentation depth, Halstead effort, and file size — with a list of the files that need the most attention.
 
 Beyond the aggregate score, Kimün provides 12 specialized commands:
 
-- **Static metrics** — lines of code by language ([cloc](https://github.com/AlDanial/cloc)-compatible), duplicate detection (Rule of Three), Halstead complexity, cyclomatic complexity, indentation complexity, and two Maintainability Index variants (Visual Studio and verifysoft).
+- **Static metrics** — lines of code by language ([cloc](https://github.com/AlDanial/cloc)-compatible), duplicate detection (Rule of Three), Halstead complexity, cyclomatic complexity, cognitive complexity (SonarSource), indentation complexity, and two Maintainability Index variants (Visual Studio and verifysoft).
 - **Git-based analysis** — hotspot detection (change frequency × complexity, Thornhill method), code ownership / knowledge maps via `git blame`, and temporal coupling between files that change together.
 - **AI-powered analysis** — optional integration with Claude to run all tools and produce a narrative report.
 
@@ -222,6 +222,25 @@ Options:
 | `--top N` | Show only the top N files (default: 20) |
 | `--min-complexity N` | Minimum max-complexity to include a file (default: 1) |
 | `--per-function` | Show per-function breakdown |
+
+### `km cogcom` -- Cognitive complexity
+
+Computes cognitive complexity per file and per function using the [SonarSource method](https://www.sonarsource.com/docs/CognitiveComplexity.pdf) (2017). Unlike cyclomatic complexity, cognitive complexity measures how difficult code is to *understand*, penalizing deeply nested structures and rewarding linear control flow.
+
+```bash
+km cogcom [path]
+```
+
+Options:
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Output as JSON |
+| `--include-tests` | Include test files in analysis (excluded by default) |
+| `--top N` | Show only the top N files (default: 20) |
+| `--min-complexity N` | Minimum max-complexity to include a file (default: 1) |
+| `--per-function` | Show per-function breakdown |
+| `--sort-by METRIC` | Sort by `total`, `max`, or `avg` (default: `total`) |
 
 ### `km mi` -- Maintainability Index (Visual Studio variant)
 
@@ -495,15 +514,28 @@ Strong coupling (>= 0.5) suggests hidden dependencies — consider extracting sh
 
 ### `km score` -- Code health score
 
-Computes an overall code health score for the project, grading it from A++ (exceptional) to F-- (severe issues). Analyzes 6 dimensions of code quality using only static metrics (no git required).
+Computes an overall code health score for the project, grading it from A++ (exceptional) to F-- (severe issues). Uses only static metrics (no git required).
+
+> **Breaking change in v0.14:** The default scoring model changed from MI + Cyclomatic Complexity (6 dimensions) to Cognitive Complexity (5 dimensions). Use `--model legacy` to restore v0.13 behavior.
 
 Non-code files (Markdown, TOML, JSON, etc.) are automatically excluded. Inline test blocks (`#[cfg(test)]`) are excluded from duplication analysis.
 
 ```bash
 km score [path]
+km score --model legacy [path]    # v0.13 scoring model
 ```
 
-#### Dimensions and weights
+#### Dimensions and weights (default: cogcom)
+
+| Dimension | Weight | What it measures |
+|-----------|--------|-----------------|
+| Cognitive Complexity | 30% | SonarSource method, penalizes nesting |
+| Duplication | 20% | Project-wide duplicate code % |
+| Indentation Complexity | 15% | Stddev of indentation depth |
+| Halstead Effort | 20% | Mental effort per LOC |
+| File Size | 15% | Optimal range 50-300 LOC |
+
+#### Dimensions and weights (--model legacy)
 
 | Dimension | Weight | What it measures |
 |-----------|--------|-----------------|
@@ -533,6 +565,7 @@ Options:
 
 | Flag | Description |
 |------|-------------|
+| `--model MODEL` | Scoring model: `cogcom` (default, v0.14+) or `legacy` (MI + cyclomatic, v0.13) |
 | `--json` | Output as JSON |
 | `--include-tests` | Include test files in analysis (excluded by default) |
 | `--bottom N` | Number of worst files to show in "needs attention" (default: 10) |
@@ -549,20 +582,19 @@ Code Health Score
 ──────────────────────────────────────────────────────────────────
  Dimension                 Weight   Score   Grade
 ──────────────────────────────────────────────────────────────────
- Maintainability Index        30%    88.2   A-
- Cyclomatic Complexity        20%    82.4   B+
- Duplication                  15%    91.3   A
+ Cognitive Complexity         30%    85.6   B+
+ Duplication                  20%    91.3   A
  Indentation Complexity       15%    79.8   B-
- Halstead Effort              15%    85.1   B+
- File Size                     5%    89.2   A-
+ Halstead Effort              20%    85.1   B+
+ File Size                    15%    89.2   A-
 ──────────────────────────────────────────────────────────────────
 
  Files Needing Attention (worst scores)
 ──────────────────────────────────────────────────────────────────
  Score  Grade  File                       Issues
 ──────────────────────────────────────────────────────────────────
-  54.2  F      src/legacy/parser.rs       Complexity: 87, MI: 12
-  63.7  D+     src/utils/helpers.rs       MI: 42, Indent: 2.4
+  54.2  F      src/legacy/parser.rs       Cognitive: 42, Indent: 3.2
+  63.7  D+     src/utils/helpers.rs       Effort: 15200, Indent: 2.4
   68.9  C-     src/core/engine.rs         Size: 1243 LOC
 ──────────────────────────────────────────────────────────────────
 ```

@@ -1,5 +1,107 @@
 use super::*;
 
+// ─── Legacy model: normalize_mi ──────────────────────────────────────
+
+#[test]
+fn test_normalize_mi_0() {
+    let s = normalize_mi(0.0);
+    assert!((s - 0.0).abs() < 0.01, "mi=0 -> 0, got {s}");
+}
+
+#[test]
+fn test_normalize_mi_25() {
+    let s = normalize_mi(25.0);
+    assert!((s - 20.0).abs() < 0.01, "mi=25 -> 20, got {s}");
+}
+
+#[test]
+fn test_normalize_mi_50() {
+    let s = normalize_mi(50.0);
+    assert!((s - 60.0).abs() < 0.01, "mi=50 -> 60, got {s}");
+}
+
+#[test]
+fn test_normalize_mi_75() {
+    let s = normalize_mi(75.0);
+    assert!((s - 90.0).abs() < 0.01, "mi=75 -> 90, got {s}");
+}
+
+#[test]
+fn test_normalize_mi_100() {
+    let s = normalize_mi(100.0);
+    assert!((s - 100.0).abs() < 0.01, "mi=100 -> 100, got {s}");
+}
+
+#[test]
+fn test_normalize_mi_monotonic() {
+    let values = [0.0, 10.0, 25.0, 40.0, 50.0, 65.0, 75.0, 85.0, 100.0];
+    for window in values.windows(2) {
+        let lo = normalize_mi(window[0]);
+        let hi = normalize_mi(window[1]);
+        assert!(
+            hi >= lo,
+            "normalize_mi should be monotonically increasing: mi={} -> {lo}, mi={} -> {hi}",
+            window[0],
+            window[1]
+        );
+    }
+}
+
+// ─── Legacy model: normalize_complexity ──────────────────────────────
+
+#[test]
+fn test_normalize_complexity_5() {
+    let s = normalize_complexity(5);
+    assert!((s - 100.0).abs() < 0.01, "cycom=5 -> 100, got {s}");
+}
+
+#[test]
+fn test_normalize_complexity_10() {
+    let s = normalize_complexity(10);
+    assert!((s - 85.0).abs() < 0.01, "cycom=10 -> 85, got {s}");
+}
+
+#[test]
+fn test_normalize_complexity_15() {
+    let s = normalize_complexity(15);
+    assert!((s - 65.0).abs() < 0.01, "cycom=15 -> 65, got {s}");
+}
+
+#[test]
+fn test_normalize_complexity_25() {
+    let s = normalize_complexity(25);
+    assert!((s - 35.0).abs() < 0.01, "cycom=25 -> 35, got {s}");
+}
+
+#[test]
+fn test_normalize_complexity_50() {
+    let s = normalize_complexity(50);
+    assert!((s - 5.0).abs() < 0.01, "cycom=50 -> 5, got {s}");
+}
+
+#[test]
+fn test_normalize_complexity_100() {
+    let s = normalize_complexity(100);
+    assert!((s - 0.0).abs() < 0.01, "cycom=100 -> 0, got {s}");
+}
+
+#[test]
+fn test_normalize_complexity_monotonic() {
+    let values = [0, 2, 5, 7, 10, 12, 15, 20, 25, 40, 50, 75, 100];
+    for window in values.windows(2) {
+        let lo = normalize_complexity(window[0]);
+        let hi = normalize_complexity(window[1]);
+        assert!(
+            lo >= hi,
+            "normalize_complexity should be monotonically decreasing: cycom={} -> {lo}, cycom={} -> {hi}",
+            window[0],
+            window[1]
+        );
+    }
+}
+
+// ─── Cognitive model: normalize_cognitive ────────────────────────────
+
 #[test]
 fn test_normalize_cognitive_0() {
     assert!((normalize_cognitive(0) - 100.0).abs() < 0.01);
