@@ -140,7 +140,16 @@ pub fn install(provider: &str) -> Result<(), Box<dyn std::error::Error>> {
     let choice = choice.trim();
 
     let skill_dir = match choice {
-        "1" => PathBuf::from(".claude/skills/km-analyze"),
+        "1" => {
+            // Find the git repo root so the skill is installed at the project root
+            // even when invoked from a subdirectory.
+            let repo = git2::Repository::discover(".")
+                .map_err(|_| "Could not find a git repository. Run from a project directory or use option 2 (user-level).")?;
+            let workdir = repo
+                .workdir()
+                .ok_or("Could not determine repository working directory")?;
+            workdir.join(".claude/skills/km-analyze")
+        }
         "2" => {
             let home = std::env::var("HOME").map_err(|_| "Could not determine home directory")?;
             PathBuf::from(home).join(".claude/skills/km-analyze")
