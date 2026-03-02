@@ -1,3 +1,18 @@
+## 0.15.0 (2026-03-02)
+
+### Feat
+
+- add --exclude-ext, --exclude-dir, --exclude, --include-ext, and --list-excluded filters
+
+### Fix
+
+- install project-level skill at git repo root, not cwd
+
+### Refactor
+
+- consolidate duplicated function detection into shared module
+- extract `indent_level` to `util.rs`, remove 3 duplicates
+
 ## 0.14.0 (2026-03-01)
 
 ### Feat
