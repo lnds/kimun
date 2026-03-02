@@ -1,10 +1,13 @@
 use super::*;
+use crate::walk::{ExcludeFilter, WalkConfig};
 use std::fs;
 
 #[test]
 fn run_on_empty_dir() {
     let dir = tempfile::tempdir().unwrap();
-    run(dir.path(), false, false, 1, 20, false, "total").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, false, 1, 20, false, "total").unwrap();
 }
 
 #[test]
@@ -15,7 +18,9 @@ fn run_on_rust_file() {
         "fn main() {\n    if true {\n        println!(\"hi\");\n    }\n}\n",
     )
     .unwrap();
-    run(dir.path(), false, false, 1, 20, false, "total").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, false, 1, 20, false, "total").unwrap();
 }
 
 #[test]
@@ -26,14 +31,18 @@ fn run_on_python_file() {
         "def main():\n    if True:\n        print(\"hi\")\n",
     )
     .unwrap();
-    run(dir.path(), false, false, 1, 20, false, "total").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, false, 1, 20, false, "total").unwrap();
 }
 
 #[test]
 fn run_skips_binary() {
     let dir = tempfile::tempdir().unwrap();
     fs::write(dir.path().join("data.c"), b"hello\x00world").unwrap();
-    run(dir.path(), false, false, 1, 20, false, "total").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, false, 1, 20, false, "total").unwrap();
 }
 
 #[test]
@@ -45,7 +54,9 @@ fn run_excludes_tests_by_default() {
         "fn test() {\n    assert!(true);\n}\n",
     )
     .unwrap();
-    run(dir.path(), false, false, 1, 20, false, "total").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, false, 1, 20, false, "total").unwrap();
 }
 
 #[test]
@@ -56,7 +67,9 @@ fn run_json_output() {
         "fn main() {\n    let x = 1;\n}\n",
     )
     .unwrap();
-    run(dir.path(), true, false, 1, 20, false, "total").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, true, 1, 20, false, "total").unwrap();
 }
 
 #[test]
@@ -67,7 +80,9 @@ fn run_per_function_output() {
         "fn foo() {\n    if x > 0 {\n        bar();\n    }\n}\nfn baz() {\n    quux();\n}\n",
     )
     .unwrap();
-    run(dir.path(), false, false, 1, 20, true, "total").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, false, 1, 20, true, "total").unwrap();
 }
 
 #[test]
@@ -79,7 +94,9 @@ fn run_min_complexity_filter() {
     )
     .unwrap();
     // min_complexity=5 should filter out simple functions
-    run(dir.path(), false, false, 5, 20, false, "total").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, false, 5, 20, false, "total").unwrap();
 }
 
 #[test]
@@ -95,7 +112,9 @@ fn run_top_limit() {
         "fn b() {\n    if y { baz(); }\n}\n",
     )
     .unwrap();
-    run(dir.path(), false, false, 1, 1, false, "total").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, false, 1, 1, false, "total").unwrap();
 }
 
 #[test]
@@ -107,7 +126,9 @@ fn run_includes_tests_with_flag() {
         "fn test() {\n    assert!(true);\n}\n",
     )
     .unwrap();
-    run(dir.path(), false, true, 1, 20, false, "total").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), true, &filter);
+    run(&cfg, false, 1, 20, false, "total").unwrap();
 }
 
 #[test]
@@ -116,5 +137,7 @@ fn run_skips_non_code_languages() {
     fs::write(dir.path().join("data.json"), "{\"key\": \"value\"}\n").unwrap();
     fs::write(dir.path().join("style.css"), "body { color: red; }\n").unwrap();
     // Should produce no results (JSON/CSS have no markers)
-    run(dir.path(), false, false, 1, 20, false, "total").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, false, 1, 20, false, "total").unwrap();
 }

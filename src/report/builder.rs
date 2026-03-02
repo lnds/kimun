@@ -13,7 +13,7 @@ use crate::dups;
 use crate::loc::counter::FileStats;
 use crate::loc::report::LanguageReport;
 use crate::util::hash_file;
-use crate::walk;
+use crate::walk::WalkConfig;
 
 use super::analyzer::analyze_file_for_report;
 use super::data::*;
@@ -75,8 +75,7 @@ fn sort_truncate<T>(
 /// Build the full project report by walking the file tree once and running
 /// all analyzers per file. Returns the report struct for output or testing.
 pub fn build_report(
-    path: &Path,
-    include_tests: bool,
+    cfg: &WalkConfig<'_>,
     top: usize,
     min_lines: usize,
 ) -> Result<ProjectReport, Box<dyn Error>> {
@@ -100,7 +99,7 @@ pub fn build_report(
 
     // Walk source files, skipping test directories/files when requested.
     // Each file is analyzed once and its results distributed to all accumulators.
-    for (file_path, spec) in walk::source_files(path, !include_tests) {
+    for (file_path, spec) in cfg.source_files() {
         // Skip duplicate files (same content), matching km loc behavior.
         if let Some(h) = hash_file(&file_path)
             && !seen_hashes.insert(h)
@@ -168,9 +167,9 @@ pub fn build_report(
     });
 
     Ok(ProjectReport {
-        path: path.display().to_string(),
+        path: cfg.path.display().to_string(),
         top,
-        include_tests,
+        include_tests: cfg.include_tests,
         min_lines,
         loc: loc_reports,
         duplication: dup_summary,

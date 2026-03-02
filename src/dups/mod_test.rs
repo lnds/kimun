@@ -1,11 +1,15 @@
 use super::*;
 use crate::loc::language::detect;
+use crate::walk::{self, ExcludeFilter, WalkConfig};
 use std::fs;
+use std::path::Path;
 
 #[test]
 fn run_on_empty_dir() {
     let dir = tempfile::tempdir().unwrap();
-    run(dir.path(), 6, false, false, false, false).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, 6, false, false, false).unwrap();
 }
 
 #[test]
@@ -19,7 +23,9 @@ fn run_with_no_duplicates() {
         dir.path().join("b.rs"),
         "fn bar() {\n    let a = 10;\n    let b = 20;\n    let c = a * b;\n    println!(\"{}\", c);\n    return c;\n}\n",
     ).unwrap();
-    run(dir.path(), 6, false, false, false, false).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, 6, false, false, false).unwrap();
 }
 
 #[test]
@@ -28,8 +34,10 @@ fn run_detects_duplicates() {
     let code = "fn process() {\n    let x = read();\n    let y = transform(x);\n    write(y);\n    log(\"done\");\n    cleanup();\n}\n";
     fs::write(dir.path().join("a.rs"), code).unwrap();
     fs::write(dir.path().join("b.rs"), code).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
     // Should not panic, should detect duplicates
-    run(dir.path(), 6, false, false, false, false).unwrap();
+    run(&cfg, 6, false, false, false).unwrap();
 }
 
 #[test]
@@ -38,7 +46,9 @@ fn run_with_report_flag() {
     let code = "fn process() {\n    let x = read();\n    let y = transform(x);\n    write(y);\n    log(\"done\");\n    cleanup();\n}\n";
     fs::write(dir.path().join("a.rs"), code).unwrap();
     fs::write(dir.path().join("b.rs"), code).unwrap();
-    run(dir.path(), 6, true, false, false, false).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, 6, true, false, false).unwrap();
 }
 
 #[test]
@@ -47,14 +57,18 @@ fn run_with_show_all_flag() {
     let code = "fn process() {\n    let x = read();\n    let y = transform(x);\n    write(y);\n    log(\"done\");\n    cleanup();\n}\n";
     fs::write(dir.path().join("a.rs"), code).unwrap();
     fs::write(dir.path().join("b.rs"), code).unwrap();
-    run(dir.path(), 6, true, true, false, false).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, 6, true, true, false).unwrap();
 }
 
 #[test]
 fn run_skips_binary_files() {
     let dir = tempfile::tempdir().unwrap();
     fs::write(dir.path().join("data.c"), b"hello\x00world").unwrap();
-    run(dir.path(), 6, false, false, false, false).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, 6, false, false, false).unwrap();
 }
 
 #[test]
@@ -63,8 +77,10 @@ fn run_with_high_min_lines() {
     let code = "fn f() {\n    let x = 1;\n    let y = 2;\n}\n";
     fs::write(dir.path().join("a.rs"), code).unwrap();
     fs::write(dir.path().join("b.rs"), code).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
     // min_lines=20 means no 4-line file can produce duplicates
-    run(dir.path(), 20, false, false, false, false).unwrap();
+    run(&cfg, 20, false, false, false).unwrap();
 }
 
 #[test]
@@ -103,20 +119,26 @@ fn run_json_with_duplicates() {
     let code = "fn process() {\n    let x = read();\n    let y = transform(x);\n    write(y);\n    log(\"done\");\n    cleanup();\n}\n";
     fs::write(dir.path().join("a.rs"), code).unwrap();
     fs::write(dir.path().join("b.rs"), code).unwrap();
-    run(dir.path(), 6, false, false, true, false).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, 6, false, false, true).unwrap();
 }
 
 #[test]
 fn run_json_empty_dir() {
     let dir = tempfile::tempdir().unwrap();
-    run(dir.path(), 6, false, false, true, false).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, 6, false, false, true).unwrap();
 }
 
 #[test]
 fn run_json_no_duplicates() {
     let dir = tempfile::tempdir().unwrap();
     fs::write(dir.path().join("a.rs"), "fn foo() {\n    let x = 1;\n}\n").unwrap();
-    run(dir.path(), 6, false, false, true, false).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, 6, false, false, true).unwrap();
 }
 
 // --- is_test_file tests (use shared walk module) ---
@@ -224,9 +246,12 @@ fn run_exclude_tests_skips_test_dir() {
     fs::write(dir.path().join("lib.rs"), "fn foo() {\n    let x = 1;\n}\n").unwrap();
 
     // Without exclude: detects duplicates (does not panic)
-    run(dir.path(), 6, false, false, false, false).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), true, &filter);
+    run(&cfg, 6, false, false, false).unwrap();
     // With exclude: tests/ is skipped entirely
-    run(dir.path(), 6, false, false, false, true).unwrap();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, 6, false, false, false).unwrap();
 }
 
 #[test]
@@ -240,7 +265,9 @@ fn run_exclude_tests_skips_test_files() {
     fs::write(dir.path().join("lib.rs"), "fn foo() {\n    let x = 1;\n}\n").unwrap();
 
     // With exclude_tests, the *_test.rs files are skipped
-    run(dir.path(), 6, false, false, false, true).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, 6, false, false, false).unwrap();
 }
 
 #[test]
@@ -259,7 +286,9 @@ fn run_exclude_tests_skips_test_file_in_subdirectory() {
     .unwrap();
 
     // With exclude_tests, *_test.rs files in any directory are skipped
-    run(dir.path(), 6, false, false, false, true).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, 6, false, false, false).unwrap();
 }
 
 #[test]
@@ -274,5 +303,7 @@ fn run_exclude_tests_skips_entire_test_dir_tree() {
     fs::write(dir.path().join("lib.rs"), "fn foo() {\n    let x = 1;\n}\n").unwrap();
 
     // With exclude_tests, the entire tests/ tree is skipped
-    run(dir.path(), 6, false, false, false, true).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, 6, false, false, false).unwrap();
 }

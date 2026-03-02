@@ -1,11 +1,15 @@
 use super::*;
 use crate::util::find_test_block_start;
+use crate::walk::{ExcludeFilter, WalkConfig};
 use std::fs;
+use std::path::Path;
 
 #[test]
 fn run_on_empty_dir() {
     let dir = tempfile::tempdir().unwrap();
-    run(dir.path(), false, false, 10, 6, "cogcom").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, false, 10, 6, "cogcom").unwrap();
 }
 
 #[test]
@@ -16,8 +20,10 @@ fn run_on_rust_file() {
         "// a module\nfn main() {\n    let x = 1;\n    let y = x + 2;\n    println!(\"{}\", y);\n}\n",
     )
     .unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
     let model = ScoringModel::Cognitive;
-    let score = compute_score(dir.path(), false, 10, 6, &model).unwrap();
+    let score = compute_score(&cfg, 10, 6, &model).unwrap();
     assert!(
         score.score > 50.0,
         "simple code should score well, got {}",
@@ -36,8 +42,10 @@ fn run_on_rust_file_legacy_model() {
         "// a module\nfn main() {\n    let x = 1;\n    let y = x + 2;\n    println!(\"{}\", y);\n}\n",
     )
     .unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
     let model = ScoringModel::Legacy;
-    let score = compute_score(dir.path(), false, 10, 6, &model).unwrap();
+    let score = compute_score(&cfg, 10, 6, &model).unwrap();
     assert!(
         score.score > 50.0,
         "simple code should score well with legacy model, got {}",
@@ -58,7 +66,9 @@ fn run_json_output() {
         "fn main() {\n    let x = 1;\n}\n",
     )
     .unwrap();
-    run(dir.path(), true, false, 10, 6, "cogcom").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, true, 10, 6, "cogcom").unwrap();
 }
 
 #[test]
@@ -70,8 +80,10 @@ fn run_includes_tests_with_flag() {
         "fn test() {\n    assert!(true);\n}\n",
     )
     .unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), true, &filter);
     let model = ScoringModel::Cognitive;
-    let score = compute_score(dir.path(), true, 10, 6, &model).unwrap();
+    let score = compute_score(&cfg, 10, 6, &model).unwrap();
     assert_eq!(score.files_analyzed, 1);
 }
 
@@ -84,21 +96,27 @@ fn run_excludes_tests_by_default() {
         "fn test() {\n    assert!(true);\n}\n",
     )
     .unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
     let model = ScoringModel::Cognitive;
-    let score = compute_score(dir.path(), false, 10, 6, &model).unwrap();
+    let score = compute_score(&cfg, 10, 6, &model).unwrap();
     assert_eq!(score.files_analyzed, 0);
 }
 
 #[test]
 fn run_on_current_repo() {
     // Smoke test on the actual repo
-    run(Path::new("."), false, false, 5, 6, "cogcom").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(Path::new("."), false, &filter);
+    run(&cfg, false, 5, 6, "cogcom").unwrap();
 }
 
 #[test]
 fn run_on_current_repo_legacy() {
     // Smoke test on the actual repo with legacy model
-    run(Path::new("."), false, false, 5, 6, "legacy").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(Path::new("."), false, &filter);
+    run(&cfg, false, 5, 6, "legacy").unwrap();
 }
 
 #[test]
@@ -137,8 +155,10 @@ fn find_test_block_start_empty() {
 fn excludes_markdown_files() {
     let dir = tempfile::tempdir().unwrap();
     fs::write(dir.path().join("README.md"), "# Hello\n\nWorld\n").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
     let model = ScoringModel::Cognitive;
-    let score = compute_score(dir.path(), false, 10, 6, &model).unwrap();
+    let score = compute_score(&cfg, 10, 6, &model).unwrap();
     assert_eq!(score.files_analyzed, 0, "Markdown should be excluded");
 }
 
@@ -150,8 +170,10 @@ fn excludes_toml_files() {
         "[package]\nname = \"test\"\n",
     )
     .unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
     let model = ScoringModel::Cognitive;
-    let score = compute_score(dir.path(), false, 10, 6, &model).unwrap();
+    let score = compute_score(&cfg, 10, 6, &model).unwrap();
     assert_eq!(score.files_analyzed, 0, "TOML should be excluded");
 }
 
@@ -159,8 +181,10 @@ fn excludes_toml_files() {
 fn excludes_json_files() {
     let dir = tempfile::tempdir().unwrap();
     fs::write(dir.path().join("data.json"), "{\"key\": \"value\"}\n").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
     let model = ScoringModel::Cognitive;
-    let score = compute_score(dir.path(), false, 10, 6, &model).unwrap();
+    let score = compute_score(&cfg, 10, 6, &model).unwrap();
     assert_eq!(score.files_analyzed, 0, "JSON should be excluded");
 }
 
@@ -173,8 +197,10 @@ fn run_on_single_file() {
         "/// Docs\nfn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n",
     )
     .unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(&file, false, &filter);
     let model = ScoringModel::Cognitive;
-    let score = compute_score(&file, false, 10, 6, &model).unwrap();
+    let score = compute_score(&cfg, 10, 6, &model).unwrap();
     assert_eq!(score.files_analyzed, 1);
     assert!(score.total_loc > 0);
 }
@@ -187,8 +213,10 @@ fn dimensions_sum_to_100_percent() {
         "fn main() {\n    let x = 1;\n}\n",
     )
     .unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
     let model = ScoringModel::Cognitive;
-    let score = compute_score(dir.path(), false, 10, 6, &model).unwrap();
+    let score = compute_score(&cfg, 10, 6, &model).unwrap();
     let total_weight: f64 = score.dimensions.iter().map(|d| d.weight).sum();
     assert!(
         (total_weight - 1.0).abs() < 0.001,
@@ -204,8 +232,10 @@ fn legacy_dimensions_sum_to_100_percent() {
         "fn main() {\n    let x = 1;\n}\n",
     )
     .unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
     let model = ScoringModel::Legacy;
-    let score = compute_score(dir.path(), false, 10, 6, &model).unwrap();
+    let score = compute_score(&cfg, 10, 6, &model).unwrap();
     let total_weight: f64 = score.dimensions.iter().map(|d| d.weight).sum();
     assert!(
         (total_weight - 1.0).abs() < 0.001,
