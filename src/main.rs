@@ -19,6 +19,8 @@ mod cli_help;
 mod cogcom;
 /// Cyclomatic complexity analysis (per-file and per-function).
 mod cycom;
+/// Shared function detection for complexity analyzers.
+mod detection;
 /// Duplicate code detection using sliding-window fingerprinting.
 mod dups;
 /// Git repository access via libgit2 (change frequency, blame, coupling).

@@ -18,6 +18,7 @@
 use serde::Serialize;
 
 use crate::loc::counter::LineKind;
+use crate::util::indent_level as indent_spaces;
 use crate::util::mask_strings;
 
 use super::detection::detect_functions;
@@ -282,9 +283,6 @@ fn count_indent_scoped(func_lines: &[(usize, &str)], markers: &CognitiveMarkers)
 
     complexity
 }
-
-/// Count indentation in spaces (tabs = 4 spaces).
-use crate::util::indent_level as indent_spaces;
 
 /// Classification result for a single line.
 #[derive(Debug, Clone, Copy, PartialEq)]

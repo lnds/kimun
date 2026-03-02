@@ -1,3 +1,5 @@
+use crate::detection::FunctionDetectionMarkers;
+
 /// Language-specific tokens used to compute cyclomatic complexity.
 ///
 /// Cyclomatic complexity counts independent paths through code. Each
@@ -262,6 +264,18 @@ pub fn markers_for(language_name: &str) -> Option<&'static ComplexityMarkers> {
         "Zig" => Some(&ZIG),
         "Clojure" => Some(&CLOJURE),
         _ => None,
+    }
+}
+
+impl FunctionDetectionMarkers for ComplexityMarkers {
+    fn function_markers(&self) -> &[&str] {
+        self.function_markers
+    }
+    fn brace_scoped(&self) -> bool {
+        self.brace_scoped
+    }
+    fn line_comments(&self) -> &[&str] {
+        self.line_comments
     }
 }
 
