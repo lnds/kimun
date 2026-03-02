@@ -15,7 +15,7 @@ use std::path::Path;
 use crate::loc::counter::LineKind;
 use crate::loc::language::LanguageSpec;
 use crate::util::{find_test_block_start, read_and_classify};
-use crate::walk;
+use crate::walk::WalkConfig;
 use detector::{NormalizedFile, NormalizedLine, detect_duplicates};
 use report::{DuplicationMetrics, display_limit, print_detailed, print_json, print_summary};
 
@@ -61,17 +61,17 @@ pub(crate) fn normalize_file(
 /// Run the full duplication analysis pipeline: walk files, normalize,
 /// detect duplicates, and print results (summary, detailed, or JSON).
 pub fn run(
-    path: &Path,
+    cfg: &WalkConfig<'_>,
     min_lines: usize,
     show_report: bool,
     show_all: bool,
     json: bool,
-    exclude_tests: bool,
 ) -> Result<(), Box<dyn Error>> {
+    let exclude_tests = cfg.exclude_tests();
     let mut files: Vec<NormalizedFile> = Vec::new();
     let mut total_code_lines: usize = 0;
 
-    for (file_path, spec) in walk::source_files(path, exclude_tests) {
+    for (file_path, spec) in cfg.source_files() {
         match normalize_file(&file_path, spec, exclude_tests) {
             Ok(Some(nf)) => {
                 total_code_lines += nf.lines.len();

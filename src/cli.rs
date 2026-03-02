@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use clap::{Args, Parser, Subcommand};
 
 use crate::cli_help;
+use crate::walk::ExcludeFilter;
 
 /// Top-level CLI parser with a single subcommand selector.
 #[derive(Parser)]
@@ -14,6 +15,59 @@ use crate::cli_help;
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
+}
+
+/// Exclude-filter arguments shared by all commands that walk the filesystem.
+#[derive(Args)]
+pub struct ExcludeArgs {
+    /// Only include files with these extensions (case-insensitive, leading dot optional).
+    /// When set, all other extensions are excluded. Cannot be combined with --exclude-ext.
+    /// Repeatable: --include-ext rs --include-ext toml
+    #[arg(long, value_name = "EXT", conflicts_with = "exclude_ext")]
+    pub include_ext: Vec<String>,
+
+    /// Exclude files by extension, case-insensitive (leading dot optional: "js" and ".js" are equivalent).
+    /// Repeatable: --exclude-ext js --exclude-ext ts
+    #[arg(long, value_name = "EXT")]
+    pub exclude_ext: Vec<String>,
+
+    /// Exclude directories by exact name (case-sensitive).
+    /// Matches directory names at any depth in the tree.
+    /// Repeatable: --exclude-dir vendor --exclude-dir dist
+    #[arg(long, value_name = "DIR")]
+    pub exclude_dir: Vec<String>,
+
+    /// Exclude files matching a glob pattern against the relative path from the analysis root.
+    /// Use this for compound extensions (e.g. "*.min.js") or path patterns (e.g. "vendor/**").
+    /// For simple extensions prefer --exclude-ext; for directory names prefer --exclude-dir.
+    /// Repeatable: --exclude "*.min.js" --exclude "generated/**"
+    #[arg(long, short = 'E', value_name = "PATTERN")]
+    pub exclude: Vec<String>,
+
+    /// Print files that would be excluded by the current filter and exit.
+    /// Useful for debugging filter rules before running an analysis.
+    #[arg(long)]
+    pub list_excluded: bool,
+}
+
+impl ExcludeArgs {
+    /// Build an `ExcludeFilter` from the parsed CLI flags.
+    pub fn exclude_filter(&self) -> ExcludeFilter {
+        ExcludeFilter::new(
+            &self.include_ext,
+            &self.exclude_ext,
+            &self.exclude_dir,
+            &self.exclude,
+        )
+    }
+
+    /// Returns `true` if no exclude/include flags were specified.
+    pub fn is_empty(&self) -> bool {
+        self.include_ext.is_empty()
+            && self.exclude_ext.is_empty()
+            && self.exclude_dir.is_empty()
+            && self.exclude.is_empty()
+    }
 }
 
 /// Common arguments shared by most analysis commands.
@@ -29,6 +83,21 @@ pub struct CommonArgs {
     /// Include test files and directories in analysis (excluded by default)
     #[arg(long)]
     pub include_tests: bool,
+
+    #[command(flatten)]
+    pub exclude_args: ExcludeArgs,
+}
+
+impl CommonArgs {
+    /// Build an `ExcludeFilter` from the `--exclude-ext`, `--exclude-dir`, and `--exclude` flags.
+    pub fn exclude_filter(&self) -> ExcludeFilter {
+        self.exclude_args.exclude_filter()
+    }
+
+    /// Whether `--list-excluded` was requested.
+    pub fn list_excluded(&self) -> bool {
+        self.exclude_args.list_excluded
+    }
 }
 
 /// All available analysis subcommands.
@@ -298,6 +367,9 @@ pub enum ScoreCommands {
         /// Include test files and directories in analysis (excluded by default)
         #[arg(long)]
         include_tests: bool,
+
+        #[command(flatten)]
+        exclude_args: ExcludeArgs,
 
         /// Number of worst files to show in "needs attention" (default: 10)
         #[arg(long, default_value = "10")]

@@ -14,7 +14,7 @@ use std::path::Path;
 use crate::loc::counter::LineKind;
 use crate::loc::language::LanguageSpec;
 use crate::util::read_and_classify;
-use crate::walk;
+use crate::walk::WalkConfig;
 use analyzer::analyze;
 use markers::cognitive_markers_for;
 use report::{FileCogcomMetrics, print_json, print_per_function, print_report};
@@ -64,16 +64,14 @@ pub(crate) fn analyze_file(
 /// Walk source files, compute cognitive complexity, filter/sort/truncate
 /// results, and print as a table, per-function breakdown, or JSON.
 pub fn run(
-    path: &Path,
+    cfg: &WalkConfig<'_>,
     json: bool,
-    include_tests: bool,
     min_complexity: usize,
     top: usize,
     per_function: bool,
     sort_by: &str,
 ) -> Result<(), Box<dyn Error>> {
-    let exclude_tests = !include_tests;
-    let mut results = walk::collect_analysis(path, exclude_tests, analyze_file);
+    let mut results = cfg.collect_analysis(analyze_file);
 
     // Filter by min_complexity
     if min_complexity > 1 {

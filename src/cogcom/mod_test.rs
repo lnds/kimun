@@ -1,10 +1,13 @@
 use super::*;
+use crate::walk::{ExcludeFilter, WalkConfig};
 use std::fs;
 
 #[test]
 fn run_on_empty_dir() {
     let dir = tempfile::tempdir().unwrap();
-    run(dir.path(), false, false, 1, 20, false, "total").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, false, 1, 20, false, "total").unwrap();
 }
 
 #[test]
@@ -15,7 +18,9 @@ fn run_on_rust_file() {
         "fn main() {\n    if x > 0 {\n        println!(\"hi\");\n    }\n}\n",
     )
     .unwrap();
-    run(dir.path(), false, false, 1, 20, false, "total").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, false, 1, 20, false, "total").unwrap();
 }
 
 #[test]
@@ -26,7 +31,9 @@ fn run_json_output() {
         "fn main() {\n    let x = 1;\n}\n",
     )
     .unwrap();
-    run(dir.path(), true, false, 1, 20, false, "total").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, true, 1, 20, false, "total").unwrap();
 }
 
 #[test]
@@ -37,7 +44,9 @@ fn run_per_function() {
         "fn foo() {\n    if x > 0 {\n        bar();\n    }\n}\nfn bar() {\n    baz();\n}\n",
     )
     .unwrap();
-    run(dir.path(), false, false, 1, 20, true, "total").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, false, 1, 20, true, "total").unwrap();
 }
 
 #[test]
@@ -48,7 +57,9 @@ fn run_with_min_complexity_filter() {
         "fn foo() {\n    let x = 1;\n}\n",
     )
     .unwrap();
-    run(dir.path(), false, false, 5, 20, false, "total").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, false, 5, 20, false, "total").unwrap();
 }
 
 #[test]
@@ -59,7 +70,9 @@ fn run_sort_by_max() {
         "fn foo() {\n    if x > 0 {\n        bar();\n    }\n}\n",
     )
     .unwrap();
-    run(dir.path(), false, false, 1, 20, false, "max").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, false, 1, 20, false, "max").unwrap();
 }
 
 #[test]
@@ -70,7 +83,9 @@ fn run_sort_by_avg() {
         "fn foo() {\n    if x > 0 {\n        bar();\n    }\n}\n",
     )
     .unwrap();
-    run(dir.path(), false, false, 1, 20, false, "avg").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, false, 1, 20, false, "avg").unwrap();
 }
 
 #[test]

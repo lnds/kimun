@@ -1,5 +1,7 @@
 use super::*;
+use crate::walk::{ExcludeFilter, WalkConfig};
 use std::fs;
+use std::path::Path;
 
 #[test]
 fn run_on_temp_dir_with_rust_file() {
@@ -10,23 +12,29 @@ fn run_on_temp_dir_with_rust_file() {
     )
     .unwrap();
 
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
     // Should succeed without error
-    run(dir.path(), false, false, false).unwrap();
+    run(&cfg, false, false).unwrap();
 }
 
 #[test]
 fn run_on_empty_dir() {
     let dir = tempfile::tempdir().unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
     // Should succeed and print "No recognized source files found."
-    run(dir.path(), false, false, false).unwrap();
+    run(&cfg, false, false).unwrap();
 }
 
 #[test]
 fn run_skips_binary_files() {
     let dir = tempfile::tempdir().unwrap();
     fs::write(dir.path().join("data.c"), b"hello\x00world").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
     // Should succeed — binary file silently skipped
-    run(dir.path(), false, false, false).unwrap();
+    run(&cfg, false, false).unwrap();
 }
 
 #[test]
@@ -35,8 +43,10 @@ fn run_deduplicates_identical_files() {
     let content = "int x = 1;\n";
     fs::write(dir.path().join("a.c"), content).unwrap();
     fs::write(dir.path().join("b.c"), content).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
     // Should succeed — one of the duplicates skipped
-    run(dir.path(), false, false, false).unwrap();
+    run(&cfg, false, false).unwrap();
 }
 
 #[test]
@@ -47,7 +57,9 @@ fn run_with_shebang_detection() {
         "#!/usr/bin/env python3\nprint('hello')\n",
     )
     .unwrap();
-    run(dir.path(), false, false, false).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, false, false).unwrap();
 }
 
 #[test]
@@ -55,8 +67,10 @@ fn run_verbose_on_temp_dir() {
     let dir = tempfile::tempdir().unwrap();
     fs::write(dir.path().join("main.rs"), "fn main() {}\n").unwrap();
     fs::write(dir.path().join("lib.rs"), "pub fn x() {}\n").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
     // Should succeed with verbose stats printed
-    run(dir.path(), true, false, false).unwrap();
+    run(&cfg, true, false).unwrap();
 }
 
 #[test]
@@ -65,14 +79,18 @@ fn run_verbose_with_duplicates() {
     let content = "int x = 1;\n";
     fs::write(dir.path().join("a.c"), content).unwrap();
     fs::write(dir.path().join("b.c"), content).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
     // Should show skipped_files=1 (duplicate)
-    run(dir.path(), true, false, false).unwrap();
+    run(&cfg, true, false).unwrap();
 }
 
 #[test]
 fn run_verbose_empty_dir() {
     let dir = tempfile::tempdir().unwrap();
-    run(dir.path(), true, false, false).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, true, false).unwrap();
 }
 
 #[test]
@@ -83,13 +101,17 @@ fn run_json_output() {
         "fn main() {\n    println!(\"hi\");\n}\n",
     )
     .unwrap();
-    run(dir.path(), false, true, false).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, false, true).unwrap();
 }
 
 #[test]
 fn run_json_empty_dir() {
     let dir = tempfile::tempdir().unwrap();
-    run(dir.path(), false, true, false).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, false, true).unwrap();
 }
 
 #[test]

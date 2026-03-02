@@ -21,7 +21,8 @@ mod json;
 mod markdown;
 
 use std::error::Error;
-use std::path::Path;
+
+use crate::walk::WalkConfig;
 
 pub use data::*;
 
@@ -29,13 +30,12 @@ pub use builder::build_report;
 
 /// Entry point: build the combined report and print it as markdown or JSON.
 pub fn run(
-    path: &Path,
+    cfg: &WalkConfig<'_>,
     json: bool,
-    include_tests: bool,
     top: usize,
     min_lines: usize,
 ) -> Result<(), Box<dyn Error>> {
-    let report = build_report(path, include_tests, top, min_lines)?;
+    let report = build_report(cfg, top, min_lines)?;
 
     if json {
         json::print_json(&report)?;

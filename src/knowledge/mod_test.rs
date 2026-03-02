@@ -1,4 +1,5 @@
 use super::*;
+use crate::walk::{ExcludeFilter, WalkConfig};
 use std::fs;
 use std::path::Path as StdPath;
 
@@ -22,7 +23,9 @@ fn run_on_non_git_dir() {
     let dir = tempfile::tempdir().unwrap();
     let sub = dir.path().join("not_a_repo");
     fs::create_dir_all(&sub).unwrap();
-    let err = run(&sub, false, false, 20, "concentration", None, false).unwrap_err();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(&sub, false, &filter);
+    let err = run(&cfg, false, 20, "concentration", None, false).unwrap_err();
     assert!(
         err.to_string().contains("not a git repository"),
         "should mention not a git repo, got: {err}"
@@ -68,7 +71,9 @@ fn integration_basic() {
         "add main",
     );
 
-    let result = run(dir.path(), false, false, 20, "concentration", None, false);
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run(&cfg, false, 20, "concentration", None, false);
     assert!(result.is_ok(), "knowledge map should succeed on a git repo");
 }
 
@@ -81,7 +86,9 @@ fn integration_json() {
         "add main",
     );
 
-    let result = run(dir.path(), true, false, 20, "concentration", None, false);
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run(&cfg, true, 20, "concentration", None, false);
     assert!(result.is_ok(), "JSON output should succeed");
 }
 
@@ -94,7 +101,9 @@ fn integration_risk_only() {
         "add main",
     );
 
-    let result = run(dir.path(), false, false, 20, "risk", None, true);
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run(&cfg, false, 20, "risk", None, true);
     assert!(result.is_ok(), "risk-only filter should work");
 }
 
@@ -107,7 +116,9 @@ fn integration_sort_by_risk() {
         "add main",
     );
 
-    let result = run(dir.path(), false, false, 20, "risk", None, false);
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run(&cfg, false, 20, "risk", None, false);
     assert!(result.is_ok(), "sort by risk should work");
 }
 
@@ -120,20 +131,16 @@ fn integration_sort_by_diffusion() {
         "add main",
     );
 
-    let result = run(dir.path(), false, false, 20, "diffusion", None, false);
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run(&cfg, false, 20, "diffusion", None, false);
     assert!(result.is_ok(), "sort by diffusion should work");
 }
 
 #[test]
 fn run_on_current_repo() {
-    let result = run(
-        StdPath::new("."),
-        true,
-        false,
-        5,
-        "concentration",
-        None,
-        false,
-    );
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(StdPath::new("."), false, &filter);
+    let result = run(&cfg, true, 5, "concentration", None, false);
     assert!(result.is_ok(), "knowledge map should work on current repo");
 }
