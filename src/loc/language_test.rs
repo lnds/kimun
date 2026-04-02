@@ -87,3 +87,21 @@ fn all_languages_have_names() {
         assert!(!spec.name.is_empty());
     }
 }
+
+#[test]
+fn detect_heex() {
+    let spec = detect(Path::new("component.heex")).unwrap();
+    assert_eq!(spec.name, "HTML EEx");
+}
+
+#[test]
+fn detect_po() {
+    let spec = detect(Path::new("es.po")).unwrap();
+    assert_eq!(spec.name, "PO File");
+}
+
+#[test]
+fn detect_pot() {
+    let spec = detect(Path::new("default.pot")).unwrap();
+    assert_eq!(spec.name, "PO File");
+}
