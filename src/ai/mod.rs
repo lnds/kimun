@@ -13,6 +13,8 @@
 mod client;
 /// Tool executor: maps tool calls to `km` subprocess invocations.
 mod executor;
+/// Claude Code permissions installer (`km ai permissions claude`).
+pub mod permissions;
 /// Tool definitions: JSON Schema descriptions of all 11 `km` subcommands.
 pub(crate) mod schema;
 /// Claude Code skill installer (`km ai skill claude`).

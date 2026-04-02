@@ -293,3 +293,18 @@ Supported providers:
 
 Examples:
   km ai skill claude                    # install the skill";
+
+/// Claude Code permissions installer for km commands.
+/// Adds bash permission rules so km runs without prompting.
+pub const AI_PERMISSIONS: &str = "\
+Configure Claude Code permissions so that km commands run without prompting.
+
+Adds Bash permission rules for all km subcommands to the project's
+.claude/settings.local.json file. Merges with existing permissions
+and is safe to run multiple times (idempotent).
+
+Supported providers:
+  claude  — configures Claude Code permissions
+
+Examples:
+  km ai permissions claude              # add km permissions to project";

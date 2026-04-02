@@ -393,8 +393,26 @@ fn main() {
             } => run_command(path, |t| {
                 ai::run(&provider, t, model.as_deref(), output.as_deref())
             }),
-            AiCommands::Skill { provider } => {
-                if let Err(err) = ai::skill::install(&provider) {
+            AiCommands::Skill {
+                provider,
+                with_permissions,
+            } => {
+                if let Err(err) = ai::skill::install(&provider, with_permissions) {
+                    eprintln!("error: {err}");
+                    std::process::exit(1);
+                }
+            }
+            AiCommands::Permissions { provider } => {
+                if provider != "claude" {
+                    eprintln!("error: Unsupported provider: {provider}. Supported: claude");
+                    std::process::exit(1);
+                }
+                let repo =
+                    git2::Repository::discover(".").expect("Could not find a git repository");
+                let workdir = repo
+                    .workdir()
+                    .expect("Could not determine repository working directory");
+                if let Err(err) = ai::permissions::install(workdir) {
                     eprintln!("error: {err}");
                     std::process::exit(1);
                 }
