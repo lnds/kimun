@@ -3,7 +3,8 @@
 /// Installs a Claude Code skill file (`SKILL.md`) that teaches the AI
 /// provider how to invoke the `km` CLI for code analysis. The skill
 /// can be installed at project level (`.claude/skills/`) or user level
-/// (`~/.claude/skills/`).
+/// (`~/.claude/skills/`). With `--with-permissions`, also configures
+/// bash permissions so `km` commands run without prompting.
 use std::fs;
 use std::io::{self, Write};
 use std::path::PathBuf;
@@ -124,7 +125,7 @@ Reference specific file names and metric values. Be concise but thorough.
 /// Prompts the user to choose between project-level and user-level
 /// installation, creates the directory structure, and writes the skill file.
 /// Currently only the `claude` provider is supported.
-pub fn install(provider: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub fn install(provider: &str, with_permissions: bool) -> Result<(), Box<dyn std::error::Error>> {
     if provider != "claude" {
         return Err(format!("Unsupported provider: {provider}. Supported: claude").into());
     }
@@ -139,7 +140,7 @@ pub fn install(provider: &str) -> Result<(), Box<dyn std::error::Error>> {
     io::stdin().read_line(&mut choice)?;
     let choice = choice.trim();
 
-    let skill_dir = match choice {
+    let (skill_dir, project_root) = match choice {
         "1" => {
             // Find the git repo root so the skill is installed at the project root
             // even when invoked from a subdirectory.
@@ -148,11 +149,14 @@ pub fn install(provider: &str) -> Result<(), Box<dyn std::error::Error>> {
             let workdir = repo
                 .workdir()
                 .ok_or("Could not determine repository working directory")?;
-            workdir.join(".claude/skills/km-analyze")
+            (
+                workdir.join(".claude/skills/km-analyze"),
+                Some(workdir.to_path_buf()),
+            )
         }
         "2" => {
             let home = std::env::var("HOME").map_err(|_| "Could not determine home directory")?;
-            PathBuf::from(home).join(".claude/skills/km-analyze")
+            (PathBuf::from(home).join(".claude/skills/km-analyze"), None)
         }
         _ => return Err("Invalid choice. Please enter 1 or 2.".into()),
     };
@@ -163,6 +167,16 @@ pub fn install(provider: &str) -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Skill installed at: {}", skill_path.display());
     println!("Claude Code will now be able to use km for code analysis.");
+
+    if with_permissions {
+        if let Some(root) = project_root {
+            super::permissions::install(&root)?;
+        } else {
+            eprintln!(
+                "warning: --with-permissions only applies to project-level installs, skipping"
+            );
+        }
+    }
 
     Ok(())
 }

@@ -411,5 +411,16 @@ pub enum AiCommands {
     Skill {
         /// Provider for the skill (e.g. claude)
         provider: String,
+
+        /// Also configure permissions so km commands run without prompting
+        #[arg(long)]
+        with_permissions: bool,
+    },
+
+    /// Configure Claude Code permissions for km commands
+    #[command(long_about = cli_help::AI_PERMISSIONS)]
+    Permissions {
+        /// Provider for permissions (e.g. claude)
+        provider: String,
     },
 }
