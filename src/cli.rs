@@ -340,6 +340,28 @@ pub enum Commands {
         model: String,
     },
 
+    /// Analyze code age: classify files as active, stale, or frozen by last git modification
+    Age {
+        #[command(flatten)]
+        common: CommonArgs,
+
+        /// Files modified within this many days are Active (default: 90)
+        #[arg(long, default_value = "90")]
+        active_days: u64,
+
+        /// Files not modified for more than this many days are Frozen (default: 365)
+        #[arg(long, default_value = "365")]
+        frozen_days: u64,
+
+        /// Sort by: date (oldest first, default), status, or file
+        #[arg(long, default_value = "date", value_parser = ["date", "status", "file"])]
+        sort_by: String,
+
+        /// Show only files with this status: active, stale, or frozen
+        #[arg(long, value_parser = ["active", "stale", "frozen"])]
+        status: Option<String>,
+    },
+
     /// AI-powered code analysis and tooling
     Ai {
         #[command(subcommand)]
