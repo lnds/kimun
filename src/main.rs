@@ -11,6 +11,8 @@
 
 /// AI-powered analysis via external LLM providers.
 mod ai;
+/// Author summary: per-author ownership, lines, languages, last active date.
+mod authors;
 /// CLI argument definitions using `clap` derive macros.
 mod cli;
 /// Long help text constants extracted from CLI definitions.
@@ -313,6 +315,19 @@ fn main() {
                     since.as_deref(),
                     risk_only,
                 )
+            })
+        }
+        Commands::Authors { common, since } => {
+            let filter = common.exclude_filter();
+            maybe_list_excluded(
+                &common.path,
+                common.include_tests,
+                &filter,
+                common.list_excluded(),
+            );
+            run_command(common.path, |t| {
+                let cfg = WalkConfig::new(t, common.include_tests, &filter);
+                authors::run(&cfg, common.json, since.as_deref())
             })
         }
         Commands::Tc {

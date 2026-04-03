@@ -340,6 +340,16 @@ pub enum Commands {
         model: String,
     },
 
+    /// Summarize code ownership by author: files owned, lines, languages, last active date
+    Authors {
+        #[command(flatten)]
+        common: CommonArgs,
+
+        /// Only consider activity since this time (e.g. 6m, 1y, 30d)
+        #[arg(long)]
+        since: Option<String>,
+    },
+
     /// AI-powered code analysis and tooling
     Ai {
         #[command(subcommand)]
