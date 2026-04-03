@@ -100,3 +100,15 @@ fn print_json_with_reports() {
 fn print_json_empty() {
     print_json(vec![]);
 }
+
+#[test]
+fn sep_width_matches_row_width() {
+    // SEP_WIDTH must equal the rendered width of a data row so the separator
+    // aligns with the content (regression for off-by-one where SEP_WIDTH was 68
+    // but rows were 69 chars wide).
+    let row = format!(
+        " {:<COL_LANG$} {:>COL_FILES$} {:>COL_NUM$} {:>COL_NUM$} {:>COL_NUM$}",
+        "Language", "Files", "Blank", "Comment", "Code"
+    );
+    assert_eq!(row.len(), SEP_WIDTH);
+}
