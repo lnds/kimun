@@ -111,6 +111,10 @@ pub enum Commands {
         /// Show summary stats (files read, unique, ignored, elapsed time)
         #[arg(short, long)]
         verbose: bool,
+
+        /// Break down lines of code by git author (requires a git repository)
+        #[arg(long)]
+        by_author: bool,
     },
 
     /// Detect duplicate code across files

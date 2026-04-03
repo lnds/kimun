@@ -11,12 +11,18 @@ pub(crate) mod report;
 
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
+use std::fs::File;
+use std::io::BufReader;
 use std::time::Instant;
 
+use crate::git::GitRepo;
 use crate::util::hash_file;
-use crate::walk::WalkConfig;
-use counter::{FileStats, count_lines};
-use report::{LanguageReport, VerboseStats, print_json, print_report};
+use crate::walk::{self, WalkConfig};
+use counter::{FileStats, LineKind, classify_reader, count_lines};
+use report::{
+    AuthorReport, LanguageReport, VerboseStats, print_author_json, print_author_report, print_json,
+    print_report,
+};
 
 /// Walk source files, deduplicate by content hash, count lines per
 /// language, and print a summary table (or JSON when `json` is true).
@@ -95,6 +101,87 @@ pub fn run(cfg: &WalkConfig<'_>, verbose: bool, json: bool) -> Result<(), Box<dy
             None
         };
         print_report(reports, verbose_stats);
+    }
+
+    Ok(())
+}
+
+/// Walk source files in a git repository, attribute each line to its author
+/// via `git blame`, classify lines with the FSM, and print a per-author table.
+pub fn run_by_author(cfg: &WalkConfig<'_>, json: bool) -> Result<(), Box<dyn Error>> {
+    let git = GitRepo::open(cfg.path)?;
+    let (canonical_walk, prefix) = git.walk_prefix(cfg.path)?;
+
+    // author email → (name, stats, files_set)
+    let mut by_author: HashMap<String, (String, FileStats, HashSet<String>)> = HashMap::new();
+    let mut seen_hashes: HashSet<u64> = HashSet::new();
+
+    for (file_path, spec) in walk::source_files(&canonical_walk, cfg.exclude_tests(), cfg.filter) {
+        if hash_file(&file_path).is_some_and(|h| !seen_hashes.insert(h)) {
+            continue;
+        }
+
+        let Ok(file) = File::open(&file_path) else {
+            continue;
+        };
+        let reader = BufReader::new(file);
+        let kinds = classify_reader(reader, spec);
+
+        let rel = GitRepo::to_git_path(&canonical_walk, &prefix, &file_path);
+        let Ok(hunks) = git.blame_hunks(&rel) else {
+            continue;
+        };
+
+        let file_key = rel.display().to_string();
+
+        for hunk in hunks {
+            let key = hunk.email.clone();
+            let entry = by_author
+                .entry(key)
+                .or_insert_with(|| (hunk.author.clone(), FileStats::default(), HashSet::new()));
+
+            entry.0 = hunk.author.clone();
+            entry.2.insert(file_key.clone());
+
+            for line_idx in (hunk.start_line - 1)..(hunk.start_line - 1 + hunk.lines) {
+                match kinds.get(line_idx) {
+                    Some(LineKind::Code) => entry.1.code += 1,
+                    Some(LineKind::Comment) => entry.1.comment += 1,
+                    Some(LineKind::Blank) => entry.1.blank += 1,
+                    None => {}
+                }
+            }
+        }
+    }
+
+    if by_author.is_empty() {
+        if json {
+            println!(
+                "{}",
+                serde_json::json!({"authors": [], "totals": {"files": 0, "blank": 0, "comment": 0, "code": 0}})
+            );
+        } else {
+            println!("No recognized source files found.");
+        }
+        return Ok(());
+    }
+
+    let reports: Vec<AuthorReport> = by_author
+        .into_iter()
+        .map(|(email, (name, fs, files))| AuthorReport {
+            name,
+            email,
+            files: files.len(),
+            blank: fs.blank,
+            comment: fs.comment,
+            code: fs.code,
+        })
+        .collect();
+
+    if json {
+        print_author_json(reports);
+    } else {
+        print_author_report(reports);
     }
 
     Ok(())
