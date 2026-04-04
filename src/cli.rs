@@ -361,6 +361,12 @@ pub enum Commands {
         /// Scoring model: cogcom (default, v0.14+) or legacy (MI + cyclomatic, v0.13)
         #[arg(long, default_value = "cogcom", value_parser = ["cogcom", "legacy"])]
         model: String,
+
+        /// Compare current score against a git ref (default: HEAD).
+        /// Shows how the score changed: "B- → B (+2.3)".
+        /// Useful for PR review: --trend origin/main
+        #[arg(long, num_args = 0..=1, default_missing_value = "HEAD", value_name = "REF")]
+        trend: Option<String>,
     },
 
     /// Analyze code age: classify files as active, stale, or frozen by last git modification

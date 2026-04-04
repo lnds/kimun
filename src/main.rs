@@ -421,6 +421,7 @@ fn main() {
             bottom,
             min_lines,
             model,
+            trend,
         } => {
             let filter = common.exclude_filter();
             maybe_list_excluded(
@@ -431,7 +432,11 @@ fn main() {
             );
             run_command(common.path, |t| {
                 let cfg = WalkConfig::new(t, common.include_tests, &filter);
-                score::run(&cfg, common.json, bottom, min_lines, &model)
+                if let Some(ref git_ref) = trend {
+                    score::run_diff(&cfg, git_ref, common.json, bottom, min_lines, &model)
+                } else {
+                    score::run(&cfg, common.json, bottom, min_lines, &model)
+                }
             })
         }
         Commands::Score {
