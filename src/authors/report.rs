@@ -1,7 +1,6 @@
 /// Report formatters for author summary analysis.
 use chrono::{DateTime, Utc};
 use serde::Serialize;
-use unicode_width::UnicodeWidthStr;
 
 use super::analyzer::AuthorSummary;
 use crate::report_helpers;
@@ -17,12 +16,6 @@ fn format_date(ts: i64) -> String {
         .unwrap_or_else(|| "unknown".to_string())
 }
 
-/// Left-pad `s` to `width` terminal display columns.
-fn pad_to(s: &str, width: usize) -> String {
-    let padding = width.saturating_sub(UnicodeWidthStr::width(s));
-    format!("{s}{}", " ".repeat(padding))
-}
-
 /// Print a table of per-author summaries sorted by lines descending.
 pub fn print_report(authors: &[AuthorSummary]) {
     if authors.is_empty() {
@@ -32,10 +25,10 @@ pub fn print_report(authors: &[AuthorSummary]) {
 
     let col_author = authors
         .iter()
-        .map(|a| UnicodeWidthStr::width(a.name.as_str()))
+        .map(|a| report_helpers::display_width(a.name.as_str()))
         .max()
         .unwrap_or(0)
-        .max(UnicodeWidthStr::width("Author"));
+        .max(report_helpers::display_width("Author"));
 
     let col_langs = authors
         .iter()
@@ -50,7 +43,7 @@ pub fn print_report(authors: &[AuthorSummary]) {
     println!("{separator}");
     println!(
         " {} {:>COL_OWNED$} {:>COL_LINES$}  {:<col_langs$} {:>COL_DATE$}",
-        pad_to("Author", col_author),
+        report_helpers::pad_to("Author", col_author),
         "Owned",
         "Lines",
         "Languages",
@@ -62,7 +55,7 @@ pub fn print_report(authors: &[AuthorSummary]) {
         let langs = a.languages.join(", ");
         println!(
             " {} {:>COL_OWNED$} {:>COL_LINES$}  {:<col_langs$} {:>COL_DATE$}",
-            pad_to(&a.name, col_author),
+            report_helpers::pad_to(&a.name, col_author),
             a.owned_files,
             a.lines,
             langs,

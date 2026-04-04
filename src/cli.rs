@@ -133,6 +133,17 @@ pub enum Commands {
         /// Minimum lines for a duplicate block (default: 6)
         #[arg(long, default_value = "6")]
         min_lines: usize,
+
+        /// Exit with code 1 if duplicate groups exceed this limit.
+        /// Useful as a CI quality gate: --max-duplicates 0 fails on any duplicate.
+        #[arg(long, value_name = "N")]
+        max_duplicates: Option<usize>,
+
+        /// Exit with code 1 if the duplicated-lines ratio exceeds this percentage.
+        /// Useful for ratcheting down duplication over time: --max-dup-ratio 5.0
+        /// fails when more than 5% of code lines are duplicated.
+        #[arg(long, value_name = "PERCENT")]
+        max_dup_ratio: Option<f64>,
     },
 
     /// Analyze indentation complexity (stddev and max depth per file)
