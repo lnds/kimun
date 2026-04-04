@@ -4,10 +4,10 @@
 
 A fast command-line tool for code analysis, written in Rust. Run `km score` on any project to get an overall health grade (A++ to F--) across five quality dimensions — cognitive complexity, duplication, indentation depth, Halstead effort, and file size — with a list of the files that need the most attention.
 
-Beyond the aggregate score, Kimün provides 12 specialized commands:
+Beyond the aggregate score, Kimün provides 15 specialized commands:
 
-- **Static metrics** — lines of code by language ([cloc](https://github.com/AlDanial/cloc)-compatible), duplicate detection (Rule of Three), Halstead complexity, cyclomatic complexity, cognitive complexity (SonarSource), indentation complexity, and two Maintainability Index variants (Visual Studio and verifysoft).
-- **Git-based analysis** — hotspot detection (change frequency × complexity, Thornhill method), code ownership / knowledge maps via `git blame`, and temporal coupling between files that change together.
+- **Static metrics** — lines of code by language ([cloc](https://github.com/AlDanial/cloc)-compatible), duplicate detection (Rule of Three), Halstead complexity, cyclomatic complexity, cognitive complexity (SonarSource), indentation complexity, two Maintainability Index variants (Visual Studio and verifysoft), and code smell detection.
+- **Git-based analysis** — hotspot detection (change frequency × complexity, Thornhill method), code ownership / knowledge maps via `git blame`, temporal coupling between files that change together, per-author ownership summary, and file age classification (Active / Stale / Frozen).
 - **AI-powered analysis** — optional integration with Claude to run all tools and produce a narrative report.
 
 ## Installation
@@ -43,6 +43,7 @@ Options:
 | Flag | Description |
 |------|-------------|
 | `-v`, `--verbose` | Show summary stats (files read, unique, ignored, elapsed time) |
+| `--by-author` | Break down lines of code by git author (requires a git repository) |
 | `--json` | Output as JSON |
 
 Example output:
@@ -511,6 +512,115 @@ Strong coupling (>= 0.5) suggests hidden dependencies — consider extracting sh
 ```
 
 **Note:** File renames are not tracked across git history. Renamed files appear as separate entries.
+
+### `km smells` -- Code smell detection
+
+Detects common code quality issues per file using text-based heuristics (no AST required). Only languages with complexity marker support are analyzed (same set as `km cycom`: Rust, Python, JS/TS, C/C++, Go, etc.).
+
+```bash
+km smells [path]
+```
+
+#### Smell types
+
+| Smell | Description |
+|-------|-------------|
+| `long_function` | Function body exceeds `--max-lines` (default: 50) |
+| `long_params` | Function has more than `--max-params` parameters (default: 4) |
+| `todo_debt` | TODO, FIXME, HACK, XXX, or BUG in comment lines |
+| `magic_number` | Bare numeric literals in code (excluding 0, 1, 2, -1 and `const`/`let` declarations) |
+| `commented_code` | Two or more consecutive comment lines containing code-like patterns |
+
+Options:
+
+| Flag | Description |
+|------|-------------|
+| `--top N` | Show only the top N files by smell count (default: 20) |
+| `--max-lines N` | Maximum function body lines before flagging (default: 50) |
+| `--max-params N` | Maximum parameter count before flagging (default: 4) |
+| `--json` | Output as JSON |
+
+Example output:
+
+```
+Code Smells
+──────────────────────────────────────────────────────────────────────────────
+ File                            Smells  Top Smell
+──────────────────────────────────────────────────────────────────────────────
+ src/loc/counter.rs                  12  magic_number (7)
+ src/main.rs                          6  todo_debt (4)
+ src/dups/detector.rs                 3  long_function (2)
+──────────────────────────────────────────────────────────────────────────────
+ Total (3 files)                     21
+```
+
+### `km authors` -- Per-author ownership summary
+
+Summarizes code ownership across the project by author. Aggregates `git blame` data to answer "who knows what?" at the team level — complementing `km knowledge` (per-file view) with a team-level view.
+
+```bash
+km authors [path]
+```
+
+Options:
+
+| Flag | Description |
+|------|-------------|
+| `--since DURATION` | Only consider activity since this time (e.g. `6m`, `1y`, `30d`) |
+| `--json` | Output as JSON |
+
+Example output:
+
+```
+──────────────────────────────────────────────────────────────────────
+ Author              Owned      Lines  Languages    Last Active
+──────────────────────────────────────────────────────────────────────
+ E. Diaz                38       8432  Rust, TOML   2026-03-15
+ R. Ramirez              4        312  Rust         2026-02-10
+──────────────────────────────────────────────────────────────────────
+```
+
+### `km age` -- File age analysis
+
+Classifies source files as **Active**, **Stale**, or **Frozen** based on how long ago they were last modified in git history. Helps identify neglected or abandoned code.
+
+```bash
+km age [path]
+```
+
+#### Status classification
+
+| Status | Condition | Meaning |
+|--------|-----------|---------|
+| ACTIVE | Modified within `--active-days` days (default: 90) | Regularly touched |
+| STALE | Between `--active-days` and `--frozen-days` (default: 365) | Neglected |
+| FROZEN | Not modified for more than `--frozen-days` days | Potentially abandoned |
+
+Options:
+
+| Flag | Description |
+|------|-------------|
+| `--active-days N` | Days threshold for Active status (default: 90) |
+| `--frozen-days N` | Days threshold for Frozen status (default: 365) |
+| `--sort-by METRIC` | Sort by `date` (oldest first, default), `status`, or `file` |
+| `--status FILTER` | Show only files with this status: `active`, `stale`, or `frozen` |
+| `--json` | Output as JSON |
+
+Example output:
+
+```
+──────────────────────────────────────────────────────────────────────────────
+ File                    Language     Last Modified  Days  Status
+──────────────────────────────────────────────────────────────────────────────
+ src/legacy/parser.rs    Rust           2023-01-15   840  FROZEN
+ src/util.rs             Rust           2024-09-20   197  STALE
+ src/main.rs             Rust           2026-03-01    34  ACTIVE
+──────────────────────────────────────────────────────────────────────────────
+
+  ACTIVE     12  (modified < 90 days)
+  STALE       8  (90 days – 365 days)
+  FROZEN      3  (not modified > 365 days)
+```
 
 ### `km score` -- Code health score
 
