@@ -97,7 +97,11 @@ fn main() {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Loc { common, verbose } => {
+        Commands::Loc {
+            common,
+            verbose,
+            by_author,
+        } => {
             let filter = common.exclude_filter();
             maybe_list_excluded(
                 &common.path,
@@ -107,7 +111,11 @@ fn main() {
             );
             run_command(common.path, |t| {
                 let cfg = WalkConfig::new(t, common.include_tests, &filter);
-                loc::run(&cfg, verbose, common.json)
+                if by_author {
+                    loc::run_by_author(&cfg, common.json)
+                } else {
+                    loc::run(&cfg, verbose, common.json)
+                }
             })
         }
         Commands::Dups {
