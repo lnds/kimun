@@ -60,12 +60,20 @@ pub(crate) fn normalize_file(
 
 /// Run the full duplication analysis pipeline: walk files, normalize,
 /// detect duplicates, and print results (summary, detailed, or JSON).
+///
+/// If `max_duplicates` is `Some(n)` and the number of detected groups exceeds
+/// `n`, returns an error so the process exits with code 1 — use this as a CI
+/// quality gate (`--max-duplicates 0` fails on any duplicate).
+/// `max_dup_ratio` enforces a percentage ceiling: `--max-dup-ratio 5.0` fails
+/// when more than 5% of code lines are duplicated.
 pub fn run(
     cfg: &WalkConfig<'_>,
     min_lines: usize,
     show_report: bool,
     show_all: bool,
     json: bool,
+    max_duplicates: Option<usize>,
+    max_dup_ratio: Option<f64>,
 ) -> Result<(), Box<dyn Error>> {
     let exclude_tests = cfg.exclude_tests();
     let mut files: Vec<NormalizedFile> = Vec::new();
@@ -126,6 +134,29 @@ pub fn run(
         print_detailed(&metrics, &groups[..limit], groups.len());
     } else {
         print_summary(&metrics, &groups);
+    }
+
+    if max_duplicates.is_some_and(|max| groups.len() > max) {
+        let max = max_duplicates.unwrap();
+        return Err(format!(
+            "quality gate failed: {} duplicate groups found (limit: {max})",
+            groups.len()
+        )
+        .into());
+    }
+
+    if let Some(max_pct) = max_dup_ratio {
+        let actual_pct = if metrics.total_code_lines > 0 {
+            metrics.duplicated_lines as f64 / metrics.total_code_lines as f64 * 100.0
+        } else {
+            0.0
+        };
+        if actual_pct > max_pct {
+            return Err(format!(
+                "quality gate failed: {actual_pct:.1}% duplication ratio exceeds limit of {max_pct:.1}%"
+            )
+            .into());
+        }
     }
 
     Ok(())

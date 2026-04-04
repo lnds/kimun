@@ -1,5 +1,5 @@
 use super::*;
-use crate::age::analyzer::{AgeStatus, AgeThresholds, FileAge, classify};
+use crate::age::analyzer::{AgeThresholds, FileAge, classify};
 use std::path::PathBuf;
 
 const NOW: i64 = 1_700_000_000;

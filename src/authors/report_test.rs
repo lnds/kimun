@@ -1,5 +1,6 @@
 use super::*;
 use crate::authors::analyzer::AuthorSummary;
+use crate::report_helpers;
 
 fn sample() -> Vec<AuthorSummary> {
     vec![
@@ -50,10 +51,10 @@ fn separator_matches_row_width() {
 
     let col_author = authors
         .iter()
-        .map(|a| UnicodeWidthStr::width(a.name.as_str()))
+        .map(|a| report_helpers::display_width(a.name.as_str()))
         .max()
         .unwrap_or(0)
-        .max(UnicodeWidthStr::width("Author"));
+        .max(report_helpers::display_width("Author"));
 
     let col_langs = authors
         .iter()
@@ -67,12 +68,12 @@ fn separator_matches_row_width() {
     // Build a header row and verify its display width matches sep_width.
     let row = format!(
         " {} {:>COL_OWNED$} {:>COL_LINES$}  {:<col_langs$} {:>COL_DATE$}",
-        pad_to("Author", col_author),
+        report_helpers::pad_to("Author", col_author),
         "Owned",
         "Lines",
         "Languages",
         "Last Active",
     );
 
-    assert_eq!(UnicodeWidthStr::width(row.as_str()), sep_width);
+    assert_eq!(report_helpers::display_width(row.as_str()), sep_width);
 }
