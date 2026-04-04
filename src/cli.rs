@@ -249,6 +249,24 @@ pub enum Commands {
         sort_by: String,
     },
 
+    /// Analyze code churn: pure change frequency per file (git commits only)
+    Churn {
+        #[command(flatten)]
+        common: CommonArgs,
+
+        /// Show only the top N files (default: 20)
+        #[arg(long, default_value = "20")]
+        top: usize,
+
+        /// Sort by: commits (default), rate (commits/month), or file
+        #[arg(long, default_value = "commits", value_parser = ["commits", "rate", "file"])]
+        sort_by: String,
+
+        /// Only consider commits since this time (e.g. 6m, 1y, 30d)
+        #[arg(long)]
+        since: Option<String>,
+    },
+
     /// Find hotspots: files that change frequently and have high complexity
     #[command(long_about = cli_help::HOTSPOTS)]
     Hotspots {
