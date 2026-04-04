@@ -45,6 +45,8 @@ mod report;
 mod report_helpers;
 /// Overall code health score (A++ to F--, 5 weighted dimensions).
 mod score;
+/// Code smell detection (long functions, magic numbers, etc.).
+mod smells;
 /// Temporal coupling analysis (co-changing files in git history).
 mod tc;
 /// Shared utilities (string masking, file reading, since parsing).
@@ -342,6 +344,24 @@ fn main() {
                     min_degree,
                     min_strength,
                 )
+            })
+        }
+        Commands::Smells {
+            common,
+            top,
+            max_lines,
+            max_params,
+        } => {
+            let filter = common.exclude_filter();
+            maybe_list_excluded(
+                &common.path,
+                common.include_tests,
+                &filter,
+                common.list_excluded(),
+            );
+            run_command(common.path, |t| {
+                let cfg = WalkConfig::new(t, common.include_tests, &filter);
+                smells::run(&cfg, common.json, top, max_lines, max_params)
             })
         }
         Commands::Score {

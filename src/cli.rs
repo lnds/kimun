@@ -318,6 +318,25 @@ pub enum Commands {
         min_strength: Option<f64>,
     },
 
+    /// Detect common code smells per file
+    #[command(long_about = cli_help::SMELLS)]
+    Smells {
+        #[command(flatten)]
+        common: CommonArgs,
+
+        /// Show only the top N files (default: 20)
+        #[arg(long, default_value = "20")]
+        top: usize,
+
+        /// Maximum function length before flagging (default: 50)
+        #[arg(long, default_value = "50")]
+        max_lines: usize,
+
+        /// Maximum parameter count before flagging (default: 4)
+        #[arg(long, default_value = "4")]
+        max_params: usize,
+    },
+
     /// Compute an overall code health score for the project (A++ to F--)
     #[command(long_about = cli_help::SCORE)]
     Score {

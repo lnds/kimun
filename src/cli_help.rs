@@ -182,6 +182,28 @@ Examples:
   km tc --min-strength 0.5       # only strong coupling
   km tc --json                   # machine-readable output";
 
+/// Code smells: detect common patterns that suggest code quality issues.
+pub const SMELLS: &str = "\
+Detect common code smells per file.
+
+Five smell types are detected using text-based heuristics (no AST):
+
+  Long Function       -- function body exceeds --max-lines (default 50)
+  Long Parameter List -- function has more than --max-params (default 4)
+  TODO/FIXME Debt     -- TODO, FIXME, HACK, XXX, BUG in comments
+  Magic Number        -- bare numeric literals in code (excluding 0, 1, 2, -1)
+  Commented-Out Code  -- consecutive comment lines with code patterns
+
+Only languages with complexity marker support are analyzed (same set as
+cyclomatic/cognitive complexity: Rust, Python, JS/TS, C/C++, Go, etc.).
+
+Examples:
+  km smells                        # default thresholds
+  km smells --max-lines 30         # stricter function length
+  km smells --max-params 3         # stricter param count
+  km smells --top 10               # top 10 files
+  km smells --json                 # machine-readable output";
+
 /// Overall code health score: weighted aggregate of quality dimensions.
 /// Produces a letter grade from A++ (exceptional) to F-- (severe issues).
 pub const SCORE: &str = "\
