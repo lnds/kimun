@@ -25,7 +25,7 @@ fn run_on_non_git_dir() {
     fs::create_dir_all(&sub).unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(&sub, false, &filter);
-    let err = run(&cfg, false, 20, "concentration", None, false).unwrap_err();
+    let err = run(&cfg, false, 20, "concentration", None, false, false).unwrap_err();
     assert!(
         err.to_string().contains("not a git repository"),
         "should mention not a git repo, got: {err}"
@@ -73,7 +73,7 @@ fn integration_basic() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, false, 20, "concentration", None, false);
+    let result = run(&cfg, false, 20, "concentration", None, false, false);
     assert!(result.is_ok(), "knowledge map should succeed on a git repo");
 }
 
@@ -88,7 +88,7 @@ fn integration_json() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, true, 20, "concentration", None, false);
+    let result = run(&cfg, true, 20, "concentration", None, false, false);
     assert!(result.is_ok(), "JSON output should succeed");
 }
 
@@ -103,7 +103,7 @@ fn integration_risk_only() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, false, 20, "risk", None, true);
+    let result = run(&cfg, false, 20, "risk", None, true, false);
     assert!(result.is_ok(), "risk-only filter should work");
 }
 
@@ -118,7 +118,7 @@ fn integration_sort_by_risk() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, false, 20, "risk", None, false);
+    let result = run(&cfg, false, 20, "risk", None, false, false);
     assert!(result.is_ok(), "sort by risk should work");
 }
 
@@ -133,7 +133,7 @@ fn integration_sort_by_diffusion() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, false, 20, "diffusion", None, false);
+    let result = run(&cfg, false, 20, "diffusion", None, false, false);
     assert!(result.is_ok(), "sort by diffusion should work");
 }
 
@@ -141,6 +141,39 @@ fn integration_sort_by_diffusion() {
 fn run_on_current_repo() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(StdPath::new("."), false, &filter);
-    let result = run(&cfg, true, 5, "concentration", None, false);
+    let result = run(&cfg, true, 5, "concentration", None, false, false);
     assert!(result.is_ok(), "knowledge map should work on current repo");
+}
+
+#[test]
+fn integration_summary() {
+    let (dir, repo) = create_test_repo();
+    make_commit(
+        &repo,
+        &[
+            ("main.rs", "fn main() {\n    println!(\"hi\");\n}\n"),
+            ("lib.rs", "pub fn add(a: i32, b: i32) -> i32 { a + b }\n"),
+        ],
+        "add files",
+    );
+
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run(&cfg, false, 20, "concentration", None, false, true);
+    assert!(result.is_ok(), "summary mode should work");
+}
+
+#[test]
+fn integration_summary_json() {
+    let (dir, repo) = create_test_repo();
+    make_commit(
+        &repo,
+        &[("main.rs", "fn main() {\n    println!(\"hi\");\n}\n")],
+        "add main",
+    );
+
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run(&cfg, true, 20, "concentration", None, false, true);
+    assert!(result.is_ok(), "summary JSON mode should work");
 }

@@ -1,6 +1,18 @@
 use std::path::Path;
 
 use serde::Serialize;
+use unicode_width::UnicodeWidthStr;
+
+/// Return the terminal display width of a string (handles multi-byte characters correctly).
+pub fn display_width(s: &str) -> usize {
+    UnicodeWidthStr::width(s)
+}
+
+/// Pad a string to `width` display columns using spaces.
+pub fn pad_to(s: &str, width: usize) -> String {
+    let padding = width.saturating_sub(UnicodeWidthStr::width(s));
+    format!("{s}{}", " ".repeat(padding))
+}
 
 /// A single function row for per-function complexity breakdown reports.
 pub trait PerFunctionRow {
@@ -58,7 +70,7 @@ pub fn print_per_function_breakdown<F: PerFunctionFile>(title: &str, files: &[F]
 /// Compute the max display width for paths, with a minimum of `min`.
 pub fn max_path_width<'a>(paths: impl Iterator<Item = &'a Path>, min: usize) -> usize {
     paths
-        .map(|p| p.display().to_string().len())
+        .map(|p| display_width(&p.display().to_string()))
         .max()
         .unwrap_or(min)
         .max(min)

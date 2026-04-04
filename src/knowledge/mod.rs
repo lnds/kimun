@@ -16,8 +16,8 @@ use crate::util::parse_since;
 use crate::walk::{self, WalkConfig};
 
 use crate::report_helpers;
-use analyzer::{FileOwnership, compute_ownership};
-use report::{print_json, print_report};
+use analyzer::{FileOwnership, aggregate_by_author, compute_ownership};
+use report::{print_json, print_report, print_summary_json, print_summary_report};
 
 /// Check if a file is machine-generated (lock files, minified assets,
 /// protobuf output) and should be excluded from ownership analysis.
@@ -55,6 +55,7 @@ pub fn run(
     sort_by: &str,
     since: Option<&str>,
     risk_only: bool,
+    summary: bool,
 ) -> Result<(), Box<dyn Error>> {
     let git_repo = GitRepo::open(cfg.path)
         .map_err(|e| format!("not a git repository (or any parent): {e}"))?;
@@ -117,7 +118,25 @@ pub fn run(
         }
     }
 
-    report_helpers::output_results(&mut results, top, json, print_json, print_report)
+    if summary {
+        let mut authors = aggregate_by_author(&results);
+        // In summary mode sort_by maps: concentration→files owned, diffusion→lines, risk→worst risk
+        match sort_by {
+            "diffusion" => authors.sort_by(|a, b| b.total_lines.cmp(&a.total_lines)),
+            "risk" => authors.sort_by(|a, b| a.worst_risk.sort_key().cmp(&b.worst_risk.sort_key())),
+            _ => authors.sort_by(|a, b| b.files_owned.cmp(&a.files_owned)),
+        }
+        let limit = top.min(authors.len());
+        let authors = &authors[..limit];
+        if json {
+            print_summary_json(authors)
+        } else {
+            print_summary_report(authors);
+            Ok(())
+        }
+    } else {
+        report_helpers::output_results(&mut results, top, json, print_json, print_report)
+    }
 }
 
 #[cfg(test)]

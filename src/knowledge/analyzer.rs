@@ -137,6 +137,65 @@ fn classify_risk(contributors: &[AuthorContribution]) -> RiskLevel {
     RiskLevel::Low
 }
 
+/// Aggregated ownership summary for a single author across all files they own.
+pub struct AuthorSummary {
+    pub author: String,
+    /// Number of files where this author is the primary owner.
+    pub files_owned: usize,
+    /// Total lines across all owned files.
+    pub total_lines: usize,
+    /// Unique languages across owned files (sorted).
+    pub languages: Vec<String>,
+    /// Worst risk level among owned files.
+    pub worst_risk: RiskLevel,
+    /// Number of owned files flagged for knowledge loss (primary owner inactive).
+    pub knowledge_loss_files: usize,
+}
+
+/// Aggregate per-file ownership data by primary owner.
+/// Each entry in the result represents one author's total footprint.
+pub fn aggregate_by_author(files: &[FileOwnership]) -> Vec<AuthorSummary> {
+    use std::collections::{BTreeMap, BTreeSet};
+
+    // key: author → (files_owned, total_lines, languages, worst_risk, knowledge_loss_files)
+    let mut map: BTreeMap<String, (usize, usize, BTreeSet<String>, RiskLevel, usize)> =
+        BTreeMap::new();
+
+    for f in files {
+        let entry = map.entry(f.primary_owner.clone()).or_insert((
+            0,
+            0,
+            BTreeSet::new(),
+            RiskLevel::Low,
+            0,
+        ));
+        entry.0 += 1;
+        entry.1 += f.total_lines;
+        entry.2.insert(f.language.clone());
+        if f.risk.sort_key() < entry.3.sort_key() {
+            entry.3 = f.risk;
+        }
+        if f.knowledge_loss {
+            entry.4 += 1;
+        }
+    }
+
+    map.into_iter()
+        .map(
+            |(author, (files_owned, total_lines, languages, worst_risk, knowledge_loss_files))| {
+                AuthorSummary {
+                    author,
+                    files_owned,
+                    total_lines,
+                    languages: languages.into_iter().collect(),
+                    worst_risk,
+                    knowledge_loss_files,
+                }
+            },
+        )
+        .collect()
+}
+
 #[cfg(test)]
 #[path = "analyzer_test.rs"]
 mod tests;
