@@ -13,6 +13,8 @@
 mod age;
 /// AI-powered analysis via external LLM providers.
 mod ai;
+/// Author summary: per-author ownership, lines, languages, last active date.
+mod authors;
 /// CLI argument definitions using `clap` derive macros.
 mod cli;
 /// Long help text constants extracted from CLI definitions.
@@ -47,6 +49,8 @@ mod report;
 mod report_helpers;
 /// Overall code health score (A++ to F--, 5 weighted dimensions).
 mod score;
+/// Code smell detection (long functions, magic numbers, etc.).
+mod smells;
 /// Temporal coupling analysis (co-changing files in git history).
 mod tc;
 /// Shared utilities (string masking, file reading, since parsing).
@@ -99,7 +103,11 @@ fn main() {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Loc { common, verbose } => {
+        Commands::Loc {
+            common,
+            verbose,
+            by_author,
+        } => {
             let filter = common.exclude_filter();
             maybe_list_excluded(
                 &common.path,
@@ -109,7 +117,11 @@ fn main() {
             );
             run_command(common.path, |t| {
                 let cfg = WalkConfig::new(t, common.include_tests, &filter);
-                loc::run(&cfg, verbose, common.json)
+                if by_author {
+                    loc::run_by_author(&cfg, common.json)
+                } else {
+                    loc::run(&cfg, verbose, common.json)
+                }
             })
         }
         Commands::Dups {
@@ -343,6 +355,19 @@ fn main() {
                 )
             })
         }
+        Commands::Authors { common, since } => {
+            let filter = common.exclude_filter();
+            maybe_list_excluded(
+                &common.path,
+                common.include_tests,
+                &filter,
+                common.list_excluded(),
+            );
+            run_command(common.path, |t| {
+                let cfg = WalkConfig::new(t, common.include_tests, &filter);
+                authors::run(&cfg, common.json, since.as_deref())
+            })
+        }
         Commands::Tc {
             common,
             top,
@@ -370,6 +395,24 @@ fn main() {
                     min_degree,
                     min_strength,
                 )
+            })
+        }
+        Commands::Smells {
+            common,
+            top,
+            max_lines,
+            max_params,
+        } => {
+            let filter = common.exclude_filter();
+            maybe_list_excluded(
+                &common.path,
+                common.include_tests,
+                &filter,
+                common.list_excluded(),
+            );
+            run_command(common.path, |t| {
+                let cfg = WalkConfig::new(t, common.include_tests, &filter);
+                smells::run(&cfg, common.json, top, max_lines, max_params)
             })
         }
         Commands::Score {

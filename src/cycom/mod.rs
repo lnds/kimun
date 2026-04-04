@@ -5,7 +5,7 @@
 /// Simple, Moderate, Complex, or HighlyComplex.
 mod analyzer;
 mod detection;
-mod markers;
+pub(crate) mod markers;
 pub(crate) mod report;
 
 use std::error::Error;
