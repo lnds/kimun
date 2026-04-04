@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use serde::Serialize;
+use unicode_width::UnicodeWidthStr;
 
 /// A single function row for per-function complexity breakdown reports.
 pub trait PerFunctionRow {
@@ -36,18 +37,17 @@ pub fn print_per_function_breakdown<F: PerFunctionFile>(title: &str, files: &[F]
         let rows = f.rows();
         let max_name_len = rows
             .iter()
-            .map(|r| r.name().len())
+            .map(|r| display_width(r.name()))
             .max()
             .unwrap_or(10)
             .max(10);
 
         for r in rows {
             println!(
-                "  {:<width$}  {:>5}  {}",
-                r.name(),
+                "  {}  {:>5}  {}",
+                pad_to(r.name(), max_name_len),
                 r.complexity(),
                 r.level_str(),
-                width = max_name_len
             );
         }
     }
@@ -55,10 +55,27 @@ pub fn print_per_function_breakdown<F: PerFunctionFile>(title: &str, files: &[F]
     println!("{sep}");
 }
 
+/// Returns the display width of `s` in terminal columns.
+///
+/// Uses `unicode-width` so CJK and accented characters are measured correctly
+/// rather than counting raw bytes or Unicode scalar values.
+pub fn display_width(s: &str) -> usize {
+    UnicodeWidthStr::width(s)
+}
+
+/// Left-pad `s` to `width` terminal display columns.
+///
+/// Rust's built-in `{:<N}` counts Unicode scalar values, not display columns.
+/// This helper pads by display width so accented and CJK characters align.
+pub fn pad_to(s: &str, width: usize) -> String {
+    let padding = width.saturating_sub(UnicodeWidthStr::width(s));
+    format!("{s}{}", " ".repeat(padding))
+}
+
 /// Compute the max display width for paths, with a minimum of `min`.
 pub fn max_path_width<'a>(paths: impl Iterator<Item = &'a Path>, min: usize) -> usize {
     paths
-        .map(|p| p.display().to_string().len())
+        .map(|p| display_width(&p.display().to_string()))
         .max()
         .unwrap_or(min)
         .max(min)
