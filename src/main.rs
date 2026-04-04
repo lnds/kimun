@@ -99,7 +99,11 @@ fn main() {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Loc { common, verbose } => {
+        Commands::Loc {
+            common,
+            verbose,
+            by_author,
+        } => {
             let filter = common.exclude_filter();
             maybe_list_excluded(
                 &common.path,
@@ -109,7 +113,11 @@ fn main() {
             );
             run_command(common.path, |t| {
                 let cfg = WalkConfig::new(t, common.include_tests, &filter);
-                loc::run(&cfg, verbose, common.json)
+                if by_author {
+                    loc::run_by_author(&cfg, common.json)
+                } else {
+                    loc::run(&cfg, verbose, common.json)
+                }
             })
         }
         Commands::Dups {
@@ -413,8 +421,26 @@ fn main() {
             } => run_command(path, |t| {
                 ai::run(&provider, t, model.as_deref(), output.as_deref())
             }),
-            AiCommands::Skill { provider } => {
-                if let Err(err) = ai::skill::install(&provider) {
+            AiCommands::Skill {
+                provider,
+                with_permissions,
+            } => {
+                if let Err(err) = ai::skill::install(&provider, with_permissions) {
+                    eprintln!("error: {err}");
+                    std::process::exit(1);
+                }
+            }
+            AiCommands::Permissions { provider } => {
+                if provider != "claude" {
+                    eprintln!("error: Unsupported provider: {provider}. Supported: claude");
+                    std::process::exit(1);
+                }
+                let repo =
+                    git2::Repository::discover(".").expect("Could not find a git repository");
+                let workdir = repo
+                    .workdir()
+                    .expect("Could not determine repository working directory");
+                if let Err(err) = ai::permissions::install(workdir) {
                     eprintln!("error: {err}");
                     std::process::exit(1);
                 }

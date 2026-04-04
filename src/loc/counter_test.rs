@@ -464,3 +464,80 @@ fn batch_multiple_comment_markers() {
     assert_eq!(stats.comment, 3);
     assert_eq!(stats.code, 1);
 }
+
+fn spec_heex() -> LanguageSpec {
+    LanguageSpec {
+        name: "HTML EEx",
+        extensions: &["heex"],
+        filenames: &[],
+        line_comments: &[],
+        line_comment_not_before: "",
+        block_comment: Some(("<!--", "-->")),
+        nested_block_comments: false,
+        single_quote_strings: true,
+        triple_quote_strings: false,
+        pragma: None,
+        shebangs: &[],
+    }
+}
+
+fn spec_po() -> LanguageSpec {
+    LanguageSpec {
+        name: "PO File",
+        extensions: &["po", "pot"],
+        filenames: &[],
+        line_comments: &["#"],
+        line_comment_not_before: "",
+        block_comment: None,
+        nested_block_comments: false,
+        single_quote_strings: false,
+        triple_quote_strings: false,
+        pragma: None,
+        shebangs: &[],
+    }
+}
+
+#[test]
+fn heex_html_comment() {
+    let stats = count(&spec_heex(), "<!-- comment -->\n<div>hello</div>\n");
+    assert_eq!(stats.comment, 1);
+    assert_eq!(stats.code, 1);
+}
+
+#[test]
+fn heex_multiline_comment() {
+    let stats = count(&spec_heex(), "<!--\n  multi\n  line\n-->\n<p>code</p>\n");
+    assert_eq!(stats.comment, 4);
+    assert_eq!(stats.code, 1);
+}
+
+#[test]
+fn heex_code_only() {
+    let stats = count(
+        &spec_heex(),
+        "<.live_component module={MyApp.Modal} id=\"modal\" />\n",
+    );
+    assert_eq!(stats.code, 1);
+    assert_eq!(stats.comment, 0);
+}
+
+#[test]
+fn po_comment_lines() {
+    let stats = count(
+        &spec_po(),
+        "# translator comment\n#. extracted\n#: src/foo.ex:42\n#, fuzzy\nmsgid \"hello\"\nmsgstr \"hola\"\n",
+    );
+    assert_eq!(stats.comment, 4);
+    assert_eq!(stats.code, 2);
+}
+
+#[test]
+fn po_blank_and_code() {
+    let stats = count(
+        &spec_po(),
+        "msgid \"\"\nmsgstr \"\"\n\nmsgid \"Save\"\nmsgstr \"Guardar\"\n",
+    );
+    assert_eq!(stats.blank, 1);
+    assert_eq!(stats.code, 4);
+    assert_eq!(stats.comment, 0);
+}

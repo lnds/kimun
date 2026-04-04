@@ -33,6 +33,18 @@ pub struct FileFrequency {
     pub last_commit: i64,
 }
 
+/// Per-hunk blame data with line range, used to join against FSM line classification.
+pub struct BlameHunkInfo {
+    /// Author display name from git signature.
+    pub author: String,
+    /// Author email from git signature.
+    pub email: String,
+    /// First line of the hunk (1-based).
+    pub start_line: usize,
+    /// Number of lines in this hunk.
+    pub lines: usize,
+}
+
 /// Per-author blame contribution for a single file.
 pub struct BlameInfo {
     /// Author display name from git signature.
@@ -179,6 +191,28 @@ impl GitRepo {
 
         let mut result: Vec<BlameInfo> = map.into_values().collect();
         result.sort_by(|a, b| b.lines.cmp(&a.lines));
+        Ok(result)
+    }
+
+    /// Run git blame on a file and return per-hunk data preserving line ranges.
+    /// Used to join blame attribution with per-line FSM classification.
+    pub fn blame_hunks(&self, rel_path: &Path) -> Result<Vec<BlameHunkInfo>, Box<dyn Error>> {
+        let mut opts = BlameOptions::new();
+        let blame = self.repo.blame_file(rel_path, Some(&mut opts))?;
+
+        let result = blame
+            .iter()
+            .map(|hunk| {
+                let sig = hunk.final_signature();
+                BlameHunkInfo {
+                    author: sig.name().unwrap_or("unknown").to_string(),
+                    email: sig.email().unwrap_or("unknown").to_string(),
+                    start_line: hunk.final_start_line(),
+                    lines: hunk.lines_in_hunk(),
+                }
+            })
+            .collect();
+
         Ok(result)
     }
 

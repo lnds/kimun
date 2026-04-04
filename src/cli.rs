@@ -111,6 +111,10 @@ pub enum Commands {
         /// Show summary stats (files read, unique, ignored, elapsed time)
         #[arg(short, long)]
         verbose: bool,
+
+        /// Break down lines of code by git author (requires a git repository)
+        #[arg(long)]
+        by_author: bool,
     },
 
     /// Detect duplicate code across files
@@ -429,6 +433,17 @@ pub enum AiCommands {
     #[command(long_about = cli_help::AI_SKILL)]
     Skill {
         /// Provider for the skill (e.g. claude)
+        provider: String,
+
+        /// Also configure permissions so km commands run without prompting
+        #[arg(long)]
+        with_permissions: bool,
+    },
+
+    /// Configure Claude Code permissions for km commands
+    #[command(long_about = cli_help::AI_PERMISSIONS)]
+    Permissions {
+        /// Provider for permissions (e.g. claude)
         provider: String,
     },
 }

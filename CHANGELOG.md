@@ -21,6 +21,35 @@
 - add cognitive complexity (SonarSource 2017), replace MI+cyclomatic in score
 - add `km score diff` and auto-update homebrew on release
 
+## v0.16.0 (2026-04-02)
+
+### Feat
+
+- **loc**: add HTML EEx (.heex) and PO File (.po, .pot) language support
+
+## v0.15.1 (2026-03-03)
+
+### Feat
+
+- add --exclude-ext, --exclude-dir, --exclude, --include-ext, and --list-excluded filters
+
+### Fix
+
+- install project-level skill at git repo root, not cwd
+
+### Refactor
+
+- consolidate duplicated function detection into shared module
+- extract `indent_level` to `util.rs`, remove 3 duplicates
+
+## v0.14.0 (2026-03-01)
+
+### Feat
+
+- add `--model legacy` flag to `km score` for backward compatibility
+- add cognitive complexity (SonarSource 2017), replace MI+cyclomatic in score
+- add `km score diff` and auto-update homebrew on release
+
 ## v0.13.3 (2026-02-25)
 
 ## 0.12.3 (2026-02-19)
