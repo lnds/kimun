@@ -1,4 +1,5 @@
 use std::io::Write;
+use std::path::PathBuf;
 
 use tempfile::tempdir;
 
@@ -167,4 +168,48 @@ fn doc_comments_with_use_not_false_positive() {
             "doc comments with `use` should not trigger commented-out code detection"
         );
     }
+}
+
+#[test]
+fn run_on_files_with_smell() {
+    let dir = tempdir().unwrap();
+    let file = dir.path().join("big.rs");
+    let mut f = std::fs::File::create(&file).unwrap();
+    writeln!(f, "fn big() {{").unwrap();
+    for i in 0..55 {
+        writeln!(f, "    let x{i} = {i};").unwrap();
+    }
+    writeln!(f, "}}").unwrap();
+
+    let result = super::run_on_files(&[file], false, 20, 50, 4);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn run_on_files_empty_list() {
+    let result = super::run_on_files(&[], false, 20, 50, 4);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn run_on_files_skips_unknown_extension() {
+    let dir = tempdir().unwrap();
+    let file = dir.path().join("data.xyz");
+    std::fs::write(&file, "hello world").unwrap();
+
+    let result = super::run_on_files(&[file], false, 20, 50, 4);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn run_on_files_json_empty() {
+    let result = super::run_on_files(&[], true, 20, 50, 4);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn run_on_files_nonexistent_path_skips() {
+    let paths = vec![PathBuf::from("/nonexistent/path/fake.rs")];
+    let result = super::run_on_files(&paths, false, 20, 50, 4);
+    assert!(result.is_ok(), "nonexistent files should be skipped, not panic");
 }

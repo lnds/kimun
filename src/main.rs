@@ -402,6 +402,8 @@ fn main() {
             top,
             max_lines,
             max_params,
+            files,
+            since_ref,
         } => {
             let filter = common.exclude_filter();
             maybe_list_excluded(
@@ -411,8 +413,17 @@ fn main() {
                 common.list_excluded(),
             );
             run_command(common.path, |t| {
-                let cfg = WalkConfig::new(t, common.include_tests, &filter);
-                smells::run(&cfg, common.json, top, max_lines, max_params)
+                if let Some(ref git_ref) = since_ref {
+                    let git_repo =
+                        git::GitRepo::open(t).map_err(|e| format!("not a git repository: {e}"))?;
+                    let changed = git_repo.files_changed_since(git_ref)?;
+                    smells::run_on_files(&changed, common.json, top, max_lines, max_params)
+                } else if !files.is_empty() {
+                    smells::run_on_files(&files, common.json, top, max_lines, max_params)
+                } else {
+                    let cfg = WalkConfig::new(t, common.include_tests, &filter);
+                    smells::run(&cfg, common.json, top, max_lines, max_params)
+                }
             })
         }
         Commands::Score {

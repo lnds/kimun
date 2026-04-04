@@ -8,10 +8,10 @@ mod report;
 mod rules;
 
 use std::error::Error;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::cycom::markers::markers_for;
-use crate::loc::language::LanguageSpec;
+use crate::loc::language::{LanguageSpec, detect};
 use crate::util::read_and_classify;
 use crate::walk::WalkConfig;
 
@@ -47,6 +47,49 @@ fn analyze_file(
         smells,
         total,
     }))
+}
+
+/// Analyze an explicit list of file paths for smells.
+/// Skips paths that are not recognized source files or no longer exist.
+/// Used by `--files` and `--since-ref` to limit analysis to a PR's changed files.
+pub fn run_on_files(
+    paths: &[PathBuf],
+    json: bool,
+    top: usize,
+    max_lines: usize,
+    max_params: usize,
+) -> Result<(), Box<dyn Error>> {
+    let mut results: Vec<FileSmellMetrics> = Vec::new();
+
+    for path in paths {
+        let spec = match detect(path) {
+            Some(s) => s,
+            None => continue,
+        };
+        match analyze_file(path, spec, max_lines, max_params) {
+            Ok(Some(m)) => results.push(m),
+            Ok(None) => {}
+            Err(e) => eprintln!("warning: {}: {e}", path.display()),
+        }
+    }
+
+    if results.is_empty() {
+        if json {
+            return report::print_json(&[]);
+        }
+        println!("No recognized source files in the provided list.");
+        return Ok(());
+    }
+
+    results.sort_by(|a, b| b.total.cmp(&a.total));
+    results.truncate(top);
+
+    if json {
+        print_json(&results)
+    } else {
+        print_report(&results);
+        Ok(())
+    }
 }
 
 /// Walk source files, detect smells, sort by count, and output.
