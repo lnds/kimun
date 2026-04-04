@@ -6,7 +6,6 @@
 use std::time::Duration;
 
 use serde::Serialize;
-use unicode_width::UnicodeWidthStr;
 
 use crate::report_helpers;
 
@@ -142,15 +141,6 @@ pub struct AuthorReport {
     pub code: usize,
 }
 
-/// Left-pad `s` to `width` terminal display columns using `unicode-width`.
-/// Rust's built-in `{:<N}` counts codepoints, not display columns — for
-/// names with combining characters or CJK the two can diverge.
-fn pad_to(s: &str, width: usize) -> String {
-    let display_w = UnicodeWidthStr::width(s);
-    let padding = width.saturating_sub(display_w);
-    format!("{s}{}", " ".repeat(padding))
-}
-
 /// Print a cloc-style table with per-author line counts and totals.
 /// The author column width adapts to the longest name in the dataset,
 /// measured in terminal display columns rather than codepoints.
@@ -159,10 +149,10 @@ pub fn print_author_report(mut reports: Vec<AuthorReport>) {
 
     let col_author = reports
         .iter()
-        .map(|r| UnicodeWidthStr::width(r.name.as_str()))
+        .map(|r| report_helpers::display_width(r.name.as_str()))
         .max()
         .unwrap_or(0)
-        .max(UnicodeWidthStr::width("Author"));
+        .max(report_helpers::display_width("Author"));
 
     let sep_width = 1 + col_author + 1 + COL_FILES + 1 + COL_NUM + 1 + COL_NUM + 1 + COL_NUM;
     let separator = report_helpers::separator(sep_width);
@@ -170,7 +160,7 @@ pub fn print_author_report(mut reports: Vec<AuthorReport>) {
     println!("{separator}");
     println!(
         " {} {:>COL_FILES$} {:>COL_NUM$} {:>COL_NUM$} {:>COL_NUM$}",
-        pad_to("Author", col_author),
+        report_helpers::pad_to("Author", col_author),
         "Files",
         "Blank",
         "Comment",
@@ -186,7 +176,7 @@ pub fn print_author_report(mut reports: Vec<AuthorReport>) {
     for r in &reports {
         println!(
             " {} {:>COL_FILES$} {:>COL_NUM$} {:>COL_NUM$} {:>COL_NUM$}",
-            pad_to(&r.name, col_author),
+            report_helpers::pad_to(&r.name, col_author),
             r.files,
             r.blank,
             r.comment,
@@ -201,7 +191,7 @@ pub fn print_author_report(mut reports: Vec<AuthorReport>) {
     println!("{separator}");
     println!(
         " {} {:>COL_FILES$} {:>COL_NUM$} {:>COL_NUM$} {:>COL_NUM$}",
-        pad_to("SUM:", col_author),
+        report_helpers::pad_to("SUM:", col_author),
         total_files,
         total_blank,
         total_comment,
