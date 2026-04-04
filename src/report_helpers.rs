@@ -2,6 +2,59 @@ use std::path::Path;
 
 use serde::Serialize;
 
+/// A single function row for per-function complexity breakdown reports.
+pub trait PerFunctionRow {
+    fn name(&self) -> &str;
+    fn complexity(&self) -> usize;
+    fn level_str(&self) -> &str;
+}
+
+/// A file entry that carries a path and a list of per-function rows.
+pub trait PerFunctionFile {
+    type Row: PerFunctionRow;
+    fn path_str(&self) -> String;
+    fn rows(&self) -> &[Self::Row];
+}
+
+/// Print a per-function complexity breakdown grouped by file.
+///
+/// `title` is printed as the report header (e.g. "Cyclomatic Complexity (per function)").
+pub fn print_per_function_breakdown<F: PerFunctionFile>(title: &str, files: &[F]) {
+    if files.is_empty() {
+        println!("No recognized source files found.");
+        return;
+    }
+
+    let sep = separator(78);
+    println!("{title}");
+    println!("{sep}");
+
+    for f in files {
+        println!();
+        println!("{}:", f.path_str());
+
+        let rows = f.rows();
+        let max_name_len = rows
+            .iter()
+            .map(|r| r.name().len())
+            .max()
+            .unwrap_or(10)
+            .max(10);
+
+        for r in rows {
+            println!(
+                "  {:<width$}  {:>5}  {}",
+                r.name(),
+                r.complexity(),
+                r.level_str(),
+                width = max_name_len
+            );
+        }
+    }
+
+    println!("{sep}");
+}
+
 /// Compute the max display width for paths, with a minimum of `min`.
 pub fn max_path_width<'a>(paths: impl Iterator<Item = &'a Path>, min: usize) -> usize {
     paths

@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use serde::Serialize;
 
 use super::analyzer::{CognitiveLevel, FunctionCognitive};
-use crate::report_helpers;
+use crate::report_helpers::{self, PerFunctionFile, PerFunctionRow};
 
 /// Per-file cognitive complexity metrics, including per-function breakdown.
 pub struct FileCogcomMetrics {
@@ -81,41 +81,31 @@ pub fn print_report(files: &[FileCogcomMetrics]) {
     );
 }
 
+impl PerFunctionRow for FunctionCognitive {
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn complexity(&self) -> usize {
+        self.complexity
+    }
+    fn level_str(&self) -> &str {
+        self.level.as_str()
+    }
+}
+
+impl PerFunctionFile for FileCogcomMetrics {
+    type Row = FunctionCognitive;
+    fn path_str(&self) -> String {
+        self.path.display().to_string()
+    }
+    fn rows(&self) -> &[FunctionCognitive] {
+        &self.functions
+    }
+}
+
 /// Print per-function cognitive complexity breakdown grouped by file.
 pub fn print_per_function(files: &[FileCogcomMetrics]) {
-    if files.is_empty() {
-        println!("No recognized source files found.");
-        return;
-    }
-
-    let separator = report_helpers::separator(78);
-    println!("Cognitive Complexity (per function)");
-    println!("{separator}");
-
-    for f in files {
-        println!();
-        println!("{}:", f.path.display());
-
-        let max_name_len = f
-            .functions
-            .iter()
-            .map(|func| func.name.len())
-            .max()
-            .unwrap_or(10)
-            .max(10);
-
-        for func in &f.functions {
-            println!(
-                "  {:<width$}  {:>5}  {}",
-                func.name,
-                func.complexity,
-                func.level.as_str(),
-                width = max_name_len
-            );
-        }
-    }
-
-    println!("{separator}");
+    report_helpers::print_per_function_breakdown("Cognitive Complexity (per function)", files);
 }
 
 /// JSON-serializable representation of a single function's complexity.
