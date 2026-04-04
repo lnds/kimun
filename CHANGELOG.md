@@ -21,6 +21,24 @@
 - add cognitive complexity (SonarSource 2017), replace MI+cyclomatic in score
 - add `km score diff` and auto-update homebrew on release
 
+## v0.17.0 (2026-04-04)
+
+### Feat
+
+- **loc**: add --by-author flag to break down lines by git author
+- add `km smells` command for code smell detection
+- add km authors command for per-author ownership summary
+- **age**: add km age command to classify files by last git modification
+- **ai**: add permissions command and --with-permissions flag for skill install
+
+### Fix
+
+- **loc**: fix table alignment and replace magic numbers with named constants
+
+### Refactor
+
+- extract print_per_function_breakdown to report_helpers
+
 ## v0.16.0 (2026-04-02)
 
 ### Feat
