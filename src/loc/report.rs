@@ -27,6 +27,11 @@ pub struct VerboseStats {
     pub elapsed: Duration,
 }
 
+const COL_LANG: usize = 20;
+const COL_FILES: usize = 8;
+const COL_NUM: usize = 12;
+const SEP_WIDTH: usize = 1 + COL_LANG + 1 + COL_FILES + 1 + COL_NUM + 1 + COL_NUM + 1 + COL_NUM;
+
 /// Print a cloc-style table with per-language line counts and totals.
 /// When `verbose` is provided, prints file counts and throughput first.
 pub fn print_report(mut reports: Vec<LanguageReport>, verbose: Option<VerboseStats>) {
@@ -56,11 +61,11 @@ pub fn print_report(mut reports: Vec<LanguageReport>, verbose: Option<VerboseSta
         println!();
     }
 
-    let separator = report_helpers::separator(68);
+    let separator = report_helpers::separator(SEP_WIDTH);
 
     println!("{separator}");
     println!(
-        " {:<20} {:>8} {:>12} {:>12} {:>12}",
+        " {:<COL_LANG$} {:>COL_FILES$} {:>COL_NUM$} {:>COL_NUM$} {:>COL_NUM$}",
         "Language", "Files", "Blank", "Comment", "Code"
     );
     println!("{separator}");
@@ -72,7 +77,7 @@ pub fn print_report(mut reports: Vec<LanguageReport>, verbose: Option<VerboseSta
 
     for r in &reports {
         println!(
-            " {:<20} {:>8} {:>12} {:>12} {:>12}",
+            " {:<COL_LANG$} {:>COL_FILES$} {:>COL_NUM$} {:>COL_NUM$} {:>COL_NUM$}",
             r.name, r.files, r.blank, r.comment, r.code
         );
         total_files += r.files;
@@ -83,7 +88,7 @@ pub fn print_report(mut reports: Vec<LanguageReport>, verbose: Option<VerboseSta
 
     println!("{separator}");
     println!(
-        " {:<20} {:>8} {:>12} {:>12} {:>12}",
+        " {:<COL_LANG$} {:>COL_FILES$} {:>COL_NUM$} {:>COL_NUM$} {:>COL_NUM$}",
         "SUM:", total_files, total_blank, total_comment, total_code
     );
     println!("{separator}");
