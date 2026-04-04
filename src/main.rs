@@ -15,6 +15,8 @@ mod age;
 mod ai;
 /// Author summary: per-author ownership, lines, languages, last active date.
 mod authors;
+/// Code churn analysis: pure change frequency per file from git history.
+mod churn;
 /// CLI argument definitions using `clap` derive macros.
 mod cli;
 /// Long help text constants extracted from CLI definitions.
@@ -285,6 +287,24 @@ fn main() {
             run_command(common.path, |t| {
                 let cfg = WalkConfig::new(t, common.include_tests, &filter);
                 miv::run(&cfg, common.json, top, &sort_by)
+            })
+        }
+        Commands::Churn {
+            common,
+            top,
+            sort_by,
+            since,
+        } => {
+            let filter = common.exclude_filter();
+            maybe_list_excluded(
+                &common.path,
+                common.include_tests,
+                &filter,
+                common.list_excluded(),
+            );
+            run_command(common.path, |t| {
+                let cfg = WalkConfig::new(t, common.include_tests, &filter);
+                churn::run(&cfg, common.json, top, &sort_by, since.as_deref())
             })
         }
         Commands::Hotspots {
