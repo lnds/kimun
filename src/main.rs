@@ -465,6 +465,8 @@ fn main() {
             min_lines,
             model,
             trend,
+            fail_if_worse,
+            fail_below,
         } => {
             let filter = common.exclude_filter();
             maybe_list_excluded(
@@ -473,10 +475,25 @@ fn main() {
                 &filter,
                 common.list_excluded(),
             );
+            // Parse --fail-below grade early so errors surface before running analysis.
+            let fail_below_grade = match fail_below {
+                Some(ref s) => match score::analyzer::Grade::parse(s) {
+                    Ok(g) => Some(g),
+                    Err(e) => {
+                        eprintln!("error: --fail-below: {e}");
+                        std::process::exit(1);
+                    }
+                },
+                None => None,
+            };
             run_command(common.path, |t| {
                 let cfg = WalkConfig::new(t, common.include_tests, &filter);
                 if let Some(ref git_ref) = trend {
-                    score::run_diff(&cfg, git_ref, common.json, bottom, min_lines, &model)
+                    let gate = score::ScoreGate {
+                        fail_if_worse,
+                        fail_below: fail_below_grade,
+                    };
+                    score::run_diff(&cfg, git_ref, common.json, bottom, min_lines, &model, gate)
                 } else {
                     score::run(&cfg, common.json, bottom, min_lines, &model)
                 }
@@ -500,7 +517,15 @@ fn main() {
             maybe_list_excluded(&path, include_tests, &filter, exclude_args.list_excluded);
             run_command(path, |t| {
                 let cfg = WalkConfig::new(t, include_tests, &filter);
-                score::run_diff(&cfg, &git_ref, json, bottom, min_lines, &model)
+                score::run_diff(
+                    &cfg,
+                    &git_ref,
+                    json,
+                    bottom,
+                    min_lines,
+                    &model,
+                    score::ScoreGate::default(),
+                )
             })
         }
         Commands::Ai { command } => match command {

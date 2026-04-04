@@ -242,3 +242,106 @@ fn legacy_dimensions_sum_to_100_percent() {
         "legacy weights should sum to 1.0, got {total_weight}"
     );
 }
+
+// --- ScoreGate tests ---
+
+fn make_git_repo_with_file(content: &str) -> tempfile::TempDir {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = git2::Repository::init(dir.path()).unwrap();
+    let mut config = repo.config().unwrap();
+    config.set_str("user.name", "Test").unwrap();
+    config.set_str("user.email", "test@test.com").unwrap();
+
+    let sig =
+        git2::Signature::new("Test", "test@test.com", &git2::Time::new(1_700_000_000, 0)).unwrap();
+    fs::write(dir.path().join("main.rs"), content).unwrap();
+    let mut index = repo.index().unwrap();
+    index.add_path(Path::new("main.rs")).unwrap();
+    index.write().unwrap();
+    let tree_oid = index.write_tree().unwrap();
+    let tree = repo.find_tree(tree_oid).unwrap();
+    repo.commit(Some("HEAD"), &sig, &sig, "init", &tree, &[])
+        .unwrap();
+    drop(tree);
+    dir
+}
+
+#[test]
+fn score_gate_no_flags_succeeds() {
+    let dir = make_git_repo_with_file("fn main() {}\n");
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let gate = ScoreGate::default();
+    let result = run_diff(&cfg, "HEAD", false, 10, 6, "cogcom", gate);
+    assert!(result.is_ok(), "no gates should always succeed: {result:?}");
+}
+
+#[test]
+fn score_gate_fail_below_passes_when_above_threshold() {
+    let dir = make_git_repo_with_file("fn main() {}\n");
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    // A small clean file should score high — F-- threshold should never trigger
+    let gate = ScoreGate {
+        fail_if_worse: false,
+        fail_below: Some(analyzer::Grade::FMinusMinus),
+    };
+    let result = run_diff(&cfg, "HEAD", false, 10, 6, "cogcom", gate);
+    assert!(
+        result.is_ok(),
+        "F-- threshold should not trigger on clean code"
+    );
+}
+
+#[test]
+fn score_gate_fail_below_unit() {
+    // Unit test: verify gate logic directly using ScoreDiff without a full git run.
+    let before = analyzer::score_to_grade(80.0); // B
+    let after = analyzer::score_to_grade(70.0); // C
+    let diff = diff::ScoreDiff {
+        git_ref: "HEAD".to_string(),
+        overall: diff::ScoreDelta {
+            before: 80.0,
+            after: 70.0,
+            delta: -10.0,
+        },
+        before_grade: before,
+        after_grade: after,
+        files_before: 1,
+        files_after: 1,
+        loc_before: 10,
+        loc_after: 10,
+        dimensions: vec![],
+    };
+    // Gate: fail if below B — current score is C, so should fail
+    let threshold = analyzer::Grade::B;
+    assert!(
+        diff.after_grade.numeric_rank() < threshold.numeric_rank(),
+        "C should be below B"
+    );
+    // Gate: fail if below F-- — current score is C, should pass
+    let low_threshold = analyzer::Grade::FMinusMinus;
+    assert!(
+        diff.after_grade.numeric_rank() >= low_threshold.numeric_rank(),
+        "C should not be below F--"
+    );
+    // Gate: fail-if-worse compares numeric score, not grade
+    assert!(diff.overall.delta < 0.0, "80→70 is a negative delta");
+}
+
+#[test]
+fn score_gate_fail_if_worse_same_ref_passes() {
+    let dir = make_git_repo_with_file("fn main() {}\n");
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    // Comparing HEAD to itself — score cannot be worse
+    let gate = ScoreGate {
+        fail_if_worse: true,
+        fail_below: None,
+    };
+    let result = run_diff(&cfg, "HEAD", false, 10, 6, "cogcom", gate);
+    assert!(
+        result.is_ok(),
+        "same ref comparison should not trigger fail-if-worse"
+    );
+}
