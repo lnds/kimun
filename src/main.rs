@@ -9,6 +9,8 @@
 //! the target path (defaulting to "."), and delegate to the module's `run()`
 //! function. All errors are printed to stderr and cause exit code 1.
 
+/// Code age analysis: Active / Stale / Frozen classification by last git modification.
+mod age;
 /// AI-powered analysis via external LLM providers.
 mod ai;
 /// Author summary: per-author ownership, lines, languages, last active date.
@@ -298,6 +300,32 @@ fn main() {
                     &sort_by,
                     since.as_deref(),
                     &complexity,
+                )
+            })
+        }
+        Commands::Age {
+            common,
+            active_days,
+            frozen_days,
+            sort_by,
+            status,
+        } => {
+            let filter = common.exclude_filter();
+            maybe_list_excluded(
+                &common.path,
+                common.include_tests,
+                &filter,
+                common.list_excluded(),
+            );
+            run_command(common.path, |t| {
+                let cfg = WalkConfig::new(t, common.include_tests, &filter);
+                age::run(
+                    &cfg,
+                    common.json,
+                    active_days,
+                    frozen_days,
+                    &sort_by,
+                    status.as_deref(),
                 )
             })
         }

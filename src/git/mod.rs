@@ -135,6 +135,34 @@ impl GitRepo {
         Ok(result)
     }
 
+    /// Return the most recent commit timestamp for each file in `targets`.
+    ///
+    /// Walks commits newest-first; the first time a target file appears is its
+    /// last-modification time. Stops early once all targets have been resolved.
+    /// Files not touched by any commit (e.g. untracked) are omitted from the result.
+    pub fn last_modified_per_file(
+        &self,
+        targets: &[PathBuf],
+    ) -> Result<HashMap<PathBuf, i64>, Box<dyn Error>> {
+        let mut remaining: HashSet<&PathBuf> = targets.iter().collect();
+        let mut result: HashMap<PathBuf, i64> = HashMap::new();
+
+        self.walk_commits(None, |commit| {
+            if remaining.is_empty() {
+                return Ok(ControlFlow::Break(()));
+            }
+            let time = commit.time().seconds();
+            for path in self.changed_files(commit)? {
+                if remaining.remove(&path) {
+                    result.insert(path, time);
+                }
+            }
+            Ok(ControlFlow::Continue(()))
+        })?;
+
+        Ok(result)
+    }
+
     /// Collect groups of files that changed together in each commit.
     /// Only includes commits that touch 2+ files.
     pub fn co_changing_commits(
