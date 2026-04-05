@@ -366,6 +366,7 @@ fn main() {
             since,
             risk_only,
             summary,
+            author,
         } => {
             let filter = common.exclude_filter();
             maybe_list_excluded(
@@ -378,12 +379,15 @@ fn main() {
                 let cfg = WalkConfig::new(t, common.include_tests, &filter);
                 knowledge::run(
                     &cfg,
-                    common.json,
-                    top,
-                    &sort_by,
-                    since.as_deref(),
-                    risk_only,
-                    summary,
+                    &knowledge::KnowledgeOptions {
+                        json: common.json,
+                        top,
+                        sort_by: &sort_by,
+                        since: since.as_deref(),
+                        risk_only,
+                        summary,
+                        author: author.as_deref(),
+                    },
                 )
             })
         }

@@ -5,6 +5,25 @@ use std::path::Path as StdPath;
 
 use git2::Repository;
 
+fn opts<'a>(
+    json: bool,
+    top: usize,
+    sort_by: &'a str,
+    since: Option<&'a str>,
+    risk_only: bool,
+    summary: bool,
+) -> KnowledgeOptions<'a> {
+    KnowledgeOptions {
+        json,
+        top,
+        sort_by,
+        since,
+        risk_only,
+        summary,
+        author: None,
+    }
+}
+
 #[test]
 fn test_is_generated() {
     assert!(is_generated(StdPath::new("Cargo.lock")));
@@ -25,7 +44,7 @@ fn run_on_non_git_dir() {
     fs::create_dir_all(&sub).unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(&sub, false, &filter);
-    let err = run(&cfg, false, 20, "concentration", None, false, false).unwrap_err();
+    let err = run(&cfg, &opts(false, 20, "concentration", None, false, false)).unwrap_err();
     assert!(
         err.to_string().contains("not a git repository"),
         "should mention not a git repo, got: {err}"
@@ -36,14 +55,18 @@ fn create_test_repo() -> (tempfile::TempDir, Repository) {
     let dir = tempfile::tempdir().unwrap();
     let repo = Repository::init(dir.path()).unwrap();
     let mut config = repo.config().unwrap();
-    config.set_str("user.name", "Test").unwrap();
-    config.set_str("user.email", "test@test.com").unwrap();
+    config.set_str("user.name", "Fresia").unwrap();
+    config.set_str("user.email", "fresia@ruca.mapu").unwrap();
     (dir, repo)
 }
 
 fn make_commit(repo: &Repository, files: &[(&str, &str)], message: &str) {
-    let sig =
-        git2::Signature::new("Test", "test@test.com", &git2::Time::new(1_700_000_000, 0)).unwrap();
+    let sig = git2::Signature::new(
+        "Fresia",
+        "fresia@ruca.mapu",
+        &git2::Time::new(1_700_000_000, 0),
+    )
+    .unwrap();
     let mut index = repo.index().unwrap();
     for (path, content) in files {
         let full_path = repo.workdir().unwrap().join(path);
@@ -73,7 +96,7 @@ fn integration_basic() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, false, 20, "concentration", None, false, false);
+    let result = run(&cfg, &opts(false, 20, "concentration", None, false, false));
     assert!(result.is_ok(), "knowledge map should succeed on a git repo");
 }
 
@@ -88,7 +111,7 @@ fn integration_json() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, true, 20, "concentration", None, false, false);
+    let result = run(&cfg, &opts(true, 20, "concentration", None, false, false));
     assert!(result.is_ok(), "JSON output should succeed");
 }
 
@@ -103,7 +126,7 @@ fn integration_risk_only() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, false, 20, "risk", None, true, false);
+    let result = run(&cfg, &opts(false, 20, "risk", None, true, false));
     assert!(result.is_ok(), "risk-only filter should work");
 }
 
@@ -118,7 +141,7 @@ fn integration_sort_by_risk() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, false, 20, "risk", None, false, false);
+    let result = run(&cfg, &opts(false, 20, "risk", None, false, false));
     assert!(result.is_ok(), "sort by risk should work");
 }
 
@@ -133,7 +156,7 @@ fn integration_sort_by_diffusion() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, false, 20, "diffusion", None, false, false);
+    let result = run(&cfg, &opts(false, 20, "diffusion", None, false, false));
     assert!(result.is_ok(), "sort by diffusion should work");
 }
 
@@ -141,7 +164,7 @@ fn integration_sort_by_diffusion() {
 fn run_on_current_repo() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(StdPath::new("."), false, &filter);
-    let result = run(&cfg, true, 5, "concentration", None, false, false);
+    let result = run(&cfg, &opts(true, 5, "concentration", None, false, false));
     assert!(result.is_ok(), "knowledge map should work on current repo");
 }
 
@@ -159,7 +182,7 @@ fn integration_summary() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, false, 20, "concentration", None, false, true);
+    let result = run(&cfg, &opts(false, 20, "concentration", None, false, true));
     assert!(result.is_ok(), "summary mode should work");
 }
 
@@ -174,6 +197,62 @@ fn integration_summary_json() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, true, 20, "concentration", None, false, true);
+    let result = run(&cfg, &opts(true, 20, "concentration", None, false, true));
     assert!(result.is_ok(), "summary JSON mode should work");
+}
+
+#[test]
+fn integration_author_filter_match() {
+    let (dir, repo) = create_test_repo();
+    make_commit(
+        &repo,
+        &[
+            ("main.rs", "fn main() {}\n"),
+            ("lib.rs", "pub fn foo() {}\n"),
+        ],
+        "add files",
+    );
+
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    // "Fresia" matches the committer name — should return files
+    let result = run(
+        &cfg,
+        &KnowledgeOptions {
+            json: false,
+            top: 20,
+            sort_by: "concentration",
+            since: None,
+            risk_only: false,
+            summary: false,
+            author: Some("Fresia"),
+        },
+    );
+    assert!(result.is_ok(), "author filter should succeed");
+}
+
+#[test]
+fn integration_author_filter_no_match() {
+    let (dir, repo) = create_test_repo();
+    make_commit(&repo, &[("main.rs", "fn main() {}\n")], "add main");
+
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    // "nonexistent" won't match — should produce an empty result without error
+    let result = run(
+        &cfg,
+        &KnowledgeOptions {
+            json: false,
+            top: 20,
+            sort_by: "concentration",
+            since: None,
+            risk_only: false,
+            summary: false,
+            author: Some("nonexistent"),
+        },
+    );
+    assert!(
+        result.is_ok(),
+        "author filter with no match should not error"
+    );
 }

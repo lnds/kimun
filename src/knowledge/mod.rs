@@ -46,21 +46,25 @@ fn is_generated(path: &Path) -> bool {
         || file_name.contains(".generated.")
 }
 
+/// Options for knowledge map analysis.
+pub struct KnowledgeOptions<'a> {
+    pub json: bool,
+    pub top: usize,
+    pub sort_by: &'a str,
+    pub since: Option<&'a str>,
+    pub risk_only: bool,
+    pub summary: bool,
+    /// Filter to files owned by this author (case-insensitive substring match).
+    pub author: Option<&'a str>,
+}
+
 /// Run knowledge map analysis: walk source files, blame each one,
 /// compute ownership concentration and risk, then output results.
-pub fn run(
-    cfg: &WalkConfig<'_>,
-    json: bool,
-    top: usize,
-    sort_by: &str,
-    since: Option<&str>,
-    risk_only: bool,
-    summary: bool,
-) -> Result<(), Box<dyn Error>> {
+pub fn run(cfg: &WalkConfig<'_>, opts: &KnowledgeOptions<'_>) -> Result<(), Box<dyn Error>> {
     let git_repo = GitRepo::open(cfg.path)
         .map_err(|e| format!("not a git repository (or any parent): {e}"))?;
 
-    let since_ts = since.map(parse_since).transpose()?;
+    let since_ts = opts.since.map(parse_since).transpose()?;
 
     // Collect recent authors (for knowledge loss detection)
     let recent_authors = if since_ts.is_some() {
@@ -93,13 +97,22 @@ pub fn run(
         results.push(ownership);
     }
 
+    // Filter by author if requested (case-insensitive substring match on name or email)
+    if let Some(author_filter) = opts.author {
+        let lower = author_filter.to_lowercase();
+        results.retain(|f| {
+            f.primary_owner.to_lowercase().contains(&lower)
+                || f.primary_email.to_lowercase().contains(&lower)
+        });
+    }
+
     // Filter risk-only if requested
-    if risk_only {
+    if opts.risk_only {
         results.retain(|f| f.knowledge_loss);
     }
 
     // Sort
-    match sort_by {
+    match opts.sort_by {
         "diffusion" => results.sort_by(|a, b| b.contributors.cmp(&a.contributors)),
         "risk" => results.sort_by(|a, b| {
             a.risk.sort_key().cmp(&b.risk.sort_key()).then_with(|| {
@@ -118,24 +131,24 @@ pub fn run(
         }
     }
 
-    if summary {
+    if opts.summary {
         let mut authors = aggregate_by_author(&results);
         // In summary mode sort_by maps: concentration→files owned, diffusion→lines, risk→worst risk
-        match sort_by {
+        match opts.sort_by {
             "diffusion" => authors.sort_by(|a, b| b.total_lines.cmp(&a.total_lines)),
             "risk" => authors.sort_by(|a, b| a.worst_risk.sort_key().cmp(&b.worst_risk.sort_key())),
             _ => authors.sort_by(|a, b| b.files_owned.cmp(&a.files_owned)),
         }
-        let limit = top.min(authors.len());
+        let limit = opts.top.min(authors.len());
         let authors = &authors[..limit];
-        if json {
+        if opts.json {
             print_summary_json(authors)
         } else {
             print_summary_report(authors);
             Ok(())
         }
     } else {
-        report_helpers::output_results(&mut results, top, json, print_json, print_report)
+        report_helpers::output_results(&mut results, opts.top, opts.json, print_json, print_report)
     }
 }
 

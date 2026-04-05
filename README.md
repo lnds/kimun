@@ -443,6 +443,7 @@ Options:
 | `--sort-by METRIC` | Sort by `concentration`, `diffusion`, or `risk` (default: `concentration`) |
 | `--since DURATION` | Define recent activity window for knowledge loss (e.g. `6m`, `1y`, `30d`) |
 | `--risk-only` | Show only files with knowledge loss risk |
+| `--author NAME` | Show only files owned by this author (case-insensitive substring match) |
 
 Example output:
 

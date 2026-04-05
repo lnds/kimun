@@ -326,6 +326,10 @@ pub enum Commands {
         /// Aggregate by author: files owned, lines, languages, worst risk
         #[arg(long)]
         summary: bool,
+
+        /// Show only files owned by this author (substring match, case-insensitive)
+        #[arg(long, value_name = "NAME")]
+        author: Option<String>,
     },
 
     /// Analyze temporal coupling: files that change together in commits

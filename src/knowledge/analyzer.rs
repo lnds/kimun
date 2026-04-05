@@ -44,6 +44,7 @@ impl RiskLevel {
 /// Internal representation of a single author's contribution to a file.
 struct AuthorContribution {
     author: String,
+    email: String,
     percentage: f64,
     active: bool,
 }
@@ -54,6 +55,7 @@ pub struct FileOwnership {
     pub language: String,
     pub total_lines: usize,
     pub primary_owner: String,
+    pub primary_email: String,
     pub ownership_pct: f64,
     pub contributors: usize,
     pub risk: RiskLevel,
@@ -76,6 +78,7 @@ pub fn compute_ownership(
             language: language.to_string(),
             total_lines: 0,
             primary_owner: "unknown".to_string(),
+            primary_email: String::new(),
             ownership_pct: 0.0,
             contributors: 0,
             risk: RiskLevel::Low,
@@ -89,6 +92,7 @@ pub fn compute_ownership(
             let pct = (b.lines as f64 / total_lines as f64) * 100.0;
             AuthorContribution {
                 author: b.author.clone(),
+                email: b.email.clone(),
                 percentage: pct,
                 active: recent_authors.contains(&b.email),
             }
@@ -104,6 +108,7 @@ pub fn compute_ownership(
         language: language.to_string(),
         total_lines,
         primary_owner: primary.author.clone(),
+        primary_email: primary.email.clone(),
         ownership_pct: primary.percentage,
         contributors: contributions.len(),
         risk,
