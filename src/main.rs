@@ -15,6 +15,8 @@ mod age;
 mod ai;
 /// Author summary: per-author ownership, lines, languages, last active date.
 mod authors;
+/// Code churn analysis: pure change frequency per file from git history.
+mod churn;
 /// CLI argument definitions using `clap` derive macros.
 mod cli;
 /// Long help text constants extracted from CLI definitions.
@@ -129,6 +131,8 @@ fn main() {
             report,
             show_all,
             min_lines,
+            max_duplicates,
+            max_dup_ratio,
         } => {
             let filter = common.exclude_filter();
             maybe_list_excluded(
@@ -139,7 +143,15 @@ fn main() {
             );
             run_command(common.path, |t| {
                 let cfg = WalkConfig::new(t, common.include_tests, &filter);
-                dups::run(&cfg, min_lines, report, show_all, common.json)
+                dups::run(
+                    &cfg,
+                    min_lines,
+                    report,
+                    show_all,
+                    common.json,
+                    max_duplicates,
+                    max_dup_ratio,
+                )
             })
         }
         Commands::Indent { common } => {
@@ -277,6 +289,24 @@ fn main() {
                 miv::run(&cfg, common.json, top, &sort_by)
             })
         }
+        Commands::Churn {
+            common,
+            top,
+            sort_by,
+            since,
+        } => {
+            let filter = common.exclude_filter();
+            maybe_list_excluded(
+                &common.path,
+                common.include_tests,
+                &filter,
+                common.list_excluded(),
+            );
+            run_command(common.path, |t| {
+                let cfg = WalkConfig::new(t, common.include_tests, &filter);
+                churn::run(&cfg, common.json, top, &sort_by, since.as_deref())
+            })
+        }
         Commands::Hotspots {
             common,
             top,
@@ -335,6 +365,7 @@ fn main() {
             sort_by,
             since,
             risk_only,
+            summary,
         } => {
             let filter = common.exclude_filter();
             maybe_list_excluded(
@@ -352,6 +383,7 @@ fn main() {
                     &sort_by,
                     since.as_deref(),
                     risk_only,
+                    summary,
                 )
             })
         }
@@ -432,6 +464,7 @@ fn main() {
             bottom,
             min_lines,
             model,
+            trend,
         } => {
             let filter = common.exclude_filter();
             maybe_list_excluded(
@@ -442,7 +475,11 @@ fn main() {
             );
             run_command(common.path, |t| {
                 let cfg = WalkConfig::new(t, common.include_tests, &filter);
-                score::run(&cfg, common.json, bottom, min_lines, &model)
+                if let Some(ref git_ref) = trend {
+                    score::run_diff(&cfg, git_ref, common.json, bottom, min_lines, &model)
+                } else {
+                    score::run(&cfg, common.json, bottom, min_lines, &model)
+                }
             })
         }
         Commands::Score {
