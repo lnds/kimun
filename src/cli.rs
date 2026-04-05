@@ -326,6 +326,12 @@ pub enum Commands {
         /// Aggregate by author: files owned, lines, languages, worst risk
         #[arg(long)]
         summary: bool,
+
+        /// Compute the project bus factor: the minimum number of contributors
+        /// whose combined ownership covers 80% of the code. A bus factor of 1
+        /// means one person holds most knowledge — extremely high risk.
+        #[arg(long)]
+        bus_factor: bool,
     },
 
     /// Analyze temporal coupling: files that change together in commits

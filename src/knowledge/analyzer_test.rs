@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use super::*;
 
 fn make_blame(author: &str, email: &str, lines: usize, time: i64) -> BlameInfo {
@@ -93,4 +95,66 @@ fn test_contributors_count() {
     let recent = HashSet::new();
     let result = compute_ownership(PathBuf::from("a.rs"), "Rust", &blames, &recent);
     assert_eq!(result.contributors, 2);
+}
+
+// --- bus factor tests ---
+
+fn author_map(entries: &[(&str, usize)]) -> HashMap<String, usize> {
+    entries.iter().map(|(k, v)| (k.to_string(), *v)).collect()
+}
+
+#[test]
+fn bus_factor_single_dominant_owner() {
+    // One person owns 90% → bus factor = 1
+    let map = author_map(&[("Alice", 90), ("Bob", 10)]);
+    let bf = compute_bus_factor(&map, 80.0);
+    assert_eq!(bf.factor, 1);
+    assert_eq!(bf.total_lines, 100);
+    assert!(bf.contributors[0].is_critical);
+    assert!(!bf.contributors[1].is_critical);
+}
+
+#[test]
+fn bus_factor_two_owners_needed() {
+    // Alice 69%, Carol 20%, Bob 11% → sorted: Alice, Carol, Bob
+    // Alice alone: 69% < 80%, Alice+Carol: 89% ≥ 80% → bus factor = 2
+    let map = author_map(&[("Alice", 69), ("Bob", 11), ("Carol", 20)]);
+    let bf = compute_bus_factor(&map, 80.0);
+    assert_eq!(bf.factor, 2);
+    assert_eq!(bf.contributors[0].author, "Alice");
+    assert_eq!(bf.contributors[1].author, "Carol");
+}
+
+#[test]
+fn bus_factor_exact_threshold() {
+    // Alice owns exactly 80% → bus factor = 1
+    let map = author_map(&[("Alice", 80), ("Bob", 20)]);
+    let bf = compute_bus_factor(&map, 80.0);
+    assert_eq!(bf.factor, 1);
+}
+
+#[test]
+fn bus_factor_empty() {
+    let map = author_map(&[]);
+    let bf = compute_bus_factor(&map, 80.0);
+    assert_eq!(bf.factor, 0);
+    assert_eq!(bf.total_lines, 0);
+    assert!(bf.contributors.is_empty());
+}
+
+#[test]
+fn bus_factor_cumulative_pct_reaches_100() {
+    let map = author_map(&[("Alice", 50), ("Bob", 50)]);
+    let bf = compute_bus_factor(&map, 80.0);
+    let last = bf.contributors.last().unwrap();
+    assert!((last.cumulative_pct - 100.0).abs() < 0.01);
+}
+
+#[test]
+fn bus_factor_contributors_sorted_descending() {
+    let map = author_map(&[("C", 10), ("A", 50), ("B", 40)]);
+    let bf = compute_bus_factor(&map, 80.0);
+    assert_eq!(bf.contributors[0].author, "A");
+    assert_eq!(bf.contributors[1].author, "B");
+    assert_eq!(bf.contributors[2].author, "C");
 }

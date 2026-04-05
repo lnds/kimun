@@ -4,7 +4,7 @@
 /// ownership concentration, contributor count, and knowledge loss risk.
 use serde::Serialize;
 
-use super::analyzer::{AuthorSummary, FileOwnership};
+use super::analyzer::{AuthorSummary, BusFactor, FileOwnership};
 use crate::report_helpers;
 
 const COL_LANG: usize = 10;
@@ -203,6 +203,124 @@ pub fn print_summary_json(authors: &[AuthorSummary]) -> Result<(), Box<dyn std::
         })
         .collect();
     report_helpers::print_json_stdout(&entries)
+}
+
+/// Print the bus factor report as a human-readable table.
+pub fn print_bus_factor_report(bf: &BusFactor) {
+    if bf.total_lines == 0 {
+        println!("No blame data found for bus factor analysis.");
+        return;
+    }
+
+    let risk_label = match bf.factor {
+        0 => "no data",
+        1 => "CRITICAL — one person holds most project knowledge",
+        2 => "HIGH — two people hold critical knowledge",
+        3 => "MODERATE — three people hold critical knowledge",
+        _ => "LOW — knowledge is distributed across several contributors",
+    };
+
+    println!("Project Bus Factor: {}", bf.factor);
+    println!();
+    println!(
+        " Losing {} key {} would put {:.0}% of the project's knowledge at risk.",
+        bf.factor,
+        if bf.factor == 1 {
+            "contributor"
+        } else {
+            "contributors"
+        },
+        bf.threshold,
+    );
+    println!(" Risk: {risk_label}");
+    println!();
+
+    let max_author_len = bf
+        .contributors
+        .iter()
+        .map(|e| report_helpers::display_width(&e.author))
+        .max()
+        .unwrap_or(6)
+        .max(6);
+
+    let header_width = 6 + max_author_len + 8 + 8 + 11 + 8;
+    let separator = report_helpers::separator(header_width.max(70));
+
+    println!("{separator}");
+    println!(
+        " {:>4}  {:<aw$}  {:>8}  {:>7}  {:>10}",
+        "Rank",
+        "Author",
+        "Lines",
+        "Share",
+        "Cumulative",
+        aw = max_author_len,
+    );
+    println!("{separator}");
+
+    for (i, entry) in bf.contributors.iter().enumerate() {
+        let marker = if entry.cumulative_pct >= bf.threshold
+            && (i == 0 || bf.contributors[i - 1].cumulative_pct < bf.threshold)
+        {
+            format!("  ← {:.0}% threshold", bf.threshold)
+        } else {
+            String::new()
+        };
+
+        println!(
+            " {:>4}  {:<aw$}  {:>8}  {:>6.2}%  {:>9.2}%{}",
+            i + 1,
+            entry.author,
+            entry.lines,
+            entry.pct,
+            entry.cumulative_pct,
+            marker,
+            aw = max_author_len,
+        );
+    }
+
+    println!("{separator}");
+}
+
+/// JSON-serializable bus factor output.
+pub fn print_bus_factor_json(bf: &BusFactor) -> Result<(), Box<dyn std::error::Error>> {
+    use serde::Serialize;
+
+    #[derive(Serialize)]
+    struct JsonBusFactorEntry {
+        author: String,
+        lines: usize,
+        pct: f64,
+        cumulative_pct: f64,
+        is_critical: bool,
+    }
+
+    #[derive(Serialize)]
+    struct JsonBusFactor {
+        factor: usize,
+        threshold: f64,
+        total_lines: usize,
+        contributors: Vec<JsonBusFactorEntry>,
+    }
+
+    let out = JsonBusFactor {
+        factor: bf.factor,
+        threshold: bf.threshold,
+        total_lines: bf.total_lines,
+        contributors: bf
+            .contributors
+            .iter()
+            .map(|e| JsonBusFactorEntry {
+                author: e.author.clone(),
+                lines: e.lines,
+                pct: (e.pct * 100.0).round() / 100.0,
+                cumulative_pct: (e.cumulative_pct * 100.0).round() / 100.0,
+                is_critical: e.is_critical,
+            })
+            .collect(),
+    };
+
+    report_helpers::print_json_stdout(&out)
 }
 
 #[cfg(test)]
