@@ -204,7 +204,10 @@ fn count_brace_scoped(func_lines: &[(usize, &str)], markers: &CognitiveMarkers) 
         complexity += count_boolean_sequences(&stripped, markers);
 
         // Track braces for nesting depth
-        let opens_flow = matches!(
+        // `opens_flow` is consumed by the first `{` on a control-flow line so
+        // that subsequent braces on the same line (closures, struct literals)
+        // are not counted as flow-control nesting.
+        let mut opens_flow = matches!(
             line_result,
             LineClassification::Structural | LineClassification::Fundamental
         );
@@ -218,6 +221,7 @@ fn count_brace_scoped(func_lines: &[(usize, &str)], markers: &CognitiveMarkers) 
                 } else if opens_flow {
                     brace_stack.push(BraceContext::FlowControl);
                     nesting_depth += 1;
+                    opens_flow = false; // consumed — remaining { on this line are closures/structs
                 } else {
                     brace_stack.push(BraceContext::Other);
                 }
@@ -229,8 +233,6 @@ fn count_brace_scoped(func_lines: &[(usize, &str)], markers: &CognitiveMarkers) 
             }
         }
 
-        // After processing braces, clear the flow flag
-        // (only the first '{' on a structural line counts as flow)
         is_first_line = false;
     }
 

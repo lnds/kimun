@@ -42,7 +42,27 @@ pub struct ScoreDiff {
 }
 
 /// Compare two `ProjectScore` snapshots and produce a `ScoreDiff`.
+///
+/// # Panics
+///
+/// Panics if the two snapshots were computed with different scoring models
+/// (different dimension names or counts). Both must use the same `--model`.
 pub fn compute_diff(git_ref: &str, before: &ProjectScore, after: &ProjectScore) -> ScoreDiff {
+    assert_eq!(
+        before.dimensions.len(),
+        after.dimensions.len(),
+        "cannot diff scores with different models: before has {} dimensions, after has {}",
+        before.dimensions.len(),
+        after.dimensions.len(),
+    );
+    for (b, a) in before.dimensions.iter().zip(after.dimensions.iter()) {
+        assert_eq!(
+            b.name, a.name,
+            "dimension mismatch: before has '{}', after has '{}' — use the same --model for both",
+            b.name, a.name,
+        );
+    }
+
     let dimensions: Vec<DimensionDelta> = before
         .dimensions
         .iter()

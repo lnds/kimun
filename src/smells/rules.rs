@@ -204,9 +204,11 @@ fn is_declaration_line(trimmed: &str) -> bool {
 }
 
 /// Check whether a byte is part of a numeric literal (digit, hex letter, dot, prefix char).
+/// Includes `_` to handle Rust/Python/Swift digit separators (e.g. `1_000_000`, `0xFF_FF`).
 fn is_numeric_char(b: u8) -> bool {
     b.is_ascii_digit()
         || b == b'.'
+        || b == b'_'
         || b == b'x'
         || b == b'X'
         || b == b'b'

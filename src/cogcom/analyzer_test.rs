@@ -261,3 +261,20 @@ fn boolean_sequence_reset_at_semicolon() {
     let result = analyze(&lines, &kinds, rust_markers()).unwrap();
     assert_eq!(result.functions[0].complexity, 4);
 }
+
+#[test]
+fn closure_inline_not_counted_as_flow_nesting() {
+    // `for item in items { process(item, |x| { x + 1 }) }`
+    // The `{` of the closure should NOT increment nesting depth.
+    // Expected: for=1, no extra nesting penalty from closure brace.
+    let (lines, kinds) = make_lines(
+        "fn foo() {\n    for item in items { process(item, |x| { x + 1 }) }\n}\n",
+    );
+    let result = analyze(&lines, &kinds, rust_markers()).unwrap();
+    // for = 1 (nesting 0→1 = +1 structural, so complexity = 1)
+    assert_eq!(
+        result.functions[0].complexity,
+        1,
+        "closure brace on same line as for should not add nesting penalty"
+    );
+}
