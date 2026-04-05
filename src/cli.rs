@@ -435,6 +435,24 @@ pub enum Commands {
         status: Option<String>,
     },
 
+    /// Analyze internal module dependencies: fan-in, fan-out, and dependency cycles
+    Deps {
+        #[command(flatten)]
+        common: CommonArgs,
+
+        /// Show only files with dependency cycles
+        #[arg(long)]
+        cycles_only: bool,
+
+        /// Sort by: fan-out (default), fan-in
+        #[arg(long, default_value = "fan-out", value_parser = ["fan-out", "fan-in"])]
+        sort_by: String,
+
+        /// Show only the top N files (default: 20)
+        #[arg(long, default_value = "20")]
+        top: usize,
+    },
+
     /// Summarize code ownership by author: files owned, lines, languages, last active date
     Authors {
         #[command(flatten)]
