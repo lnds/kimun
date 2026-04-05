@@ -5,6 +5,7 @@
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand};
+pub use clap_complete::Shell;
 
 use crate::cli_help;
 use crate::walk::ExcludeFilter;
@@ -449,6 +450,12 @@ pub enum Commands {
     Ai {
         #[command(subcommand)]
         command: AiCommands,
+    },
+
+    /// Generate shell completion scripts (zsh, bash, fish, ...)
+    Completions {
+        /// Shell to generate completions for
+        shell: Shell,
     },
 }
 

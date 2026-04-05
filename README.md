@@ -18,6 +18,24 @@ cargo install --path .
 
 This installs the `km` binary.
 
+### Shell completions
+
+Generate and install a completion script for your shell:
+
+```bash
+# zsh
+km completions zsh > ~/.zfunc/_km
+# add to ~/.zshrc if not already present:
+#   fpath=(~/.zfunc $fpath)
+#   autoload -Uz compinit && compinit
+
+# bash
+km completions bash > /etc/bash_completion.d/km
+
+# fish
+km completions fish > ~/.config/fish/completions/km.fish
+```
+
 ## Commands
 
 ### `km loc` -- Count lines of code

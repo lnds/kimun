@@ -62,7 +62,8 @@ mod walk;
 
 use std::path::PathBuf;
 
-use clap::Parser;
+use clap::{CommandFactory, Parser};
+use clap_complete::{Shell, generate};
 
 use cli::{AiCommands, Cli, Commands, ScoreCommands};
 use walk::{ExcludeFilter, WalkConfig};
@@ -537,5 +538,67 @@ fn main() {
                 }
             }
         },
+        Commands::Completions { shell } => {
+            write_completions(shell, &mut std::io::stdout());
+        }
+    }
+}
+
+/// Generate shell completions for `km` into `buf`.
+pub fn write_completions(shell: Shell, buf: &mut impl std::io::Write) {
+    let mut cmd = Cli::command();
+    generate(shell, &mut cmd, "km", buf);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn completions_zsh_starts_with_compdef() {
+        let mut buf = Vec::new();
+        write_completions(Shell::Zsh, &mut buf);
+        let out = String::from_utf8(buf).unwrap();
+        assert!(
+            out.starts_with("#compdef km"),
+            "zsh script should start with #compdef km"
+        );
+    }
+
+    #[test]
+    fn completions_bash_contains_km() {
+        let mut buf = Vec::new();
+        write_completions(Shell::Bash, &mut buf);
+        let out = String::from_utf8(buf).unwrap();
+        assert!(out.contains("km"), "bash completion should reference km");
+    }
+
+    #[test]
+    fn completions_fish_contains_km() {
+        let mut buf = Vec::new();
+        write_completions(Shell::Fish, &mut buf);
+        let out = String::from_utf8(buf).unwrap();
+        assert!(out.contains("km"), "fish completion should reference km");
+    }
+
+    #[test]
+    fn completions_zsh_includes_subcommands() {
+        let mut buf = Vec::new();
+        write_completions(Shell::Zsh, &mut buf);
+        let out = String::from_utf8(buf).unwrap();
+        for cmd in [
+            "loc",
+            "dups",
+            "score",
+            "knowledge",
+            "hotspots",
+            "smells",
+            "completions",
+        ] {
+            assert!(
+                out.contains(cmd),
+                "zsh completion missing subcommand: {cmd}"
+            );
+        }
     }
 }
