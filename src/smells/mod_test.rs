@@ -211,5 +211,8 @@ fn run_on_files_json_empty() {
 fn run_on_files_nonexistent_path_skips() {
     let paths = vec![PathBuf::from("/nonexistent/path/fake.rs")];
     let result = super::run_on_files(&paths, false, 20, 50, 4);
-    assert!(result.is_ok(), "nonexistent files should be skipped, not panic");
+    assert!(
+        result.is_ok(),
+        "nonexistent files should be skipped, not panic"
+    );
 }

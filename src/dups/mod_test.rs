@@ -9,7 +9,7 @@ fn run_on_empty_dir() {
     let dir = tempfile::tempdir().unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, 6, false, false, false, None, None).unwrap();
+    run(&cfg, 6, false, false, false, gate()).unwrap();
 }
 
 #[test]
@@ -25,7 +25,7 @@ fn run_with_no_duplicates() {
     ).unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, 6, false, false, false, None, None).unwrap();
+    run(&cfg, 6, false, false, false, gate()).unwrap();
 }
 
 #[test]
@@ -37,7 +37,7 @@ fn run_detects_duplicates() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     // Should not panic, should detect duplicates
-    run(&cfg, 6, false, false, false, None, None).unwrap();
+    run(&cfg, 6, false, false, false, gate()).unwrap();
 }
 
 #[test]
@@ -48,7 +48,7 @@ fn run_with_report_flag() {
     fs::write(dir.path().join("b.rs"), code).unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, 6, true, false, false, None, None).unwrap();
+    run(&cfg, 6, true, false, false, gate()).unwrap();
 }
 
 #[test]
@@ -59,7 +59,7 @@ fn run_with_show_all_flag() {
     fs::write(dir.path().join("b.rs"), code).unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, 6, true, true, false, None, None).unwrap();
+    run(&cfg, 6, true, true, false, gate()).unwrap();
 }
 
 #[test]
@@ -68,7 +68,7 @@ fn run_skips_binary_files() {
     fs::write(dir.path().join("data.c"), b"hello\x00world").unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, 6, false, false, false, None, None).unwrap();
+    run(&cfg, 6, false, false, false, gate()).unwrap();
 }
 
 #[test]
@@ -80,7 +80,7 @@ fn run_with_high_min_lines() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     // min_lines=20 means no 4-line file can produce duplicates
-    run(&cfg, 20, false, false, false, None, None).unwrap();
+    run(&cfg, 20, false, false, false, gate()).unwrap();
 }
 
 #[test]
@@ -121,7 +121,7 @@ fn run_json_with_duplicates() {
     fs::write(dir.path().join("b.rs"), code).unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, 6, false, false, true, None, None).unwrap();
+    run(&cfg, 6, false, false, true, gate()).unwrap();
 }
 
 #[test]
@@ -129,7 +129,7 @@ fn run_json_empty_dir() {
     let dir = tempfile::tempdir().unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, 6, false, false, true, None, None).unwrap();
+    run(&cfg, 6, false, false, true, gate()).unwrap();
 }
 
 #[test]
@@ -138,7 +138,7 @@ fn run_json_no_duplicates() {
     fs::write(dir.path().join("a.rs"), "fn foo() {\n    let x = 1;\n}\n").unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, 6, false, false, true, None, None).unwrap();
+    run(&cfg, 6, false, false, true, gate()).unwrap();
 }
 
 // --- is_test_file tests (use shared walk module) ---
@@ -248,10 +248,10 @@ fn run_exclude_tests_skips_test_dir() {
     // Without exclude: detects duplicates (does not panic)
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), true, &filter);
-    run(&cfg, 6, false, false, false, None, None).unwrap();
+    run(&cfg, 6, false, false, false, gate()).unwrap();
     // With exclude: tests/ is skipped entirely
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, 6, false, false, false, None, None).unwrap();
+    run(&cfg, 6, false, false, false, gate()).unwrap();
 }
 
 #[test]
@@ -267,7 +267,7 @@ fn run_exclude_tests_skips_test_files() {
     // With exclude_tests, the *_test.rs files are skipped
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, 6, false, false, false, None, None).unwrap();
+    run(&cfg, 6, false, false, false, gate()).unwrap();
 }
 
 #[test]
@@ -288,7 +288,7 @@ fn run_exclude_tests_skips_test_file_in_subdirectory() {
     // With exclude_tests, *_test.rs files in any directory are skipped
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, 6, false, false, false, None, None).unwrap();
+    run(&cfg, 6, false, false, false, gate()).unwrap();
 }
 
 #[test]
@@ -305,12 +305,39 @@ fn run_exclude_tests_skips_entire_test_dir_tree() {
     // With exclude_tests, the entire tests/ tree is skipped
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, 6, false, false, false, None, None).unwrap();
+    run(&cfg, 6, false, false, false, gate()).unwrap();
+}
+
+// --- quality gate helpers ---
+
+const DUP_CODE: &str = "fn process() {\n    let x = read();\n    let y = transform(x);\n    write(y);\n    log(\"done\");\n    cleanup();\n}\n";
+
+fn gate() -> DupsGate {
+    DupsGate::default()
+}
+
+fn gate_max_dups(n: usize) -> DupsGate {
+    DupsGate {
+        max_duplicates: Some(n),
+        ..Default::default()
+    }
+}
+
+fn gate_max_ratio(pct: f64) -> DupsGate {
+    DupsGate {
+        max_dup_ratio: Some(pct),
+        ..Default::default()
+    }
+}
+
+fn gate_fail_on_increase(git_ref: &str) -> DupsGate {
+    DupsGate {
+        fail_on_increase: Some(git_ref.to_owned()),
+        ..Default::default()
+    }
 }
 
 // --- --max-duplicates quality gate tests ---
-
-const DUP_CODE: &str = "fn process() {\n    let x = read();\n    let y = transform(x);\n    write(y);\n    log(\"done\");\n    cleanup();\n}\n";
 
 #[test]
 fn max_duplicates_none_does_not_fail_with_duplicates() {
@@ -319,7 +346,7 @@ fn max_duplicates_none_does_not_fail_with_duplicates() {
     fs::write(dir.path().join("b.rs"), DUP_CODE).unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, 6, false, false, false, None, None).unwrap();
+    run(&cfg, 6, false, false, false, gate()).unwrap();
 }
 
 #[test]
@@ -332,7 +359,7 @@ fn max_duplicates_zero_passes_when_no_duplicates() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, 6, false, false, false, Some(0), None).unwrap();
+    run(&cfg, 6, false, false, false, gate_max_dups(0)).unwrap();
 }
 
 #[test]
@@ -342,7 +369,7 @@ fn max_duplicates_zero_fails_when_duplicates_found() {
     fs::write(dir.path().join("b.rs"), DUP_CODE).unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let err = run(&cfg, 6, false, false, false, Some(0), None).unwrap_err();
+    let err = run(&cfg, 6, false, false, false, gate_max_dups(0)).unwrap_err();
     assert!(
         err.to_string().contains("quality gate failed"),
         "expected quality gate error, got: {err}"
@@ -357,7 +384,7 @@ fn max_duplicates_limit_passes_when_within_limit() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     // 1 duplicate group found, limit is 5 — should pass
-    run(&cfg, 6, false, false, false, Some(5), None).unwrap();
+    run(&cfg, 6, false, false, false, gate_max_dups(5)).unwrap();
 }
 
 #[test]
@@ -367,7 +394,7 @@ fn max_duplicates_error_message_contains_counts() {
     fs::write(dir.path().join("b.rs"), DUP_CODE).unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let err = run(&cfg, 6, false, false, false, Some(0), None).unwrap_err();
+    let err = run(&cfg, 6, false, false, false, gate_max_dups(0)).unwrap_err();
     let msg = err.to_string();
     assert!(
         msg.contains("limit: 0"),
@@ -388,7 +415,7 @@ fn max_dup_ratio_none_does_not_fail() {
     fs::write(dir.path().join("b.rs"), DUP_CODE).unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, 6, false, false, false, None, None).unwrap();
+    run(&cfg, 6, false, false, false, gate()).unwrap();
 }
 
 #[test]
@@ -401,7 +428,7 @@ fn max_dup_ratio_passes_when_no_duplicates() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, 6, false, false, false, None, Some(0.0)).unwrap();
+    run(&cfg, 6, false, false, false, gate_max_ratio(0.0)).unwrap();
 }
 
 #[test]
@@ -412,7 +439,7 @@ fn max_dup_ratio_fails_when_ratio_exceeded() {
     fs::write(dir.path().join("b.rs"), DUP_CODE).unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let err = run(&cfg, 6, false, false, false, None, Some(1.0)).unwrap_err();
+    let err = run(&cfg, 6, false, false, false, gate_max_ratio(1.0)).unwrap_err();
     assert!(
         err.to_string().contains("quality gate failed"),
         "expected quality gate error, got: {err}"
@@ -427,7 +454,7 @@ fn max_dup_ratio_passes_when_within_limit() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     // 100% ratio but limit is 100.0 — should pass
-    run(&cfg, 6, false, false, false, None, Some(100.0)).unwrap();
+    run(&cfg, 6, false, false, false, gate_max_ratio(100.0)).unwrap();
 }
 
 #[test]
@@ -437,7 +464,7 @@ fn max_dup_ratio_error_message_shows_percentages() {
     fs::write(dir.path().join("b.rs"), DUP_CODE).unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let err = run(&cfg, 6, false, false, false, None, Some(1.0)).unwrap_err();
+    let err = run(&cfg, 6, false, false, false, gate_max_ratio(1.0)).unwrap_err();
     let msg = err.to_string();
     assert!(msg.contains('%'), "expected % in message, got: {msg}");
     assert!(
@@ -454,6 +481,108 @@ fn both_gates_checked_independently() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     // Group count passes (limit=100) but ratio fails (limit=1%)
-    let err = run(&cfg, 6, false, false, false, Some(100), Some(1.0)).unwrap_err();
+    let g = DupsGate {
+        max_duplicates: Some(100),
+        max_dup_ratio: Some(1.0),
+        ..Default::default()
+    };
+    let err = run(&cfg, 6, false, false, false, g).unwrap_err();
     assert!(err.to_string().contains('%'), "ratio gate should trigger");
+}
+
+// --- --fail-on-increase quality gate tests ---
+
+fn make_git_repo_with_files(files: &[(&str, &str)]) -> tempfile::TempDir {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = git2::Repository::init(dir.path()).unwrap();
+    let mut config = repo.config().unwrap();
+    config.set_str("user.name", "Test").unwrap();
+    config.set_str("user.email", "test@test.com").unwrap();
+
+    let sig =
+        git2::Signature::new("Test", "test@test.com", &git2::Time::new(1_700_000_000, 0)).unwrap();
+
+    for (name, content) in files {
+        fs::write(dir.path().join(name), content).unwrap();
+    }
+
+    let mut index = repo.index().unwrap();
+    for (name, _) in files {
+        index.add_path(Path::new(name)).unwrap();
+    }
+    index.write().unwrap();
+    let tree_oid = index.write_tree().unwrap();
+    let tree = repo.find_tree(tree_oid).unwrap();
+    repo.commit(Some("HEAD"), &sig, &sig, "init", &tree, &[])
+        .unwrap();
+    dir
+}
+
+#[test]
+fn fail_on_increase_none_does_not_fail() {
+    let dir = make_git_repo_with_files(&[("a.rs", DUP_CODE), ("b.rs", DUP_CODE)]);
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, 6, false, false, false, gate()).unwrap();
+}
+
+#[test]
+fn fail_on_increase_same_ref_passes() {
+    // Comparing HEAD to HEAD — duplication cannot have increased.
+    let dir = make_git_repo_with_files(&[("a.rs", DUP_CODE), ("b.rs", DUP_CODE)]);
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run(&cfg, 6, false, false, false, gate_fail_on_increase("HEAD"));
+    assert!(
+        result.is_ok(),
+        "same ref should not trigger gate: {result:?}"
+    );
+}
+
+#[test]
+fn fail_on_increase_passes_when_duplication_decreased() {
+    // HEAD has duplicates (high ratio); working tree adds a large block of unique
+    // code so the ratio drops. Each function is fully distinct — no 6-line window
+    // repeats, so the duplicate detector sees no new groups.
+    let unique: String = (0..40)
+        .map(|i| {
+            format!(
+                "fn unique_{i}(x{i}: i64, y{i}: i64) -> i64 {{\n    \
+                 let a{i} = x{i} * {i} + y{i};\n    \
+                 let b{i} = a{i} ^ (a{i} >> 3);\n    \
+                 let c{i} = b{i}.wrapping_add({i} * 17);\n    \
+                 let d{i} = c{i}.wrapping_mul(b{i} | 0x{i:04X});\n    \
+                 d{i}.wrapping_sub(a{i})\n}}\n"
+            )
+        })
+        .collect();
+    let dir = make_git_repo_with_files(&[("a.rs", DUP_CODE), ("b.rs", DUP_CODE)]);
+    fs::write(dir.path().join("extra.rs"), &unique).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run(&cfg, 6, false, false, false, gate_fail_on_increase("HEAD"));
+    assert!(
+        result.is_ok(),
+        "decreased duplication should not trigger gate: {result:?}"
+    );
+}
+
+#[test]
+fn fail_on_increase_fails_when_duplication_increased() {
+    // HEAD has zero duplication; working tree adds duplicates.
+    let unique_a = "fn foo() {\n    let x = 1;\n    let y = 2;\n    let z = 3;\n    let w = 4;\n    let v = 5;\n}\n";
+    let unique_b = "fn bar() {\n    let a = 10;\n    let b = 20;\n    let c = 30;\n    let d = 40;\n    let e = 50;\n}\n";
+    let dir = make_git_repo_with_files(&[("a.rs", unique_a), ("b.rs", unique_b)]);
+    // Add duplicate code to working tree (not committed)
+    fs::write(dir.path().join("dup1.rs"), DUP_CODE).unwrap();
+    fs::write(dir.path().join("dup2.rs"), DUP_CODE).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run(&cfg, 6, false, false, false, gate_fail_on_increase("HEAD"));
+    assert!(result.is_err(), "increased duplication should trigger gate");
+    let msg = result.unwrap_err().to_string();
+    assert!(
+        msg.contains("quality gate failed") && msg.contains("duplication increased"),
+        "unexpected error message: {msg}"
+    );
 }

@@ -213,7 +213,11 @@ fn digit_separator_detected_as_magic_number() {
     let ls = lines("    timeout(1_000_000);");
     let kinds = vec![LineKind::Code];
     let smells = detect_magic_numbers(&ls, &kinds, &["//"][..]);
-    assert_eq!(smells.len(), 1, "1_000_000 should be detected as a magic number");
+    assert_eq!(
+        smells.len(),
+        1,
+        "1_000_000 should be detected as a magic number"
+    );
 }
 
 #[test]
@@ -221,7 +225,11 @@ fn hex_with_digit_separator_detected() {
     let ls = lines("    mask = 0xFF_FF;");
     let kinds = vec![LineKind::Code];
     let smells = detect_magic_numbers(&ls, &kinds, &["//"][..]);
-    assert_eq!(smells.len(), 1, "0xFF_FF should be detected as a magic number");
+    assert_eq!(
+        smells.len(),
+        1,
+        "0xFF_FF should be detected as a magic number"
+    );
 }
 
 // ── Commented-out code ──

@@ -133,6 +133,7 @@ fn main() {
             min_lines,
             max_duplicates,
             max_dup_ratio,
+            fail_on_increase,
         } => {
             let filter = common.exclude_filter();
             maybe_list_excluded(
@@ -143,15 +144,12 @@ fn main() {
             );
             run_command(common.path, |t| {
                 let cfg = WalkConfig::new(t, common.include_tests, &filter);
-                dups::run(
-                    &cfg,
-                    min_lines,
-                    report,
-                    show_all,
-                    common.json,
+                let gate = dups::DupsGate {
                     max_duplicates,
                     max_dup_ratio,
-                )
+                    fail_on_increase: fail_on_increase.clone(),
+                };
+                dups::run(&cfg, min_lines, report, show_all, common.json, gate)
             })
         }
         Commands::Indent { common } => {
