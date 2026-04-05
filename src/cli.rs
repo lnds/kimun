@@ -133,6 +133,17 @@ pub enum Commands {
         /// Minimum lines for a duplicate block (default: 6)
         #[arg(long, default_value = "6")]
         min_lines: usize,
+
+        /// Exit with code 1 if duplicate groups exceed this limit.
+        /// Useful as a CI quality gate: --max-duplicates 0 fails on any duplicate.
+        #[arg(long, value_name = "N")]
+        max_duplicates: Option<usize>,
+
+        /// Exit with code 1 if the duplicated-lines ratio exceeds this percentage.
+        /// Useful for ratcheting down duplication over time: --max-dup-ratio 5.0
+        /// fails when more than 5% of code lines are duplicated.
+        #[arg(long, value_name = "PERCENT")]
+        max_dup_ratio: Option<f64>,
     },
 
     /// Analyze indentation complexity (stddev and max depth per file)
@@ -247,6 +258,24 @@ pub enum Commands {
         /// Sort by metric: mi, volume, complexity, or loc (default: mi)
         #[arg(long, default_value = "mi", value_parser = ["mi", "volume", "complexity", "loc"])]
         sort_by: String,
+    },
+
+    /// Analyze code churn: pure change frequency per file (git commits only)
+    Churn {
+        #[command(flatten)]
+        common: CommonArgs,
+
+        /// Show only the top N files (default: 20)
+        #[arg(long, default_value = "20")]
+        top: usize,
+
+        /// Sort by: commits (default), rate (commits/month), or file
+        #[arg(long, default_value = "commits", value_parser = ["commits", "rate", "file"])]
+        sort_by: String,
+
+        /// Only consider commits since this time (e.g. 6m, 1y, 30d)
+        #[arg(long)]
+        since: Option<String>,
     },
 
     /// Find hotspots: files that change frequently and have high complexity
@@ -365,6 +394,12 @@ pub enum Commands {
         /// Scoring model: cogcom (default, v0.14+) or legacy (MI + cyclomatic, v0.13)
         #[arg(long, default_value = "cogcom", value_parser = ["cogcom", "legacy"])]
         model: String,
+
+        /// Compare current score against a git ref (default: HEAD).
+        /// Shows how the score changed: "B- → B (+2.3)".
+        /// Useful for PR review: --trend origin/main
+        #[arg(long, num_args = 0..=1, default_missing_value = "HEAD", value_name = "REF")]
+        trend: Option<String>,
     },
 
     /// Analyze code age: classify files as active, stale, or frozen by last git modification

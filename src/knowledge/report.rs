@@ -7,6 +7,16 @@ use serde::Serialize;
 use super::analyzer::{AuthorSummary, FileOwnership};
 use crate::report_helpers;
 
+const COL_LANG: usize = 10;
+const COL_LINES: usize = 7;
+const COL_OWN_PCT: usize = 5; // "Own%"
+const COL_CONTRIB: usize = 7; // "Contrib"
+const COL_RISK: usize = 8; // "CRITICAL"
+// 1 (lead) + 2 (after path) + 1 (after lang) + 2 (after lines) + 1 + 1 + 1 (between last cols)
+const COL_SPACING: usize = 9;
+const FIXED_WIDTH: usize =
+    COL_SPACING + COL_LANG + COL_LINES + COL_OWN_PCT + COL_CONTRIB + COL_RISK;
+
 /// Print a table of per-file ownership with risk assessment and
 /// a summary of files at risk of knowledge loss (inactive primary owner).
 pub fn print_report(files: &[FileOwnership]) {
@@ -18,43 +28,40 @@ pub fn print_report(files: &[FileOwnership]) {
     let max_path_len = report_helpers::max_path_width(files.iter().map(|f| f.path.as_path()), 4);
     let max_owner_len = files
         .iter()
-        .map(|f| f.primary_owner.len())
+        .map(|f| report_helpers::display_width(&f.primary_owner))
         .max()
         .unwrap_or(5)
         .max(5);
 
-    // path + 2 + lang(10) + 1 + lines(7) + 1 + owner + 1 + own%(5) + 1 + contrib(7) + 1 + risk(8) + 1
-    let header_width = max_path_len + max_owner_len + 45;
+    let header_width = max_path_len + max_owner_len + FIXED_WIDTH;
     let separator = report_helpers::separator(header_width.max(78));
 
     println!("Knowledge Map — Code Ownership");
     println!("{separator}");
     println!(
-        " {:<pw$}  {:>10} {:>7}  {:<ow$} {:>5} {:>7} {:>8}",
+        " {:<pw$}  {:>10} {:>7}  {} {:>5} {:>7} {:>8}",
         "File",
         "Language",
         "Lines",
-        "Owner",
+        report_helpers::pad_to("Owner", max_owner_len),
         "Own%",
         "Contrib",
         "Risk",
         pw = max_path_len,
-        ow = max_owner_len
     );
     println!("{separator}");
 
     for f in files {
         println!(
-            " {:<pw$}  {:>10} {:>7}  {:<ow$} {:>4.0}% {:>7} {:>8}",
+            " {:<pw$}  {:>10} {:>7}  {} {:>4.0}% {:>7} {:>8}",
             f.path.display(),
             f.language,
             f.total_lines,
-            f.primary_owner,
+            report_helpers::pad_to(&f.primary_owner, max_owner_len),
             f.ownership_pct,
             f.contributors,
             f.risk.label(),
             pw = max_path_len,
-            ow = max_owner_len
         );
     }
 
@@ -102,10 +109,10 @@ pub fn print_json(files: &[FileOwnership]) -> Result<(), Box<dyn std::error::Err
     report_helpers::print_json_stdout(&entries)
 }
 
-const COL_FILES: usize = 5;
-const COL_LINES: usize = 7;
-const COL_RISK: usize = 8;
-const COL_LOSS: usize = 4;
+const SUM_COL_FILES: usize = 5;
+const SUM_COL_LINES: usize = 7;
+const SUM_COL_RISK: usize = 8;
+const SUM_COL_LOSS: usize = 4;
 // spacing: 1+2+1+1+1+1+1 = 8 fixed chars between/around dynamic columns
 const SUMMARY_SPACING: usize = 8;
 
@@ -131,17 +138,17 @@ pub fn print_summary_report(authors: &[AuthorSummary]) {
 
     let header_width = max_author_len
         + max_lang_len
-        + COL_FILES
-        + COL_LINES
-        + COL_RISK
-        + COL_LOSS
+        + SUM_COL_FILES
+        + SUM_COL_LINES
+        + SUM_COL_RISK
+        + SUM_COL_LOSS
         + SUMMARY_SPACING;
     let separator = report_helpers::separator(header_width.max(78));
 
     println!("Knowledge Summary — Ownership by Author");
     println!("{separator}");
     println!(
-        " {:<aw$}  {:>COL_FILES$} {:>COL_LINES$}  {:<lw$} {:>COL_RISK$} {:>COL_LOSS$}",
+        " {:<aw$}  {:>SUM_COL_FILES$} {:>SUM_COL_LINES$}  {:<lw$} {:>SUM_COL_RISK$} {:>SUM_COL_LOSS$}",
         "Author",
         "Files",
         "Lines",
@@ -156,7 +163,7 @@ pub fn print_summary_report(authors: &[AuthorSummary]) {
     for a in authors {
         let langs = a.languages.join(", ");
         println!(
-            " {:<aw$}  {:>COL_FILES$} {:>COL_LINES$}  {:<lw$} {:>COL_RISK$} {:>COL_LOSS$}",
+            " {:<aw$}  {:>SUM_COL_FILES$} {:>SUM_COL_LINES$}  {:<lw$} {:>SUM_COL_RISK$} {:>SUM_COL_LOSS$}",
             report_helpers::pad_to(&a.author, max_author_len),
             a.files_owned,
             a.total_lines,
