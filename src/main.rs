@@ -365,6 +365,7 @@ fn main() {
             sort_by,
             since,
             risk_only,
+            summary,
         } => {
             let filter = common.exclude_filter();
             maybe_list_excluded(
@@ -382,6 +383,7 @@ fn main() {
                     &sort_by,
                     since.as_deref(),
                     risk_only,
+                    summary,
                 )
             })
         }

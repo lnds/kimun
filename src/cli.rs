@@ -322,6 +322,10 @@ pub enum Commands {
         /// Show only files with knowledge loss risk (primary owner inactive)
         #[arg(long)]
         risk_only: bool,
+
+        /// Aggregate by author: files owned, lines, languages, worst risk
+        #[arg(long)]
+        summary: bool,
     },
 
     /// Analyze temporal coupling: files that change together in commits
