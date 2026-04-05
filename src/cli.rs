@@ -372,6 +372,17 @@ pub enum Commands {
         /// Maximum parameter count before flagging (default: 4)
         #[arg(long, default_value = "4")]
         max_params: usize,
+
+        /// Analyze only these specific files (repeatable).
+        /// Useful for scripting: km smells --files src/foo.rs --files src/bar.ex
+        #[arg(long, value_name = "FILE", conflicts_with = "since_ref")]
+        files: Vec<PathBuf>,
+
+        /// Analyze only files changed since this git ref (e.g. origin/main, HEAD~1).
+        /// Runs git diff internally — no need to pipe file lists.
+        /// Ideal for CI: km smells --since-ref origin/main
+        #[arg(long, value_name = "REF")]
+        since_ref: Option<String>,
     },
 
     /// Compute an overall code health score for the project (A++ to F--)

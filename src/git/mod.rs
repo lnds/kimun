@@ -13,7 +13,7 @@ use std::fs;
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 
-use git2::{BlameOptions, DiffOptions, ObjectType, Repository, Sort, Tree};
+use git2::{BlameOptions, Delta, DiffOptions, ObjectType, Repository, Sort, Tree};
 
 /// Wrapper around a `git2::Repository` with its resolved root path.
 pub struct GitRepo {
@@ -330,6 +330,40 @@ impl GitRepo {
     }
 
     /// Diff a commit against its parent to get the list of changed file paths.
+    /// Return the absolute paths of files added or modified between `since_ref`
+    /// and HEAD. Deleted files are excluded — they no longer exist on disk.
+    /// Paths are absolute (joined with the git working directory root).
+    pub fn files_changed_since(&self, since_ref: &str) -> Result<Vec<PathBuf>, Box<dyn Error>> {
+        let old_obj = self
+            .repo
+            .revparse_single(since_ref)
+            .map_err(|e| format!("cannot resolve ref '{since_ref}': {e}"))?;
+        let old_tree = old_obj
+            .peel_to_commit()
+            .map_err(|e| format!("'{since_ref}' is not a commit: {e}"))?
+            .tree()?;
+
+        let head_tree = self.repo.head()?.peel_to_commit()?.tree()?;
+
+        let mut opts = DiffOptions::new();
+        let diff =
+            self.repo
+                .diff_tree_to_tree(Some(&old_tree), Some(&head_tree), Some(&mut opts))?;
+
+        let mut paths = Vec::new();
+        for delta in diff.deltas() {
+            match delta.status() {
+                Delta::Added | Delta::Modified | Delta::Renamed | Delta::Copied => {
+                    if let Some(p) = delta.new_file().path() {
+                        paths.push(self.root.join(p));
+                    }
+                }
+                _ => {}
+            }
+        }
+        Ok(paths)
+    }
+
     fn changed_files(&self, commit: &git2::Commit) -> Result<Vec<PathBuf>, Box<dyn Error>> {
         let tree = commit.tree()?;
         let parent_tree = if commit.parent_count() > 0 {
