@@ -190,6 +190,7 @@ fn main() {
             top,
             per_function,
             sort_by,
+            format,
         } => {
             let filter = common.exclude_filter();
             maybe_list_excluded(
@@ -207,6 +208,7 @@ fn main() {
                     top,
                     per_function,
                     &sort_by,
+                    format.as_deref(),
                 )
             })
         }
@@ -216,6 +218,7 @@ fn main() {
             top,
             per_function,
             sort_by,
+            format,
         } => {
             let filter = common.exclude_filter();
             maybe_list_excluded(
@@ -233,6 +236,7 @@ fn main() {
                     top,
                     per_function,
                     &sort_by,
+                    format.as_deref(),
                 )
             })
         }
@@ -436,6 +440,7 @@ fn main() {
             max_params,
             files,
             since_ref,
+            format,
         } => {
             let filter = common.exclude_filter();
             maybe_list_excluded(
@@ -449,12 +454,12 @@ fn main() {
                     let git_repo =
                         git::GitRepo::open(t).map_err(|e| format!("not a git repository: {e}"))?;
                     let changed = git_repo.files_changed_since(git_ref)?;
-                    smells::run_on_files(&changed, common.json, top, max_lines, max_params)
+                    smells::run_on_files(&changed, common.json, top, max_lines, max_params, format.as_deref())
                 } else if !files.is_empty() {
-                    smells::run_on_files(&files, common.json, top, max_lines, max_params)
+                    smells::run_on_files(&files, common.json, top, max_lines, max_params, format.as_deref())
                 } else {
                     let cfg = WalkConfig::new(t, common.include_tests, &filter);
-                    smells::run(&cfg, common.json, top, max_lines, max_params)
+                    smells::run(&cfg, common.json, top, max_lines, max_params, format.as_deref())
                 }
             })
         }

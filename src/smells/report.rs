@@ -114,3 +114,20 @@ pub fn print_json(files: &[FileSmellMetrics]) -> Result<(), Box<dyn std::error::
 
     report_helpers::print_json_stdout(&entries)
 }
+
+/// Emit one GitHub Actions warning annotation per smell instance.
+/// Each annotation links directly to the file and line in the PR diff.
+pub fn print_github(files: &[FileSmellMetrics]) {
+    for f in files {
+        let path = f.path.display().to_string();
+        for s in &f.smells.smells {
+            report_helpers::github_annotation(
+                "warning",
+                &path,
+                s.line,
+                s.kind.title(),
+                &s.detail,
+            );
+        }
+    }
+}
