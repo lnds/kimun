@@ -95,6 +95,9 @@ Options:
 | `--show-all` | Show all duplicate groups (default: top 20) |
 | `--min-lines N` | Minimum lines for a duplicate block (default: 6) |
 | `--include-tests` | Include test files in analysis (excluded by default) |
+| `--max-duplicates N` | Exit with code 1 if duplicate groups exceed this limit (`--max-duplicates 0` fails on any duplicate) |
+| `--max-dup-ratio PERCENT` | Exit with code 1 if the duplicated-lines ratio exceeds this percentage (e.g. `--max-dup-ratio 5.0`) |
+| `--fail-on-increase REF` | Exit with code 1 if the current duplication ratio is higher than at the given git ref (e.g. `origin/main`). Prevents debt from growing silently in CI |
 | `--json` | Output as JSON |
 
 Example summary output:

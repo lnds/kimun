@@ -146,6 +146,12 @@ pub enum Commands {
         /// fails when more than 5% of code lines are duplicated.
         #[arg(long, value_name = "PERCENT")]
         max_dup_ratio: Option<f64>,
+
+        /// Exit with code 1 if the current duplication ratio is higher than at the
+        /// given git ref. Prevents duplication debt from growing silently in CI:
+        /// --fail-on-increase origin/main fails if this branch added more duplicates.
+        #[arg(long, value_name = "REF")]
+        fail_on_increase: Option<String>,
     },
 
     /// Analyze indentation complexity (stddev and max depth per file)

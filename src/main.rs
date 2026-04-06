@@ -147,17 +147,15 @@ fn main() {
             min_lines,
             max_duplicates,
             max_dup_ratio,
+            fail_on_increase,
         } => {
             dispatch!(common, |cfg, json| {
-                dups::run(
-                    &cfg,
-                    min_lines,
-                    report,
-                    show_all,
-                    json,
+                let gate = dups::DupsGate {
                     max_duplicates,
                     max_dup_ratio,
-                )
+                    fail_on_increase: fail_on_increase.clone(),
+                };
+                dups::run(&cfg, min_lines, report, show_all, json, gate)
             })
         }
         Commands::Indent { common } => dispatch!(common, |cfg, json| indent::run(&cfg, json)),
