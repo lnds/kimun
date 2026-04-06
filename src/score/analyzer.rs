@@ -77,6 +77,56 @@ impl fmt::Display for Grade {
     }
 }
 
+impl Grade {
+    /// Numeric rank where higher = better grade (A++ = 15, F-- = 0).
+    /// Used for gate comparisons: `after.numeric_rank() < before.numeric_rank()` means regression.
+    pub fn numeric_rank(self) -> u8 {
+        match self {
+            Self::APlusPlus => 15,
+            Self::APlus => 14,
+            Self::A => 13,
+            Self::AMinus => 12,
+            Self::BPlus => 11,
+            Self::B => 10,
+            Self::BMinus => 9,
+            Self::CPlus => 8,
+            Self::C => 7,
+            Self::CMinus => 6,
+            Self::DPlus => 5,
+            Self::D => 4,
+            Self::DMinus => 3,
+            Self::F => 2,
+            Self::FMinus => 1,
+            Self::FMinusMinus => 0,
+        }
+    }
+
+    /// Parse a grade string (e.g. "B-", "A++") into a `Grade`.
+    pub fn parse(s: &str) -> Result<Self, String> {
+        match s {
+            "A++" => Ok(Self::APlusPlus),
+            "A+" => Ok(Self::APlus),
+            "A" => Ok(Self::A),
+            "A-" => Ok(Self::AMinus),
+            "B+" => Ok(Self::BPlus),
+            "B" => Ok(Self::B),
+            "B-" => Ok(Self::BMinus),
+            "C+" => Ok(Self::CPlus),
+            "C" => Ok(Self::C),
+            "C-" => Ok(Self::CMinus),
+            "D+" => Ok(Self::DPlus),
+            "D" => Ok(Self::D),
+            "D-" => Ok(Self::DMinus),
+            "F" => Ok(Self::F),
+            "F-" => Ok(Self::FMinus),
+            "F--" => Ok(Self::FMinusMinus),
+            _ => Err(format!(
+                "unknown grade '{s}' — valid grades: A++, A+, A, A-, B+, B, B-, C+, C, C-, D+, D, D-, F, F-, F--"
+            )),
+        }
+    }
+}
+
 /// Map a numeric score (0–100) to a letter grade.
 /// Thresholds: A++ ≥97, A+ ≥93, A ≥90, A- ≥87, B+ ≥83, B ≥80, etc.
 pub fn score_to_grade(score: f64) -> Grade {

@@ -103,6 +103,7 @@ impl CommonArgs {
 
 /// All available analysis subcommands.
 #[derive(Subcommand)]
+#[allow(clippy::large_enum_variant)] // CLI args are parsed once; size is not performance-critical
 pub enum Commands {
     /// Count lines of code (blank, comment, code) by language
     Loc {
@@ -430,6 +431,17 @@ pub enum Commands {
         /// Useful for PR review: --trend origin/main
         #[arg(long, num_args = 0..=1, default_missing_value = "HEAD", value_name = "REF")]
         trend: Option<String>,
+
+        /// Exit with code 1 if the score is worse than the ref (requires --trend).
+        /// Example: --trend origin/main --fail-if-worse
+        #[arg(long, requires = "trend")]
+        fail_if_worse: bool,
+
+        /// Exit with code 1 if the score is below GRADE (requires --trend).
+        /// Example: --trend origin/main --fail-below B-
+        /// Valid grades: A++, A+, A, A-, B+, B, B-, C+, C, C-, D+, D, D-, F, F-, F--
+        #[arg(long, value_name = "GRADE", requires = "trend")]
+        fail_below: Option<String>,
     },
 
     /// Analyze code age: classify files as active, stale, or frozen by last git modification

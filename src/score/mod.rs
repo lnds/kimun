@@ -18,7 +18,7 @@ pub(crate) mod analyzer;
 /// Single-file metric extraction (reads once, computes all dimensions).
 mod collector;
 /// Diff data types and computation for comparing two ProjectScore snapshots.
-mod diff;
+pub(crate) mod diff;
 /// Table and JSON formatters for score diff output.
 mod diff_report;
 /// Piecewise linear normalization curves mapping raw metrics to 0–100.
@@ -38,6 +38,16 @@ use analyzer::{FileScore, ProjectScore, compute_project_score, score_to_grade};
 use collector::{FileMetrics, analyze_single_file};
 use report::{print_json, print_report};
 use scoring::{build_dimensions, build_empty_dimensions, score_file};
+
+/// Quality gate options for `--trend` mode.
+/// Both conditions are independent and checked after the report is printed.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ScoreGate {
+    /// Fail if the current grade is lower than the ref grade.
+    pub fail_if_worse: bool,
+    /// Fail if the current grade is below this threshold.
+    pub fail_below: Option<analyzer::Grade>,
+}
 
 /// Scoring model selection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -90,7 +100,8 @@ pub fn run(
     Ok(())
 }
 
-/// Entry point for `km score diff`: compare current working tree against a git ref.
+/// Entry point for `km score --trend`: compare current working tree against a git ref.
+/// Quality gates in `gate` are checked after the report is printed so CI logs are complete.
 pub fn run_diff(
     cfg: &WalkConfig<'_>,
     git_ref: &str,
@@ -98,6 +109,7 @@ pub fn run_diff(
     bottom: usize,
     min_lines: usize,
     model: &str,
+    gate: ScoreGate,
 ) -> Result<(), Box<dyn Error>> {
     let scoring_model = ScoringModel::from_arg(model);
 
@@ -124,10 +136,29 @@ pub fn run_diff(
 
     let score_diff = diff::compute_diff(git_ref, &before, &after);
 
+    // Always print first so CI logs show the full report before any gate error.
     if json {
         diff_report::print_json(&score_diff)?;
     } else {
         diff_report::print_report(&score_diff);
+    }
+
+    // Quality gates: evaluated after output so the log is always complete.
+    if gate.fail_if_worse && score_diff.overall.delta < 0.0 {
+        return Err(format!(
+            "quality gate failed: score dropped {:.1} → {:.1} ({:+.1})",
+            score_diff.overall.before, score_diff.overall.after, score_diff.overall.delta
+        )
+        .into());
+    }
+    if let Some(threshold) = gate.fail_below
+        && score_diff.after_grade.numeric_rank() < threshold.numeric_rank()
+    {
+        return Err(format!(
+            "quality gate failed: score {} is below minimum threshold {}",
+            score_diff.after_grade, threshold
+        )
+        .into());
     }
 
     Ok(())
