@@ -62,6 +62,30 @@ pub struct KnowledgeOptions<'a> {
     pub author: Option<&'a str>,
 }
 
+/// Sort file ownership results by the given sort key.
+/// "diffusion" sorts by contributor count, "risk" by risk level then ownership,
+/// and anything else (default "concentration") by highest ownership percentage first.
+fn sort_results(results: &mut [FileOwnership], sort_by: &str) {
+    match sort_by {
+        "diffusion" => results.sort_by(|a, b| b.contributors.cmp(&a.contributors)),
+        "risk" => results.sort_by(|a, b| {
+            a.risk.sort_key().cmp(&b.risk.sort_key()).then_with(|| {
+                b.ownership_pct
+                    .partial_cmp(&a.ownership_pct)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+        }),
+        _ => {
+            // concentration: highest ownership % first
+            results.sort_by(|a, b| {
+                b.ownership_pct
+                    .partial_cmp(&a.ownership_pct)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+        }
+    }
+}
+
 /// Run knowledge map analysis: walk source files, blame each one,
 /// compute ownership concentration and risk, then output results.
 pub fn run(cfg: &WalkConfig<'_>, opts: &KnowledgeOptions<'_>) -> Result<(), Box<dyn Error>> {
@@ -123,25 +147,7 @@ pub fn run(cfg: &WalkConfig<'_>, opts: &KnowledgeOptions<'_>) -> Result<(), Box<
         results.retain(|f| f.knowledge_loss);
     }
 
-    // Sort
-    match opts.sort_by {
-        "diffusion" => results.sort_by(|a, b| b.contributors.cmp(&a.contributors)),
-        "risk" => results.sort_by(|a, b| {
-            a.risk.sort_key().cmp(&b.risk.sort_key()).then_with(|| {
-                b.ownership_pct
-                    .partial_cmp(&a.ownership_pct)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })
-        }),
-        _ => {
-            // concentration: highest ownership % first
-            results.sort_by(|a, b| {
-                b.ownership_pct
-                    .partial_cmp(&a.ownership_pct)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            });
-        }
-    }
+    sort_results(&mut results, opts.sort_by);
 
     if opts.bus_factor {
         let bf = compute_bus_factor(&author_lines, 80.0);

@@ -326,12 +326,8 @@ pub fn source_files(
         let file_path = entry.path();
         // File-level filtering (test names, extension/glob exclusion) is
         // handled by the walker's filter_entry callback — no checks needed here.
-        let spec = match detect(file_path) {
-            Some(s) => s,
-            None => match try_detect_shebang(file_path) {
-                Some(s) => s,
-                None => continue,
-            },
+        let Some(spec) = detect(file_path).or_else(|| try_detect_shebang(file_path)) else {
+            continue;
         };
         result.push((file_path.to_path_buf(), spec));
     }
@@ -399,6 +395,29 @@ pub(crate) fn walk(path: &Path, exclude_tests: bool, filter: &ExcludeFilter) -> 
         .build()
 }
 
+/// Return the exclusion reason for an ancestor directory, if any.
+/// Checks all path components for excluded directory names or test directories.
+fn ancestor_exclusion_reason(
+    path: &Path,
+    exclude_tests: bool,
+    filter: &ExcludeFilter,
+) -> Option<&'static str> {
+    let parent = path.parent()?;
+    for component in parent.components() {
+        if let std::path::Component::Normal(name) = component
+            && let Some(name_str) = name.to_str()
+        {
+            if filter.excludes_dir(name_str) {
+                return Some("directory");
+            }
+            if exclude_tests && TEST_DIRS.contains(&name_str) {
+                return Some("test directory");
+            }
+        }
+    }
+    None
+}
+
 /// Print files that would be excluded by the current filter configuration.
 /// Used by `--list-excluded` for debugging filter rules.
 pub fn print_excluded_files(
@@ -426,22 +445,8 @@ pub fn print_excluded_files(
         if filter.excludes_by_extension(file_path) {
             reasons.push("extension");
         }
-        // Check directory exclusion
-        if let Some(parent) = file_path.parent() {
-            for component in parent.components() {
-                if let std::path::Component::Normal(name) = component
-                    && let Some(name_str) = name.to_str()
-                {
-                    if filter.excludes_dir(name_str) {
-                        reasons.push("directory");
-                        break;
-                    }
-                    if exclude_tests && TEST_DIRS.contains(&name_str) {
-                        reasons.push("test directory");
-                        break;
-                    }
-                }
-            }
+        if let Some(reason) = ancestor_exclusion_reason(file_path, exclude_tests, filter) {
+            reasons.push(reason);
         }
         if filter.excludes_by_glob(file_path, path) {
             reasons.push("glob");

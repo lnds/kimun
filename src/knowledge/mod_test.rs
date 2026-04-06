@@ -213,7 +213,10 @@ fn integration_with_since_filter() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, &opts(false, 20, "concentration", Some("1y"), false, false));
+    let result = run(
+        &cfg,
+        &opts(false, 20, "concentration", Some("1y"), false, false),
+    );
     assert!(result.is_ok(), "since filter should work: {:?}", result);
 }
 
@@ -228,7 +231,10 @@ fn integration_with_since_filter_json() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, &opts(true, 20, "concentration", Some("1d"), false, false));
+    let result = run(
+        &cfg,
+        &opts(true, 20, "concentration", Some("1d"), false, false),
+    );
     assert!(
         result.is_ok(),
         "since filter JSON should work: {:?}",

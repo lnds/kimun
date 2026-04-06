@@ -175,7 +175,15 @@ fn main() {
             format,
         } => {
             dispatch!(common, |cfg, json| {
-                cycom::run(&cfg, json, min_complexity, top, per_function, &sort_by, format.as_deref())
+                cycom::run(
+                    &cfg,
+                    json,
+                    min_complexity,
+                    top,
+                    per_function,
+                    &sort_by,
+                    format.as_deref(),
+                )
             })
         }
         Commands::Cogcom {
@@ -187,7 +195,15 @@ fn main() {
             format,
         } => {
             dispatch!(common, |cfg, json| {
-                cogcom::run(&cfg, json, min_complexity, top, per_function, &sort_by, format.as_deref())
+                cogcom::run(
+                    &cfg,
+                    json,
+                    min_complexity,
+                    top,
+                    per_function,
+                    &sort_by,
+                    format.as_deref(),
+                )
             })
         }
         Commands::Mi {
@@ -293,7 +309,13 @@ fn main() {
             sort_by,
             top,
         } => {
-            dispatch!(common, |cfg, json| deps::run(&cfg, json, cycles_only, &sort_by, top))
+            dispatch!(common, |cfg, json| deps::run(
+                &cfg,
+                json,
+                cycles_only,
+                &sort_by,
+                top
+            ))
         }
         Commands::Authors { common, since } => {
             dispatch!(common, |cfg, json| authors::run(
@@ -349,9 +371,23 @@ fn main() {
                     let git_repo =
                         git::GitRepo::open(t).map_err(|e| format!("not a git repository: {e}"))?;
                     let changed = git_repo.files_changed_since(git_ref)?;
-                    smells::run_on_files(&changed, json, top, max_lines, max_params, format.as_deref())
+                    smells::run_on_files(
+                        &changed,
+                        json,
+                        top,
+                        max_lines,
+                        max_params,
+                        format.as_deref(),
+                    )
                 } else if !files.is_empty() {
-                    smells::run_on_files(&files, json, top, max_lines, max_params, format.as_deref())
+                    smells::run_on_files(
+                        &files,
+                        json,
+                        top,
+                        max_lines,
+                        max_params,
+                        format.as_deref(),
+                    )
                 } else {
                     let cfg = WalkConfig::new(t, include_tests, &filter);
                     smells::run(&cfg, json, top, max_lines, max_params, format.as_deref())

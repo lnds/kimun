@@ -79,6 +79,39 @@ pub struct FileCognitive {
     pub level: CognitiveLevel,
 }
 
+/// Build a `FileCognitive` for files where no functions were detected,
+/// treating the entire file as a single implicit `<file>` function.
+fn make_fallback_file_cognitive(complexity: usize) -> FileCognitive {
+    let level = CognitiveLevel::from_complexity(complexity);
+    FileCognitive {
+        functions: vec![FunctionCognitive {
+            name: "<file>".to_string(),
+            start_line: 1,
+            complexity,
+            level,
+        }],
+        total_complexity: complexity,
+        max_complexity: complexity,
+        avg_complexity: complexity as f64,
+        level,
+    }
+}
+
+/// Aggregate per-function cognitive complexity results into a `FileCognitive`.
+fn aggregate_functions(functions: Vec<FunctionCognitive>) -> FileCognitive {
+    let total: usize = functions.iter().map(|f| f.complexity).sum();
+    let max = functions.iter().map(|f| f.complexity).max().unwrap_or(0);
+    let avg = total as f64 / functions.len() as f64;
+    let level = CognitiveLevel::from_complexity(max);
+    FileCognitive {
+        functions,
+        total_complexity: total,
+        max_complexity: max,
+        avg_complexity: avg,
+        level,
+    }
+}
+
 /// Analyze cognitive complexity for a file's lines.
 ///
 /// Detects functions, then computes per-function cognitive complexity.
@@ -111,33 +144,10 @@ pub fn analyze(
 
     if functions.is_empty() {
         let complexity = count_cognitive_for_lines(&code_lines, markers);
-        let level = CognitiveLevel::from_complexity(complexity);
-        return Some(FileCognitive {
-            functions: vec![FunctionCognitive {
-                name: "<file>".to_string(),
-                start_line: 1,
-                complexity,
-                level,
-            }],
-            total_complexity: complexity,
-            max_complexity: complexity,
-            avg_complexity: complexity as f64,
-            level,
-        });
+        return Some(make_fallback_file_cognitive(complexity));
     }
 
-    let total: usize = functions.iter().map(|f| f.complexity).sum();
-    let max = functions.iter().map(|f| f.complexity).max().unwrap_or(0);
-    let avg = total as f64 / functions.len() as f64;
-    let level = CognitiveLevel::from_complexity(max);
-
-    Some(FileCognitive {
-        functions,
-        total_complexity: total,
-        max_complexity: max,
-        avg_complexity: avg,
-        level,
-    })
+    Some(aggregate_functions(functions))
 }
 
 /// What kind of brace context we're tracking.
@@ -166,6 +176,41 @@ pub fn count_cognitive_for_lines(
     } else {
         count_indent_scoped(func_lines, markers)
     }
+}
+
+/// Process all braces on a single line, updating the brace stack and nesting depth.
+///
+/// Returns `(new_is_first_line, new_opens_flow)` after processing.
+/// `is_first_line` transitions to `false` once the function-body opening brace is seen.
+/// `opens_flow` tracks whether the next `{` on this line opens a flow-control block.
+fn process_line_braces(
+    stripped: &str,
+    mut is_first_line: bool,
+    mut opens_flow: bool,
+    brace_stack: &mut Vec<BraceContext>,
+    nesting_depth: &mut usize,
+) -> (bool, bool) {
+    for ch in stripped.bytes() {
+        if ch == b'{' {
+            if is_first_line {
+                // First opening brace is the function body — don't increment nesting
+                brace_stack.push(BraceContext::Other);
+                is_first_line = false;
+            } else if opens_flow {
+                brace_stack.push(BraceContext::FlowControl);
+                *nesting_depth += 1;
+                opens_flow = false; // consumed — remaining { on this line are closures/structs
+            } else {
+                brace_stack.push(BraceContext::Other);
+            }
+        } else if ch == b'}'
+            && let Some(ctx) = brace_stack.pop()
+            && ctx == BraceContext::FlowControl
+        {
+            *nesting_depth = nesting_depth.saturating_sub(1);
+        }
+    }
+    (is_first_line, opens_flow)
 }
 
 /// Count cognitive complexity for brace-scoped languages.
@@ -207,33 +252,18 @@ fn count_brace_scoped(func_lines: &[(usize, &str)], markers: &CognitiveMarkers) 
         // `opens_flow` is consumed by the first `{` on a control-flow line so
         // that subsequent braces on the same line (closures, struct literals)
         // are not counted as flow-control nesting.
-        let mut opens_flow = matches!(
+        let line_opens_flow = matches!(
             line_result,
             LineClassification::Structural | LineClassification::Fundamental
         );
 
-        for ch in stripped.bytes() {
-            if ch == b'{' {
-                if is_first_line {
-                    // First opening brace is the function body — don't increment nesting
-                    brace_stack.push(BraceContext::Other);
-                    is_first_line = false;
-                } else if opens_flow {
-                    brace_stack.push(BraceContext::FlowControl);
-                    nesting_depth += 1;
-                    opens_flow = false; // consumed — remaining { on this line are closures/structs
-                } else {
-                    brace_stack.push(BraceContext::Other);
-                }
-            } else if ch == b'}'
-                && let Some(ctx) = brace_stack.pop()
-                && ctx == BraceContext::FlowControl
-            {
-                nesting_depth = nesting_depth.saturating_sub(1);
-            }
-        }
-
-        is_first_line = false;
+        (is_first_line, _) = process_line_braces(
+            &stripped,
+            is_first_line,
+            line_opens_flow,
+            &mut brace_stack,
+            &mut nesting_depth,
+        );
     }
 
     complexity

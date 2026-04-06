@@ -256,6 +256,39 @@ pub fn detect_magic_numbers(
     smells
 }
 
+/// Check whether a `-` at `pos` is a unary negative sign (not a binary minus).
+/// Returns true if followed by a digit and not preceded by alphanumeric.
+fn is_negative_prefix(bytes: &[u8], pos: usize) -> bool {
+    bytes[pos] == b'-'
+        && pos + 1 < bytes.len()
+        && bytes[pos + 1].is_ascii_digit()
+        && (pos == 0 || !bytes[pos - 1].is_ascii_alphanumeric())
+}
+
+/// Returns true if the character at `pos` is preceded by an identifier char
+/// (alphanumeric or underscore), meaning this digit is part of an identifier.
+fn is_preceded_by_ident(bytes: &[u8], pos: usize) -> bool {
+    pos > 0 && (bytes[pos - 1].is_ascii_alphanumeric() || bytes[pos - 1] == b'_')
+}
+
+/// Consume a numeric literal starting at `start` in `bytes`, returning the
+/// position after the literal (including any exponent suffix like e+10).
+fn scan_numeric_literal(bytes: &[u8], start: usize) -> usize {
+    let mut j = start;
+    while j < bytes.len() && is_numeric_char(bytes[j]) {
+        // Handle exponent sign: e+, e-, E+, E-
+        if (bytes[j] == b'e' || bytes[j] == b'E')
+            && j + 1 < bytes.len()
+            && (bytes[j + 1] == b'+' || bytes[j + 1] == b'-')
+        {
+            j += 2; // skip e and sign
+            continue;
+        }
+        j += 1;
+    }
+    j
+}
+
 /// Scan a masked code line for a bare numeric literal that isn't trivial.
 fn has_magic_number(trimmed: &str) -> bool {
     let bytes = trimmed.as_bytes();
@@ -263,35 +296,21 @@ fn has_magic_number(trimmed: &str) -> bool {
 
     while j < bytes.len() {
         // Look for a digit or a minus followed by a digit
-        let is_neg = bytes[j] == b'-'
-            && j + 1 < bytes.len()
-            && bytes[j + 1].is_ascii_digit()
-            && (j == 0 || !bytes[j - 1].is_ascii_alphanumeric());
+        let is_neg = is_negative_prefix(bytes, j);
         let start = j;
         if is_neg {
             j += 1;
         }
         if j < bytes.len() && bytes[j].is_ascii_digit() {
             // Skip if preceded by identifier char (e.g., var2)
-            if start > 0 && (bytes[start - 1].is_ascii_alphanumeric() || bytes[start - 1] == b'_') {
-                while j < bytes.len() && is_numeric_char(bytes[j]) {
-                    j += 1;
-                }
+            if is_preceded_by_ident(bytes, start) {
+                j = scan_numeric_literal(bytes, j);
                 continue;
             }
 
             // Collect the full numeric literal (digits, dots, hex chars, exponent)
-            while j < bytes.len() && is_numeric_char(bytes[j]) {
-                // Handle exponent sign: e+, e-, E+, E-
-                if (bytes[j] == b'e' || bytes[j] == b'E')
-                    && j + 1 < bytes.len()
-                    && (bytes[j + 1] == b'+' || bytes[j + 1] == b'-')
-                {
-                    j += 2; // skip e and sign
-                    continue;
-                }
-                j += 1;
-            }
+            j = scan_numeric_literal(bytes, j);
+
             // Skip if followed by identifier char (part of identifier)
             if j < bytes.len() && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_') {
                 j += 1;
@@ -335,6 +354,19 @@ const WEAK_CODE_PATTERNS: &[&str] = &[
     "->",
 ];
 
+/// Emit a `CommentedOutCode` smell if `run_len >= 2` and `run_start` is set.
+fn flush_code_run(run_start: Option<usize>, run_len: usize, smells: &mut Vec<SmellInstance>) {
+    if run_len >= 2
+        && let Some(start) = run_start
+    {
+        smells.push(SmellInstance {
+            kind: SmellKind::CommentedOutCode,
+            line: start + 1,
+            detail: format!("{run_len} lines of commented-out code"),
+        });
+    }
+}
+
 /// Detect consecutive comment lines that look like commented-out code.
 ///
 /// A comment line is considered "code-like" if it contains at least 1 strong
@@ -356,30 +388,14 @@ pub fn detect_commented_out_code(lines: &[String], kinds: &[LineKind]) -> Vec<Sm
             }
             run_len += 1;
         } else {
-            if run_len >= 2
-                && let Some(start) = run_start
-            {
-                smells.push(SmellInstance {
-                    kind: SmellKind::CommentedOutCode,
-                    line: start + 1,
-                    detail: format!("{run_len} lines of commented-out code"),
-                });
-            }
+            flush_code_run(run_start, run_len, &mut smells);
             run_start = None;
             run_len = 0;
         }
     }
 
     // Handle a run that extends to the end
-    if run_len >= 2
-        && let Some(start) = run_start
-    {
-        smells.push(SmellInstance {
-            kind: SmellKind::CommentedOutCode,
-            line: start + 1,
-            detail: format!("{run_len} lines of commented-out code"),
-        });
-    }
+    flush_code_run(run_start, run_len, &mut smells);
 
     smells
 }

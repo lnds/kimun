@@ -107,6 +107,78 @@ pub struct DupsGate {
     pub fail_on_increase: Option<String>,
 }
 
+/// Check quality gates after the report has been printed.
+/// Returns an error if any gate condition is violated.
+fn check_quality_gates(
+    gate: &DupsGate,
+    metrics: &DuplicationMetrics,
+    groups: &[detector::DuplicateGroup],
+    cfg: &WalkConfig<'_>,
+    min_lines: usize,
+) -> Result<(), Box<dyn Error>> {
+    if gate.max_duplicates.is_some_and(|max| groups.len() > max) {
+        let max = gate.max_duplicates.unwrap();
+        return Err(format!(
+            "quality gate failed: {} duplicate groups found (limit: {max})",
+            groups.len()
+        )
+        .into());
+    }
+
+    if let Some(max_pct) = gate.max_dup_ratio {
+        let actual_pct = if metrics.total_code_lines > 0 {
+            metrics.duplicated_lines as f64 / metrics.total_code_lines as f64 * 100.0
+        } else {
+            0.0
+        };
+        if actual_pct > max_pct {
+            return Err(format!(
+                "quality gate failed: {actual_pct:.1}% duplication ratio exceeds limit of {max_pct:.1}%"
+            )
+            .into());
+        }
+    }
+
+    if let Some(git_ref) = gate.fail_on_increase.as_deref() {
+        let after_ratio = if metrics.total_code_lines > 0 {
+            metrics.duplicated_lines as f64 / metrics.total_code_lines as f64 * 100.0
+        } else {
+            0.0
+        };
+
+        let repo = GitRepo::open(cfg.path)?;
+        let tmpdir = tempfile::tempdir()?;
+        repo.extract_tree_to_dir(git_ref, tmpdir.path())?;
+
+        let (_, prefix) = repo.walk_prefix(cfg.path)?;
+        let tmp_path = if prefix.as_os_str().is_empty() {
+            tmpdir.path().to_path_buf()
+        } else {
+            tmpdir.path().join(&prefix)
+        };
+
+        let ref_cfg = WalkConfig::new(&tmp_path, cfg.include_tests, cfg.filter);
+        let ref_metrics = compute_metrics(&ref_cfg, min_lines);
+
+        let before_ratio = if ref_metrics.total_code_lines > 0 {
+            ref_metrics.duplicated_lines as f64 / ref_metrics.total_code_lines as f64 * 100.0
+        } else {
+            0.0
+        };
+
+        // Compare at 0.01% resolution (the display precision) to avoid spurious
+        // failures from floating-point noise smaller than one display unit.
+        if (after_ratio * 100.0).round() > (before_ratio * 100.0).round() {
+            return Err(format!(
+                "quality gate failed: duplication increased from {before_ratio:.2}% to {after_ratio:.2}% vs {git_ref}"
+            )
+            .into());
+        }
+    }
+
+    Ok(())
+}
+
 /// Run the full duplication analysis pipeline: walk files, normalize,
 /// detect duplicates, and print results (summary, detailed, or JSON).
 ///
@@ -188,67 +260,7 @@ pub fn run(
         print_summary(&metrics, &groups);
     }
 
-    if gate.max_duplicates.is_some_and(|max| groups.len() > max) {
-        let max = gate.max_duplicates.unwrap();
-        return Err(format!(
-            "quality gate failed: {} duplicate groups found (limit: {max})",
-            groups.len()
-        )
-        .into());
-    }
-
-    if let Some(max_pct) = gate.max_dup_ratio {
-        let actual_pct = if metrics.total_code_lines > 0 {
-            metrics.duplicated_lines as f64 / metrics.total_code_lines as f64 * 100.0
-        } else {
-            0.0
-        };
-        if actual_pct > max_pct {
-            return Err(format!(
-                "quality gate failed: {actual_pct:.1}% duplication ratio exceeds limit of {max_pct:.1}%"
-            )
-            .into());
-        }
-    }
-
-    if let Some(git_ref) = gate.fail_on_increase.as_deref() {
-        let after_ratio = if metrics.total_code_lines > 0 {
-            metrics.duplicated_lines as f64 / metrics.total_code_lines as f64 * 100.0
-        } else {
-            0.0
-        };
-
-        let repo = GitRepo::open(cfg.path)?;
-        let tmpdir = tempfile::tempdir()?;
-        repo.extract_tree_to_dir(git_ref, tmpdir.path())?;
-
-        let (_, prefix) = repo.walk_prefix(cfg.path)?;
-        let tmp_path = if prefix.as_os_str().is_empty() {
-            tmpdir.path().to_path_buf()
-        } else {
-            tmpdir.path().join(&prefix)
-        };
-
-        let ref_cfg = WalkConfig::new(&tmp_path, cfg.include_tests, cfg.filter);
-        let ref_metrics = compute_metrics(&ref_cfg, min_lines);
-
-        let before_ratio = if ref_metrics.total_code_lines > 0 {
-            ref_metrics.duplicated_lines as f64 / ref_metrics.total_code_lines as f64 * 100.0
-        } else {
-            0.0
-        };
-
-        // Compare at 0.01% resolution (the display precision) to avoid spurious
-        // failures from floating-point noise smaller than one display unit.
-        if (after_ratio * 100.0).round() > (before_ratio * 100.0).round() {
-            return Err(format!(
-                "quality gate failed: duplication increased from {before_ratio:.2}% to {after_ratio:.2}% vs {git_ref}"
-            )
-            .into());
-        }
-    }
-
-    Ok(())
+    check_quality_gates(&gate, &metrics, &groups, cfg, min_lines)
 }
 
 #[cfg(test)]

@@ -19,6 +19,38 @@ pub fn multi_line_string_mask(lines: &[String], spec: &LanguageSpec) -> Vec<bool
     mask
 }
 
+/// Advance past a character while inside a triple-quoted string.
+/// Updates `in_triple` when the closing delimiter is found.
+/// Returns the new position after consuming one step.
+fn advance_inside_triple(
+    bytes: &[u8],
+    i: usize,
+    delim: &str,
+    in_triple: &mut Option<&str>,
+) -> usize {
+    if bytes[i] == b'\\' && i + 1 < bytes.len() {
+        i + 2
+    } else if bytes[i..].starts_with(delim.as_bytes()) {
+        *in_triple = None;
+        i + delim.len()
+    } else {
+        i + 1
+    }
+}
+
+/// Advance past a single-quoted string literal starting at `i` (after the opening quote).
+/// Returns the position after the closing quote.
+fn advance_single_quote(bytes: &[u8], mut i: usize, q: u8) -> usize {
+    let len = bytes.len();
+    while i < len && bytes[i] != q {
+        if bytes[i] == b'\\' {
+            i += 1;
+        }
+        i += 1;
+    }
+    if i < len { i + 1 } else { i }
+}
+
 /// Scan a single line for triple-quote delimiters, updating the in-string state.
 fn scan_triple_quotes(line: &str, in_triple: &mut Option<&str>) {
     let bytes = line.as_bytes();
@@ -27,14 +59,7 @@ fn scan_triple_quotes(line: &str, in_triple: &mut Option<&str>) {
 
     while i < len {
         if let Some(delim) = *in_triple {
-            if bytes[i] == b'\\' && i + 1 < len {
-                i += 2;
-            } else if bytes[i..].starts_with(delim.as_bytes()) {
-                *in_triple = None;
-                i += delim.len();
-            } else {
-                i += 1;
-            }
+            i = advance_inside_triple(bytes, i, delim, in_triple);
         } else if bytes[i] == b'"' || bytes[i] == b'\'' {
             let q = bytes[i];
             let triple: &str = if q == b'"' { "\"\"\"" } else { "'''" };
@@ -42,16 +67,7 @@ fn scan_triple_quotes(line: &str, in_triple: &mut Option<&str>) {
                 *in_triple = Some(triple);
                 i += 3;
             } else {
-                i += 1;
-                while i < len && bytes[i] != q {
-                    if bytes[i] == b'\\' {
-                        i += 1;
-                    }
-                    i += 1;
-                }
-                if i < len {
-                    i += 1;
-                }
+                i = advance_single_quote(bytes, i + 1, q);
             }
         } else {
             i += 1;

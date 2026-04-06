@@ -44,6 +44,26 @@ pub struct TokenCounts {
 
 pub use super::rules::rules_for;
 
+/// Classify an alphanumeric token (keyword, number, or identifier) and update counts.
+fn classify_alphanumeric_token(token: &str, rules: &TokenRules, counts: &mut TokenCounts) {
+    if rules.operator_keywords.contains(&token) {
+        counts.distinct_operators.insert(token.to_string());
+        counts.total_operators += 1;
+    } else if rules.ignored_keywords.contains(&token) {
+        // Skip ignored tokens
+    } else if is_numeric(token) {
+        // Numeric literal → operand
+        counts.distinct_operands.insert(token.to_string());
+        counts.total_operands += 1;
+    } else {
+        // Identifier (variable name, function name, etc.) → operand.
+        // Function names are operands; the call mechanism ()
+        // is already counted as an operator via operator_symbols.
+        counts.distinct_operands.insert(token.to_string());
+        counts.total_operands += 1;
+    }
+}
+
 /// Extract and classify tokens from code lines, counting operators and operands.
 ///
 /// Each line is first passed through `mask_strings` to replace string literal
@@ -104,24 +124,7 @@ pub fn count_tokens(
                 }
                 // Safe: start..i spans only ASCII bytes
                 let token = &masked[start..i];
-
-                // Check if this is an operator keyword
-                if rules.operator_keywords.contains(&token) {
-                    counts.distinct_operators.insert(token.to_string());
-                    counts.total_operators += 1;
-                } else if rules.ignored_keywords.contains(&token) {
-                    // Skip ignored tokens
-                } else if is_numeric(token) {
-                    // Numeric literal → operand
-                    counts.distinct_operands.insert(token.to_string());
-                    counts.total_operands += 1;
-                } else {
-                    // Identifier (variable name, function name, etc.) → operand.
-                    // Function names are operands; the call mechanism ()
-                    // is already counted as an operator via operator_symbols.
-                    counts.distinct_operands.insert(token.to_string());
-                    counts.total_operands += 1;
-                }
+                classify_alphanumeric_token(token, rules, &mut counts);
                 continue;
             }
 

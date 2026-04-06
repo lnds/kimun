@@ -47,6 +47,31 @@ pub fn hash_file(path: &Path) -> Option<u64> {
     Some(hash)
 }
 
+/// Scan from `start` through a string literal delimited by `quote`, masking
+/// its contents in `result` with spaces. Returns the position after the closing quote.
+fn advance_through_string(bytes: &[u8], result: &mut [u8], start: usize, quote: u8) -> usize {
+    let len = bytes.len();
+    let mut i = start;
+    while i < len {
+        if bytes[i] == b'\\' {
+            // escape: mask both chars
+            result[i] = b' ';
+            i += 1;
+            if i < len {
+                result[i] = b' ';
+                i += 1;
+            }
+        } else if bytes[i] == quote {
+            i += 1; // skip closing quote
+            break;
+        } else {
+            result[i] = b' ';
+            i += 1;
+        }
+    }
+    i
+}
+
 /// Replace the contents of string/char literals and line comments with spaces,
 /// so that keywords/braces inside literals or comments are not counted.
 ///
@@ -78,25 +103,7 @@ pub fn mask_strings(line: &str, line_comments: &[&str]) -> String {
 
         let ch = bytes[i];
         if ch == b'"' || ch == b'\'' {
-            let quote = ch;
-            i += 1; // skip opening quote
-            while i < len {
-                if bytes[i] == b'\\' {
-                    // escape: mask both chars
-                    result[i] = b' ';
-                    i += 1;
-                    if i < len {
-                        result[i] = b' ';
-                        i += 1;
-                    }
-                } else if bytes[i] == quote {
-                    i += 1; // skip closing quote
-                    break;
-                } else {
-                    result[i] = b' ';
-                    i += 1;
-                }
-            }
+            i = advance_through_string(bytes, &mut result, i + 1, ch);
         } else {
             i += 1;
         }

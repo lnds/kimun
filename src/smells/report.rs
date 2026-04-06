@@ -121,13 +121,7 @@ pub fn print_github(files: &[FileSmellMetrics]) {
     for f in files {
         let path = f.path.display().to_string();
         for s in &f.smells.smells {
-            report_helpers::github_annotation(
-                "warning",
-                &path,
-                s.line,
-                s.kind.title(),
-                &s.detail,
-            );
+            report_helpers::github_annotation("warning", &path, s.line, s.kind.title(), &s.detail);
         }
     }
 }
