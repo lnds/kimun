@@ -174,6 +174,39 @@ fn detect_brace_scoped<'a>(
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn is_c_family_function_no_paren_returns_false() {
+        assert!(!is_c_family_function("let x = 1;"));
+        assert!(!is_c_family_function("int x = 1;"));
+        assert!(!is_c_family_function("struct Foo"));
+    }
+
+    #[test]
+    fn is_c_family_function_no_open_brace_or_closing_paren() {
+        // Has '(' but doesn't end with '{' or ')'
+        assert!(!is_c_family_function("foo(x, y,"));
+        assert!(!is_c_family_function("bar(x, y;"));
+    }
+
+    #[test]
+    fn is_c_family_function_control_keyword_returns_false() {
+        assert!(!is_c_family_function("if (condition) {"));
+        assert!(!is_c_family_function("while (x > 0) {"));
+        assert!(!is_c_family_function("for (int i = 0; i < n; i++) {"));
+    }
+
+    #[test]
+    fn is_c_family_function_valid_function() {
+        assert!(is_c_family_function("int foo(int x) {"));
+        assert!(is_c_family_function("void bar()"));
+        assert!(is_c_family_function("static void baz(int a, int b) {"));
+    }
+}
+
 /// Walk code lines for indent-scoped languages (Python, Ruby), using
 /// indentation level to determine where function bodies end.
 fn detect_indent_scoped<'a>(

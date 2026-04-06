@@ -1,4 +1,5 @@
 use super::*;
+use crate::loc::language::detect;
 use crate::walk::{ExcludeFilter, WalkConfig};
 use std::fs;
 
@@ -111,6 +112,17 @@ fn run_sorts_by_stddev_descending() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     run(&cfg, false).unwrap();
+}
+
+#[test]
+fn analyze_file_returns_none_for_comment_only_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("comments.rs");
+    // A file with only comments has no code lines → analyze returns None
+    fs::write(&path, "// This is a comment\n// Another comment\n").unwrap();
+    let spec = detect(&path).unwrap();
+    let result = analyze_file(&path, spec).unwrap();
+    assert!(result.is_none(), "comment-only file should return None");
 }
 
 #[test]

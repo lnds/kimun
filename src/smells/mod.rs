@@ -16,7 +16,7 @@ use crate::util::read_and_classify;
 use crate::walk::WalkConfig;
 
 use analyzer::detect_smells;
-use report::{FileSmellMetrics, print_json, print_report};
+use report::{FileSmellMetrics, print_github, print_json, print_report};
 
 /// Read a file, classify lines, and detect smells.
 fn analyze_file(
@@ -58,6 +58,7 @@ pub fn run_on_files(
     top: usize,
     max_lines: usize,
     max_params: usize,
+    format: Option<&str>,
 ) -> Result<(), Box<dyn Error>> {
     let mut results: Vec<FileSmellMetrics> = Vec::new();
 
@@ -74,7 +75,7 @@ pub fn run_on_files(
     }
 
     if results.is_empty() {
-        if json {
+        if json || format == Some("json") {
             return report::print_json(&[]);
         }
         println!("No recognized source files in the provided list.");
@@ -84,12 +85,13 @@ pub fn run_on_files(
     results.sort_by(|a, b| b.total.cmp(&a.total));
     results.truncate(top);
 
-    if json {
-        print_json(&results)
-    } else {
-        print_report(&results);
-        Ok(())
+    match (json, format) {
+        (true, _) | (_, Some("json")) => print_json(&results)?,
+        (_, Some("github")) => print_github(&results),
+        _ => print_report(&results),
     }
+
+    Ok(())
 }
 
 /// Walk source files, detect smells, sort by count, and output.
@@ -99,6 +101,7 @@ pub fn run(
     top: usize,
     max_lines: usize,
     max_params: usize,
+    format: Option<&str>,
 ) -> Result<(), Box<dyn Error>> {
     let mut results =
         cfg.collect_analysis(|path, spec| analyze_file(path, spec, max_lines, max_params));
@@ -107,12 +110,13 @@ pub fn run(
     results.sort_by(|a, b| b.total.cmp(&a.total));
     results.truncate(top);
 
-    if json {
-        print_json(&results)
-    } else {
-        print_report(&results);
-        Ok(())
+    match (json, format) {
+        (true, _) | (_, Some("json")) => print_json(&results)?,
+        (_, Some("github")) => print_github(&results),
+        _ => print_report(&results),
     }
+
+    Ok(())
 }
 
 #[cfg(test)]

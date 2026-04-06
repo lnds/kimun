@@ -196,3 +196,57 @@ fn integration_summary_json() {
     let result = run(&cfg, &opts(true, 20, "concentration", None, false, true));
     assert!(result.is_ok(), "summary JSON mode should work");
 }
+
+#[test]
+fn integration_with_since_filter() {
+    let (dir, repo) = create_test_repo();
+    make_commit(
+        &repo,
+        &[("main.rs", "fn main() {\n    println!(\"hi\");\n}\n")],
+        "add main",
+    );
+
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    // Use "1y" — exercises the since_ts branch that calls recent_authors
+    let result = run(&cfg, &opts(false, 20, "concentration", Some("1y"), false, false));
+    assert!(result.is_ok(), "since filter should work: {:?}", result);
+}
+
+#[test]
+fn integration_with_since_filter_json() {
+    let (dir, repo) = create_test_repo();
+    make_commit(
+        &repo,
+        &[("main.rs", "fn main() {\n    println!(\"hi\");\n}\n")],
+        "add main",
+    );
+
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    // Use "1d" to exercise recent_authors with a strict cutoff
+    let result = run(&cfg, &opts(true, 20, "concentration", Some("1d"), false, false));
+    assert!(
+        result.is_ok(),
+        "since filter JSON should work: {:?}",
+        result
+    );
+}
+
+#[test]
+fn integration_with_generated_file_skipped() {
+    let (dir, repo) = create_test_repo();
+    make_commit(
+        &repo,
+        &[
+            ("main.rs", "fn main() {}"),
+            ("Cargo.lock", "[dependencies]\n"),
+        ],
+        "add files",
+    );
+
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run(&cfg, &opts(false, 20, "concentration", None, false, false));
+    assert!(result.is_ok(), "generated files should be skipped");
+}

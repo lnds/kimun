@@ -4,10 +4,10 @@
 
 A fast command-line tool for code analysis, written in Rust. Run `km score` on any project to get an overall health grade (A++ to F--) across five quality dimensions — cognitive complexity, duplication, indentation depth, Halstead effort, and file size — with a list of the files that need the most attention.
 
-Beyond the aggregate score, Kimün provides 15 specialized commands:
+Beyond the aggregate score, Kimün provides 17 specialized commands:
 
-- **Static metrics** — lines of code by language ([cloc](https://github.com/AlDanial/cloc)-compatible), duplicate detection (Rule of Three), Halstead complexity, cyclomatic complexity, cognitive complexity (SonarSource), indentation complexity, two Maintainability Index variants (Visual Studio and verifysoft), and code smell detection.
-- **Git-based analysis** — hotspot detection (change frequency × complexity, Thornhill method), code ownership / knowledge maps via `git blame`, temporal coupling between files that change together, per-author ownership summary, and file age classification (Active / Stale / Frozen).
+- **Static metrics** — lines of code by language ([cloc](https://github.com/AlDanial/cloc)-compatible), duplicate detection (Rule of Three), Halstead complexity, cyclomatic complexity, cognitive complexity (SonarSource), indentation complexity, two Maintainability Index variants (Visual Studio and verifysoft), code smell detection, and a comprehensive multi-metric report.
+- **Git-based analysis** — hotspot detection (change frequency × complexity, Thornhill method), code churn (pure change frequency), code ownership / knowledge maps via `git blame`, temporal coupling between files that change together, per-author ownership summary, and file age classification (Active / Stale / Frozen).
 - **AI-powered analysis** — optional integration with Claude to run all tools and produce a narrative report.
 
 ## Installation
@@ -17,6 +17,24 @@ cargo install --path .
 ```
 
 This installs the `km` binary.
+
+### Shell completions
+
+Generate and install a completion script for your shell:
+
+```bash
+# zsh
+km completions zsh > ~/.zfunc/_km
+# add to ~/.zshrc if not already present:
+#   fpath=(~/.zfunc $fpath)
+#   autoload -Uz compinit && compinit
+
+# bash
+km completions bash > /etc/bash_completion.d/km
+
+# fish
+km completions fish > ~/.config/fish/completions/km.fish
+```
 
 ## Commands
 
@@ -77,6 +95,9 @@ Options:
 | `--show-all` | Show all duplicate groups (default: top 20) |
 | `--min-lines N` | Minimum lines for a duplicate block (default: 6) |
 | `--include-tests` | Include test files in analysis (excluded by default) |
+| `--max-duplicates N` | Exit with code 1 if duplicate groups exceed this limit (`--max-duplicates 0` fails on any duplicate) |
+| `--max-dup-ratio PERCENT` | Exit with code 1 if the duplicated-lines ratio exceeds this percentage (e.g. `--max-dup-ratio 5.0`) |
+| `--fail-on-increase REF` | Exit with code 1 if the current duplication ratio is higher than at the given git ref (e.g. `origin/main`). Prevents debt from growing silently in CI |
 | `--json` | Output as JSON |
 
 Example summary output:
@@ -443,7 +464,7 @@ Options:
 | `--sort-by METRIC` | Sort by `concentration`, `diffusion`, or `risk` (default: `concentration`) |
 | `--since DURATION` | Define recent activity window for knowledge loss (e.g. `6m`, `1y`, `30d`) |
 | `--risk-only` | Show only files with knowledge loss risk |
-| `--summary` | Show per-author aggregated ownership instead of per-file |
+| `--summary` | Aggregate by author: files owned, lines, languages, worst risk |
 | `--bus-factor` | Show project bus factor (minimum contributors covering 80% of code) |
 
 Example output:
@@ -533,6 +554,36 @@ Strong coupling (>= 0.5) suggests hidden dependencies — consider extracting sh
 
 **Note:** File renames are not tracked across git history. Renamed files appear as separate entries.
 
+### `km churn` -- Code churn analysis
+
+Measures pure change frequency per file from git history (commit count only, no complexity weight). Identifies the most frequently modified files — high churn without a corresponding quality improvement is a maintenance signal.
+
+```bash
+km churn [path]
+```
+
+Options:
+
+| Flag | Description |
+|------|-------------|
+| `--top N` | Show only the top N files (default: 20) |
+| `--sort-by METRIC` | Sort by `commits` (default), `rate` (commits/month), or `file` |
+| `--since DURATION` | Only consider commits since this time (e.g. `6m`, `1y`, `30d`) |
+| `--json` | Output as JSON |
+
+Example output:
+
+```
+Code Churn — Change Frequency
+──────────────────────────────────────────────────────────────────────────────
+ File                     Language  Commits   Rate/mo   First Seen   Last Seen
+──────────────────────────────────────────────────────────────────────────────
+ src/main.rs                  Rust       18      3.2    2025-01-10  2026-03-28
+ src/loc/counter.rs           Rust        7      1.3    2025-01-10  2026-02-14
+ src/dups/detector.rs         Rust        7      1.2    2025-02-01  2026-02-20
+──────────────────────────────────────────────────────────────────────────────
+```
+
 ### `km smells` -- Code smell detection
 
 Detects common code quality issues per file using text-based heuristics (no AST required). Only languages with complexity marker support are analyzed (same set as `km cycom`: Rust, Python, JS/TS, C/C++, Go, etc.).
@@ -558,6 +609,8 @@ Options:
 | `--top N` | Show only the top N files by smell count (default: 20) |
 | `--max-lines N` | Maximum function body lines before flagging (default: 50) |
 | `--max-params N` | Maximum parameter count before flagging (default: 4) |
+| `--files FILE` | Analyze only these specific files (repeatable). Useful for scripting |
+| `--since-ref REF` | Analyze only files changed since this git ref (e.g. `origin/main`, `HEAD~1`). Ideal for CI |
 | `--json` | Output as JSON |
 
 Example output:
@@ -572,6 +625,37 @@ Code Smells
  src/dups/detector.rs                 3  long_function (2)
 ──────────────────────────────────────────────────────────────────────────────
  Total (3 files)                     21
+```
+
+### `km deps` -- Dependency graph analysis
+
+Analyzes internal module dependencies by parsing import/use/require statements. Builds a directed graph of file-level coupling and detects cycles using Tarjan's SCC algorithm.
+
+```bash
+km deps [path]
+```
+
+Supports Rust (`mod X;`), Python (relative `from .X import`), JavaScript/TypeScript (relative `import`/`require`), and Go (imports matching the module path from `go.mod`). External dependencies (crates, npm packages) are ignored.
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Output as JSON |
+| `--cycles-only` | Show only files that participate in a dependency cycle |
+| `--sort-by METRIC` | Sort by `fan-out` (default) or `fan-in` |
+| `--top N` | Show only top N files (default: 20) |
+
+Example output:
+
+```
+Dependency Graph
+────────────────────────────────────────────────────────────────────────
+ File                    Language Fan-In Fan-Out Cycle
+────────────────────────────────────────────────────────────────────────
+ main.rs                     Rust      0      26    no
+ score/mod.rs                Rust      1       7    no
+ report/mod.rs               Rust      1       5    no
+────────────────────────────────────────────────────────────────────────
+No dependency cycles detected.
 ```
 
 ### `km authors` -- Per-author ownership summary
@@ -688,7 +772,8 @@ Each dimension is aggregated as a LOC-weighted mean across all files (except Dup
 | A- | 87-89 | D+ | 63-66 |
 | B+ | 83-86 | D | 60-62 |
 | B | 80-82 | D- | 57-59 |
-| B- | 77-79 | F | 40-56 |
+| B- | 77-79 | F | 50-56 |
+| | | F- | 40-49 |
 | | | F-- | 0-39 |
 
 Options:
@@ -696,6 +781,7 @@ Options:
 | Flag | Description |
 |------|-------------|
 | `--model MODEL` | Scoring model: `cogcom` (default, v0.14+) or `legacy` (MI + cyclomatic, v0.13) |
+| `--trend [REF]` | Compare current score against a git ref (default: `HEAD`). Shows change: `B- → B (+2.3)`. Useful for PR review: `--trend origin/main` |
 | `--json` | Output as JSON |
 | `--include-tests` | Include test files in analysis (excluded by default) |
 | `--bottom N` | Number of worst files to show in "needs attention" (default: 10) |
@@ -728,6 +814,44 @@ Code Health Score
   68.9  C-     src/core/engine.rs         Size: 1243 LOC
 ──────────────────────────────────────────────────────────────────
 ```
+
+#### `km score diff` — Compare score against a git ref
+
+Extracts the file tree at the given ref, computes the score for both snapshots, and shows a delta table per dimension. Useful for reviewing how commits impact code quality.
+
+```bash
+km score diff                          # compare vs HEAD (uncommitted changes)
+km score diff --git-ref HEAD~1         # compare vs previous commit
+km score diff --git-ref main           # compare vs main branch
+km score diff --json                   # machine-readable output
+```
+
+Options:
+
+| Flag | Description |
+|------|-------------|
+| `--git-ref REF` | Git ref to compare against (default: `HEAD`) |
+| `--model MODEL` | Scoring model: `cogcom` (default) or `legacy` |
+| `--json` | Output as JSON |
+| `--bottom N` | Number of worst files to show (default: 10) |
+| `--min-lines N` | Minimum lines for a duplicate block (default: 6) |
+
+### `km report` -- Comprehensive metrics report
+
+Generates a multi-section report combining all static code metrics in a single pass: lines of code, duplicates, indentation, Halstead, cyclomatic complexity, cognitive complexity, and maintainability index.
+
+```bash
+km report [path]
+```
+
+Options:
+
+| Flag | Description |
+|------|-------------|
+| `--top N` | Show only the top N files per section (default: 20) |
+| `--min-lines N` | Minimum lines for a duplicate block (default: 6) |
+| `--full` | Show all files instead of truncating to top N |
+| `--json` | Output as JSON |
 
 ## Features
 

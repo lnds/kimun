@@ -28,6 +28,17 @@ impl SmellKind {
             Self::CommentedOutCode => "commented_code",
         }
     }
+
+    /// Human-readable title for GitHub annotation titles.
+    pub fn title(self) -> &'static str {
+        match self {
+            Self::LongFunction => "Long Function",
+            Self::LongParameterList => "Long Parameter List",
+            Self::TodoDebt => "TODO/FIXME Debt",
+            Self::MagicNumber => "Magic Number",
+            Self::CommentedOutCode => "Commented-Out Code",
+        }
+    }
 }
 
 /// A single detected smell instance at a specific line.

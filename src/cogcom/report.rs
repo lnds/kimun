@@ -158,6 +158,29 @@ pub fn print_json(files: &[FileCogcomMetrics]) -> Result<(), Box<dyn std::error:
     report_helpers::print_json_stdout(&entries)
 }
 
+/// Emit one GitHub Actions warning annotation per function that exceeds
+/// the complexity threshold. Uses `start_line` for precise line linking.
+pub fn print_github(files: &[FileCogcomMetrics], min_complexity: usize) {
+    for f in files {
+        let path = f.path.display().to_string();
+        for func in &f.functions {
+            if func.complexity >= min_complexity {
+                let message = format!(
+                    "function '{}' has cognitive complexity {} (threshold: {})",
+                    func.name, func.complexity, min_complexity
+                );
+                report_helpers::github_annotation(
+                    "warning",
+                    &path,
+                    func.start_line,
+                    "Cognitive Complexity",
+                    &message,
+                );
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 #[path = "report_test.rs"]
 mod tests;

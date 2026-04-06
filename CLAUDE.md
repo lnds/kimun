@@ -20,7 +20,7 @@ The binary is named `km` (configured in `[[bin]]` in Cargo.toml). After `cargo i
 
 ## Architecture
 
-CLI tool for code metrics: lines of code (like `cloc`), duplicate detection, Halstead complexity, cyclomatic complexity, indentation analysis, and Maintainability Index. Built around a character-level finite state machine for line classification.
+CLI tool for code metrics: lines of code (like `cloc`), duplicate detection, Halstead complexity, cyclomatic complexity, cognitive complexity, indentation analysis, Maintainability Index, code smells, hotspots, temporal coupling, knowledge maps, code churn, file age, and an overall health score. Built around a character-level finite state machine for line classification.
 
 ### Module structure: `src/loc/`
 
@@ -53,6 +53,7 @@ Optional flags: `nested: true`, `sq: true` (single-quote strings), `tq: true` (t
 
 - The tool's output should match `cloc` as closely as possible — use `cloc` as the reference when validating changes.
 - Always run `cargo fmt` before `cargo clippy`. Then validate with `cargo clippy` (zero warnings required) and `cargo test` before considering a change complete.
+- When adding or modifying a feature (new command, new flag, changed behavior), update `README.md` to reflect the change before considering the work done.
 - Tests in `counter.rs` use `count_reader(Cursor::new(...))` to test the FSM without touching the filesystem.
 - Tests in `mod.rs` use `tempfile::tempdir()` for integration tests with real files.
 - Tests exist in all modules: `counter.rs`, `language.rs`, `report.rs`, `mod.rs`.
@@ -74,13 +75,30 @@ Maintainability Index (verifysoft variant with comment weight). Invoked via `km 
 - **`report.rs`** — Table and JSON output formatters (`FileMIMetrics`, `print_report`, `print_json`).
 - **`mod.rs`** — Orchestration: walks files, calls `hal::analyze_file` and `cycom::analyze_file` (pub(crate)) for Halstead volume and cyclomatic complexity, classifies lines for LOC/comment counts, computes MI. Note: each file is read three times (once per analyzer) due to per-module architecture.
 
+### Module structure: `src/cogcom/`
+
+Cognitive complexity (SonarSource method). Invoked via `km cogcom`.
+
+- **`analyzer.rs`** — Core computation: penalizes nesting increments and non-linear control structures. Resets `opens_flow` after consuming the first `{` on a control-flow line so closure/struct braces on the same line are not double-counted.
+- **`detection.rs`** — Language-aware function boundary detection.
+- **`markers.rs`** — Per-language complexity markers (keywords that trigger nesting increments).
+- **`report.rs`** — Table and JSON output formatters.
+- **`mod.rs`** — Orchestration: walks files, computes per-function and per-file scores, sorts/filters results.
+
+### Module structure: `src/hotspots/`
+
+Hotspot analysis (Thornhill, change frequency × complexity). Invoked via `km hotspots`.
+
+- **`report.rs`** — Table and JSON output formatters.
+- **`mod.rs`** — Orchestration: opens git repo, counts commits per file, computes complexity (indent or cyclomatic), multiplies for hotspot score. Uses `util::parse_since` for `--since` flag.
+
 ### Module structure: `src/knowledge/`
 
 Knowledge maps (Thornhill, code ownership via git blame). Invoked via `km knowledge`.
 
 - **`analyzer.rs`** — `RiskLevel` enum (Critical/High/Medium/Low), `FileOwnership` struct, `compute_ownership()` function that calculates primary owner, concentration, and knowledge loss risk.
-- **`report.rs`** — Table and JSON output formatters.
-- **`mod.rs`** — Orchestration: opens git repo, walks files (filtering generated files), runs `blame_file()` per file, computes ownership, sorts/filters results. Uses `util::parse_since` for `--since` flag.
+- **`report.rs`** — Table and JSON output formatters. `--summary` mode aggregates by author (files owned, lines, languages, worst risk) as an alternative to the per-file view.
+- **`mod.rs`** — Orchestration: opens git repo, walks files (filtering generated files), runs `blame_file()` per file, computes ownership, sorts/filters results. Uses `util::parse_since` for `--since` flag. `--summary` flag switches to author-level aggregation.
 
 ### Module structure: `src/tc/`
 
@@ -90,10 +108,55 @@ Temporal coupling analysis (Thornhill, files that change together). Invoked via 
 - **`report.rs`** — Table and JSON output formatters.
 - **`mod.rs`** — Orchestration: opens git repo, calls `file_frequencies()` (filtered by `min_degree`), `co_changing_commits()`, `compute_coupling()`, sorts/filters results. Uses `util::parse_since` for `--since` flag. No filesystem walk needed — works entirely from git data.
 
+### Module structure: `src/churn/`
+
+Code churn — pure change frequency per source file. Invoked via `km churn`.
+
+- **`analyzer.rs`** — `ChurnLevel` enum (High/Medium/Low), `FileChurn` struct, rate computed as commits ÷ active months (minimum 1 month).
+- **`report.rs`** — Table and JSON output formatters.
+- **`mod.rs`** — Orchestration: opens git repo, counts commits per file, computes rate, sorts/filters. Uses `util::parse_since` for `--since` flag.
+
+### Module structure: `src/smells/`
+
+Code smell detection. Invoked via `km smells`.
+
+- **`rules.rs`** — Individual smell detectors: long functions, long parameter lists, TODO debt, magic numbers (note: `'_'` is a valid digit separator, included in `is_numeric_char`), and commented-out code.
+- **`analyzer.rs`** — Per-file smell aggregation.
+- **`report.rs`** — Table and JSON output formatters.
+- **`mod.rs`** — Orchestration: walks files (or a specific `--files` list), supports `--since-ref <REF>` to limit analysis to files changed since a git ref (ideal for CI/PR checks).
+
+### Module structure: `src/age/`
+
+File age classification. Invoked via `km age`.
+
+- **`analyzer.rs`** — Classifies files as Active/Stale/Frozen based on days since last git commit. Thresholds configurable via `--active-days` and `--frozen-days`.
+- **`report.rs`** — Table and JSON output formatters.
+- **`mod.rs`** — Orchestration: opens git repo, resolves last-commit date per file, classifies, sorts/filters.
+
+### Module structure: `src/authors/`
+
+Per-author ownership summary. Invoked via `km authors`.
+
+- **`analyzer.rs`** — Aggregates `git blame` data across all files to produce per-author totals: files owned, lines, languages, last active date.
+- **`report.rs`** — Table and JSON output formatters.
+- **`mod.rs`** — Orchestration: opens git repo, runs blame per file, aggregates by author. Uses `util::parse_since` for `--since` flag.
+
+### Module structure: `src/report/`
+
+Comprehensive multi-metric report. Invoked via `km report`.
+
+- **`data.rs`** / **`builder.rs`** — Data types and per-file metric collection (LOC, dups, indent, Halstead, cyclomatic, MI).
+- **`markdown.rs`** — Human-readable table report.
+- **`json.rs`** — JSON output formatter.
+- **`mod.rs`** — Orchestration: walks files once, runs all analyzers, emits unified report.
+
 ### Module structure: `src/score/`
 
-Overall code health score (A++ to F--). Invoked via `km score`. Static metrics only (no git).
+Overall code health score (A++ to F--). Invoked via `km score`. Static metrics only (no git required); `--trend` and `km score diff` require a git repo.
 
-- **`analyzer.rs`** — `Grade` enum (15 grades from A++ to F--), `DimensionScore`/`FileScore`/`ProjectScore` structs, `score_to_grade()`, `compute_project_score()`, and 6 normalization functions (`normalize_mi`, `normalize_complexity`, `normalize_duplication`, `normalize_indent`, `normalize_halstead`, `normalize_file_size`). Halstead normalization uses effort-per-LOC.
+- **`analyzer.rs`** — `Grade` enum (16 grades: A++ to F--), `DimensionScore`/`FileScore`/`ProjectScore` structs, `score_to_grade()`, `compute_project_score()`, `Grade::numeric_rank()` (used for gate comparisons), `Grade::parse()` (for `--fail-below` CLI arg), and 6 normalization functions. Halstead normalization uses effort-per-LOC.
 - **`report.rs`** — Table and JSON output formatters.
-- **`mod.rs`** — Orchestration: walks files once, computes MI (verifysoft), cyclomatic, indent, and halstead metrics per file; filters non-code files (Markdown, TOML, etc.); strips inline `#[cfg(test)]` blocks from duplication; detects duplication at project level; aggregates 6 dimensions as LOC-weighted mean; computes weighted project score; identifies worst-scoring files as "needs attention".
+- **`diff.rs`** — `ScoreDiff`/`ScoreDelta` types and `compute_diff()`. Asserts dimension count and names match before zipping to prevent silent model mismatches.
+- **`diff_report.rs`** — Table and JSON formatters for diff output.
+- **`mod.rs`** — `ScoreGate` struct (`fail_if_worse`, `fail_below`). `run()` for normal score. `run_diff()` for `--trend`/`km score diff`: computes before/after snapshots, prints report, then evaluates quality gates (gates always evaluated after output so CI logs are complete).
+- **`scoring.rs`** / **`collector.rs`** / **`normalizer.rs`** — Dimension definitions, per-file metric extraction, and piecewise linear normalization curves.
