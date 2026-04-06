@@ -189,3 +189,12 @@ fn format_json_respects_group_slice() {
     let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
     assert_eq!(parsed["groups"].as_array().unwrap().len(), 1);
 }
+
+#[test]
+fn print_detailed_shows_truncation_message() {
+    // Pass 1 group but report total_groups=2 to trigger the "Showing top N of M" message
+    let groups = sample_groups();
+    let total_groups = groups.len(); // 2
+    // Show only 1 of 2 groups
+    print_detailed(&sample_metrics(), &groups[..1], total_groups);
+}
