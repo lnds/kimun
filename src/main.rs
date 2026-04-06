@@ -25,6 +25,8 @@ mod cli_help;
 mod cogcom;
 /// Cyclomatic complexity analysis (per-file and per-function).
 mod cycom;
+/// Dependency graph analysis: internal module coupling via import parsing.
+mod deps;
 /// Shared function detection for complexity analyzers.
 mod detection;
 /// Duplicate code detection using sliding-window fingerprinting.
@@ -279,6 +281,24 @@ fn main() {
                     risk_only,
                     summary,
                 )
+            })
+        }
+        Commands::Deps {
+            common,
+            cycles_only,
+            sort_by,
+            top,
+        } => {
+            let filter = common.exclude_filter();
+            maybe_list_excluded(
+                &common.path,
+                common.include_tests,
+                &filter,
+                common.list_excluded(),
+            );
+            run_command(common.path, |t| {
+                let cfg = WalkConfig::new(t, common.include_tests, &filter);
+                deps::run(&cfg, common.json, cycles_only, &sort_by, top)
             })
         }
         Commands::Authors { common, since } => {
