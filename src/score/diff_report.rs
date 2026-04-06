@@ -160,3 +160,140 @@ pub fn print_json(diff: &ScoreDiff) -> Result<(), Box<dyn std::error::Error>> {
     };
     report_helpers::print_json_stdout(&json)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::score::analyzer::{DimensionScore, Grade, ProjectScore, score_to_grade};
+    use crate::score::diff::compute_diff;
+
+    fn make_project_score(score: f64, files: usize, loc: usize, dim_score: f64) -> ProjectScore {
+        let grade = score_to_grade(score);
+        let dim_grade = score_to_grade(dim_score);
+        ProjectScore {
+            score,
+            grade,
+            files_analyzed: files,
+            total_loc: loc,
+            dimensions: vec![
+                DimensionScore {
+                    name: "Cognitive Complexity",
+                    weight: 0.50,
+                    score: dim_score,
+                    grade: dim_grade,
+                },
+                DimensionScore {
+                    name: "Duplication",
+                    weight: 0.50,
+                    score: dim_score,
+                    grade: dim_grade,
+                },
+            ],
+            needs_attention: vec![],
+        }
+    }
+
+    #[test]
+    fn print_report_improvement_does_not_panic() {
+        let before = make_project_score(70.0, 10, 1000, 70.0);
+        let after = make_project_score(80.0, 12, 1200, 80.0);
+        let diff = compute_diff("HEAD~1", &before, &after);
+        print_report(&diff);
+    }
+
+    #[test]
+    fn print_report_regression_does_not_panic() {
+        let before = make_project_score(80.0, 10, 1000, 80.0);
+        let after = make_project_score(70.0, 8, 900, 70.0);
+        let diff = compute_diff("main", &before, &after);
+        print_report(&diff);
+    }
+
+    #[test]
+    fn print_report_no_change_does_not_panic() {
+        let before = make_project_score(85.0, 10, 1000, 85.0);
+        let after = make_project_score(85.0, 10, 1000, 85.0);
+        let diff = compute_diff("v1.0", &before, &after);
+        print_report(&diff);
+    }
+
+    #[test]
+    fn print_json_does_not_panic() {
+        let before = make_project_score(75.0, 5, 500, 75.0);
+        let after = make_project_score(85.0, 7, 700, 85.0);
+        let diff = compute_diff("abc123", &before, &after);
+        print_json(&diff).unwrap();
+    }
+
+    #[test]
+    fn print_json_regression_does_not_panic() {
+        let before = make_project_score(90.0, 10, 1000, 90.0);
+        let after = make_project_score(60.0, 10, 1000, 60.0);
+        let diff = compute_diff("v2.0", &before, &after);
+        print_json(&diff).unwrap();
+    }
+
+    #[test]
+    fn colored_delta_positive() {
+        let s = colored_delta(5.0);
+        assert!(s.contains('+'), "positive delta should have + prefix: {s}");
+    }
+
+    #[test]
+    fn colored_delta_negative() {
+        let s = colored_delta(-5.0);
+        assert!(s.contains('-'), "negative delta should have - prefix: {s}");
+    }
+
+    #[test]
+    fn colored_delta_near_zero() {
+        let s = colored_delta(0.0);
+        assert!(s.contains("0.0"), "zero delta should show 0.0: {s}");
+    }
+
+    #[test]
+    fn colored_int_delta_positive() {
+        let s = colored_int_delta(3);
+        assert!(
+            s.contains('+'),
+            "positive int delta should have + prefix: {s}"
+        );
+    }
+
+    #[test]
+    fn colored_int_delta_negative() {
+        let s = colored_int_delta(-3);
+        assert!(
+            s.contains('-'),
+            "negative int delta should have - prefix: {s}"
+        );
+    }
+
+    #[test]
+    fn colored_int_delta_zero() {
+        let s = colored_int_delta(0);
+        assert!(s.contains('0'), "zero int delta should show 0: {s}");
+    }
+
+    #[test]
+    fn same_grade_shows_single_grade() {
+        // When before and after grade are the same, should just show the grade once
+        let before = make_project_score(80.0, 10, 1000, 80.0);
+        let after = make_project_score(81.0, 10, 1000, 81.0);
+        let diff = compute_diff("HEAD", &before, &after);
+        assert_eq!(diff.before_grade, Grade::B);
+        assert_eq!(diff.after_grade, Grade::B);
+        // print_report should not panic with same grades
+        print_report(&diff);
+    }
+
+    #[test]
+    fn different_grades_shows_transition() {
+        let before = make_project_score(70.0, 10, 1000, 70.0); // C
+        let after = make_project_score(80.0, 10, 1000, 80.0); // B
+        let diff = compute_diff("HEAD", &before, &after);
+        assert_eq!(diff.before_grade, Grade::C);
+        assert_eq!(diff.after_grade, Grade::B);
+        print_report(&diff);
+    }
+}

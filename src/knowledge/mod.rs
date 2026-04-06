@@ -16,8 +16,11 @@ use crate::util::parse_since;
 use crate::walk::{self, WalkConfig};
 
 use crate::report_helpers;
-use analyzer::{FileOwnership, aggregate_by_author, compute_ownership};
-use report::{print_json, print_report, print_summary_json, print_summary_report};
+use analyzer::{FileOwnership, aggregate_by_author, compute_bus_factor, compute_ownership};
+use report::{
+    print_bus_factor_json, print_bus_factor_report, print_json, print_report, print_summary_json,
+    print_summary_report,
+};
 
 /// Check if a file is machine-generated (lock files, minified assets,
 /// protobuf output) and should be excluded from ownership analysis.
@@ -54,6 +57,7 @@ pub struct KnowledgeOptions<'a> {
     pub since: Option<&'a str>,
     pub risk_only: bool,
     pub summary: bool,
+    pub bus_factor: bool,
     /// Filter to files owned by this author (case-insensitive substring match).
     pub author: Option<&'a str>,
 }
@@ -76,6 +80,9 @@ pub fn run(cfg: &WalkConfig<'_>, opts: &KnowledgeOptions<'_>) -> Result<(), Box<
     let (walk_root, walk_prefix) = git_repo.walk_prefix(cfg.path)?;
 
     let mut results: Vec<FileOwnership> = Vec::new();
+    // author name → total blame lines across all files (for bus factor)
+    let mut author_lines: std::collections::HashMap<String, usize> =
+        std::collections::HashMap::new();
 
     for (file_path, spec) in walk::source_files(&walk_root, cfg.exclude_tests(), cfg.filter) {
         if is_generated(&file_path) {
@@ -92,6 +99,11 @@ pub fn run(cfg: &WalkConfig<'_>, opts: &KnowledgeOptions<'_>) -> Result<(), Box<
                 continue;
             }
         };
+
+        // Accumulate raw blame lines for bus factor computation.
+        for b in &blames {
+            *author_lines.entry(b.author.clone()).or_insert(0) += b.lines;
+        }
 
         let ownership = compute_ownership(rel_path, spec.name, &blames, &recent_authors);
         results.push(ownership);
@@ -129,6 +141,16 @@ pub fn run(cfg: &WalkConfig<'_>, opts: &KnowledgeOptions<'_>) -> Result<(), Box<
                     .unwrap_or(std::cmp::Ordering::Equal)
             });
         }
+    }
+
+    if opts.bus_factor {
+        let bf = compute_bus_factor(&author_lines, 80.0);
+        return if opts.json {
+            print_bus_factor_json(&bf)
+        } else {
+            print_bus_factor_report(&bf);
+            Ok(())
+        };
     }
 
     if opts.summary {

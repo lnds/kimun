@@ -72,6 +72,15 @@ pub fn pad_to(s: &str, width: usize) -> String {
     format!("{s}{}", " ".repeat(padding))
 }
 
+/// Emit a GitHub Actions workflow annotation.
+///
+/// `level` is one of `"warning"`, `"error"`, or `"notice"`.
+/// `file` should be a path relative to the repository root.
+/// Produces output like: `::warning file=src/foo.rs,line=42,title=Long Function::fn process is 80 lines`
+pub fn github_annotation(level: &str, file: &str, line: usize, title: &str, message: &str) {
+    println!("::{level} file={file},line={line},title={title}::{message}");
+}
+
 /// Compute the max display width for paths, with a minimum of `min`.
 pub fn max_path_width<'a>(paths: impl Iterator<Item = &'a Path>, min: usize) -> usize {
     paths
