@@ -21,6 +21,21 @@
 - add cognitive complexity (SonarSource 2017), replace MI+cyclomatic in score
 - add `km score diff` and auto-update homebrew on release
 
+## v0.18.0 (2026-04-05)
+
+### Feat
+
+- **dups**: add --max-duplicates and --max-dup-ratio CI quality gates
+- **churn**: add km churn command for pure change-frequency analysis
+- **score**: add --trend flag to compare score against a git ref
+- **knowledge**: add --summary flag for per-author ownership aggregation
+- **smells**: add --files and --since-ref for PR-scoped analysis
+
+### Fix
+
+- three bugs found in post-merge quality review
+- **report**: unify Unicode-safe column widths across all report formatters
+
 ## v0.17.0 (2026-04-04)
 
 ### Feat
