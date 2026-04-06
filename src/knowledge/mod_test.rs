@@ -317,3 +317,120 @@ fn integration_author_filter_no_match() {
         "author filter with no match should not error"
     );
 }
+
+#[test]
+fn integration_bus_factor_table() {
+    let (dir, repo) = create_test_repo();
+    make_commit(
+        &repo,
+        &[("main.rs", "fn main() {\n    println!(\"hi\");\n}\n")],
+        "add main",
+    );
+
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run(
+        &cfg,
+        &KnowledgeOptions {
+            json: false,
+            top: 20,
+            sort_by: "concentration",
+            since: None,
+            risk_only: false,
+            summary: false,
+            bus_factor: true,
+            author: None,
+        },
+    );
+    assert!(
+        result.is_ok(),
+        "bus factor table should succeed: {result:?}"
+    );
+}
+
+#[test]
+fn integration_bus_factor_json() {
+    let (dir, repo) = create_test_repo();
+    make_commit(
+        &repo,
+        &[("main.rs", "fn main() {\n    println!(\"hi\");\n}\n")],
+        "add main",
+    );
+
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run(
+        &cfg,
+        &KnowledgeOptions {
+            json: true,
+            top: 20,
+            sort_by: "concentration",
+            since: None,
+            risk_only: false,
+            summary: false,
+            bus_factor: true,
+            author: None,
+        },
+    );
+    assert!(result.is_ok(), "bus factor JSON should succeed: {result:?}");
+}
+
+#[test]
+fn integration_summary_sort_by_diffusion() {
+    let (dir, repo) = create_test_repo();
+    make_commit(
+        &repo,
+        &[
+            ("main.rs", "fn main() {\n    println!(\"hi\");\n}\n"),
+            ("lib.rs", "pub fn add(a: i32, b: i32) -> i32 { a + b }\n"),
+        ],
+        "add files",
+    );
+
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run(
+        &cfg,
+        &KnowledgeOptions {
+            json: false,
+            top: 20,
+            sort_by: "diffusion",
+            since: None,
+            risk_only: false,
+            summary: true,
+            bus_factor: false,
+            author: None,
+        },
+    );
+    assert!(
+        result.is_ok(),
+        "summary diffusion sort should work: {result:?}"
+    );
+}
+
+#[test]
+fn integration_summary_sort_by_risk() {
+    let (dir, repo) = create_test_repo();
+    make_commit(
+        &repo,
+        &[("main.rs", "fn main() {\n    println!(\"hi\");\n}\n")],
+        "add main",
+    );
+
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run(
+        &cfg,
+        &KnowledgeOptions {
+            json: false,
+            top: 20,
+            sort_by: "risk",
+            since: None,
+            risk_only: false,
+            summary: true,
+            bus_factor: false,
+            author: None,
+        },
+    );
+    assert!(result.is_ok(), "summary risk sort should work: {result:?}");
+}

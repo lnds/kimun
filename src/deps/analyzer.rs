@@ -458,4 +458,243 @@ mod tests {
         let p = normalize_path(Path::new("src/foo/../bar.rs"));
         assert_eq!(p, PathBuf::from("src/bar.rs"));
     }
+
+    // ── Python resolution ──────────────────────────────────────────────────
+
+    #[test]
+    fn resolve_python_relative_as_file() {
+        let mut file_set = std::collections::HashSet::new();
+        file_set.insert(PathBuf::from("src/utils.py"));
+        let result = resolve_import(Path::new("src/main.py"), ".utils", "Python", &file_set, None);
+        assert_eq!(result, Some(PathBuf::from("src/utils.py")));
+    }
+
+    #[test]
+    fn resolve_python_relative_as_package() {
+        let mut file_set = std::collections::HashSet::new();
+        file_set.insert(PathBuf::from("src/utils/__init__.py"));
+        let result = resolve_import(Path::new("src/main.py"), ".utils", "Python", &file_set, None);
+        assert_eq!(result, Some(PathBuf::from("src/utils/__init__.py")));
+    }
+
+    #[test]
+    fn resolve_python_double_dot_goes_up() {
+        let mut file_set = std::collections::HashSet::new();
+        file_set.insert(PathBuf::from("common.py"));
+        // From src/sub/main.py, ..common → src/common.py? No, two dots goes up two levels
+        // importer: src/sub/main.py → dir = src/sub
+        // dots=2 → base goes up 1 level (for _ in 1..2) → base = src
+        // module = "common" → src/common.py
+        file_set.insert(PathBuf::from("src/common.py"));
+        let result = resolve_import(
+            Path::new("src/sub/main.py"),
+            "..common",
+            "Python",
+            &file_set,
+            None,
+        );
+        assert_eq!(result, Some(PathBuf::from("src/common.py")));
+    }
+
+    #[test]
+    fn resolve_python_dotted_module_path() {
+        let mut file_set = std::collections::HashSet::new();
+        file_set.insert(PathBuf::from("src/foo/bar.py"));
+        let result =
+            resolve_import(Path::new("src/main.py"), ".foo.bar", "Python", &file_set, None);
+        assert_eq!(result, Some(PathBuf::from("src/foo/bar.py")));
+    }
+
+    #[test]
+    fn resolve_python_module_only_dots_returns_none() {
+        // Single dot with no module name → skip
+        let file_set = std::collections::HashSet::new();
+        let result = resolve_import(Path::new("src/main.py"), ".", "Python", &file_set, None);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn resolve_python_not_found_returns_none() {
+        let file_set = std::collections::HashSet::new();
+        let result =
+            resolve_import(Path::new("src/main.py"), ".missing", "Python", &file_set, None);
+        assert!(result.is_none());
+    }
+
+    // ── JavaScript/TypeScript resolution ──────────────────────────────────
+
+    #[test]
+    fn resolve_js_direct_extension() {
+        let mut file_set = std::collections::HashSet::new();
+        file_set.insert(PathBuf::from("src/utils.js"));
+        let result = resolve_import(
+            Path::new("src/app.js"),
+            "./utils.js",
+            "JavaScript",
+            &file_set,
+            None,
+        );
+        assert_eq!(result, Some(PathBuf::from("src/utils.js")));
+    }
+
+    #[test]
+    fn resolve_js_without_extension_ts() {
+        let mut file_set = std::collections::HashSet::new();
+        file_set.insert(PathBuf::from("src/utils.ts"));
+        let result = resolve_import(
+            Path::new("src/app.ts"),
+            "./utils",
+            "TypeScript",
+            &file_set,
+            None,
+        );
+        assert_eq!(result, Some(PathBuf::from("src/utils.ts")));
+    }
+
+    #[test]
+    fn resolve_js_index_file() {
+        let mut file_set = std::collections::HashSet::new();
+        file_set.insert(PathBuf::from("src/components/index.tsx"));
+        let result = resolve_import(
+            Path::new("src/app.tsx"),
+            "./components",
+            "TSX",
+            &file_set,
+            None,
+        );
+        assert_eq!(result, Some(PathBuf::from("src/components/index.tsx")));
+    }
+
+    #[test]
+    fn resolve_js_jsx_extension() {
+        let mut file_set = std::collections::HashSet::new();
+        file_set.insert(PathBuf::from("src/Button.jsx"));
+        let result =
+            resolve_import(Path::new("src/App.jsx"), "./Button", "JSX", &file_set, None);
+        assert_eq!(result, Some(PathBuf::from("src/Button.jsx")));
+    }
+
+    #[test]
+    fn resolve_js_not_found_returns_none() {
+        let file_set = std::collections::HashSet::new();
+        let result =
+            resolve_import(Path::new("src/app.ts"), "./missing", "TypeScript", &file_set, None);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn resolve_js_direct_extension_not_found_returns_none() {
+        // Has extension but file doesn't exist in file_set
+        let file_set = std::collections::HashSet::new();
+        let result = resolve_import(
+            Path::new("src/app.ts"),
+            "./nonexistent.ts",
+            "TypeScript",
+            &file_set,
+            None,
+        );
+        assert!(result.is_none());
+    }
+
+    // ── Go resolution ──────────────────────────────────────────────────────
+
+    #[test]
+    fn resolve_go_with_module() {
+        let mut file_set = std::collections::HashSet::new();
+        file_set.insert(PathBuf::from("pkg/foo/main.go"));
+        let result = resolve_import(
+            Path::new("main.go"),
+            "github.com/user/proj/pkg/foo",
+            "Go",
+            &file_set,
+            Some("github.com/user/proj"),
+        );
+        assert_eq!(result, Some(PathBuf::from("pkg/foo/main.go")));
+    }
+
+    #[test]
+    fn resolve_go_no_module_returns_none() {
+        let file_set = std::collections::HashSet::new();
+        let result = resolve_import(
+            Path::new("main.go"),
+            "github.com/user/proj/pkg/foo",
+            "Go",
+            &file_set,
+            None, // no go_module
+        );
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn resolve_go_external_package_returns_none() {
+        // Import doesn't start with module prefix
+        let file_set = std::collections::HashSet::new();
+        let result = resolve_import(
+            Path::new("main.go"),
+            "fmt",
+            "Go",
+            &file_set,
+            Some("github.com/user/proj"),
+        );
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn resolve_go_root_module_path_returns_none() {
+        // Strip prefix leaves empty string
+        let file_set = std::collections::HashSet::new();
+        let result = resolve_import(
+            Path::new("main.go"),
+            "github.com/user/proj",
+            "Go",
+            &file_set,
+            Some("github.com/user/proj"),
+        );
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn resolve_unknown_language_returns_none() {
+        let file_set = std::collections::HashSet::new();
+        let result = resolve_import(Path::new("main.sh"), "utils", "Bash", &file_set, None);
+        assert!(result.is_none());
+    }
+
+    // ── normalize_path ─────────────────────────────────────────────────────
+
+    #[test]
+    fn normalize_cur_dir_component() {
+        let p = normalize_path(Path::new("./src/foo.rs"));
+        assert_eq!(p, PathBuf::from("src/foo.rs"));
+    }
+
+    #[test]
+    fn normalize_already_clean() {
+        let p = normalize_path(Path::new("src/foo.rs"));
+        assert_eq!(p, PathBuf::from("src/foo.rs"));
+    }
+
+    // ── JsonDepResult conversion ───────────────────────────────────────────
+
+    #[test]
+    fn json_dep_result_conversion() {
+        let files = paths(&["a.rs", "b.rs"]);
+        let edges = edges_map(&[("a.rs", &["b.rs"]), ("b.rs", &[])]);
+        let result = build_graph(&files, &edges);
+        let json: JsonDepResult = (&result).into();
+        assert_eq!(json.files.len(), 2);
+        assert_eq!(json.cycles.len(), 0);
+        assert_eq!(json.cycle_count, 0);
+    }
+
+    #[test]
+    fn json_dep_result_with_cycle() {
+        let files = paths(&["a.rs", "b.rs"]);
+        let edges = edges_map(&[("a.rs", &["b.rs"]), ("b.rs", &["a.rs"])]);
+        let result = build_graph(&files, &edges);
+        let json: JsonDepResult = (&result).into();
+        assert_eq!(json.cycle_count, 1);
+        assert_eq!(json.cycles.len(), 1);
+        assert!(json.files.iter().all(|f| f.in_cycle));
+    }
 }

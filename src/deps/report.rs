@@ -71,3 +71,7 @@ pub fn print_json(result: &DepResult) -> Result<(), Box<dyn std::error::Error>> 
     let out = JsonDepResult::from(result);
     report_helpers::print_json_stdout(&out)
 }
+
+#[cfg(test)]
+#[path = "report_test.rs"]
+mod tests;

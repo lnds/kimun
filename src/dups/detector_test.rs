@@ -344,3 +344,53 @@ fn fnv_hash_different_content() {
     };
     assert_ne!(hash_window(&[a]), hash_window(&[b]));
 }
+
+#[test]
+fn boilerplate_over_max_occurrences_is_skipped() {
+    // Create MAX_OCCURRENCES + 1 files all containing the same 6-line block.
+    // The validate_hashes phase should skip this pattern (> MAX_OCCURRENCES).
+    let code: &[(usize, &str)] = &[
+        (1, "fn boilerplate() {"),
+        (2, "let x = 1;"),
+        (3, "let y = 2;"),
+        (4, "let z = x + y;"),
+        (5, "println!(\"{}\", z);"),
+        (6, "}"),
+    ];
+    // 101 files with identical content
+    let files: Vec<NormalizedFile> = (0..=MAX_OCCURRENCES)
+        .map(|i| make_file(&format!("file_{i}.rs"), code))
+        .collect();
+
+    // quiet=false so the skipped_common eprintln branch is exercised
+    let groups = detect_duplicates(&files, 6, false);
+    // The boilerplate should be skipped, so no groups
+    assert!(
+        groups.is_empty(),
+        "boilerplate with >{MAX_OCCURRENCES} occurrences should be skipped, got {} groups",
+        groups.len()
+    );
+}
+
+#[test]
+fn boilerplate_quiet_mode_no_output() {
+    // Same as above but with quiet=true — exercises the !quiet branch (negated)
+    let code: &[(usize, &str)] = &[
+        (1, "fn common() {"),
+        (2, "return 0;"),
+        (3, "let a = 1;"),
+        (4, "let b = 2;"),
+        (5, "let c = 3;"),
+        (6, "}"),
+    ];
+    let files: Vec<NormalizedFile> = (0..=MAX_OCCURRENCES)
+        .map(|i| make_file(&format!("q_{i}.rs"), code))
+        .collect();
+
+    // quiet=true — the eprintln inside validate_hashes is suppressed
+    let groups = detect_duplicates(&files, 6, true);
+    assert!(
+        groups.is_empty(),
+        "boilerplate should be skipped in quiet mode too"
+    );
+}

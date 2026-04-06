@@ -127,6 +127,56 @@ fn run_sort_by_loc() {
 }
 
 #[test]
+fn run_sort_by_volume_two_files() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("a.rs"),
+        "// doc comment\nfn foo() {\n    let x = 1;\n    let y = x + 2;\n    println!(\"{}\", y);\n}\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("b.rs"),
+        "fn bar(a: i32, b: i32, c: i32) -> i32 {\n    if a > 0 { a + b } else { b + c }\n}\n",
+    )
+    .unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, false, 20, "volume").unwrap();
+}
+
+#[test]
+fn run_sort_by_complexity_two_files() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("a.rs"),
+        "// comment\nfn foo() {\n    let x = 1;\n}\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("b.rs"),
+        "fn bar(a: i32) -> i32 {\n    if a > 0 { a } else { -a }\n}\n",
+    )
+    .unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, false, 20, "complexity").unwrap();
+}
+
+#[test]
+fn analyze_file_returns_none_for_hal_unsupported() {
+    // JSON files are not supported by hal — analyze_file returns None
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("data.json");
+    fs::write(&path, "{\"key\": \"value\"}\n").unwrap();
+    let spec = detect(&path).unwrap();
+    let result = analyze_file(&path, spec).unwrap();
+    assert!(
+        result.is_none(),
+        "JSON file should return None (hal unsupported)"
+    );
+}
+
+#[test]
 fn analyze_file_produces_valid_mi() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("sample.rs");

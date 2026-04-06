@@ -85,3 +85,26 @@ pub fn detect_smells(
     smells.sort_by_key(|s| s.line);
     Some(FileSmells { smells })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn smell_kind_as_str_all_variants() {
+        assert_eq!(SmellKind::LongFunction.as_str(), "long_function");
+        assert_eq!(SmellKind::LongParameterList.as_str(), "long_params");
+        assert_eq!(SmellKind::TodoDebt.as_str(), "todo_debt");
+        assert_eq!(SmellKind::MagicNumber.as_str(), "magic_number");
+        assert_eq!(SmellKind::CommentedOutCode.as_str(), "commented_code");
+    }
+
+    #[test]
+    fn smell_kind_title_all_variants() {
+        assert_eq!(SmellKind::LongFunction.title(), "Long Function");
+        assert_eq!(SmellKind::LongParameterList.title(), "Long Parameter List");
+        assert_eq!(SmellKind::TodoDebt.title(), "TODO/FIXME Debt");
+        assert_eq!(SmellKind::MagicNumber.title(), "Magic Number");
+        assert_eq!(SmellKind::CommentedOutCode.title(), "Commented-Out Code");
+    }
+}

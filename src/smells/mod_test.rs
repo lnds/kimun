@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use tempfile::tempdir;
 
 use super::analyzer::SmellKind;
+use crate::walk::{ExcludeFilter, WalkConfig};
 
 #[test]
 fn finds_long_function_with_correct_count() {
@@ -215,4 +216,69 @@ fn run_on_files_nonexistent_path_skips() {
         result.is_ok(),
         "nonexistent files should be skipped, not panic"
     );
+}
+
+#[test]
+fn run_on_files_github_format_with_smells() {
+    let dir = tempdir().unwrap();
+    let file = dir.path().join("big.rs");
+    let mut f = std::fs::File::create(&file).unwrap();
+    writeln!(f, "fn big() {{").unwrap();
+    for i in 0..55 {
+        writeln!(f, "    let x{i} = {i};").unwrap();
+    }
+    writeln!(f, "}}").unwrap();
+
+    let result = super::run_on_files(&[file], false, 20, 50, 4, Some("github"));
+    assert!(result.is_ok(), "github format should succeed");
+}
+
+#[test]
+fn run_on_files_json_format_via_format_param() {
+    let dir = tempdir().unwrap();
+    let file = dir.path().join("big2.rs");
+    let mut f = std::fs::File::create(&file).unwrap();
+    writeln!(f, "fn big() {{").unwrap();
+    for i in 0..55 {
+        writeln!(f, "    let x{i} = {i};").unwrap();
+    }
+    writeln!(f, "}}").unwrap();
+
+    let result = super::run_on_files(&[file], false, 20, 50, 4, Some("json"));
+    assert!(result.is_ok(), "json format param should succeed");
+}
+
+#[test]
+fn run_on_files_empty_json_format() {
+    // json=false but format=Some("json") with empty list → print_json([])
+    let result = super::run_on_files(&[], false, 20, 50, 4, Some("json"));
+    assert!(result.is_ok());
+}
+
+#[test]
+fn run_github_format_with_smells() {
+    let dir = tempdir().unwrap();
+    let file = dir.path().join("big3.rs");
+    let mut f = std::fs::File::create(&file).unwrap();
+    writeln!(f, "fn big() {{").unwrap();
+    for i in 0..55 {
+        writeln!(f, "    let x{i} = {i};").unwrap();
+    }
+    writeln!(f, "}}").unwrap();
+
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), true, &filter);
+    let result = super::run(&cfg, false, 20, 50, 4, Some("github"));
+    assert!(result.is_ok(), "run github format should succeed");
+}
+
+#[test]
+fn analyze_file_returns_none_for_unsupported_language() {
+    let dir = tempdir().unwrap();
+    let file = dir.path().join("data.json");
+    std::fs::write(&file, "{\"key\": \"value\"}\n").unwrap();
+    let spec = crate::loc::language::detect(&file).unwrap();
+    // JSON has no function detection markers → returns None
+    let result = super::analyze_file(&file, spec, 50, 4).unwrap();
+    assert!(result.is_none(), "JSON should have no markers, return None");
 }

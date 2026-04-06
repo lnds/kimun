@@ -1,4 +1,5 @@
 use super::*;
+use crate::loc::language::detect;
 use crate::walk::{ExcludeFilter, WalkConfig};
 use std::fs;
 
@@ -109,4 +110,57 @@ fn analyze_content_returns_none_for_unknown() {
     let spec = crate::loc::language::detect(std::path::Path::new("test.json")).unwrap();
     let result = analyze_content(&lines, &kinds, spec);
     assert!(result.is_none());
+}
+
+#[test]
+fn run_github_format() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("main.rs"),
+        "fn foo() {\n    if x > 0 {\n        bar();\n    }\n}\n",
+    )
+    .unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, false, 1, 20, false, "total", Some("github")).unwrap();
+}
+
+#[test]
+fn run_format_json_via_format_param() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("main.rs"),
+        "fn foo() {\n    if x > 0 {\n        bar();\n    }\n}\n",
+    )
+    .unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, false, 1, 20, false, "total", Some("json")).unwrap();
+}
+
+#[test]
+fn analyze_file_returns_none_for_unsupported() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("data.json");
+    fs::write(&path, "{\"key\": \"value\"}\n").unwrap();
+    let spec = detect(&path).unwrap();
+    let result = analyze_file(&path, spec).unwrap();
+    assert!(
+        result.is_none(),
+        "JSON has no cognitive markers, should return None"
+    );
+}
+
+#[test]
+fn analyze_file_returns_none_for_comment_only() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("comments.rs");
+    fs::write(&path, "// just a comment\n// another\n").unwrap();
+    let spec = detect(&path).unwrap();
+    let result = analyze_file(&path, spec).unwrap();
+    // A file with only comments has no functions, so analyze returns None
+    assert!(
+        result.is_none(),
+        "comment-only Rust file should return None"
+    );
 }
