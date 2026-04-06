@@ -269,6 +269,7 @@ fn main() {
             risk_only,
             summary,
             bus_factor,
+            author,
         } => {
             dispatch!(common, |cfg, json| {
                 knowledge::run(
@@ -281,6 +282,7 @@ fn main() {
                         risk_only,
                         summary,
                         bus_factor,
+                        author: author.as_deref(),
                     },
                 )
             })
@@ -291,17 +293,7 @@ fn main() {
             sort_by,
             top,
         } => {
-            let filter = common.exclude_filter();
-            maybe_list_excluded(
-                &common.path,
-                common.include_tests,
-                &filter,
-                common.list_excluded(),
-            );
-            run_command(common.path, |t| {
-                let cfg = WalkConfig::new(t, common.include_tests, &filter);
-                deps::run(&cfg, common.json, cycles_only, &sort_by, top)
-            })
+            dispatch!(common, |cfg, json| deps::run(&cfg, json, cycles_only, &sort_by, top))
         }
         Commands::Authors { common, since } => {
             dispatch!(common, |cfg, json| authors::run(

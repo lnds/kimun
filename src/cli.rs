@@ -352,6 +352,10 @@ pub enum Commands {
         /// means one person holds most knowledge — extremely high risk.
         #[arg(long)]
         bus_factor: bool,
+
+        /// Show only files owned by this author (substring match, case-insensitive)
+        #[arg(long, value_name = "NAME")]
+        author: Option<String>,
     },
 
     /// Analyze temporal coupling: files that change together in commits

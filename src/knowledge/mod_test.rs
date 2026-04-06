@@ -21,6 +21,7 @@ fn opts<'a>(
         risk_only,
         summary,
         bus_factor: false,
+        author: None,
     }
 }
 
@@ -55,14 +56,18 @@ fn create_test_repo() -> (tempfile::TempDir, Repository) {
     let dir = tempfile::tempdir().unwrap();
     let repo = Repository::init(dir.path()).unwrap();
     let mut config = repo.config().unwrap();
-    config.set_str("user.name", "Test").unwrap();
-    config.set_str("user.email", "test@test.com").unwrap();
+    config.set_str("user.name", "Fresia").unwrap();
+    config.set_str("user.email", "fresia@ruca.mapu").unwrap();
     (dir, repo)
 }
 
 fn make_commit(repo: &Repository, files: &[(&str, &str)], message: &str) {
-    let sig =
-        git2::Signature::new("Test", "test@test.com", &git2::Time::new(1_700_000_000, 0)).unwrap();
+    let sig = git2::Signature::new(
+        "Fresia",
+        "fresia@ruca.mapu",
+        &git2::Time::new(1_700_000_000, 0),
+    )
+    .unwrap();
     let mut index = repo.index().unwrap();
     for (path, content) in files {
         let full_path = repo.workdir().unwrap().join(path);
@@ -208,7 +213,6 @@ fn integration_with_since_filter() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    // Use "1y" — exercises the since_ts branch that calls recent_authors
     let result = run(&cfg, &opts(false, 20, "concentration", Some("1y"), false, false));
     assert!(result.is_ok(), "since filter should work: {:?}", result);
 }
@@ -224,7 +228,6 @@ fn integration_with_since_filter_json() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    // Use "1d" to exercise recent_authors with a strict cutoff
     let result = run(&cfg, &opts(true, 20, "concentration", Some("1d"), false, false));
     assert!(
         result.is_ok(),
@@ -249,4 +252,62 @@ fn integration_with_generated_file_skipped() {
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     let result = run(&cfg, &opts(false, 20, "concentration", None, false, false));
     assert!(result.is_ok(), "generated files should be skipped");
+}
+
+#[test]
+fn integration_author_filter_match() {
+    let (dir, repo) = create_test_repo();
+    make_commit(
+        &repo,
+        &[
+            ("main.rs", "fn main() {}\n"),
+            ("lib.rs", "pub fn foo() {}\n"),
+        ],
+        "add files",
+    );
+
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    // "Fresia" matches the committer name — should return files
+    let result = run(
+        &cfg,
+        &KnowledgeOptions {
+            json: false,
+            top: 20,
+            sort_by: "concentration",
+            since: None,
+            risk_only: false,
+            summary: false,
+            bus_factor: false,
+            author: Some("Fresia"),
+        },
+    );
+    assert!(result.is_ok(), "author filter should succeed");
+}
+
+#[test]
+fn integration_author_filter_no_match() {
+    let (dir, repo) = create_test_repo();
+    make_commit(&repo, &[("main.rs", "fn main() {}\n")], "add main");
+
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    // "nonexistent" won't match — should produce an empty result without error
+    let result = run(
+        &cfg,
+        &KnowledgeOptions {
+            json: false,
+            top: 20,
+            sort_by: "concentration",
+            since: None,
+            risk_only: false,
+            summary: false,
+            bus_factor: false,
+            author: Some("nonexistent"),
+        },
+    );
+    assert!(
+        result.is_ok(),
+        "author filter with no match should not error"
+    );
 }

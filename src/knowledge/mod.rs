@@ -58,6 +58,8 @@ pub struct KnowledgeOptions<'a> {
     pub risk_only: bool,
     pub summary: bool,
     pub bus_factor: bool,
+    /// Filter to files owned by this author (case-insensitive substring match).
+    pub author: Option<&'a str>,
 }
 
 /// Run knowledge map analysis: walk source files, blame each one,
@@ -105,6 +107,15 @@ pub fn run(cfg: &WalkConfig<'_>, opts: &KnowledgeOptions<'_>) -> Result<(), Box<
 
         let ownership = compute_ownership(rel_path, spec.name, &blames, &recent_authors);
         results.push(ownership);
+    }
+
+    // Filter by author if requested (case-insensitive substring match on name or email)
+    if let Some(author_filter) = opts.author {
+        let lower = author_filter.to_lowercase();
+        results.retain(|f| {
+            f.primary_owner.to_lowercase().contains(&lower)
+                || f.primary_email.to_lowercase().contains(&lower)
+        });
     }
 
     // Filter risk-only if requested

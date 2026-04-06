@@ -466,6 +466,7 @@ Options:
 | `--risk-only` | Show only files with knowledge loss risk |
 | `--summary` | Aggregate by author: files owned, lines, languages, worst risk |
 | `--bus-factor` | Show project bus factor (minimum contributors covering 80% of code) |
+| `--author NAME` | Show only files owned by this author (case-insensitive substring match) |
 
 Example output:
 
