@@ -70,3 +70,7 @@ pub fn run(cfg: &WalkConfig<'_>, json: bool, since: Option<&str>) -> Result<(), 
 
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "mod_test.rs"]
+mod tests;

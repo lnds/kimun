@@ -1,6 +1,7 @@
 use super::*;
 use crate::util::find_test_block_start;
 use crate::walk::{ExcludeFilter, WalkConfig};
+use git2::Repository;
 use std::fs;
 use std::path::Path;
 
@@ -241,4 +242,91 @@ fn legacy_dimensions_sum_to_100_percent() {
         (total_weight - 1.0).abs() < 0.001,
         "legacy weights should sum to 1.0, got {total_weight}"
     );
+}
+
+// ── ScoringModel::from_arg ──────────────────────────────────────────────
+
+#[test]
+fn scoring_model_from_arg_cogcom() {
+    assert_eq!(ScoringModel::from_arg("cogcom"), ScoringModel::Cognitive);
+}
+
+#[test]
+fn scoring_model_from_arg_legacy() {
+    assert_eq!(ScoringModel::from_arg("legacy"), ScoringModel::Legacy);
+}
+
+// ── run helpers ─────────────────────────────────────────────────────────
+
+fn create_test_repo_with_rust_file() -> (tempfile::TempDir, Repository) {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = Repository::init(dir.path()).unwrap();
+    let mut config = repo.config().unwrap();
+    config.set_str("user.name", "Test").unwrap();
+    config.set_str("user.email", "test@test.com").unwrap();
+
+    // Write a Rust file and commit it.
+    let rs_path = dir.path().join("main.rs");
+    fs::write(&rs_path, "fn main() {\n    let x = 1;\n}\n").unwrap();
+
+    let sig =
+        git2::Signature::new("Test", "test@test.com", &git2::Time::new(1_700_000_000, 0)).unwrap();
+    {
+        let mut index = repo.index().unwrap();
+        index.add_path(Path::new("main.rs")).unwrap();
+        index.write().unwrap();
+        let tree_oid = index.write_tree().unwrap();
+        let tree = repo.find_tree(tree_oid).unwrap();
+        repo.commit(Some("HEAD"), &sig, &sig, "initial", &tree, &[])
+            .unwrap();
+    }
+
+    (dir, repo)
+}
+
+#[test]
+fn run_diff_on_git_repo() {
+    let (dir, _repo) = create_test_repo_with_rust_file();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), true, &filter);
+    // "HEAD" is a valid ref that points to the current commit
+    let result = run_diff(&cfg, "HEAD", false, 5, 6, "cogcom");
+    assert!(result.is_ok(), "run_diff should succeed: {:?}", result);
+}
+
+#[test]
+fn run_diff_json_on_git_repo() {
+    let (dir, _repo) = create_test_repo_with_rust_file();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), true, &filter);
+    let result = run_diff(&cfg, "HEAD", true, 5, 6, "cogcom");
+    assert!(result.is_ok(), "run_diff JSON should succeed: {:?}", result);
+}
+
+#[test]
+fn run_diff_legacy_model_on_git_repo() {
+    let (dir, _repo) = create_test_repo_with_rust_file();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), true, &filter);
+    let result = run_diff(&cfg, "HEAD", false, 5, 6, "legacy");
+    assert!(
+        result.is_ok(),
+        "run_diff legacy should succeed: {:?}",
+        result
+    );
+}
+
+#[test]
+fn run_on_current_repo_with_target() {
+    // Test with an explicit non-"." path to exercise the target display branch
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(Path::new("src"), false, &filter);
+    run(&cfg, false, 5, 6, "cogcom").unwrap();
+}
+
+#[test]
+fn run_json_with_target_path() {
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(Path::new("src"), false, &filter);
+    run(&cfg, true, 5, 6, "cogcom").unwrap();
 }

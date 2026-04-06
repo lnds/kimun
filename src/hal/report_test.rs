@@ -80,3 +80,71 @@ fn json_structure_is_valid() {
     assert_eq!(parsed.len(), 2);
     assert!(parsed[0]["volume"].as_f64().unwrap() > 0.0);
 }
+
+// ── format_time ──────────────────────────────────────────────────────────
+
+#[test]
+fn format_time_seconds() {
+    assert_eq!(format_time(45.0), "45s");
+    assert_eq!(format_time(0.0), "0s");
+    assert_eq!(format_time(59.9), "60s");
+}
+
+#[test]
+fn format_time_minutes() {
+    assert_eq!(format_time(60.0), "1m 0s");
+    assert_eq!(format_time(90.0), "1m 30s");
+    assert_eq!(format_time(3599.0), "59m 59s");
+}
+
+#[test]
+fn format_time_hours() {
+    assert_eq!(format_time(3600.0), "1h 0m");
+    assert_eq!(format_time(7200.0), "2h 0m");
+    assert_eq!(format_time(86399.0), "23h 60m");
+}
+
+#[test]
+fn format_time_days() {
+    let s = format_time(86400.0);
+    assert!(s.contains('d'), "expected days format, got: {s}");
+    assert_eq!(format_time(86400.0), "1d 0h");
+
+    let s = format_time(172800.0); // 2 days
+    assert_eq!(s, "2d 0h");
+
+    let s = format_time(90000.0); // 1 day + 1 hour
+    assert!(s.starts_with("1d"), "expected 1d format, got: {s}");
+}
+
+// ── print_report with large time ─────────────────────────────────────────
+
+fn make_large_time_file() -> Vec<FileHalsteadMetrics> {
+    vec![FileHalsteadMetrics {
+        path: PathBuf::from("src/huge.rs"),
+        language: "Rust".to_string(),
+        metrics: HalsteadMetrics {
+            distinct_operators: 100,
+            distinct_operands: 200,
+            total_operators: 1000,
+            total_operands: 2000,
+            vocabulary: 300,
+            length: 3000,
+            volume: 50000.0,
+            difficulty: 500.0,
+            effort: 25_000_000.0,
+            bugs: 16.7,
+            time: 172800.0, // 2 days — exercises the "days" branch
+        },
+    }]
+}
+
+#[test]
+fn print_report_with_large_time_does_not_panic() {
+    print_report(&make_large_time_file());
+}
+
+#[test]
+fn print_json_with_large_time_does_not_panic() {
+    print_json(&make_large_time_file()).unwrap();
+}

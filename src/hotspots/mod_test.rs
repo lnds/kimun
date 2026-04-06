@@ -314,3 +314,39 @@ fn integration_json_structure() {
     let result = run(&cfg, true, 20, "score", None, "indent");
     assert!(result.is_ok(), "JSON output should succeed");
 }
+
+#[test]
+fn integration_cogcom_scores() {
+    let (dir, repo) = create_test_repo();
+    make_commit(
+        &repo,
+        &[(
+            "main.rs",
+            "fn main() {\n    if true {\n        println!(\"hi\");\n    }\n}\n",
+        )],
+        "add main",
+    );
+
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run(&cfg, false, 20, "score", None, "cogcom");
+    assert!(result.is_ok(), "cogcom hotspots should succeed");
+}
+
+#[test]
+fn integration_sort_by_complexity() {
+    let (dir, repo) = create_test_repo();
+    make_commit(
+        &repo,
+        &[(
+            "main.rs",
+            "fn main() {\n    if true {\n        println!(\"hi\");\n    }\n}\n",
+        )],
+        "add main",
+    );
+
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run(&cfg, false, 20, "complexity", None, "indent");
+    assert!(result.is_ok(), "sort by complexity should work");
+}

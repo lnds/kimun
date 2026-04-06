@@ -392,3 +392,252 @@ fn source_files_glob_with_absolute_path() {
     assert_eq!(files.len(), 1, "only main.rs should be found");
     assert_eq!(files[0].0.file_name().unwrap().to_str().unwrap(), "main.rs");
 }
+
+// ── is_test_file ────────────────────────────────────────────────────────
+
+#[test]
+fn is_test_file_rust_test_suffix() {
+    assert!(is_test_file(Path::new("counter_test.rs")));
+    assert!(is_test_file(Path::new("mod_test.rs")));
+    assert!(!is_test_file(Path::new("counter.rs")));
+}
+
+#[test]
+fn is_test_file_go_test_suffix() {
+    assert!(is_test_file(Path::new("counter_test.go")));
+    assert!(!is_test_file(Path::new("counter.go")));
+}
+
+#[test]
+fn is_test_file_python_prefix_and_suffix() {
+    assert!(is_test_file(Path::new("test_foo.py")));
+    assert!(is_test_file(Path::new("foo_test.py")));
+    assert!(!is_test_file(Path::new("foo.py")));
+}
+
+#[test]
+fn is_test_file_ruby_spec_suffix() {
+    assert!(is_test_file(Path::new("foo_spec.rb")));
+    assert!(is_test_file(Path::new("foo_test.rb")));
+    assert!(!is_test_file(Path::new("foo.rb")));
+}
+
+#[test]
+fn is_test_file_php_pascal_test() {
+    assert!(is_test_file(Path::new("FooTest.php")));
+    assert!(is_test_file(Path::new("foo_test.php")));
+    assert!(!is_test_file(Path::new("Foo.php")));
+}
+
+#[test]
+fn is_test_file_javascript_double_ext() {
+    assert!(is_test_file(Path::new("foo.test.js")));
+    assert!(is_test_file(Path::new("foo.spec.js")));
+    assert!(is_test_file(Path::new("foo.test.ts")));
+    assert!(is_test_file(Path::new("foo.spec.tsx")));
+    assert!(!is_test_file(Path::new("foo.js")));
+}
+
+#[test]
+fn is_test_file_java_test_suffix() {
+    assert!(is_test_file(Path::new("FooTest.java")));
+    assert!(is_test_file(Path::new("FooTests.java")));
+    assert!(!is_test_file(Path::new("Foo.java")));
+}
+
+#[test]
+fn is_test_file_kotlin_test_suffix() {
+    assert!(is_test_file(Path::new("FooTest.kt")));
+    assert!(!is_test_file(Path::new("Foo.kt")));
+}
+
+#[test]
+fn is_test_file_csharp_test_suffix() {
+    assert!(is_test_file(Path::new("FooTest.cs")));
+    assert!(is_test_file(Path::new("FooTests.cs")));
+    assert!(!is_test_file(Path::new("Foo.cs")));
+}
+
+#[test]
+fn is_test_file_swift_test_suffix() {
+    assert!(is_test_file(Path::new("FooTest.swift")));
+    assert!(is_test_file(Path::new("FooTests.swift")));
+    assert!(!is_test_file(Path::new("Foo.swift")));
+}
+
+#[test]
+fn is_test_file_scala_spec_suffix() {
+    assert!(is_test_file(Path::new("FooSpec.scala")));
+    assert!(is_test_file(Path::new("FooTest.scala")));
+    assert!(!is_test_file(Path::new("Foo.scala")));
+}
+
+#[test]
+fn is_test_file_c_unittest_suffix() {
+    assert!(is_test_file(Path::new("foo_unittest.c")));
+    assert!(is_test_file(Path::new("foo_test.c")));
+    assert!(is_test_file(Path::new("test_foo.c")));
+    assert!(!is_test_file(Path::new("foo.c")));
+}
+
+#[test]
+fn is_test_file_cpp_unittest_suffix() {
+    assert!(is_test_file(Path::new("foo_unittest.cpp")));
+    assert!(is_test_file(Path::new("foo_test.cpp")));
+    assert!(is_test_file(Path::new("FooTest.cpp")));
+    assert!(is_test_file(Path::new("test_foo.cpp")));
+    assert!(!is_test_file(Path::new("foo.cpp")));
+}
+
+#[test]
+fn is_test_file_haskell_spec_suffix() {
+    assert!(is_test_file(Path::new("FooSpec.hs")));
+    assert!(is_test_file(Path::new("FooTest.hs")));
+    assert!(!is_test_file(Path::new("Foo.hs")));
+}
+
+#[test]
+fn is_test_file_dart_test_suffix() {
+    assert!(is_test_file(Path::new("foo_test.dart")));
+    assert!(!is_test_file(Path::new("foo.dart")));
+}
+
+#[test]
+fn is_test_file_no_extension_returns_false() {
+    assert!(!is_test_file(Path::new("Makefile")));
+    assert!(!is_test_file(Path::new("Dockerfile")));
+}
+
+#[test]
+fn is_test_file_unknown_extension_returns_false() {
+    assert!(!is_test_file(Path::new("foo_test.xyz")));
+}
+
+// ── collect_analysis ────────────────────────────────────────────────────
+
+#[test]
+fn collect_analysis_ok_some_results() {
+    let dir = tempdir().unwrap();
+    fs::write(dir.path().join("main.rs"), "fn main() {}").unwrap();
+    fs::write(dir.path().join("lib.rs"), "pub fn foo() {}").unwrap();
+
+    let filter = ExcludeFilter::default();
+    let results: Vec<String> = collect_analysis(dir.path(), false, &filter, |path, spec| {
+        Ok(Some(format!("{} ({})", path.display(), spec.name)))
+    });
+
+    assert_eq!(results.len(), 2);
+}
+
+#[test]
+fn collect_analysis_ok_none_skips() {
+    let dir = tempdir().unwrap();
+    fs::write(dir.path().join("main.rs"), "fn main() {}").unwrap();
+
+    let filter = ExcludeFilter::default();
+    let results: Vec<String> =
+        collect_analysis(dir.path(), false, &filter, |_path, _spec| Ok(None));
+
+    assert!(results.is_empty(), "Ok(None) should be skipped");
+}
+
+#[test]
+fn collect_analysis_err_skips_with_warning() {
+    let dir = tempdir().unwrap();
+    fs::write(dir.path().join("main.rs"), "fn main() {}").unwrap();
+
+    let filter = ExcludeFilter::default();
+    let results: Vec<String> = collect_analysis(dir.path(), false, &filter, |_path, _spec| {
+        Err("simulated error".into())
+    });
+
+    // Errors are logged to stderr and skipped, so results should be empty
+    assert!(results.is_empty(), "Err should be skipped");
+}
+
+// ── print_excluded_files ────────────────────────────────────────────────
+
+#[test]
+fn print_excluded_files_no_exclusions() {
+    let dir = tempdir().unwrap();
+    fs::write(dir.path().join("main.rs"), "fn main() {}").unwrap();
+    let filter = ExcludeFilter::default();
+    // Should not crash even with no exclusions
+    print_excluded_files(dir.path(), false, &filter).unwrap();
+}
+
+#[test]
+fn print_excluded_files_with_extension_exclusion() {
+    let dir = tempdir().unwrap();
+    fs::write(dir.path().join("main.rs"), "fn main() {}").unwrap();
+    fs::write(dir.path().join("lib.js"), "export {};").unwrap();
+    let filter = ExcludeFilter::new(&[], &["js".to_string()], &[], &[]);
+    print_excluded_files(dir.path(), false, &filter).unwrap();
+}
+
+#[test]
+fn print_excluded_files_with_dir_exclusion() {
+    let dir = tempdir().unwrap();
+    let vendor = dir.path().join("vendor");
+    fs::create_dir(&vendor).unwrap();
+    fs::write(vendor.join("dep.rs"), "// generated").unwrap();
+    fs::write(dir.path().join("main.rs"), "fn main() {}").unwrap();
+    let filter = ExcludeFilter::new(&[], &[], &["vendor".to_string()], &[]);
+    print_excluded_files(dir.path(), false, &filter).unwrap();
+}
+
+#[test]
+fn print_excluded_files_with_test_exclusion() {
+    let dir = tempdir().unwrap();
+    fs::write(dir.path().join("main.rs"), "fn main() {}").unwrap();
+    fs::write(dir.path().join("main_test.rs"), "#[test] fn t() {}").unwrap();
+    let filter = ExcludeFilter::default();
+    print_excluded_files(dir.path(), true, &filter).unwrap();
+}
+
+#[test]
+fn print_excluded_files_with_test_dir_exclusion() {
+    let dir = tempdir().unwrap();
+    let tests_dir = dir.path().join("tests");
+    fs::create_dir(&tests_dir).unwrap();
+    fs::write(tests_dir.join("integration.rs"), "fn test() {}").unwrap();
+    fs::write(dir.path().join("main.rs"), "fn main() {}").unwrap();
+    let filter = ExcludeFilter::default();
+    print_excluded_files(dir.path(), true, &filter).unwrap();
+}
+
+#[test]
+fn print_excluded_files_with_glob_exclusion() {
+    let dir = tempdir().unwrap();
+    fs::write(dir.path().join("app.min.js"), "var x=1;").unwrap();
+    fs::write(dir.path().join("main.rs"), "fn main() {}").unwrap();
+    let filter = ExcludeFilter::new(&[], &[], &[], &["*.min.js".to_string()]);
+    print_excluded_files(dir.path(), false, &filter).unwrap();
+}
+
+// ── try_detect_shebang ─────────────────────────────────────────────────
+
+#[test]
+fn try_detect_shebang_python() {
+    let dir = tempdir().unwrap();
+    let script = dir.path().join("script");
+    fs::write(&script, "#!/usr/bin/env python3\nprint('hi')\n").unwrap();
+    let spec = try_detect_shebang(&script);
+    assert!(spec.is_some(), "should detect Python from shebang");
+    assert_eq!(spec.unwrap().name, "Python");
+}
+
+#[test]
+fn try_detect_shebang_no_shebang_returns_none() {
+    let dir = tempdir().unwrap();
+    let file = dir.path().join("file");
+    fs::write(&file, "just text, no shebang").unwrap();
+    let spec = try_detect_shebang(&file);
+    assert!(spec.is_none(), "file without shebang should return None");
+}
+
+#[test]
+fn try_detect_shebang_nonexistent_file_returns_none() {
+    let spec = try_detect_shebang(Path::new("/nonexistent/path/file"));
+    assert!(spec.is_none(), "nonexistent file should return None");
+}
