@@ -21,6 +21,18 @@
 - add cognitive complexity (SonarSource 2017), replace MI+cyclomatic in score
 - add `km score diff` and auto-update homebrew on release
 
+## v0.20.0 (2026-04-05)
+
+### Feat
+
+- **dups**: add --fail-on-increase gate to prevent duplication debt growth
+- **knowledge**: add --bus-factor flag to km knowledge
+- **knowledge**: add --author flag to filter files by primary owner
+
+### Refactor
+
+- reduce cognitive complexity to recover A- score
+
 ## v0.19.0 (2026-04-05)
 
 ### Feat
