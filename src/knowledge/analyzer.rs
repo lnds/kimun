@@ -3,7 +3,7 @@
 /// For each file, determines the primary owner, ownership concentration,
 /// contributor count, and bus-factor risk level. Optionally detects
 /// knowledge loss when the primary owner is no longer active.
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use serde::Serialize;
@@ -194,6 +194,82 @@ pub fn aggregate_by_author(files: &[FileOwnership]) -> Vec<AuthorSummary> {
             },
         )
         .collect()
+}
+
+/// A single contributor's share in the project-wide bus factor.
+pub struct BusFactorEntry {
+    pub author: String,
+    /// Total lines attributed to this author across all analyzed files.
+    pub lines: usize,
+    /// This author's share of total project lines.
+    pub pct: f64,
+    /// Cumulative coverage including this and all higher-ranked authors.
+    pub cumulative_pct: f64,
+    /// True while this author is still needed to reach the threshold.
+    /// The last `is_critical = true` entry is the one that pushes cumulative
+    /// coverage over the threshold.
+    pub is_critical: bool,
+}
+
+/// Project-wide bus factor result.
+pub struct BusFactor {
+    /// Minimum number of contributors whose combined ownership covers `threshold`%.
+    pub factor: usize,
+    /// Threshold used (e.g. 80.0 for 80%).
+    pub threshold: f64,
+    /// Total blame lines across all analyzed files.
+    pub total_lines: usize,
+    /// All contributors sorted by lines owned descending, annotated with
+    /// cumulative coverage and criticality.
+    pub contributors: Vec<BusFactorEntry>,
+}
+
+/// Compute the project bus factor from a map of author → total blame lines.
+///
+/// The bus factor is the smallest N such that the top N contributors
+/// together own ≥ `threshold`% of all code. A bus factor of 1 means
+/// a single person owns most of the project — extremely high risk.
+pub fn compute_bus_factor(author_lines: &HashMap<String, usize>, threshold: f64) -> BusFactor {
+    let total_lines: usize = author_lines.values().sum();
+    if total_lines == 0 {
+        return BusFactor {
+            factor: 0,
+            threshold,
+            total_lines: 0,
+            contributors: vec![],
+        };
+    }
+
+    // Sort by lines descending, then by name for determinism.
+    let mut sorted: Vec<(String, usize)> =
+        author_lines.iter().map(|(k, &v)| (k.clone(), v)).collect();
+    sorted.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+
+    let mut cumulative = 0.0;
+    let mut contributors: Vec<BusFactorEntry> = Vec::new();
+
+    for (author, lines) in sorted {
+        let pct = lines as f64 / total_lines as f64 * 100.0;
+        // is_critical: this author is still needed to reach the threshold
+        // (cumulative before adding this author is below threshold).
+        let is_critical = cumulative < threshold;
+        cumulative += pct;
+        contributors.push(BusFactorEntry {
+            author,
+            lines,
+            pct,
+            cumulative_pct: cumulative,
+            is_critical,
+        });
+    }
+
+    let factor = contributors.iter().filter(|e| e.is_critical).count();
+    BusFactor {
+        factor,
+        threshold,
+        total_lines,
+        contributors,
+    }
 }
 
 #[cfg(test)]

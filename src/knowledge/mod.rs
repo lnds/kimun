@@ -16,8 +16,11 @@ use crate::util::parse_since;
 use crate::walk::{self, WalkConfig};
 
 use crate::report_helpers;
-use analyzer::{FileOwnership, aggregate_by_author, compute_ownership};
-use report::{print_json, print_report, print_summary_json, print_summary_report};
+use analyzer::{FileOwnership, aggregate_by_author, compute_bus_factor, compute_ownership};
+use report::{
+    print_bus_factor_json, print_bus_factor_report, print_json, print_report, print_summary_json,
+    print_summary_report,
+};
 
 /// Check if a file is machine-generated (lock files, minified assets,
 /// protobuf output) and should be excluded from ownership analysis.
@@ -46,21 +49,24 @@ fn is_generated(path: &Path) -> bool {
         || file_name.contains(".generated.")
 }
 
+/// Options for knowledge map analysis.
+pub struct KnowledgeOptions<'a> {
+    pub json: bool,
+    pub top: usize,
+    pub sort_by: &'a str,
+    pub since: Option<&'a str>,
+    pub risk_only: bool,
+    pub summary: bool,
+    pub bus_factor: bool,
+}
+
 /// Run knowledge map analysis: walk source files, blame each one,
 /// compute ownership concentration and risk, then output results.
-pub fn run(
-    cfg: &WalkConfig<'_>,
-    json: bool,
-    top: usize,
-    sort_by: &str,
-    since: Option<&str>,
-    risk_only: bool,
-    summary: bool,
-) -> Result<(), Box<dyn Error>> {
+pub fn run(cfg: &WalkConfig<'_>, opts: &KnowledgeOptions<'_>) -> Result<(), Box<dyn Error>> {
     let git_repo = GitRepo::open(cfg.path)
         .map_err(|e| format!("not a git repository (or any parent): {e}"))?;
 
-    let since_ts = since.map(parse_since).transpose()?;
+    let since_ts = opts.since.map(parse_since).transpose()?;
 
     // Collect recent authors (for knowledge loss detection)
     let recent_authors = if since_ts.is_some() {
@@ -72,6 +78,9 @@ pub fn run(
     let (walk_root, walk_prefix) = git_repo.walk_prefix(cfg.path)?;
 
     let mut results: Vec<FileOwnership> = Vec::new();
+    // author name → total blame lines across all files (for bus factor)
+    let mut author_lines: std::collections::HashMap<String, usize> =
+        std::collections::HashMap::new();
 
     for (file_path, spec) in walk::source_files(&walk_root, cfg.exclude_tests(), cfg.filter) {
         if is_generated(&file_path) {
@@ -89,17 +98,22 @@ pub fn run(
             }
         };
 
+        // Accumulate raw blame lines for bus factor computation.
+        for b in &blames {
+            *author_lines.entry(b.author.clone()).or_insert(0) += b.lines;
+        }
+
         let ownership = compute_ownership(rel_path, spec.name, &blames, &recent_authors);
         results.push(ownership);
     }
 
     // Filter risk-only if requested
-    if risk_only {
+    if opts.risk_only {
         results.retain(|f| f.knowledge_loss);
     }
 
     // Sort
-    match sort_by {
+    match opts.sort_by {
         "diffusion" => results.sort_by(|a, b| b.contributors.cmp(&a.contributors)),
         "risk" => results.sort_by(|a, b| {
             a.risk.sort_key().cmp(&b.risk.sort_key()).then_with(|| {
@@ -118,24 +132,34 @@ pub fn run(
         }
     }
 
-    if summary {
+    if opts.bus_factor {
+        let bf = compute_bus_factor(&author_lines, 80.0);
+        return if opts.json {
+            print_bus_factor_json(&bf)
+        } else {
+            print_bus_factor_report(&bf);
+            Ok(())
+        };
+    }
+
+    if opts.summary {
         let mut authors = aggregate_by_author(&results);
         // In summary mode sort_by maps: concentration→files owned, diffusion→lines, risk→worst risk
-        match sort_by {
+        match opts.sort_by {
             "diffusion" => authors.sort_by(|a, b| b.total_lines.cmp(&a.total_lines)),
             "risk" => authors.sort_by(|a, b| a.worst_risk.sort_key().cmp(&b.worst_risk.sort_key())),
             _ => authors.sort_by(|a, b| b.files_owned.cmp(&a.files_owned)),
         }
-        let limit = top.min(authors.len());
+        let limit = opts.top.min(authors.len());
         let authors = &authors[..limit];
-        if json {
+        if opts.json {
             print_summary_json(authors)
         } else {
             print_summary_report(authors);
             Ok(())
         }
     } else {
-        report_helpers::output_results(&mut results, top, json, print_json, print_report)
+        report_helpers::output_results(&mut results, opts.top, opts.json, print_json, print_report)
     }
 }
 

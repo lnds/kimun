@@ -5,6 +5,25 @@ use std::path::Path as StdPath;
 
 use git2::Repository;
 
+fn opts<'a>(
+    json: bool,
+    top: usize,
+    sort_by: &'a str,
+    since: Option<&'a str>,
+    risk_only: bool,
+    summary: bool,
+) -> KnowledgeOptions<'a> {
+    KnowledgeOptions {
+        json,
+        top,
+        sort_by,
+        since,
+        risk_only,
+        summary,
+        bus_factor: false,
+    }
+}
+
 #[test]
 fn test_is_generated() {
     assert!(is_generated(StdPath::new("Cargo.lock")));
@@ -25,7 +44,7 @@ fn run_on_non_git_dir() {
     fs::create_dir_all(&sub).unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(&sub, false, &filter);
-    let err = run(&cfg, false, 20, "concentration", None, false, false).unwrap_err();
+    let err = run(&cfg, &opts(false, 20, "concentration", None, false, false)).unwrap_err();
     assert!(
         err.to_string().contains("not a git repository"),
         "should mention not a git repo, got: {err}"
@@ -73,7 +92,7 @@ fn integration_basic() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, false, 20, "concentration", None, false, false);
+    let result = run(&cfg, &opts(false, 20, "concentration", None, false, false));
     assert!(result.is_ok(), "knowledge map should succeed on a git repo");
 }
 
@@ -88,7 +107,7 @@ fn integration_json() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, true, 20, "concentration", None, false, false);
+    let result = run(&cfg, &opts(true, 20, "concentration", None, false, false));
     assert!(result.is_ok(), "JSON output should succeed");
 }
 
@@ -103,7 +122,7 @@ fn integration_risk_only() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, false, 20, "risk", None, true, false);
+    let result = run(&cfg, &opts(false, 20, "risk", None, true, false));
     assert!(result.is_ok(), "risk-only filter should work");
 }
 
@@ -118,7 +137,7 @@ fn integration_sort_by_risk() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, false, 20, "risk", None, false, false);
+    let result = run(&cfg, &opts(false, 20, "risk", None, false, false));
     assert!(result.is_ok(), "sort by risk should work");
 }
 
@@ -133,7 +152,7 @@ fn integration_sort_by_diffusion() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, false, 20, "diffusion", None, false, false);
+    let result = run(&cfg, &opts(false, 20, "diffusion", None, false, false));
     assert!(result.is_ok(), "sort by diffusion should work");
 }
 
@@ -141,7 +160,7 @@ fn integration_sort_by_diffusion() {
 fn run_on_current_repo() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(StdPath::new("."), false, &filter);
-    let result = run(&cfg, true, 5, "concentration", None, false, false);
+    let result = run(&cfg, &opts(true, 5, "concentration", None, false, false));
     assert!(result.is_ok(), "knowledge map should work on current repo");
 }
 
@@ -159,7 +178,7 @@ fn integration_summary() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, false, 20, "concentration", None, false, true);
+    let result = run(&cfg, &opts(false, 20, "concentration", None, false, true));
     assert!(result.is_ok(), "summary mode should work");
 }
 
@@ -174,7 +193,7 @@ fn integration_summary_json() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, true, 20, "concentration", None, false, true);
+    let result = run(&cfg, &opts(true, 20, "concentration", None, false, true));
     assert!(result.is_ok(), "summary JSON mode should work");
 }
 
@@ -190,7 +209,7 @@ fn integration_with_since_filter() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     // Use "1y" — exercises the since_ts branch that calls recent_authors
-    let result = run(&cfg, false, 20, "concentration", Some("1y"), false, false);
+    let result = run(&cfg, &opts(false, 20, "concentration", Some("1y"), false, false));
     assert!(result.is_ok(), "since filter should work: {:?}", result);
 }
 
@@ -206,7 +225,7 @@ fn integration_with_since_filter_json() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     // Use "1d" to exercise recent_authors with a strict cutoff
-    let result = run(&cfg, true, 20, "concentration", Some("1d"), false, false);
+    let result = run(&cfg, &opts(true, 20, "concentration", Some("1d"), false, false));
     assert!(
         result.is_ok(),
         "since filter JSON should work: {:?}",
@@ -228,6 +247,6 @@ fn integration_with_generated_file_skipped() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, false, 20, "concentration", None, false, false);
+    let result = run(&cfg, &opts(false, 20, "concentration", None, false, false));
     assert!(result.is_ok(), "generated files should be skipped");
 }

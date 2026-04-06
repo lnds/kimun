@@ -465,6 +465,7 @@ Options:
 | `--since DURATION` | Define recent activity window for knowledge loss (e.g. `6m`, `1y`, `30d`) |
 | `--risk-only` | Show only files with knowledge loss risk |
 | `--summary` | Aggregate by author: files owned, lines, languages, worst risk |
+| `--bus-factor` | Show project bus factor (minimum contributors covering 80% of code) |
 
 Example output:
 
@@ -480,6 +481,24 @@ Knowledge Map — Code Ownership
 
 Files with knowledge loss risk (primary owner inactive): 1
   src/legacy.rs (Former Dev)
+```
+
+Use `--bus-factor` to compute how many contributors you can afford to lose:
+
+```
+$ km knowledge --bus-factor
+Project Bus Factor: 2
+
+ Losing 2 key contributors would put 80% of the project's knowledge at risk.
+ Risk: HIGH — two people hold critical knowledge
+
+──────────────────────────────────────────────
+ Rank  Author        Lines    Share  Cumulative
+──────────────────────────────────────────────
+    1  E. Diaz        8420   68.12%     68.12%
+    2  A. Torres      1490   12.06%     80.18%  ← 80% threshold
+    3  R. Soto         940    7.61%     87.79%
+──────────────────────────────────────────────
 ```
 
 ### `km tc` -- Temporal coupling analysis

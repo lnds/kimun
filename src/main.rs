@@ -268,16 +268,20 @@ fn main() {
             since,
             risk_only,
             summary,
+            bus_factor,
         } => {
             dispatch!(common, |cfg, json| {
                 knowledge::run(
                     &cfg,
-                    json,
-                    top,
-                    &sort_by,
-                    since.as_deref(),
-                    risk_only,
-                    summary,
+                    &knowledge::KnowledgeOptions {
+                        json,
+                        top,
+                        sort_by: &sort_by,
+                        since: since.as_deref(),
+                        risk_only,
+                        summary,
+                        bus_factor,
+                    },
                 )
             })
         }
