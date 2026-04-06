@@ -5,6 +5,7 @@
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand};
+pub use clap_complete::Shell;
 
 use crate::cli_help;
 use crate::walk::ExcludeFilter;
@@ -102,6 +103,7 @@ impl CommonArgs {
 
 /// All available analysis subcommands.
 #[derive(Subcommand)]
+#[allow(clippy::large_enum_variant)] // CLI args are parsed once; size is not performance-critical
 pub enum Commands {
     /// Count lines of code (blank, comment, code) by language
     Loc {
@@ -193,6 +195,12 @@ pub enum Commands {
         /// Sort by metric: total, max, or avg (default: total)
         #[arg(long, default_value = "total", value_parser = ["total", "max", "avg"])]
         sort_by: String,
+
+        /// Output format: github emits GitHub Actions warning annotations
+        /// (::warning file=...,line=...,title=...::message) for use in CI.
+        /// Incompatible with --json.
+        #[arg(long, value_name = "FORMAT", value_parser = ["github", "json"], conflicts_with = "json")]
+        format: Option<String>,
     },
 
     /// Analyze cognitive complexity per file and per function (SonarSource method)
@@ -216,6 +224,12 @@ pub enum Commands {
         /// Sort by metric: total, max, or avg (default: total)
         #[arg(long, default_value = "total", value_parser = ["total", "max", "avg"])]
         sort_by: String,
+
+        /// Output format: github emits GitHub Actions warning annotations
+        /// (::warning file=...,line=...,title=...::message) for use in CI.
+        /// Incompatible with --json.
+        #[arg(long, value_name = "FORMAT", value_parser = ["github", "json"], conflicts_with = "json")]
+        format: Option<String>,
     },
 
     /// Compute Maintainability Index per file (Visual Studio variant, 0-100 scale)
@@ -389,6 +403,12 @@ pub enum Commands {
         /// Ideal for CI: km smells --since-ref origin/main
         #[arg(long, value_name = "REF")]
         since_ref: Option<String>,
+
+        /// Output format: github emits GitHub Actions warning annotations
+        /// (::warning file=...,line=...,title=...::message) for use in CI.
+        /// Incompatible with --json.
+        #[arg(long, value_name = "FORMAT", value_parser = ["github", "json"], conflicts_with = "json")]
+        format: Option<String>,
     },
 
     /// Compute an overall code health score for the project (A++ to F--)
@@ -417,6 +437,17 @@ pub enum Commands {
         /// Useful for PR review: --trend origin/main
         #[arg(long, num_args = 0..=1, default_missing_value = "HEAD", value_name = "REF")]
         trend: Option<String>,
+
+        /// Exit with code 1 if the score is worse than the ref (requires --trend).
+        /// Example: --trend origin/main --fail-if-worse
+        #[arg(long, requires = "trend")]
+        fail_if_worse: bool,
+
+        /// Exit with code 1 if the score is below GRADE (requires --trend).
+        /// Example: --trend origin/main --fail-below B-
+        /// Valid grades: A++, A+, A, A-, B+, B, B-, C+, C, C-, D+, D, D-, F, F-, F--
+        #[arg(long, value_name = "GRADE", requires = "trend")]
+        fail_below: Option<String>,
     },
 
     /// Analyze code age: classify files as active, stale, or frozen by last git modification
@@ -441,6 +472,24 @@ pub enum Commands {
         status: Option<String>,
     },
 
+    /// Analyze internal module dependencies: fan-in, fan-out, and dependency cycles
+    Deps {
+        #[command(flatten)]
+        common: CommonArgs,
+
+        /// Show only files with dependency cycles
+        #[arg(long)]
+        cycles_only: bool,
+
+        /// Sort by: fan-out (default), fan-in
+        #[arg(long, default_value = "fan-out", value_parser = ["fan-out", "fan-in"])]
+        sort_by: String,
+
+        /// Show only the top N files (default: 20)
+        #[arg(long, default_value = "20")]
+        top: usize,
+    },
+
     /// Summarize code ownership by author: files owned, lines, languages, last active date
     Authors {
         #[command(flatten)]
@@ -455,6 +504,12 @@ pub enum Commands {
     Ai {
         #[command(subcommand)]
         command: AiCommands,
+    },
+
+    /// Generate shell completion scripts (zsh, bash, fish, ...)
+    Completions {
+        /// Shell to generate completions for
+        shell: Shell,
     },
 }
 

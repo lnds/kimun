@@ -139,7 +139,7 @@ fn json_output_runs_without_error() {
 
     let filter = crate::walk::ExcludeFilter::default();
     let cfg = crate::walk::WalkConfig::new(dir.path(), true, &filter);
-    let result = super::run(&cfg, true, 20, 50, 4);
+    let result = super::run(&cfg, true, 20, 50, 4, None);
     assert!(result.is_ok());
 }
 
@@ -181,13 +181,13 @@ fn run_on_files_with_smell() {
     }
     writeln!(f, "}}").unwrap();
 
-    let result = super::run_on_files(&[file], false, 20, 50, 4);
+    let result = super::run_on_files(&[file], false, 20, 50, 4, None);
     assert!(result.is_ok());
 }
 
 #[test]
 fn run_on_files_empty_list() {
-    let result = super::run_on_files(&[], false, 20, 50, 4);
+    let result = super::run_on_files(&[], false, 20, 50, 4, None);
     assert!(result.is_ok());
 }
 
@@ -197,20 +197,20 @@ fn run_on_files_skips_unknown_extension() {
     let file = dir.path().join("data.xyz");
     std::fs::write(&file, "hello world").unwrap();
 
-    let result = super::run_on_files(&[file], false, 20, 50, 4);
+    let result = super::run_on_files(&[file], false, 20, 50, 4, None);
     assert!(result.is_ok());
 }
 
 #[test]
 fn run_on_files_json_empty() {
-    let result = super::run_on_files(&[], true, 20, 50, 4);
+    let result = super::run_on_files(&[], true, 20, 50, 4, None);
     assert!(result.is_ok());
 }
 
 #[test]
 fn run_on_files_nonexistent_path_skips() {
     let paths = vec![PathBuf::from("/nonexistent/path/fake.rs")];
-    let result = super::run_on_files(&paths, false, 20, 50, 4);
+    let result = super::run_on_files(&paths, false, 20, 50, 4, None);
     assert!(
         result.is_ok(),
         "nonexistent files should be skipped, not panic"

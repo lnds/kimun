@@ -1,7 +1,8 @@
 use super::*;
 use crate::walk::{ExcludeFilter, WalkConfig};
+use git2::Repository;
 use std::fs;
-use std::path::Path;
+use std::path::Path as StdPath;
 
 #[test]
 fn run_on_temp_dir_with_rust_file() {
@@ -127,5 +128,138 @@ fn hash_file_works() {
 
 #[test]
 fn hash_file_nonexistent() {
-    assert!(hash_file(Path::new("/nonexistent/file")).is_none());
+    assert!(hash_file(StdPath::new("/nonexistent/file")).is_none());
+}
+
+// ── run_by_author tests ─────────────────────────────────────────────────
+
+fn create_test_repo() -> (tempfile::TempDir, Repository) {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = Repository::init(dir.path()).unwrap();
+    let mut config = repo.config().unwrap();
+    config.set_str("user.name", "Alice").unwrap();
+    config.set_str("user.email", "alice@example.com").unwrap();
+    (dir, repo)
+}
+
+fn make_commit(repo: &Repository, files: &[(&str, &str)], message: &str) {
+    let sig = git2::Signature::new(
+        "Alice",
+        "alice@example.com",
+        &git2::Time::new(1_700_000_000, 0),
+    )
+    .unwrap();
+    let mut index = repo.index().unwrap();
+    for (path, content) in files {
+        let full_path = repo.workdir().unwrap().join(path);
+        if let Some(parent) = full_path.parent() {
+            fs::create_dir_all(parent).unwrap();
+        }
+        fs::write(&full_path, content).unwrap();
+        index.add_path(StdPath::new(path)).unwrap();
+    }
+    index.write().unwrap();
+    let tree_oid = index.write_tree().unwrap();
+    let tree = repo.find_tree(tree_oid).unwrap();
+    let parent = repo.head().ok().and_then(|h| h.peel_to_commit().ok());
+    let parents: Vec<&git2::Commit> = parent.iter().collect();
+    repo.commit(Some("HEAD"), &sig, &sig, message, &tree, &parents)
+        .unwrap();
+}
+
+#[test]
+fn run_by_author_basic() {
+    let (dir, repo) = create_test_repo();
+    make_commit(
+        &repo,
+        &[("main.rs", "fn main() {\n    println!(\"hi\");\n}\n")],
+        "initial",
+    );
+
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run_by_author(&cfg, false);
+    assert!(result.is_ok(), "run_by_author should succeed: {:?}", result);
+}
+
+#[test]
+fn run_by_author_json() {
+    let (dir, repo) = create_test_repo();
+    make_commit(
+        &repo,
+        &[("main.rs", "fn main() {\n    println!(\"hi\");\n}\n")],
+        "initial",
+    );
+
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run_by_author(&cfg, true);
+    assert!(result.is_ok(), "run_by_author JSON should succeed");
+}
+
+#[test]
+fn run_by_author_multiple_files() {
+    let (dir, repo) = create_test_repo();
+    make_commit(
+        &repo,
+        &[
+            ("main.rs", "fn main() {\n    let x = 1;\n}\n"),
+            (
+                "lib.rs",
+                "// lib\npub fn add(a: i32, b: i32) -> i32 { a + b }\n",
+            ),
+        ],
+        "add files",
+    );
+
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run_by_author(&cfg, false);
+    assert!(result.is_ok(), "multi-file run_by_author should succeed");
+}
+
+#[test]
+fn run_by_author_empty_repo() {
+    // No source files — exercises the empty by_author branch
+    let (dir, repo) = create_test_repo();
+    make_commit(&repo, &[("data.xyz", "not code")], "add data");
+
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run_by_author(&cfg, false);
+    assert!(result.is_ok(), "empty repo should not crash: {:?}", result);
+}
+
+#[test]
+fn run_by_author_empty_json() {
+    let (dir, repo) = create_test_repo();
+    make_commit(&repo, &[("data.xyz", "not code")], "add data");
+
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run_by_author(&cfg, true);
+    assert!(result.is_ok(), "empty repo JSON should not crash");
+}
+
+#[test]
+fn run_by_author_on_current_repo() {
+    // Smoke test on the actual repo
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(StdPath::new("."), false, &filter);
+    let result = run_by_author(&cfg, false);
+    assert!(
+        result.is_ok(),
+        "run_by_author on current repo should succeed"
+    );
+}
+
+#[test]
+fn run_by_author_json_on_current_repo() {
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(StdPath::new("."), false, &filter);
+    let result = run_by_author(&cfg, true);
+    assert!(
+        result.is_ok(),
+        "run_by_author JSON on current repo should succeed"
+    );
 }

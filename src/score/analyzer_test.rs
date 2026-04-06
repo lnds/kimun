@@ -60,3 +60,34 @@ fn test_compute_project_score() {
 fn test_compute_project_score_empty() {
     assert!((compute_project_score(&[]) - 0.0).abs() < 0.01);
 }
+
+#[test]
+fn grade_numeric_rank_ordering() {
+    // A++ is the best (highest rank), F-- is the worst (lowest rank)
+    assert!(Grade::APlusPlus.numeric_rank() > Grade::APlus.numeric_rank());
+    assert!(Grade::APlus.numeric_rank() > Grade::A.numeric_rank());
+    assert!(Grade::B.numeric_rank() > Grade::BMinus.numeric_rank());
+    assert!(Grade::BMinus.numeric_rank() > Grade::CPlus.numeric_rank());
+    assert!(Grade::F.numeric_rank() > Grade::FMinus.numeric_rank());
+    assert!(Grade::FMinus.numeric_rank() > Grade::FMinusMinus.numeric_rank());
+    assert_eq!(Grade::APlusPlus.numeric_rank(), 15);
+    assert_eq!(Grade::FMinusMinus.numeric_rank(), 0);
+}
+
+#[test]
+fn grade_parse_roundtrip() {
+    let grades = [
+        "A++", "A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D+", "D", "D-", "F", "F-", "F--",
+    ];
+    for s in grades {
+        let g = Grade::parse(s).expect(s);
+        assert_eq!(g.as_str(), s);
+    }
+}
+
+#[test]
+fn grade_parse_invalid() {
+    assert!(Grade::parse("X").is_err());
+    assert!(Grade::parse("").is_err());
+    assert!(Grade::parse("b-").is_err()); // case-sensitive
+}

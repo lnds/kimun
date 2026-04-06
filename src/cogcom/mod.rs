@@ -17,7 +17,7 @@ use crate::util::read_and_classify;
 use crate::walk::WalkConfig;
 use analyzer::analyze;
 use markers::cognitive_markers_for;
-use report::{FileCogcomMetrics, print_json, print_per_function, print_report};
+use report::{FileCogcomMetrics, print_github, print_json, print_per_function, print_report};
 
 /// Analyze pre-read content (avoids re-reading the file).
 pub(crate) fn analyze_content(
@@ -62,7 +62,7 @@ pub(crate) fn analyze_file(
 }
 
 /// Walk source files, compute cognitive complexity, filter/sort/truncate
-/// results, and print as a table, per-function breakdown, or JSON.
+/// results, and print as a table, per-function breakdown, JSON, or GitHub annotations.
 pub fn run(
     cfg: &WalkConfig<'_>,
     json: bool,
@@ -70,6 +70,7 @@ pub fn run(
     top: usize,
     per_function: bool,
     sort_by: &str,
+    format: Option<&str>,
 ) -> Result<(), Box<dyn Error>> {
     let mut results = cfg.collect_analysis(analyze_file);
 
@@ -92,12 +93,11 @@ pub fn run(
     // Limit to top N
     results.truncate(top);
 
-    if json {
-        print_json(&results)?;
-    } else if per_function {
-        print_per_function(&results);
-    } else {
-        print_report(&results);
+    match (json, format) {
+        (true, _) | (_, Some("json")) => print_json(&results)?,
+        (_, Some("github")) => print_github(&results, min_complexity),
+        (_, _) if per_function => print_per_function(&results),
+        _ => print_report(&results),
     }
 
     Ok(())

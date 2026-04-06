@@ -88,3 +88,18 @@ fn format_thousands_works() {
     assert_eq!(format_thousands(1000), "1,000");
     assert_eq!(format_thousands(1234567), "1,234,567");
 }
+
+#[test]
+fn print_report_truncates_long_path() {
+    // Path longer than 40 chars triggers the "..." truncation branch
+    let mut score = sample_score();
+    score.needs_attention = vec![FileScore {
+        path: PathBuf::from("src/very/deeply/nested/directory/structure/with/a/long/path/file.rs"),
+        score: 40.0,
+        grade: Grade::FMinusMinus,
+        loc: 1000,
+        issues: vec!["Cognitive: 100".to_string()],
+    }];
+    // Should not panic even with long paths
+    print_report(&score, 10, None);
+}
