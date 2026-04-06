@@ -21,6 +21,15 @@
 - add cognitive complexity (SonarSource 2017), replace MI+cyclomatic in score
 - add `km score diff` and auto-update homebrew on release
 
+## v0.19.0 (2026-04-05)
+
+### Feat
+
+- add km deps — dependency graph analysis with cycle detection
+- add shell completion support via km completions <shell>
+- add --format github|json to cycom, cogcom, and smells
+- **score**: add --fail-if-worse and --fail-below gates to --trend
+
 ## v0.18.0 (2026-04-05)
 
 ### Feat
