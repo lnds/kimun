@@ -172,9 +172,10 @@ fn main() {
             top,
             per_function,
             sort_by,
+            format,
         } => {
             dispatch!(common, |cfg, json| {
-                cycom::run(&cfg, json, min_complexity, top, per_function, &sort_by)
+                cycom::run(&cfg, json, min_complexity, top, per_function, &sort_by, format.as_deref())
             })
         }
         Commands::Cogcom {
@@ -183,9 +184,10 @@ fn main() {
             top,
             per_function,
             sort_by,
+            format,
         } => {
             dispatch!(common, |cfg, json| {
-                cogcom::run(&cfg, json, min_complexity, top, per_function, &sort_by)
+                cogcom::run(&cfg, json, min_complexity, top, per_function, &sort_by, format.as_deref())
             })
         }
         Commands::Mi {
@@ -322,6 +324,7 @@ fn main() {
             max_params,
             files,
             since_ref,
+            format,
         } => {
             let include_tests = common.include_tests;
             let json = common.json;
@@ -332,12 +335,12 @@ fn main() {
                     let git_repo =
                         git::GitRepo::open(t).map_err(|e| format!("not a git repository: {e}"))?;
                     let changed = git_repo.files_changed_since(git_ref)?;
-                    smells::run_on_files(&changed, json, top, max_lines, max_params)
+                    smells::run_on_files(&changed, json, top, max_lines, max_params, format.as_deref())
                 } else if !files.is_empty() {
-                    smells::run_on_files(&files, json, top, max_lines, max_params)
+                    smells::run_on_files(&files, json, top, max_lines, max_params, format.as_deref())
                 } else {
                     let cfg = WalkConfig::new(t, include_tests, &filter);
-                    smells::run(&cfg, json, top, max_lines, max_params)
+                    smells::run(&cfg, json, top, max_lines, max_params, format.as_deref())
                 }
             })
         }

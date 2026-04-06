@@ -7,7 +7,7 @@ fn run_on_empty_dir() {
     let dir = tempfile::tempdir().unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, false, 1, 20, false, "total").unwrap();
+    run(&cfg, false, 1, 20, false, "total", None).unwrap();
 }
 
 #[test]
@@ -20,7 +20,7 @@ fn run_on_rust_file() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, false, 1, 20, false, "total").unwrap();
+    run(&cfg, false, 1, 20, false, "total", None).unwrap();
 }
 
 #[test]
@@ -33,7 +33,7 @@ fn run_json_output() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, true, 1, 20, false, "total").unwrap();
+    run(&cfg, true, 1, 20, false, "total", None).unwrap();
 }
 
 #[test]
@@ -46,7 +46,7 @@ fn run_per_function() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, false, 1, 20, true, "total").unwrap();
+    run(&cfg, false, 1, 20, true, "total", None).unwrap();
 }
 
 #[test]
@@ -59,7 +59,7 @@ fn run_with_min_complexity_filter() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, false, 5, 20, false, "total").unwrap();
+    run(&cfg, false, 5, 20, false, "total", None).unwrap();
 }
 
 #[test]
@@ -72,7 +72,7 @@ fn run_sort_by_max() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, false, 1, 20, false, "max").unwrap();
+    run(&cfg, false, 1, 20, false, "max", None).unwrap();
 }
 
 #[test]
@@ -85,7 +85,7 @@ fn run_sort_by_avg() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, false, 1, 20, false, "avg").unwrap();
+    run(&cfg, false, 1, 20, false, "avg", None).unwrap();
 }
 
 #[test]
