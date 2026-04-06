@@ -138,6 +138,29 @@ struct JsonFileEntry {
     functions: Vec<JsonFunctionEntry>,
 }
 
+/// Emit one GitHub Actions warning annotation per function that exceeds
+/// the complexity threshold. Uses `start_line` for precise line linking.
+pub fn print_github(files: &[FileCycomMetrics], min_complexity: usize) {
+    for f in files {
+        let path = f.path.display().to_string();
+        for func in &f.functions {
+            if func.complexity >= min_complexity {
+                let message = format!(
+                    "function '{}' has cyclomatic complexity {} (threshold: {})",
+                    func.name, func.complexity, min_complexity
+                );
+                report_helpers::github_annotation(
+                    "warning",
+                    &path,
+                    func.start_line,
+                    "Cyclomatic Complexity",
+                    &message,
+                );
+            }
+        }
+    }
+}
+
 /// Serialize per-file metrics (including per-function detail) as
 /// pretty-printed JSON to stdout.
 pub fn print_json(files: &[FileCycomMetrics]) -> Result<(), Box<dyn std::error::Error>> {

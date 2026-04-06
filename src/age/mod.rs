@@ -94,3 +94,7 @@ pub fn run(
 
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "mod_test.rs"]
+mod tests;

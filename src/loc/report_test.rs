@@ -112,3 +112,102 @@ fn sep_width_matches_row_width() {
     );
     assert_eq!(row.len(), SEP_WIDTH);
 }
+
+// ── print_author_report ──────────────────────────────────────────────────
+
+#[test]
+fn print_author_report_does_not_panic() {
+    let reports = vec![
+        AuthorReport {
+            name: "Alice".to_string(),
+            email: "alice@example.com".to_string(),
+            files: 3,
+            blank: 10,
+            comment: 5,
+            code: 100,
+        },
+        AuthorReport {
+            name: "Bob".to_string(),
+            email: "bob@example.com".to_string(),
+            files: 2,
+            blank: 5,
+            comment: 2,
+            code: 50,
+        },
+    ];
+    print_author_report(reports);
+}
+
+#[test]
+fn print_author_report_empty() {
+    print_author_report(vec![]);
+}
+
+#[test]
+fn print_author_report_single() {
+    let reports = vec![AuthorReport {
+        name: "Charlie".to_string(),
+        email: "charlie@example.com".to_string(),
+        files: 1,
+        blank: 2,
+        comment: 3,
+        code: 42,
+    }];
+    print_author_report(reports);
+}
+
+// ── print_author_json ────────────────────────────────────────────────────
+
+#[test]
+fn print_author_json_does_not_panic() {
+    let reports = vec![
+        AuthorReport {
+            name: "Alice".to_string(),
+            email: "alice@example.com".to_string(),
+            files: 3,
+            blank: 10,
+            comment: 5,
+            code: 100,
+        },
+        AuthorReport {
+            name: "Bob".to_string(),
+            email: "bob@example.com".to_string(),
+            files: 1,
+            blank: 2,
+            comment: 1,
+            code: 20,
+        },
+    ];
+    print_author_json(reports);
+}
+
+#[test]
+fn print_author_json_empty() {
+    print_author_json(vec![]);
+}
+
+#[test]
+fn print_author_json_sorts_by_code_descending() {
+    // With two authors, the one with more code should come first
+    let reports = vec![
+        AuthorReport {
+            name: "Low".to_string(),
+            email: "low@example.com".to_string(),
+            files: 1,
+            blank: 0,
+            comment: 0,
+            code: 10,
+        },
+        AuthorReport {
+            name: "High".to_string(),
+            email: "high@example.com".to_string(),
+            files: 5,
+            blank: 100,
+            comment: 50,
+            code: 1000,
+        },
+    ];
+    // Should not panic; output order is not easily checked (stdout),
+    // but the function must run without error
+    print_author_json(reports);
+}

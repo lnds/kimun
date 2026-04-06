@@ -5,6 +5,7 @@
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand};
+pub use clap_complete::Shell;
 
 use crate::cli_help;
 use crate::walk::ExcludeFilter;
@@ -188,6 +189,12 @@ pub enum Commands {
         /// Sort by metric: total, max, or avg (default: total)
         #[arg(long, default_value = "total", value_parser = ["total", "max", "avg"])]
         sort_by: String,
+
+        /// Output format: github emits GitHub Actions warning annotations
+        /// (::warning file=...,line=...,title=...::message) for use in CI.
+        /// Incompatible with --json.
+        #[arg(long, value_name = "FORMAT", value_parser = ["github", "json"], conflicts_with = "json")]
+        format: Option<String>,
     },
 
     /// Analyze cognitive complexity per file and per function (SonarSource method)
@@ -211,6 +218,12 @@ pub enum Commands {
         /// Sort by metric: total, max, or avg (default: total)
         #[arg(long, default_value = "total", value_parser = ["total", "max", "avg"])]
         sort_by: String,
+
+        /// Output format: github emits GitHub Actions warning annotations
+        /// (::warning file=...,line=...,title=...::message) for use in CI.
+        /// Incompatible with --json.
+        #[arg(long, value_name = "FORMAT", value_parser = ["github", "json"], conflicts_with = "json")]
+        format: Option<String>,
     },
 
     /// Compute Maintainability Index per file (Visual Studio variant, 0-100 scale)
@@ -384,6 +397,12 @@ pub enum Commands {
         /// Ideal for CI: km smells --since-ref origin/main
         #[arg(long, value_name = "REF")]
         since_ref: Option<String>,
+
+        /// Output format: github emits GitHub Actions warning annotations
+        /// (::warning file=...,line=...,title=...::message) for use in CI.
+        /// Incompatible with --json.
+        #[arg(long, value_name = "FORMAT", value_parser = ["github", "json"], conflicts_with = "json")]
+        format: Option<String>,
     },
 
     /// Compute an overall code health score for the project (A++ to F--)
@@ -461,6 +480,12 @@ pub enum Commands {
     Ai {
         #[command(subcommand)]
         command: AiCommands,
+    },
+
+    /// Generate shell completion scripts (zsh, bash, fish, ...)
+    Completions {
+        /// Shell to generate completions for
+        shell: Shell,
     },
 }
 
