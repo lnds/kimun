@@ -15,18 +15,19 @@ use std::fs::File;
 use std::io::BufReader;
 use std::time::Instant;
 
+use crate::cli::OutputMode;
 use crate::git::GitRepo;
 use crate::util::hash_file;
 use crate::walk::{self, WalkConfig};
 use counter::{FileStats, LineKind, classify_reader, count_lines};
 use report::{
-    AuthorReport, LanguageReport, VerboseStats, print_author_json, print_author_report, print_json,
-    print_report,
+    AuthorReport, LanguageReport, VerboseStats, print_author_json, print_author_report,
+    print_author_short, print_author_terse, print_json, print_report, print_short, print_terse,
 };
 
 /// Walk source files, deduplicate by content hash, count lines per
-/// language, and print a summary table (or JSON when `json` is true).
-pub fn run(cfg: &WalkConfig<'_>, verbose: bool, json: bool) -> Result<(), Box<dyn Error>> {
+/// language, and print a summary table (or JSON/short/terse per `output`).
+pub fn run(cfg: &WalkConfig<'_>, verbose: bool, output: OutputMode) -> Result<(), Box<dyn Error>> {
     let start = Instant::now();
     let mut stats_by_lang: HashMap<&'static str, (usize, FileStats)> = HashMap::new();
     let mut seen_hashes: HashSet<u64> = HashSet::new();
@@ -78,29 +79,43 @@ pub fn run(cfg: &WalkConfig<'_>, verbose: bool, json: bool) -> Result<(), Box<dy
         .collect();
 
     if reports.is_empty() {
-        if json {
-            println!(
-                "{}",
-                serde_json::json!({"languages": [], "totals": {"files": 0, "blank": 0, "comment": 0, "code": 0}})
-            );
-        } else {
-            println!("No recognized source files found.");
+        match output {
+            OutputMode::Json => {
+                println!(
+                    "{}",
+                    serde_json::json!({"languages": [], "totals": {"files": 0, "blank": 0, "comment": 0, "code": 0}})
+                );
+            }
+            OutputMode::Short => {
+                println!("loc code:0 cmt:0 blank:0 files:0 langs:0");
+            }
+            OutputMode::Terse => {
+                println!("0");
+            }
+            OutputMode::Table => {
+                println!("No recognized source files found.");
+            }
         }
-    } else if json {
-        print_json(reports);
     } else {
-        let verbose_stats = if verbose {
-            Some(VerboseStats {
-                total_files,
-                unique_files,
-                duplicate_files,
-                binary_files,
-                elapsed: start.elapsed(),
-            })
-        } else {
-            None
-        };
-        print_report(reports, verbose_stats);
+        match output {
+            OutputMode::Json => print_json(reports),
+            OutputMode::Short => print_short(reports),
+            OutputMode::Terse => print_terse(reports),
+            OutputMode::Table => {
+                let verbose_stats = if verbose {
+                    Some(VerboseStats {
+                        total_files,
+                        unique_files,
+                        duplicate_files,
+                        binary_files,
+                        elapsed: start.elapsed(),
+                    })
+                } else {
+                    None
+                };
+                print_report(reports, verbose_stats);
+            }
+        }
     }
 
     Ok(())
@@ -108,7 +123,7 @@ pub fn run(cfg: &WalkConfig<'_>, verbose: bool, json: bool) -> Result<(), Box<dy
 
 /// Walk source files in a git repository, attribute each line to its author
 /// via `git blame`, classify lines with the FSM, and print a per-author table.
-pub fn run_by_author(cfg: &WalkConfig<'_>, json: bool) -> Result<(), Box<dyn Error>> {
+pub fn run_by_author(cfg: &WalkConfig<'_>, output: OutputMode) -> Result<(), Box<dyn Error>> {
     let git = GitRepo::open(cfg.path)?;
     let (canonical_walk, prefix) = git.walk_prefix(cfg.path)?;
 
@@ -155,13 +170,22 @@ pub fn run_by_author(cfg: &WalkConfig<'_>, json: bool) -> Result<(), Box<dyn Err
     }
 
     if by_author.is_empty() {
-        if json {
-            println!(
-                "{}",
-                serde_json::json!({"authors": [], "totals": {"files": 0, "blank": 0, "comment": 0, "code": 0}})
-            );
-        } else {
-            println!("No recognized source files found.");
+        match output {
+            OutputMode::Json => {
+                println!(
+                    "{}",
+                    serde_json::json!({"authors": [], "totals": {"files": 0, "blank": 0, "comment": 0, "code": 0}})
+                );
+            }
+            OutputMode::Short => {
+                println!("loc_authors code:0 cmt:0 blank:0 authors:0");
+            }
+            OutputMode::Terse => {
+                println!("0");
+            }
+            OutputMode::Table => {
+                println!("No recognized source files found.");
+            }
         }
         return Ok(());
     }
@@ -178,10 +202,11 @@ pub fn run_by_author(cfg: &WalkConfig<'_>, json: bool) -> Result<(), Box<dyn Err
         })
         .collect();
 
-    if json {
-        print_author_json(reports);
-    } else {
-        print_author_report(reports);
+    match output {
+        OutputMode::Json => print_author_json(reports),
+        OutputMode::Short => print_author_short(reports),
+        OutputMode::Terse => print_author_terse(reports),
+        OutputMode::Table => print_author_report(reports),
     }
 
     Ok(())

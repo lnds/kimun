@@ -36,6 +36,29 @@ km completions bash > /etc/bash_completion.d/km
 km completions fish > ~/.config/fish/completions/km.fish
 ```
 
+## Output Formats
+
+All analysis commands support four output modes:
+
+| Flag | Description |
+|------|-------------|
+| *(default)* | Human-readable table |
+| `--json` | Full JSON for machine consumption |
+| `--short` | Single compact line of `key:value` pairs (AI-friendly, low token count) |
+| `--terse` | Just the headline metric value (for piping/embedding) |
+
+The flags are mutually exclusive. Examples:
+
+```bash
+km score               # table output (default)
+km score --json        # full JSON
+km score --short       # score s:86.4 g:B+ files:91 loc:13052 cx:77.6 dup:81.5 ind:93.7 hal:89.2 sz:99.6
+km score --terse       # 86.4
+km loc --short         # loc code:14169 cmt:2391 blank:2250 files:98 langs:4
+km loc --terse         # 14169
+echo "Score: $(km score --terse)"   # embed in scripts
+```
+
 ## Commands
 
 ### `km loc` -- Count lines of code
@@ -63,6 +86,8 @@ Options:
 | `-v`, `--verbose` | Show summary stats (files read, unique, ignored, elapsed time) |
 | `--by-author` | Break down lines of code by git author (requires a git repository) |
 | `--json` | Output as JSON |
+| `--short` | Compact single-line output (AI-friendly) |
+| `--terse` | Output only the headline metric value |
 
 Example output:
 
@@ -99,6 +124,8 @@ Options:
 | `--max-dup-ratio PERCENT` | Exit with code 1 if the duplicated-lines ratio exceeds this percentage (e.g. `--max-dup-ratio 5.0`) |
 | `--fail-on-increase REF` | Exit with code 1 if the current duplication ratio is higher than at the given git ref (e.g. `origin/main`). Prevents debt from growing silently in CI |
 | `--json` | Output as JSON |
+| `--short` | Compact single-line output (AI-friendly) |
+| `--terse` | Output only the headline metric value |
 
 Example summary output:
 
@@ -173,6 +200,8 @@ Options:
 | Flag | Description |
 |------|-------------|
 | `--json` | Output as JSON |
+| `--short` | Compact single-line output (AI-friendly) |
+| `--terse` | Output only the headline metric value |
 | `--include-tests` | Include test files in analysis (excluded by default) |
 
 ### `km hal` -- Halstead complexity metrics
@@ -206,6 +235,8 @@ Options:
 | Flag | Description |
 |------|-------------|
 | `--json` | Output as JSON (includes all metrics) |
+| `--short` | Compact single-line output (AI-friendly) |
+| `--terse` | Output only the headline metric value |
 | `--include-tests` | Include test files in analysis (excluded by default) |
 | `--top N` | Show only the top N files (default: 20) |
 | `--sort-by METRIC` | Sort by `effort`, `volume`, or `bugs` (default: `effort`) |
@@ -240,6 +271,8 @@ Options:
 | Flag | Description |
 |------|-------------|
 | `--json` | Output as JSON |
+| `--short` | Compact single-line output (AI-friendly) |
+| `--terse` | Output only the headline metric value |
 | `--include-tests` | Include test files in analysis (excluded by default) |
 | `--top N` | Show only the top N files (default: 20) |
 | `--min-complexity N` | Minimum max-complexity to include a file (default: 1) |
@@ -258,6 +291,8 @@ Options:
 | Flag | Description |
 |------|-------------|
 | `--json` | Output as JSON |
+| `--short` | Compact single-line output (AI-friendly) |
+| `--terse` | Output only the headline metric value |
 | `--include-tests` | Include test files in analysis (excluded by default) |
 | `--top N` | Show only the top N files (default: 20) |
 | `--min-complexity N` | Minimum max-complexity to include a file (default: 1) |
@@ -293,6 +328,8 @@ Options:
 | Flag | Description |
 |------|-------------|
 | `--json` | Output as JSON |
+| `--short` | Compact single-line output (AI-friendly) |
+| `--terse` | Output only the headline metric value |
 | `--include-tests` | Include test files in analysis (excluded by default) |
 | `--top N` | Show only the top N files (default: 20) |
 | `--sort-by METRIC` | Sort by `mi` (ascending), `volume`, `complexity`, or `loc` (default: `mi`) |
@@ -344,6 +381,8 @@ Options:
 | Flag | Description |
 |------|-------------|
 | `--json` | Output as JSON |
+| `--short` | Compact single-line output (AI-friendly) |
+| `--terse` | Output only the headline metric value |
 | `--include-tests` | Include test files in analysis (excluded by default) |
 | `--top N` | Show only the top N files (default: 20) |
 | `--sort-by METRIC` | Sort by `mi` (ascending), `volume`, `complexity`, or `loc` (default: `mi`) |
@@ -387,6 +426,8 @@ Options:
 | Flag | Description |
 |------|-------------|
 | `--json` | Output as JSON |
+| `--short` | Compact single-line output (AI-friendly) |
+| `--terse` | Output only the headline metric value |
 | `--include-tests` | Include test files in analysis (excluded by default) |
 | `--top N` | Show only the top N files (default: 20) |
 | `--sort-by METRIC` | Sort by `score`, `commits`, or `complexity` (default: `score`) |
@@ -459,6 +500,8 @@ Options:
 | Flag | Description |
 |------|-------------|
 | `--json` | Output as JSON |
+| `--short` | Compact single-line output (AI-friendly) |
+| `--terse` | Output only the headline metric value |
 | `--include-tests` | Include test files in analysis (excluded by default) |
 | `--top N` | Show only the top N files (default: 20) |
 | `--sort-by METRIC` | Sort by `concentration`, `diffusion`, or `risk` (default: `concentration`) |
@@ -531,6 +574,8 @@ Options:
 | Flag | Description |
 |------|-------------|
 | `--json` | Output as JSON |
+| `--short` | Compact single-line output (AI-friendly) |
+| `--terse` | Output only the headline metric value |
 | `--top N` | Show only the top N file pairs (default: 20) |
 | `--sort-by METRIC` | Sort by `strength` or `shared` (default: `strength`) |
 | `--since DURATION` | Only consider commits since this time (e.g. `6m`, `1y`, `30d`) |
@@ -571,6 +616,8 @@ Options:
 | `--sort-by METRIC` | Sort by `commits` (default), `rate` (commits/month), or `file` |
 | `--since DURATION` | Only consider commits since this time (e.g. `6m`, `1y`, `30d`) |
 | `--json` | Output as JSON |
+| `--short` | Compact single-line output (AI-friendly) |
+| `--terse` | Output only the headline metric value |
 
 Example output:
 
@@ -613,6 +660,8 @@ Options:
 | `--files FILE` | Analyze only these specific files (repeatable). Useful for scripting |
 | `--since-ref REF` | Analyze only files changed since this git ref (e.g. `origin/main`, `HEAD~1`). Ideal for CI |
 | `--json` | Output as JSON |
+| `--short` | Compact single-line output (AI-friendly) |
+| `--terse` | Output only the headline metric value |
 
 Example output:
 
@@ -641,6 +690,8 @@ Supports Rust (`mod X;`), Python (relative `from .X import`), JavaScript/TypeScr
 | Flag | Description |
 |------|-------------|
 | `--json` | Output as JSON |
+| `--short` | Compact single-line output (AI-friendly) |
+| `--terse` | Output only the headline metric value |
 | `--cycles-only` | Show only files that participate in a dependency cycle |
 | `--sort-by METRIC` | Sort by `fan-out` (default) or `fan-in` |
 | `--top N` | Show only top N files (default: 20) |
@@ -673,6 +724,8 @@ Options:
 |------|-------------|
 | `--since DURATION` | Only consider activity since this time (e.g. `6m`, `1y`, `30d`) |
 | `--json` | Output as JSON |
+| `--short` | Compact single-line output (AI-friendly) |
+| `--terse` | Output only the headline metric value |
 
 Example output:
 
@@ -710,6 +763,8 @@ Options:
 | `--sort-by METRIC` | Sort by `date` (oldest first, default), `status`, or `file` |
 | `--status FILTER` | Show only files with this status: `active`, `stale`, or `frozen` |
 | `--json` | Output as JSON |
+| `--short` | Compact single-line output (AI-friendly) |
+| `--terse` | Output only the headline metric value |
 
 Example output:
 
@@ -784,6 +839,8 @@ Options:
 | `--model MODEL` | Scoring model: `cogcom` (default, v0.14+) or `legacy` (MI + cyclomatic, v0.13) |
 | `--trend [REF]` | Compare current score against a git ref (default: `HEAD`). Shows change: `B- → B (+2.3)`. Useful for PR review: `--trend origin/main` |
 | `--json` | Output as JSON |
+| `--short` | Compact single-line output (AI-friendly) |
+| `--terse` | Output only the headline metric value |
 | `--include-tests` | Include test files in analysis (excluded by default) |
 | `--bottom N` | Number of worst files to show in "needs attention" (default: 10) |
 | `--min-lines N` | Minimum lines for a duplicate block (default: 6) |
@@ -834,6 +891,8 @@ Options:
 | `--git-ref REF` | Git ref to compare against (default: `HEAD`) |
 | `--model MODEL` | Scoring model: `cogcom` (default) or `legacy` |
 | `--json` | Output as JSON |
+| `--short` | Compact single-line output (AI-friendly) |
+| `--terse` | Output only the headline metric value |
 | `--bottom N` | Number of worst files to show (default: 10) |
 | `--min-lines N` | Minimum lines for a duplicate block (default: 6) |
 
@@ -853,6 +912,8 @@ Options:
 | `--min-lines N` | Minimum lines for a duplicate block (default: 6) |
 | `--full` | Show all files instead of truncating to top N |
 | `--json` | Output as JSON |
+| `--short` | Compact single-line output (AI-friendly) |
+| `--terse` | Output only the headline metric value |
 
 ## Features
 

@@ -13,6 +13,7 @@ use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
+use crate::cli::OutputMode;
 use crate::walk::{self, WalkConfig};
 
 use analyzer::{DepEntry, DepResult, build_graph, resolve_import};
@@ -32,7 +33,7 @@ fn detect_go_module(root: &Path) -> Option<String> {
 /// Run dependency graph analysis: walk files, extract imports, build graph, output.
 pub fn run(
     cfg: &WalkConfig<'_>,
-    json: bool,
+    output: OutputMode,
     cycles_only: bool,
     sort_by: &str,
     top: usize,
@@ -109,25 +110,9 @@ pub fn run(
         result.entries.iter().take(top).collect()
     };
 
-    if json {
-        // For JSON always emit full result (with filtered entries if cycles_only)
-        let filtered = DepResult {
-            entries: entries
-                .iter()
-                .map(|e| analyzer::DepEntry {
-                    path: e.path.clone(),
-                    language: e.language.clone(),
-                    fan_in: e.fan_in,
-                    fan_out: e.fan_out,
-                    in_cycle: e.in_cycle,
-                })
-                .collect(),
-            cycles: result.cycles.clone(),
-        };
-        report::print_json(&filtered)
-    } else {
-        let entries_vec: Vec<DepEntry> = entries
-            .into_iter()
+    let filtered = DepResult {
+        entries: entries
+            .iter()
             .map(|e| analyzer::DepEntry {
                 path: e.path.clone(),
                 language: e.language.clone(),
@@ -135,9 +120,24 @@ pub fn run(
                 fan_out: e.fan_out,
                 in_cycle: e.in_cycle,
             })
-            .collect();
-        report::print_report(&entries_vec, &result);
-        Ok(())
+            .collect(),
+        cycles: result.cycles.clone(),
+    };
+
+    match output {
+        OutputMode::Json => report::print_json(&filtered),
+        OutputMode::Short => {
+            report::print_short(&filtered);
+            Ok(())
+        }
+        OutputMode::Terse => {
+            report::print_terse(&filtered);
+            Ok(())
+        }
+        OutputMode::Table => {
+            report::print_report(&filtered.entries, &result);
+            Ok(())
+        }
     }
 }
 

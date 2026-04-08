@@ -10,6 +10,22 @@ pub use clap_complete::Shell;
 use crate::cli_help;
 use crate::walk::ExcludeFilter;
 
+/// Output mode for analysis commands.
+///
+/// Derived from the mutually exclusive `--json`, `--short`, and `--terse` flags.
+/// - `Table`: default human-readable table output
+/// - `Json`: full JSON output for machine consumption
+/// - `Short`: single line of key:value pairs (AI-friendly, low token count)
+/// - `Terse`: just the headline metric value (for piping/embedding)
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
+pub enum OutputMode {
+    #[default]
+    Table,
+    Json,
+    Short,
+    Terse,
+}
+
 /// Top-level CLI parser with a single subcommand selector.
 #[derive(Parser)]
 #[command(name = "km", version, about = "Kimün — code metrics tools")]
@@ -78,8 +94,16 @@ pub struct CommonArgs {
     pub path: Option<PathBuf>,
 
     /// Output as JSON
-    #[arg(long)]
+    #[arg(long, conflicts_with_all = ["short", "terse"])]
     pub json: bool,
+
+    /// Compact single-line output (AI-friendly, low token count)
+    #[arg(long, conflicts_with_all = ["json", "terse"])]
+    pub short: bool,
+
+    /// Output only the headline metric value (for piping/embedding)
+    #[arg(long, conflicts_with_all = ["json", "short"])]
+    pub terse: bool,
 
     /// Include test files and directories in analysis (excluded by default)
     #[arg(long)]
@@ -98,6 +122,19 @@ impl CommonArgs {
     /// Whether `--list-excluded` was requested.
     pub fn list_excluded(&self) -> bool {
         self.exclude_args.list_excluded
+    }
+
+    /// Derive the output mode from the mutually exclusive flags.
+    pub fn output_mode(&self) -> OutputMode {
+        if self.json {
+            OutputMode::Json
+        } else if self.short {
+            OutputMode::Short
+        } else if self.terse {
+            OutputMode::Terse
+        } else {
+            OutputMode::Table
+        }
     }
 }
 
@@ -537,8 +574,16 @@ pub enum ScoreCommands {
         path: Option<PathBuf>,
 
         /// Output as JSON
-        #[arg(long)]
+        #[arg(long, conflicts_with_all = ["short", "terse"])]
         json: bool,
+
+        /// Compact single-line output (AI-friendly, low token count)
+        #[arg(long, conflicts_with_all = ["json", "terse"])]
+        short: bool,
+
+        /// Output only the headline metric value (for piping/embedding)
+        #[arg(long, conflicts_with_all = ["json", "short"])]
+        terse: bool,
 
         /// Include test files and directories in analysis (excluded by default)
         #[arg(long)]

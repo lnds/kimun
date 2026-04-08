@@ -465,7 +465,13 @@ mod tests {
     fn resolve_python_relative_as_file() {
         let mut file_set = std::collections::HashSet::new();
         file_set.insert(PathBuf::from("src/utils.py"));
-        let result = resolve_import(Path::new("src/main.py"), ".utils", "Python", &file_set, None);
+        let result = resolve_import(
+            Path::new("src/main.py"),
+            ".utils",
+            "Python",
+            &file_set,
+            None,
+        );
         assert_eq!(result, Some(PathBuf::from("src/utils.py")));
     }
 
@@ -473,7 +479,13 @@ mod tests {
     fn resolve_python_relative_as_package() {
         let mut file_set = std::collections::HashSet::new();
         file_set.insert(PathBuf::from("src/utils/__init__.py"));
-        let result = resolve_import(Path::new("src/main.py"), ".utils", "Python", &file_set, None);
+        let result = resolve_import(
+            Path::new("src/main.py"),
+            ".utils",
+            "Python",
+            &file_set,
+            None,
+        );
         assert_eq!(result, Some(PathBuf::from("src/utils/__init__.py")));
     }
 
@@ -500,8 +512,13 @@ mod tests {
     fn resolve_python_dotted_module_path() {
         let mut file_set = std::collections::HashSet::new();
         file_set.insert(PathBuf::from("src/foo/bar.py"));
-        let result =
-            resolve_import(Path::new("src/main.py"), ".foo.bar", "Python", &file_set, None);
+        let result = resolve_import(
+            Path::new("src/main.py"),
+            ".foo.bar",
+            "Python",
+            &file_set,
+            None,
+        );
         assert_eq!(result, Some(PathBuf::from("src/foo/bar.py")));
     }
 
@@ -516,8 +533,13 @@ mod tests {
     #[test]
     fn resolve_python_not_found_returns_none() {
         let file_set = std::collections::HashSet::new();
-        let result =
-            resolve_import(Path::new("src/main.py"), ".missing", "Python", &file_set, None);
+        let result = resolve_import(
+            Path::new("src/main.py"),
+            ".missing",
+            "Python",
+            &file_set,
+            None,
+        );
         assert!(result.is_none());
     }
 
@@ -569,16 +591,20 @@ mod tests {
     fn resolve_js_jsx_extension() {
         let mut file_set = std::collections::HashSet::new();
         file_set.insert(PathBuf::from("src/Button.jsx"));
-        let result =
-            resolve_import(Path::new("src/App.jsx"), "./Button", "JSX", &file_set, None);
+        let result = resolve_import(Path::new("src/App.jsx"), "./Button", "JSX", &file_set, None);
         assert_eq!(result, Some(PathBuf::from("src/Button.jsx")));
     }
 
     #[test]
     fn resolve_js_not_found_returns_none() {
         let file_set = std::collections::HashSet::new();
-        let result =
-            resolve_import(Path::new("src/app.ts"), "./missing", "TypeScript", &file_set, None);
+        let result = resolve_import(
+            Path::new("src/app.ts"),
+            "./missing",
+            "TypeScript",
+            &file_set,
+            None,
+        );
         assert!(result.is_none());
     }
 

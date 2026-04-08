@@ -1,3 +1,13 @@
+## Unreleased
+
+### Feat
+
+- add `--short` and `--terse` compact output modes for AI-friendly consumption
+  - `--short`: single line of key:value pairs (all key metrics)
+  - `--terse`: single headline metric value (for piping/embedding)
+  - Mutually exclusive with `--json` and each other
+  - Supported on all analysis commands
+
 ## 0.15.0 (2026-03-02)
 
 ### Feat

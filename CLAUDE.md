@@ -59,6 +59,15 @@ Optional flags: `nested: true`, `sq: true` (single-quote strings), `tq: true` (t
 - Tests exist in all modules: `counter.rs`, `language.rs`, `report.rs`, `mod.rs`.
 - Edition 2024 Rust (requires recent toolchain).
 
+### Output modes
+
+All analysis commands support four output modes via mutually exclusive flags:
+- `--json`: full JSON (default: table). Each module's `report.rs` has `print_json()`.
+- `--short`: single compact line of `key:value` pairs. Each module's `report.rs` has `print_short()`.
+- `--terse`: single headline metric value for piping. Each module's `report.rs` has `print_terse()`.
+
+The `OutputMode` enum in `src/cli.rs` (`Table | Json | Short | Terse`) replaces the old `json: bool` parameter. Every module's `run()` function takes `output: OutputMode`. The `dispatch!` macro in `main.rs` derives it from `CommonArgs::output_mode()`. For modules using `report_helpers::output_results_mode()`, all four formatters are passed as function pointers.
+
 ### Module structure: `src/mi/`
 
 Maintainability Index (Visual Studio variant, 0–100 scale). Invoked via `km mi`.

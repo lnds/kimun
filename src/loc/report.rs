@@ -224,6 +224,41 @@ pub fn print_author_json(mut reports: Vec<AuthorReport>) {
     .unwrap();
 }
 
+/// Print LOC metrics as a single compact line.
+pub fn print_short(reports: Vec<LanguageReport>) {
+    let total_code: usize = reports.iter().map(|r| r.code).sum();
+    let total_comment: usize = reports.iter().map(|r| r.comment).sum();
+    let total_blank: usize = reports.iter().map(|r| r.blank).sum();
+    let total_files: usize = reports.iter().map(|r| r.files).sum();
+    let langs = reports.len();
+    println!(
+        "loc code:{total_code} cmt:{total_comment} blank:{total_blank} files:{total_files} langs:{langs}"
+    );
+}
+
+/// Print only the total code line count.
+pub fn print_terse(reports: Vec<LanguageReport>) {
+    let total_code: usize = reports.iter().map(|r| r.code).sum();
+    println!("{total_code}");
+}
+
+/// Print author LOC as a single compact line.
+pub fn print_author_short(reports: Vec<AuthorReport>) {
+    let total_code: usize = reports.iter().map(|r| r.code).sum();
+    let total_comment: usize = reports.iter().map(|r| r.comment).sum();
+    let total_blank: usize = reports.iter().map(|r| r.blank).sum();
+    let authors = reports.len();
+    println!(
+        "loc_authors code:{total_code} cmt:{total_comment} blank:{total_blank} authors:{authors}"
+    );
+}
+
+/// Print only the total code line count for author mode.
+pub fn print_author_terse(reports: Vec<AuthorReport>) {
+    let total_code: usize = reports.iter().map(|r| r.code).sum();
+    println!("{total_code}");
+}
+
 #[cfg(test)]
 #[path = "report_test.rs"]
 mod tests;

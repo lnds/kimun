@@ -11,11 +11,12 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::path::PathBuf;
 
+use crate::cli::OutputMode;
 use crate::git::GitRepo;
 use crate::util::parse_since;
 use crate::walk::{self, WalkConfig};
 use analyzer::{FileChurn, classify};
-use report::{print_json, print_report};
+use report::{print_json, print_report, print_short, print_terse};
 
 /// Run code churn analysis and print results.
 ///
@@ -23,7 +24,7 @@ use report::{print_json, print_report};
 /// and optionally restricts to commits after `since` (e.g. "6m", "1y").
 pub fn run(
     cfg: &WalkConfig<'_>,
-    json: bool,
+    output: OutputMode,
     top: usize,
     sort_by: &str,
     since: Option<&str>,
@@ -71,10 +72,11 @@ pub fn run(
 
     files.truncate(top);
 
-    if json {
-        print_json(&files);
-    } else {
-        print_report(&files);
+    match output {
+        OutputMode::Json => print_json(&files),
+        OutputMode::Short => print_short(&files),
+        OutputMode::Terse => print_terse(&files),
+        OutputMode::Table => print_report(&files),
     }
 
     Ok(())

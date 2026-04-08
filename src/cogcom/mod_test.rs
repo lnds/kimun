@@ -1,4 +1,5 @@
 use super::*;
+use crate::cli::OutputMode;
 use crate::loc::language::detect;
 use crate::walk::{ExcludeFilter, WalkConfig};
 use std::fs;
@@ -8,7 +9,7 @@ fn run_on_empty_dir() {
     let dir = tempfile::tempdir().unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, false, 1, 20, false, "total", None).unwrap();
+    run(&cfg, OutputMode::Table, 1, 20, false, "total", None).unwrap();
 }
 
 #[test]
@@ -21,7 +22,7 @@ fn run_on_rust_file() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, false, 1, 20, false, "total", None).unwrap();
+    run(&cfg, OutputMode::Table, 1, 20, false, "total", None).unwrap();
 }
 
 #[test]
@@ -34,7 +35,7 @@ fn run_json_output() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, true, 1, 20, false, "total", None).unwrap();
+    run(&cfg, OutputMode::Json, 1, 20, false, "total", None).unwrap();
 }
 
 #[test]
@@ -47,7 +48,7 @@ fn run_per_function() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, false, 1, 20, true, "total", None).unwrap();
+    run(&cfg, OutputMode::Table, 1, 20, true, "total", None).unwrap();
 }
 
 #[test]
@@ -60,7 +61,7 @@ fn run_with_min_complexity_filter() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, false, 5, 20, false, "total", None).unwrap();
+    run(&cfg, OutputMode::Table, 5, 20, false, "total", None).unwrap();
 }
 
 #[test]
@@ -73,7 +74,7 @@ fn run_sort_by_max() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, false, 1, 20, false, "max", None).unwrap();
+    run(&cfg, OutputMode::Table, 1, 20, false, "max", None).unwrap();
 }
 
 #[test]
@@ -86,7 +87,7 @@ fn run_sort_by_avg() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, false, 1, 20, false, "avg", None).unwrap();
+    run(&cfg, OutputMode::Table, 1, 20, false, "avg", None).unwrap();
 }
 
 #[test]
@@ -122,7 +123,16 @@ fn run_github_format() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, false, 1, 20, false, "total", Some("github")).unwrap();
+    run(
+        &cfg,
+        OutputMode::Table,
+        1,
+        20,
+        false,
+        "total",
+        Some("github"),
+    )
+    .unwrap();
 }
 
 #[test]
@@ -135,7 +145,7 @@ fn run_format_json_via_format_param() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, false, 1, 20, false, "total", Some("json")).unwrap();
+    run(&cfg, OutputMode::Table, 1, 20, false, "total", Some("json")).unwrap();
 }
 
 #[test]

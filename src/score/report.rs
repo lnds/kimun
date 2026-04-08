@@ -93,6 +93,36 @@ pub fn print_report(score: &ProjectScore, bottom: usize, target: Option<&str>) {
     println!("{separator}");
 }
 
+/// Print score as a single compact line.
+///
+/// Format: `score s:<score> g:<grade> files:<N> loc:<N> <dim>:<score> ...`
+/// Dimension keys are abbreviated for minimal token count.
+pub fn print_short(score: &ProjectScore) {
+    let mut parts = format!(
+        "score s:{:.1} g:{} files:{} loc:{}",
+        score.score, score.grade, score.files_analyzed, score.total_loc
+    );
+    for d in &score.dimensions {
+        let key = match d.name {
+            "Cognitive Complexity" => "cx",
+            "Cyclomatic Complexity" => "cycl",
+            "Maintainability Index" => "mi",
+            "Duplication" => "dup",
+            "Indentation Complexity" => "ind",
+            "Halstead Effort" => "hal",
+            "File Size" => "sz",
+            _ => continue,
+        };
+        parts.push_str(&format!(" {key}:{:.1}", d.score));
+    }
+    println!("{parts}");
+}
+
+/// Print only the project score value.
+pub fn print_terse(score: &ProjectScore) {
+    println!("{:.1}", score.score);
+}
+
 /// Format an integer with thousand separators (e.g. 1234567 → "1,234,567").
 fn format_thousands(n: usize) -> String {
     let s = n.to_string();

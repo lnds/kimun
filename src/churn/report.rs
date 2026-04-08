@@ -102,6 +102,23 @@ pub fn print_json(files: &[FileChurn]) {
     report_helpers::print_json_stdout(&entries).unwrap();
 }
 
+/// Print churn as a single compact line.
+pub fn print_short(files: &[FileChurn]) {
+    let count = files.len();
+    let total_commits: usize = files.iter().map(|f| f.commits).sum();
+    let top_file = files
+        .first()
+        .map(|f| f.path.display().to_string())
+        .unwrap_or_else(|| "-".into());
+    println!("churn files:{count} total_commits:{total_commits} top:{top_file}");
+}
+
+/// Print only the total commit count.
+pub fn print_terse(files: &[FileChurn]) {
+    let total: usize = files.iter().map(|f| f.commits).sum();
+    println!("{total}");
+}
+
 #[cfg(test)]
 #[path = "report_test.rs"]
 mod tests;

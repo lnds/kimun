@@ -1,4 +1,5 @@
 use super::*;
+use crate::cli::OutputMode;
 use crate::walk::{ExcludeFilter, WalkConfig};
 use git2::Repository;
 use std::fs;
@@ -16,7 +17,7 @@ fn run_on_temp_dir_with_rust_file() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     // Should succeed without error
-    run(&cfg, false, false).unwrap();
+    run(&cfg, false, OutputMode::Table).unwrap();
 }
 
 #[test]
@@ -25,7 +26,7 @@ fn run_on_empty_dir() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     // Should succeed and print "No recognized source files found."
-    run(&cfg, false, false).unwrap();
+    run(&cfg, false, OutputMode::Table).unwrap();
 }
 
 #[test]
@@ -35,7 +36,7 @@ fn run_skips_binary_files() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     // Should succeed — binary file silently skipped
-    run(&cfg, false, false).unwrap();
+    run(&cfg, false, OutputMode::Table).unwrap();
 }
 
 #[test]
@@ -47,7 +48,7 @@ fn run_deduplicates_identical_files() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     // Should succeed — one of the duplicates skipped
-    run(&cfg, false, false).unwrap();
+    run(&cfg, false, OutputMode::Table).unwrap();
 }
 
 #[test]
@@ -60,7 +61,7 @@ fn run_with_shebang_detection() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, false, false).unwrap();
+    run(&cfg, false, OutputMode::Table).unwrap();
 }
 
 #[test]
@@ -71,7 +72,7 @@ fn run_verbose_on_temp_dir() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     // Should succeed with verbose stats printed
-    run(&cfg, true, false).unwrap();
+    run(&cfg, true, OutputMode::Table).unwrap();
 }
 
 #[test]
@@ -83,7 +84,7 @@ fn run_verbose_with_duplicates() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     // Should show skipped_files=1 (duplicate)
-    run(&cfg, true, false).unwrap();
+    run(&cfg, true, OutputMode::Table).unwrap();
 }
 
 #[test]
@@ -91,7 +92,7 @@ fn run_verbose_empty_dir() {
     let dir = tempfile::tempdir().unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, true, false).unwrap();
+    run(&cfg, true, OutputMode::Table).unwrap();
 }
 
 #[test]
@@ -104,7 +105,7 @@ fn run_json_output() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, false, true).unwrap();
+    run(&cfg, false, OutputMode::Json).unwrap();
 }
 
 #[test]
@@ -112,7 +113,7 @@ fn run_json_empty_dir() {
     let dir = tempfile::tempdir().unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, false, true).unwrap();
+    run(&cfg, false, OutputMode::Json).unwrap();
 }
 
 #[test]
@@ -178,7 +179,7 @@ fn run_by_author_basic() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run_by_author(&cfg, false);
+    let result = run_by_author(&cfg, OutputMode::Table);
     assert!(result.is_ok(), "run_by_author should succeed: {:?}", result);
 }
 
@@ -193,7 +194,7 @@ fn run_by_author_json() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run_by_author(&cfg, true);
+    let result = run_by_author(&cfg, OutputMode::Json);
     assert!(result.is_ok(), "run_by_author JSON should succeed");
 }
 
@@ -214,7 +215,7 @@ fn run_by_author_multiple_files() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run_by_author(&cfg, false);
+    let result = run_by_author(&cfg, OutputMode::Table);
     assert!(result.is_ok(), "multi-file run_by_author should succeed");
 }
 
@@ -226,7 +227,7 @@ fn run_by_author_empty_repo() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run_by_author(&cfg, false);
+    let result = run_by_author(&cfg, OutputMode::Table);
     assert!(result.is_ok(), "empty repo should not crash: {:?}", result);
 }
 
@@ -237,7 +238,7 @@ fn run_by_author_empty_json() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run_by_author(&cfg, true);
+    let result = run_by_author(&cfg, OutputMode::Json);
     assert!(result.is_ok(), "empty repo JSON should not crash");
 }
 
@@ -246,7 +247,7 @@ fn run_by_author_on_current_repo() {
     // Smoke test on the actual repo
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(StdPath::new("."), false, &filter);
-    let result = run_by_author(&cfg, false);
+    let result = run_by_author(&cfg, OutputMode::Table);
     assert!(
         result.is_ok(),
         "run_by_author on current repo should succeed"
@@ -257,7 +258,7 @@ fn run_by_author_on_current_repo() {
 fn run_by_author_json_on_current_repo() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(StdPath::new("."), false, &filter);
-    let result = run_by_author(&cfg, true);
+    let result = run_by_author(&cfg, OutputMode::Json);
     assert!(
         result.is_ok(),
         "run_by_author JSON on current repo should succeed"

@@ -1,4 +1,5 @@
 use super::*;
+use crate::cli::OutputMode;
 use crate::util::find_test_block_start;
 use crate::walk::{ExcludeFilter, WalkConfig};
 use git2::Repository;
@@ -10,7 +11,7 @@ fn run_on_empty_dir() {
     let dir = tempfile::tempdir().unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, false, 10, 6, "cogcom").unwrap();
+    run(&cfg, OutputMode::Table, 10, 6, "cogcom").unwrap();
 }
 
 #[test]
@@ -69,7 +70,7 @@ fn run_json_output() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, true, 10, 6, "cogcom").unwrap();
+    run(&cfg, OutputMode::Json, 10, 6, "cogcom").unwrap();
 }
 
 #[test]
@@ -109,7 +110,7 @@ fn run_on_current_repo() {
     // Smoke test on the actual repo
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(Path::new("."), false, &filter);
-    run(&cfg, false, 5, 6, "cogcom").unwrap();
+    run(&cfg, OutputMode::Table, 5, 6, "cogcom").unwrap();
 }
 
 #[test]
@@ -117,7 +118,7 @@ fn run_on_current_repo_legacy() {
     // Smoke test on the actual repo with legacy model
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(Path::new("."), false, &filter);
-    run(&cfg, false, 5, 6, "legacy").unwrap();
+    run(&cfg, OutputMode::Table, 5, 6, "legacy").unwrap();
 }
 
 #[test]
@@ -309,7 +310,15 @@ fn run_diff_on_git_repo() {
     let (dir, _repo) = create_test_repo_with_rust_file();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), true, &filter);
-    let result = run_diff(&cfg, "HEAD", false, 5, 6, "cogcom", ScoreGate::default());
+    let result = run_diff(
+        &cfg,
+        "HEAD",
+        OutputMode::Table,
+        5,
+        6,
+        "cogcom",
+        ScoreGate::default(),
+    );
     assert!(result.is_ok(), "run_diff should succeed: {:?}", result);
 }
 
@@ -318,7 +327,15 @@ fn run_diff_json_on_git_repo() {
     let (dir, _repo) = create_test_repo_with_rust_file();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), true, &filter);
-    let result = run_diff(&cfg, "HEAD", true, 5, 6, "cogcom", ScoreGate::default());
+    let result = run_diff(
+        &cfg,
+        "HEAD",
+        OutputMode::Json,
+        5,
+        6,
+        "cogcom",
+        ScoreGate::default(),
+    );
     assert!(result.is_ok(), "run_diff JSON should succeed: {:?}", result);
 }
 
@@ -327,7 +344,15 @@ fn run_diff_legacy_model_on_git_repo() {
     let (dir, _repo) = create_test_repo_with_rust_file();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), true, &filter);
-    let result = run_diff(&cfg, "HEAD", false, 5, 6, "legacy", ScoreGate::default());
+    let result = run_diff(
+        &cfg,
+        "HEAD",
+        OutputMode::Table,
+        5,
+        6,
+        "legacy",
+        ScoreGate::default(),
+    );
     assert!(
         result.is_ok(),
         "run_diff legacy should succeed: {:?}",
@@ -341,7 +366,7 @@ fn score_gate_no_flags_succeeds() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     let gate = ScoreGate::default();
-    let result = run_diff(&cfg, "HEAD", false, 10, 6, "cogcom", gate);
+    let result = run_diff(&cfg, "HEAD", OutputMode::Table, 10, 6, "cogcom", gate);
     assert!(result.is_ok(), "no gates should always succeed: {result:?}");
 }
 
@@ -355,7 +380,7 @@ fn score_gate_fail_below_passes_when_above_threshold() {
         fail_if_worse: false,
         fail_below: Some(analyzer::Grade::FMinusMinus),
     };
-    let result = run_diff(&cfg, "HEAD", false, 10, 6, "cogcom", gate);
+    let result = run_diff(&cfg, "HEAD", OutputMode::Table, 10, 6, "cogcom", gate);
     assert!(
         result.is_ok(),
         "F-- threshold should not trigger on clean code"
@@ -408,7 +433,7 @@ fn score_gate_fail_if_worse_same_ref_passes() {
         fail_if_worse: true,
         fail_below: None,
     };
-    let result = run_diff(&cfg, "HEAD", false, 10, 6, "cogcom", gate);
+    let result = run_diff(&cfg, "HEAD", OutputMode::Table, 10, 6, "cogcom", gate);
     assert!(
         result.is_ok(),
         "same ref comparison should not trigger fail-if-worse"
@@ -420,12 +445,12 @@ fn run_on_current_repo_with_target() {
     // Test with an explicit non-"." path to exercise the target display branch
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(Path::new("src"), false, &filter);
-    run(&cfg, false, 5, 6, "cogcom").unwrap();
+    run(&cfg, OutputMode::Table, 5, 6, "cogcom").unwrap();
 }
 
 #[test]
 fn run_json_with_target_path() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(Path::new("src"), false, &filter);
-    run(&cfg, true, 5, 6, "cogcom").unwrap();
+    run(&cfg, OutputMode::Json, 5, 6, "cogcom").unwrap();
 }

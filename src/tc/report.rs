@@ -4,7 +4,7 @@
 /// ranked by coupling strength (shared_commits / min(commits_a, commits_b)).
 use serde::Serialize;
 
-use super::analyzer::FileCoupling;
+use super::analyzer::{CouplingLevel, FileCoupling};
 use crate::report_helpers;
 
 /// Print a table of temporally coupled file pairs with strength and level.
@@ -84,6 +84,29 @@ pub fn print_json(pairs: &[FileCoupling]) -> Result<(), Box<dyn std::error::Erro
         .collect();
 
     report_helpers::print_json_stdout(&entries)
+}
+
+/// Print temporal coupling as a single compact line.
+pub fn print_short(pairs: &[FileCoupling], total: usize) {
+    let strong = pairs
+        .iter()
+        .filter(|p| p.level == CouplingLevel::Strong)
+        .count();
+    let moderate = pairs
+        .iter()
+        .filter(|p| p.level == CouplingLevel::Moderate)
+        .count();
+    let weak = pairs
+        .iter()
+        .filter(|p| p.level == CouplingLevel::Weak)
+        .count();
+    let max = pairs.iter().map(|p| p.strength).fold(0.0_f64, f64::max);
+    println!("tc pairs:{total} strong:{strong} moderate:{moderate} weak:{weak} max:{max:.2}");
+}
+
+/// Print only the total number of coupled pairs.
+pub fn print_terse(total: usize) {
+    println!("{total}");
 }
 
 #[cfg(test)]

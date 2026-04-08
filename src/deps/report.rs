@@ -72,6 +72,22 @@ pub fn print_json(result: &DepResult) -> Result<(), Box<dyn std::error::Error>> 
     report_helpers::print_json_stdout(&out)
 }
 
+/// Print deps as a single compact line.
+pub fn print_short(result: &DepResult) {
+    println!(
+        "deps files:{} cycles:{} max_fan_out:{} max_fan_in:{}",
+        result.entries.len(),
+        result.cycles.len(),
+        result.entries.iter().map(|e| e.fan_out).max().unwrap_or(0),
+        result.entries.iter().map(|e| e.fan_in).max().unwrap_or(0),
+    );
+}
+
+/// Print only the cycle count.
+pub fn print_terse(result: &DepResult) {
+    println!("{}", result.cycles.len());
+}
+
 #[cfg(test)]
 #[path = "report_test.rs"]
 mod tests;
