@@ -108,3 +108,23 @@ fn json_structure_is_valid() {
     assert!(arr[0]["functions"].is_array());
     assert_eq!(arr[0]["functions"].as_array().unwrap().len(), 2);
 }
+
+#[test]
+fn print_short_does_not_panic() {
+    print_short(&sample_files());
+}
+
+#[test]
+fn print_short_empty() {
+    print_short(&[]);
+}
+
+#[test]
+fn print_terse_does_not_panic() {
+    print_terse(&sample_files());
+}
+
+#[test]
+fn print_terse_empty() {
+    print_terse(&[]);
+}

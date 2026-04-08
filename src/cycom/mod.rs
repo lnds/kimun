@@ -11,13 +11,16 @@ pub(crate) mod report;
 use std::error::Error;
 use std::path::Path;
 
+use crate::cli::OutputMode;
 use crate::loc::counter::LineKind;
 use crate::loc::language::LanguageSpec;
 use crate::util::read_and_classify;
 use crate::walk::WalkConfig;
 use analyzer::analyze;
 use markers::markers_for;
-use report::{FileCycomMetrics, print_json, print_per_function, print_report};
+use report::{
+    FileCycomMetrics, print_json, print_per_function, print_report, print_short, print_terse,
+};
 
 /// Analyze pre-read content (avoids re-reading the file).
 pub(crate) fn analyze_content(
@@ -66,7 +69,7 @@ pub(crate) fn analyze_file(
 /// results, and print as a table, per-function breakdown, or JSON.
 pub fn run(
     cfg: &WalkConfig<'_>,
-    json: bool,
+    output: OutputMode,
     min_complexity: usize,
     top: usize,
     per_function: bool,
@@ -93,12 +96,17 @@ pub fn run(
     // Limit to top N
     results.truncate(top);
 
-    if json {
-        print_json(&results)?;
-    } else if per_function {
-        print_per_function(&results);
-    } else {
-        print_report(&results);
+    match output {
+        OutputMode::Terse => print_terse(&results),
+        OutputMode::Short => print_short(&results),
+        OutputMode::Json => print_json(&results)?,
+        OutputMode::Table => {
+            if per_function {
+                print_per_function(&results);
+            } else {
+                print_report(&results);
+            }
+        }
     }
 
     Ok(())

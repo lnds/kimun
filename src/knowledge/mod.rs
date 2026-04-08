@@ -15,6 +15,7 @@ use crate::git::GitRepo;
 use crate::util::parse_since;
 use crate::walk::{self, WalkConfig};
 
+use crate::cli::OutputMode;
 use crate::report_helpers;
 use analyzer::{FileOwnership, compute_ownership};
 use report::{print_json, print_report};
@@ -50,7 +51,7 @@ fn is_generated(path: &Path) -> bool {
 /// compute ownership concentration and risk, then output results.
 pub fn run(
     cfg: &WalkConfig<'_>,
-    json: bool,
+    output: OutputMode,
     top: usize,
     sort_by: &str,
     since: Option<&str>,
@@ -117,7 +118,15 @@ pub fn run(
         }
     }
 
-    report_helpers::output_results(&mut results, top, json, print_json, print_report)
+    report_helpers::output_results_mode(
+        &mut results,
+        top,
+        output,
+        print_json,
+        print_report,
+        report::print_short,
+        report::print_terse,
+    )
 }
 
 #[cfg(test)]

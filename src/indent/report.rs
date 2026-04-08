@@ -59,6 +59,32 @@ pub fn print_report(files: &[FileIndentMetrics]) {
     println!(" \"Your Code as a Crime Scene\", Ch.6). Thresholds are heuristic.");
 }
 
+/// Print compact single-line output for AI consumption.
+pub fn print_short(files: &[FileIndentMetrics]) {
+    let count = files.len();
+    if count == 0 {
+        println!("indent files:0 avg_sd:0.00 max_sd:0.00 max_depth:0");
+        return;
+    }
+    let avg_sd = files.iter().map(|f| f.stddev).sum::<f64>() / count as f64;
+    let max_sd = files.iter().map(|f| f.stddev).fold(0.0_f64, f64::max);
+    let max_depth = files.iter().map(|f| f.max_depth).max().unwrap_or(0);
+    println!(
+        "indent files:{} avg_sd:{:.2} max_sd:{:.2} max_depth:{}",
+        count, avg_sd, max_sd, max_depth,
+    );
+}
+
+/// Print only the headline metric (average stddev).
+pub fn print_terse(files: &[FileIndentMetrics]) {
+    if files.is_empty() {
+        println!("0.00");
+        return;
+    }
+    let avg_sd = files.iter().map(|f| f.stddev).sum::<f64>() / files.len() as f64;
+    println!("{:.2}", avg_sd);
+}
+
 /// JSON-serializable representation of a file's indentation metrics.
 #[derive(Serialize)]
 struct JsonFileEntry {

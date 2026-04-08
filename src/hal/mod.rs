@@ -13,13 +13,14 @@ mod tokenizer;
 use std::error::Error;
 use std::path::Path;
 
+use crate::cli::OutputMode;
 use crate::loc::counter::LineKind;
 use crate::loc::language::LanguageSpec;
 use crate::report_helpers;
 use crate::util::read_and_classify;
 use crate::walk::WalkConfig;
 use analyzer::compute;
-use report::{FileHalsteadMetrics, print_json, print_report};
+use report::{FileHalsteadMetrics, print_json, print_report, print_short, print_terse};
 use string_mask::multi_line_string_mask;
 use tokenizer::{count_tokens, rules_for};
 
@@ -95,7 +96,7 @@ pub(crate) fn analyze_file(
 /// chosen metric (effort, volume, or bugs), and print results.
 pub fn run(
     cfg: &WalkConfig<'_>,
-    json: bool,
+    output: OutputMode,
     top: usize,
     sort_by: &str,
 ) -> Result<(), Box<dyn Error>> {
@@ -123,7 +124,15 @@ pub fn run(
         }),
     }
 
-    report_helpers::output_results(&mut results, top, json, print_json, print_report)
+    report_helpers::output_results_mode(
+        &mut results,
+        top,
+        output,
+        print_json,
+        print_report,
+        print_short,
+        print_terse,
+    )
 }
 
 #[cfg(test)]

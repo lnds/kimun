@@ -13,14 +13,15 @@ use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::time::Instant;
 
+use crate::cli::OutputMode;
 use crate::util::hash_file;
 use crate::walk::WalkConfig;
 use counter::{FileStats, count_lines};
-use report::{LanguageReport, VerboseStats, print_json, print_report};
+use report::{LanguageReport, VerboseStats, print_json, print_report, print_short, print_terse};
 
 /// Walk source files, deduplicate by content hash, count lines per
-/// language, and print a summary table (or JSON when `json` is true).
-pub fn run(cfg: &WalkConfig<'_>, verbose: bool, json: bool) -> Result<(), Box<dyn Error>> {
+/// language, and print a summary in the requested output mode.
+pub fn run(cfg: &WalkConfig<'_>, verbose: bool, output: OutputMode) -> Result<(), Box<dyn Error>> {
     let start = Instant::now();
     let mut stats_by_lang: HashMap<&'static str, (usize, FileStats)> = HashMap::new();
     let mut seen_hashes: HashSet<u64> = HashSet::new();
@@ -72,29 +73,35 @@ pub fn run(cfg: &WalkConfig<'_>, verbose: bool, json: bool) -> Result<(), Box<dy
         .collect();
 
     if reports.is_empty() {
-        if json {
-            println!(
+        match output {
+            OutputMode::Json => println!(
                 "{}",
                 serde_json::json!({"languages": [], "totals": {"files": 0, "blank": 0, "comment": 0, "code": 0}})
-            );
-        } else {
-            println!("No recognized source files found.");
+            ),
+            OutputMode::Short => print_short(vec![]),
+            OutputMode::Terse => print_terse(vec![]),
+            OutputMode::Table => println!("No recognized source files found."),
         }
-    } else if json {
-        print_json(reports);
     } else {
-        let verbose_stats = if verbose {
-            Some(VerboseStats {
-                total_files,
-                unique_files,
-                duplicate_files,
-                binary_files,
-                elapsed: start.elapsed(),
-            })
-        } else {
-            None
-        };
-        print_report(reports, verbose_stats);
+        match output {
+            OutputMode::Json => print_json(reports),
+            OutputMode::Short => print_short(reports),
+            OutputMode::Terse => print_terse(reports),
+            OutputMode::Table => {
+                let verbose_stats = if verbose {
+                    Some(VerboseStats {
+                        total_files,
+                        unique_files,
+                        duplicate_files,
+                        binary_files,
+                        elapsed: start.elapsed(),
+                    })
+                } else {
+                    None
+                };
+                print_report(reports, verbose_stats);
+            }
+        }
     }
 
     Ok(())

@@ -18,6 +18,7 @@ pub(crate) mod report;
 use std::error::Error;
 use std::path::Path;
 
+use crate::cli::OutputMode;
 use crate::loc::counter::LineKind;
 use crate::loc::language::LanguageSpec;
 use crate::report_helpers;
@@ -61,7 +62,7 @@ fn analyze_file(path: &Path, spec: &LanguageSpec) -> Result<Option<FileMIMetrics
 
 pub fn run(
     cfg: &WalkConfig<'_>,
-    json: bool,
+    output: OutputMode,
     top: usize,
     sort_by: &str,
 ) -> Result<(), Box<dyn Error>> {
@@ -85,7 +86,15 @@ pub fn run(
         _ => results.sort_by(|a, b| a.metrics.mi_score.total_cmp(&b.metrics.mi_score)),
     }
 
-    report_helpers::output_results(&mut results, top, json, print_json, print_report)
+    report_helpers::output_results_mode(
+        &mut results,
+        top,
+        output,
+        print_json,
+        print_report,
+        report::print_short,
+        report::print_terse,
+    )
 }
 
 #[cfg(test)]

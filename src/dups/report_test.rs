@@ -189,3 +189,37 @@ fn format_json_respects_group_slice() {
     let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
     assert_eq!(parsed["groups"].as_array().unwrap().len(), 1);
 }
+
+#[test]
+fn print_short_does_not_panic() {
+    print_short(&sample_metrics());
+}
+
+#[test]
+fn print_short_empty() {
+    let m = DuplicationMetrics {
+        total_code_lines: 0,
+        duplicated_lines: 0,
+        duplicate_groups: 0,
+        files_with_duplicates: 0,
+        largest_block: 0,
+    };
+    print_short(&m);
+}
+
+#[test]
+fn print_terse_does_not_panic() {
+    print_terse(&sample_metrics());
+}
+
+#[test]
+fn print_terse_empty() {
+    let m = DuplicationMetrics {
+        total_code_lines: 0,
+        duplicated_lines: 0,
+        duplicate_groups: 0,
+        files_with_duplicates: 0,
+        largest_block: 0,
+    };
+    print_terse(&m);
+}

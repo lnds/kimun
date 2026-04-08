@@ -102,6 +102,27 @@ pub fn print_json(files: &[FileOwnership]) -> Result<(), Box<dyn std::error::Err
     report_helpers::print_json_stdout(&entries)
 }
 
+/// Print compact single-line output for AI consumption.
+pub fn print_short(files: &[FileOwnership]) {
+    let count = files.len();
+    if count == 0 {
+        println!("knowledge files:0 at_risk:0 avg_own:0.0%");
+        return;
+    }
+    let at_risk = files.iter().filter(|f| f.knowledge_loss).count();
+    let avg_own = files.iter().map(|f| f.ownership_pct).sum::<f64>() / count as f64;
+    println!(
+        "knowledge files:{} at_risk:{} avg_own:{:.1}%",
+        count, at_risk, avg_own,
+    );
+}
+
+/// Print only the headline metric (files at risk count).
+pub fn print_terse(files: &[FileOwnership]) {
+    let at_risk = files.iter().filter(|f| f.knowledge_loss).count();
+    println!("{}", at_risk);
+}
+
 #[cfg(test)]
 #[path = "report_test.rs"]
 mod tests;

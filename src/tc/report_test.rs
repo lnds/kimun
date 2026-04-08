@@ -44,3 +44,23 @@ fn print_json_does_not_panic() {
 fn print_json_empty() {
     print_json(&[]).unwrap();
 }
+
+#[test]
+fn print_short_does_not_panic() {
+    print_short(&sample_pairs(), 10);
+}
+
+#[test]
+fn print_short_empty() {
+    print_short(&[], 0);
+}
+
+#[test]
+fn print_terse_does_not_panic() {
+    print_terse(10);
+}
+
+#[test]
+fn print_terse_empty() {
+    print_terse(0);
+}

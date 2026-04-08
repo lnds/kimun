@@ -69,6 +69,31 @@ pub fn print_report(files: &[FileHotspot], metric: &str) {
     println!("High-score files are change-prone and complex — prime refactoring targets.");
 }
 
+/// Print compact single-line output for AI consumption.
+pub fn print_short(files: &[FileHotspot]) {
+    if files.is_empty() {
+        println!("hotspots top: score:0 commits:0 cx:0");
+        return;
+    }
+    let top = &files[0];
+    println!(
+        "hotspots top:{} score:{} commits:{} cx:{}",
+        top.path.display(),
+        top.score,
+        top.commits,
+        top.complexity,
+    );
+}
+
+/// Print only the headline metric (top hotspot file path).
+pub fn print_terse(files: &[FileHotspot]) {
+    if files.is_empty() {
+        println!();
+        return;
+    }
+    println!("{}", files[0].path.display());
+}
+
 /// JSON-serializable representation of a single hotspot entry.
 #[derive(Serialize)]
 struct JsonEntry {

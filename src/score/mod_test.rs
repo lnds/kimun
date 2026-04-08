@@ -1,4 +1,5 @@
 use super::*;
+use crate::cli::OutputMode;
 use crate::util::find_test_block_start;
 use crate::walk::{ExcludeFilter, WalkConfig};
 use std::fs;
@@ -99,7 +100,7 @@ fn run_on_empty_dir() {
     let dir = tempfile::tempdir().unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, false, 10, 6).unwrap();
+    run(&cfg, OutputMode::Table, 10, 6).unwrap();
 }
 
 #[test]
@@ -133,7 +134,7 @@ fn run_json_output() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, true, 10, 6).unwrap();
+    run(&cfg, OutputMode::Json, 10, 6).unwrap();
 }
 
 #[test]
@@ -171,7 +172,7 @@ fn run_on_current_repo() {
     // Smoke test on the actual repo
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(Path::new("."), false, &filter);
-    run(&cfg, false, 5, 6).unwrap();
+    run(&cfg, OutputMode::Table, 5, 6).unwrap();
 }
 
 #[test]

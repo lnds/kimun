@@ -11,11 +11,12 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
+use crate::cli::OutputMode;
 use crate::git::GitRepo;
 use crate::util::parse_since;
 use crate::walk;
 use analyzer::compute_coupling;
-use report::{print_json, print_report};
+use report::{print_json, print_report, print_short, print_terse};
 
 /// Check whether a git-relative path is inside a test directory or is a test file.
 fn is_test_path(path: &Path) -> bool {
@@ -32,7 +33,7 @@ fn is_test_path(path: &Path) -> bool {
 #[allow(clippy::too_many_arguments)]
 pub fn run(
     path: &Path,
-    json: bool,
+    output: OutputMode,
     include_tests: bool,
     top: usize,
     sort_by: &str,
@@ -100,10 +101,11 @@ pub fn run(
 
     results.truncate(top);
 
-    if json {
-        print_json(&results)?;
-    } else {
-        print_report(&results, total);
+    match output {
+        OutputMode::Terse => print_terse(total),
+        OutputMode::Short => print_short(&results, total),
+        OutputMode::Json => print_json(&results)?,
+        OutputMode::Table => print_report(&results, total),
     }
 
     Ok(())

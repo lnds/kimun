@@ -100,3 +100,57 @@ fn print_json_with_reports() {
 fn print_json_empty() {
     print_json(vec![]);
 }
+
+#[test]
+fn print_short_output() {
+    let reports = vec![
+        LanguageReport {
+            name: "Rust".to_string(),
+            files: 5,
+            blank: 20,
+            comment: 10,
+            code: 500,
+        },
+        LanguageReport {
+            name: "Python".to_string(),
+            files: 3,
+            blank: 10,
+            comment: 5,
+            code: 100,
+        },
+    ];
+    // Should not panic
+    print_short(reports);
+}
+
+#[test]
+fn print_short_empty() {
+    print_short(vec![]);
+}
+
+#[test]
+fn print_terse_output() {
+    let reports = vec![
+        LanguageReport {
+            name: "Rust".to_string(),
+            files: 5,
+            blank: 20,
+            comment: 10,
+            code: 500,
+        },
+        LanguageReport {
+            name: "Python".to_string(),
+            files: 3,
+            blank: 10,
+            comment: 5,
+            code: 100,
+        },
+    ];
+    // Should not panic
+    print_terse(reports);
+}
+
+#[test]
+fn print_terse_empty() {
+    print_terse(vec![]);
+}

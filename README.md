@@ -18,6 +18,33 @@ cargo install --path .
 
 This installs the `km` binary.
 
+## Output Formats
+
+Every analysis command supports four output modes (mutually exclusive):
+
+| Flag | Description | Example |
+|------|-------------|---------|
+| *(default)* | Human-readable table | `km score` |
+| `--json` | Machine-readable JSON | `km score --json` |
+| `--short` | Single line of key:value pairs (AI-friendly) | `km score --short` |
+| `--terse` | Just the headline metric value | `km score --terse` |
+
+```bash
+$ km score --short
+score s:86.5 g:B+ files:67 loc:8200 mi:81.9 cx:90.9 dup:76.3 ind:94.2 hal:92.6 sz:100.0
+
+$ km score --terse
+86.5
+
+$ km loc --short
+loc code:8984 cmt:1658 blank:1394 files:73 langs:4
+
+$ km loc --terse
+8984
+```
+
+The `--short` and `--terse` modes are designed for AI agents and shell scripts, minimizing token usage while preserving key metrics.
+
 ## Commands
 
 ### `km loc` -- Count lines of code
@@ -44,6 +71,8 @@ Options:
 |------|-------------|
 | `-v`, `--verbose` | Show summary stats (files read, unique, ignored, elapsed time) |
 | `--json` | Output as JSON |
+| `--short` | Compact single-line output (AI-friendly) |
+| `--terse` | Output only the headline metric value |
 
 Example output:
 
@@ -77,6 +106,8 @@ Options:
 | `--min-lines N` | Minimum lines for a duplicate block (default: 6) |
 | `--include-tests` | Include test files in analysis (excluded by default) |
 | `--json` | Output as JSON |
+| `--short` | Compact single-line output (AI-friendly) |
+| `--terse` | Output only the headline metric value |
 
 Example summary output:
 
@@ -151,6 +182,8 @@ Options:
 | Flag | Description |
 |------|-------------|
 | `--json` | Output as JSON |
+| `--short` | Compact single-line output (AI-friendly) |
+| `--terse` | Output only the headline metric value |
 | `--include-tests` | Include test files in analysis (excluded by default) |
 
 ### `km hal` -- Halstead complexity metrics
@@ -184,6 +217,8 @@ Options:
 | Flag | Description |
 |------|-------------|
 | `--json` | Output as JSON (includes all metrics) |
+| `--short` | Compact single-line output (AI-friendly) |
+| `--terse` | Output only the headline metric value |
 | `--include-tests` | Include test files in analysis (excluded by default) |
 | `--top N` | Show only the top N files (default: 20) |
 | `--sort-by METRIC` | Sort by `effort`, `volume`, or `bugs` (default: `effort`) |
@@ -218,6 +253,8 @@ Options:
 | Flag | Description |
 |------|-------------|
 | `--json` | Output as JSON |
+| `--short` | Compact single-line output (AI-friendly) |
+| `--terse` | Output only the headline metric value |
 | `--include-tests` | Include test files in analysis (excluded by default) |
 | `--top N` | Show only the top N files (default: 20) |
 | `--min-complexity N` | Minimum max-complexity to include a file (default: 1) |
@@ -252,6 +289,8 @@ Options:
 | Flag | Description |
 |------|-------------|
 | `--json` | Output as JSON |
+| `--short` | Compact single-line output (AI-friendly) |
+| `--terse` | Output only the headline metric value |
 | `--include-tests` | Include test files in analysis (excluded by default) |
 | `--top N` | Show only the top N files (default: 20) |
 | `--sort-by METRIC` | Sort by `mi` (ascending), `volume`, `complexity`, or `loc` (default: `mi`) |
@@ -303,6 +342,8 @@ Options:
 | Flag | Description |
 |------|-------------|
 | `--json` | Output as JSON |
+| `--short` | Compact single-line output (AI-friendly) |
+| `--terse` | Output only the headline metric value |
 | `--include-tests` | Include test files in analysis (excluded by default) |
 | `--top N` | Show only the top N files (default: 20) |
 | `--sort-by METRIC` | Sort by `mi` (ascending), `volume`, `complexity`, or `loc` (default: `mi`) |
@@ -346,6 +387,8 @@ Options:
 | Flag | Description |
 |------|-------------|
 | `--json` | Output as JSON |
+| `--short` | Compact single-line output (AI-friendly) |
+| `--terse` | Output only the headline metric value |
 | `--include-tests` | Include test files in analysis (excluded by default) |
 | `--top N` | Show only the top N files (default: 20) |
 | `--sort-by METRIC` | Sort by `score`, `commits`, or `complexity` (default: `score`) |
@@ -418,6 +461,8 @@ Options:
 | Flag | Description |
 |------|-------------|
 | `--json` | Output as JSON |
+| `--short` | Compact single-line output (AI-friendly) |
+| `--terse` | Output only the headline metric value |
 | `--include-tests` | Include test files in analysis (excluded by default) |
 | `--top N` | Show only the top N files (default: 20) |
 | `--sort-by METRIC` | Sort by `concentration`, `diffusion`, or `risk` (default: `concentration`) |
@@ -469,6 +514,8 @@ Options:
 | Flag | Description |
 |------|-------------|
 | `--json` | Output as JSON |
+| `--short` | Compact single-line output (AI-friendly) |
+| `--terse` | Output only the headline metric value |
 | `--top N` | Show only the top N file pairs (default: 20) |
 | `--sort-by METRIC` | Sort by `strength` or `shared` (default: `strength`) |
 | `--since DURATION` | Only consider commits since this time (e.g. `6m`, `1y`, `30d`) |
@@ -534,6 +581,8 @@ Options:
 | Flag | Description |
 |------|-------------|
 | `--json` | Output as JSON |
+| `--short` | Compact single-line output (AI-friendly) |
+| `--terse` | Output only the headline metric value |
 | `--include-tests` | Include test files in analysis (excluded by default) |
 | `--bottom N` | Number of worst files to show in "needs attention" (default: 10) |
 | `--min-lines N` | Minimum lines for a duplicate block (default: 6) |

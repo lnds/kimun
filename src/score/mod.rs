@@ -25,13 +25,14 @@ mod scoring;
 
 use std::error::Error;
 
+use crate::cli::OutputMode;
 use crate::dups;
 use crate::git::GitRepo;
 use crate::walk::WalkConfig;
 
 use analyzer::{FileScore, ProjectScore, compute_project_score, score_to_grade};
 use collector::{FileMetrics, analyze_single_file};
-use report::{print_json, print_report};
+use report::{print_json, print_report, print_short, print_terse};
 use scoring::{build_dimensions, build_empty_dimensions, score_file};
 
 // Re-export scoring internals for tests.
@@ -41,10 +42,10 @@ pub(crate) use scoring::{
 };
 
 /// Entry point: compute and display the project health score.
-/// Outputs either a formatted table or JSON depending on the `json` flag.
+/// Outputs in the requested format (table, JSON, short, or terse).
 pub fn run(
     cfg: &WalkConfig<'_>,
-    json: bool,
+    output: OutputMode,
     bottom: usize,
     min_lines: usize,
 ) -> Result<(), Box<dyn Error>> {
@@ -57,10 +58,11 @@ pub fn run(
         .filter(|s| *s != ".")
         .map(|s| s.to_string());
 
-    if json {
-        print_json(&score, target.as_deref())?;
-    } else {
-        print_report(&score, bottom, target.as_deref());
+    match output {
+        OutputMode::Terse => print_terse(&score),
+        OutputMode::Short => print_short(&score),
+        OutputMode::Json => print_json(&score, target.as_deref())?,
+        OutputMode::Table => print_report(&score, bottom, target.as_deref()),
     }
 
     Ok(())
@@ -70,7 +72,7 @@ pub fn run(
 pub fn run_diff(
     cfg: &WalkConfig<'_>,
     git_ref: &str,
-    json: bool,
+    output: OutputMode,
     bottom: usize,
     min_lines: usize,
 ) -> Result<(), Box<dyn Error>> {
@@ -97,10 +99,11 @@ pub fn run_diff(
 
     let score_diff = diff::compute_diff(git_ref, &before, &after);
 
-    if json {
-        diff_report::print_json(&score_diff)?;
-    } else {
-        diff_report::print_report(&score_diff);
+    match output {
+        OutputMode::Terse => diff_report::print_terse(&score_diff),
+        OutputMode::Short => diff_report::print_short(&score_diff),
+        OutputMode::Json => diff_report::print_json(&score_diff)?,
+        OutputMode::Table => diff_report::print_report(&score_diff),
     }
 
     Ok(())

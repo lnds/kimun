@@ -1,4 +1,5 @@
 use super::*;
+use crate::cli::OutputMode;
 use crate::walk::{ExcludeFilter, WalkConfig};
 use std::fs;
 use std::path::Path as StdPath;
@@ -25,7 +26,7 @@ fn run_on_non_git_dir() {
     fs::create_dir_all(&sub).unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(&sub, false, &filter);
-    let err = run(&cfg, false, 20, "concentration", None, false).unwrap_err();
+    let err = run(&cfg, OutputMode::Table, 20, "concentration", None, false).unwrap_err();
     assert!(
         err.to_string().contains("not a git repository"),
         "should mention not a git repo, got: {err}"
@@ -73,7 +74,7 @@ fn integration_basic() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, false, 20, "concentration", None, false);
+    let result = run(&cfg, OutputMode::Table, 20, "concentration", None, false);
     assert!(result.is_ok(), "knowledge map should succeed on a git repo");
 }
 
@@ -88,7 +89,7 @@ fn integration_json() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, true, 20, "concentration", None, false);
+    let result = run(&cfg, OutputMode::Json, 20, "concentration", None, false);
     assert!(result.is_ok(), "JSON output should succeed");
 }
 
@@ -103,7 +104,7 @@ fn integration_risk_only() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, false, 20, "risk", None, true);
+    let result = run(&cfg, OutputMode::Table, 20, "risk", None, true);
     assert!(result.is_ok(), "risk-only filter should work");
 }
 
@@ -118,7 +119,7 @@ fn integration_sort_by_risk() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, false, 20, "risk", None, false);
+    let result = run(&cfg, OutputMode::Table, 20, "risk", None, false);
     assert!(result.is_ok(), "sort by risk should work");
 }
 
@@ -133,7 +134,7 @@ fn integration_sort_by_diffusion() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, false, 20, "diffusion", None, false);
+    let result = run(&cfg, OutputMode::Table, 20, "diffusion", None, false);
     assert!(result.is_ok(), "sort by diffusion should work");
 }
 
@@ -141,6 +142,6 @@ fn integration_sort_by_diffusion() {
 fn run_on_current_repo() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(StdPath::new("."), false, &filter);
-    let result = run(&cfg, true, 5, "concentration", None, false);
+    let result = run(&cfg, OutputMode::Json, 5, "concentration", None, false);
     assert!(result.is_ok(), "knowledge map should work on current repo");
 }

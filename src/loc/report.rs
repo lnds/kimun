@@ -124,6 +124,25 @@ pub fn print_json(mut reports: Vec<LanguageReport>) {
     report_helpers::print_json_stdout(&output).unwrap();
 }
 
+/// Print a single-line summary with key:value pairs (Short mode).
+pub fn print_short(reports: Vec<LanguageReport>) {
+    let total_files: usize = reports.iter().map(|r| r.files).sum();
+    let total_comment: usize = reports.iter().map(|r| r.comment).sum();
+    let total_blank: usize = reports.iter().map(|r| r.blank).sum();
+    let total_code: usize = reports.iter().map(|r| r.code).sum();
+    let num_languages = reports.len();
+
+    println!(
+        "loc code:{total_code} cmt:{total_comment} blank:{total_blank} files:{total_files} langs:{num_languages}"
+    );
+}
+
+/// Print just the total code lines (Terse mode).
+pub fn print_terse(reports: Vec<LanguageReport>) {
+    let total_code: usize = reports.iter().map(|r| r.code).sum();
+    println!("{total_code}");
+}
+
 #[cfg(test)]
 #[path = "report_test.rs"]
 mod tests;

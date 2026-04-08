@@ -85,3 +85,23 @@ fn json_structure_is_valid() {
         "second entry should be bar.rs"
     );
 }
+
+#[test]
+fn print_short_does_not_panic() {
+    print_short(&sample_files());
+}
+
+#[test]
+fn print_short_empty() {
+    print_short(&[]);
+}
+
+#[test]
+fn print_terse_does_not_panic() {
+    print_terse(&sample_files());
+}
+
+#[test]
+fn print_terse_empty() {
+    print_terse(&[]);
+}

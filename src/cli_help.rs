@@ -88,7 +88,9 @@ Examples:
   km hotspots --complexity cycom # cyclomatic complexity
   km hotspots --since 6m         # last 6 months
   km hotspots --since 1y --sort-by commits
-  km hotspots --json             # machine-readable output";
+  km hotspots --json             # machine-readable output
+  km hotspots --short            # compact one-line output
+  km hotspots --terse            # just the top hotspot file";
 
 /// Knowledge maps: code ownership analysis via git blame.
 /// Identifies bus factor risk and knowledge concentration per file.
@@ -114,7 +116,9 @@ Examples:
   km knowledge                          # ownership by concentration
   km knowledge --sort-by risk           # highest risk first
   km knowledge --since 6m --risk-only   # knowledge loss detection
-  km knowledge --json                   # machine-readable output";
+  km knowledge --json                   # machine-readable output
+  km knowledge --short                  # compact one-line output
+  km knowledge --terse                  # just the at-risk file count";
 
 /// Temporal coupling: files that change together in git commits.
 /// Reveals hidden dependencies between modules.
@@ -142,7 +146,9 @@ Examples:
   km tc --min-degree 5           # stricter filter
   km tc --since 6m               # last 6 months only
   km tc --min-strength 0.5       # only strong coupling
-  km tc --json                   # machine-readable output";
+  km tc --json                   # machine-readable output
+  km tc --short                  # compact one-line output
+  km tc --terse                  # just the coupled pairs count";
 
 /// Overall code health score: weighted aggregate of 6 quality dimensions.
 /// Produces a letter grade from A++ (exceptional) to F-- (severe issues).
@@ -180,6 +186,8 @@ Examples:
   km score                       # score current directory
   km score src/                  # score a subdirectory
   km score --json                # machine-readable output
+  km score --short               # compact one-line output
+  km score --terse               # just the score value
   km score --bottom 20           # show 20 worst files
   km score --include-tests       # include test files";
 
@@ -208,6 +216,8 @@ Examples:
   km score diff --git-ref HEAD~1         # compare vs previous commit
   km score diff --git-ref main           # compare vs main branch
   km score diff --json                   # machine-readable output
+  km score diff --short                  # compact one-line output
+  km score diff --terse                  # just the score delta
   km score diff src/                     # compare a subdirectory";
 
 /// AI-powered repository analysis using an external LLM provider.

@@ -110,6 +110,42 @@ pub fn print_json(files: &[FileMIMetrics]) -> Result<(), Box<dyn std::error::Err
     report_helpers::print_json_stdout(&entries)
 }
 
+/// Print compact single-line output for AI consumption.
+pub fn print_short(files: &[FileMIMetrics]) {
+    let count = files.len();
+    if count == 0 {
+        println!("mi files:0 avg:0.0 green:0 yellow:0 red:0");
+        return;
+    }
+    let avg_mi = files.iter().map(|f| f.metrics.mi_score).sum::<f64>() / count as f64;
+    let green = files
+        .iter()
+        .filter(|f| f.metrics.level == MILevel::Green)
+        .count();
+    let yellow = files
+        .iter()
+        .filter(|f| f.metrics.level == MILevel::Yellow)
+        .count();
+    let red = files
+        .iter()
+        .filter(|f| f.metrics.level == MILevel::Red)
+        .count();
+    println!(
+        "mi files:{} avg:{:.1} green:{} yellow:{} red:{}",
+        count, avg_mi, green, yellow, red,
+    );
+}
+
+/// Print only the headline metric (average MI score).
+pub fn print_terse(files: &[FileMIMetrics]) {
+    if files.is_empty() {
+        println!("0.0");
+        return;
+    }
+    let avg_mi = files.iter().map(|f| f.metrics.mi_score).sum::<f64>() / files.len() as f64;
+    println!("{:.1}", avg_mi);
+}
+
 #[cfg(test)]
 #[path = "report_test.rs"]
 mod tests;

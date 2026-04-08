@@ -127,6 +127,30 @@ struct JsonScoreDiff {
     dimensions: Vec<JsonDimensionDelta>,
 }
 
+/// Print compact single-line output for AI consumption.
+pub fn print_short(diff: &ScoreDiff) {
+    let delta_sign = if diff.overall.delta >= 0.0 { "+" } else { "" };
+    println!(
+        "score_diff ref:{} s:{:.1}>{:.1} g:{}>{} d:{}{:.1}",
+        diff.git_ref,
+        diff.overall.before,
+        diff.overall.after,
+        diff.before_grade.as_str(),
+        diff.after_grade.as_str(),
+        delta_sign,
+        diff.overall.delta,
+    );
+}
+
+/// Print only the headline metric (score delta with sign).
+pub fn print_terse(diff: &ScoreDiff) {
+    if diff.overall.delta >= 0.0 {
+        println!("+{:.1}", diff.overall.delta);
+    } else {
+        println!("{:.1}", diff.overall.delta);
+    }
+}
+
 /// Serialize the score diff as pretty-printed JSON to stdout.
 pub fn print_json(diff: &ScoreDiff) -> Result<(), Box<dyn std::error::Error>> {
     let json = JsonScoreDiff {

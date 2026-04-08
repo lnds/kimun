@@ -120,6 +120,28 @@ pub fn print_report(files: &[FileHalsteadMetrics]) {
     );
 }
 
+/// Print compact single-line output for AI consumption.
+pub fn print_short(files: &[FileHalsteadMetrics]) {
+    let count = files.len();
+    if count == 0 {
+        println!("hal files:0 vol:0.0 effort:0.0 bugs:0.0");
+        return;
+    }
+    let total_volume: f64 = files.iter().map(|f| f.metrics.volume).sum();
+    let total_effort: f64 = files.iter().map(|f| f.metrics.effort).sum();
+    let total_bugs: f64 = files.iter().map(|f| f.metrics.bugs).sum();
+    println!(
+        "hal files:{} vol:{:.1} effort:{:.1} bugs:{:.1}",
+        count, total_volume, total_effort, total_bugs,
+    );
+}
+
+/// Print only the headline metric (total effort).
+pub fn print_terse(files: &[FileHalsteadMetrics]) {
+    let total_effort: f64 = files.iter().map(|f| f.metrics.effort).sum();
+    println!("{:.1}", total_effort);
+}
+
 /// JSON-serializable representation of a file's Halstead metrics.
 #[derive(Serialize)]
 struct JsonEntry {

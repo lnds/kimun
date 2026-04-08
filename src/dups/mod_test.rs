@@ -1,4 +1,5 @@
 use super::*;
+use crate::cli::OutputMode;
 use crate::loc::language::detect;
 use crate::walk::{self, ExcludeFilter, WalkConfig};
 use std::fs;
@@ -9,7 +10,7 @@ fn run_on_empty_dir() {
     let dir = tempfile::tempdir().unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, 6, false, false, false).unwrap();
+    run(&cfg, 6, false, false, OutputMode::Table).unwrap();
 }
 
 #[test]
@@ -25,7 +26,7 @@ fn run_with_no_duplicates() {
     ).unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, 6, false, false, false).unwrap();
+    run(&cfg, 6, false, false, OutputMode::Table).unwrap();
 }
 
 #[test]
@@ -37,7 +38,7 @@ fn run_detects_duplicates() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     // Should not panic, should detect duplicates
-    run(&cfg, 6, false, false, false).unwrap();
+    run(&cfg, 6, false, false, OutputMode::Table).unwrap();
 }
 
 #[test]
@@ -48,7 +49,7 @@ fn run_with_report_flag() {
     fs::write(dir.path().join("b.rs"), code).unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, 6, true, false, false).unwrap();
+    run(&cfg, 6, true, false, OutputMode::Table).unwrap();
 }
 
 #[test]
@@ -59,7 +60,7 @@ fn run_with_show_all_flag() {
     fs::write(dir.path().join("b.rs"), code).unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, 6, true, true, false).unwrap();
+    run(&cfg, 6, true, true, OutputMode::Table).unwrap();
 }
 
 #[test]
@@ -68,7 +69,7 @@ fn run_skips_binary_files() {
     fs::write(dir.path().join("data.c"), b"hello\x00world").unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, 6, false, false, false).unwrap();
+    run(&cfg, 6, false, false, OutputMode::Table).unwrap();
 }
 
 #[test]
@@ -80,7 +81,7 @@ fn run_with_high_min_lines() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     // min_lines=20 means no 4-line file can produce duplicates
-    run(&cfg, 20, false, false, false).unwrap();
+    run(&cfg, 20, false, false, OutputMode::Table).unwrap();
 }
 
 #[test]
@@ -121,7 +122,7 @@ fn run_json_with_duplicates() {
     fs::write(dir.path().join("b.rs"), code).unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, 6, false, false, true).unwrap();
+    run(&cfg, 6, false, false, OutputMode::Json).unwrap();
 }
 
 #[test]
@@ -129,7 +130,7 @@ fn run_json_empty_dir() {
     let dir = tempfile::tempdir().unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, 6, false, false, true).unwrap();
+    run(&cfg, 6, false, false, OutputMode::Json).unwrap();
 }
 
 #[test]
@@ -138,7 +139,7 @@ fn run_json_no_duplicates() {
     fs::write(dir.path().join("a.rs"), "fn foo() {\n    let x = 1;\n}\n").unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, 6, false, false, true).unwrap();
+    run(&cfg, 6, false, false, OutputMode::Json).unwrap();
 }
 
 // --- is_test_file tests (use shared walk module) ---
@@ -248,10 +249,10 @@ fn run_exclude_tests_skips_test_dir() {
     // Without exclude: detects duplicates (does not panic)
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), true, &filter);
-    run(&cfg, 6, false, false, false).unwrap();
+    run(&cfg, 6, false, false, OutputMode::Table).unwrap();
     // With exclude: tests/ is skipped entirely
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, 6, false, false, false).unwrap();
+    run(&cfg, 6, false, false, OutputMode::Table).unwrap();
 }
 
 #[test]
@@ -267,7 +268,7 @@ fn run_exclude_tests_skips_test_files() {
     // With exclude_tests, the *_test.rs files are skipped
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, 6, false, false, false).unwrap();
+    run(&cfg, 6, false, false, OutputMode::Table).unwrap();
 }
 
 #[test]
@@ -288,7 +289,7 @@ fn run_exclude_tests_skips_test_file_in_subdirectory() {
     // With exclude_tests, *_test.rs files in any directory are skipped
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, 6, false, false, false).unwrap();
+    run(&cfg, 6, false, false, OutputMode::Table).unwrap();
 }
 
 #[test]
@@ -305,5 +306,5 @@ fn run_exclude_tests_skips_entire_test_dir_tree() {
     // With exclude_tests, the entire tests/ tree is skipped
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, 6, false, false, false).unwrap();
+    run(&cfg, 6, false, false, OutputMode::Table).unwrap();
 }

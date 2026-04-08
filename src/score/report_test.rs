@@ -82,6 +82,26 @@ fn print_json_with_target() {
 }
 
 #[test]
+fn print_short_does_not_panic() {
+    print_short(&sample_score());
+}
+
+#[test]
+fn print_short_empty() {
+    print_short(&empty_score());
+}
+
+#[test]
+fn print_terse_does_not_panic() {
+    print_terse(&sample_score());
+}
+
+#[test]
+fn print_terse_empty() {
+    print_terse(&empty_score());
+}
+
+#[test]
 fn format_thousands_works() {
     assert_eq!(format_thousands(0), "0");
     assert_eq!(format_thousands(999), "999");

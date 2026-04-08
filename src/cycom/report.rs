@@ -126,6 +126,39 @@ pub fn print_per_function(files: &[FileCycomMetrics]) {
     println!("{separator}");
 }
 
+/// Print compact single-line output for AI consumption.
+pub fn print_short(files: &[FileCycomMetrics]) {
+    let count = files.len();
+    if count == 0 {
+        println!("cycom files:0 fns:0 avg:0.0 max:0 total:0");
+        return;
+    }
+    let total_fns: usize = files.iter().map(|f| f.function_count).sum();
+    let total_complexity: usize = files.iter().map(|f| f.total_complexity).sum();
+    let max_complexity = files.iter().map(|f| f.max_complexity).max().unwrap_or(0);
+    let avg = if total_fns > 0 {
+        total_complexity as f64 / total_fns as f64
+    } else {
+        0.0
+    };
+    println!(
+        "cycom files:{} fns:{} avg:{:.1} max:{} total:{}",
+        count, total_fns, avg, max_complexity, total_complexity,
+    );
+}
+
+/// Print only the headline metric (average complexity).
+pub fn print_terse(files: &[FileCycomMetrics]) {
+    let total_fns: usize = files.iter().map(|f| f.function_count).sum();
+    let total_complexity: usize = files.iter().map(|f| f.total_complexity).sum();
+    let avg = if total_fns > 0 {
+        total_complexity as f64 / total_fns as f64
+    } else {
+        0.0
+    };
+    println!("{:.1}", avg);
+}
+
 /// JSON-serializable representation of a single function's complexity.
 #[derive(Serialize)]
 struct JsonFunctionEntry {

@@ -52,7 +52,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 
-use cli::{AiCommands, Cli, Commands, ScoreCommands};
+use cli::{AiCommands, Cli, Commands, OutputMode, ScoreCommands};
 use walk::{ExcludeFilter, WalkConfig};
 
 /// Resolve an optional path to a default of "." and run an analysis
@@ -95,6 +95,7 @@ fn main() {
     match cli.command {
         Commands::Loc { common, verbose } => {
             let filter = common.exclude_filter();
+            let output = common.output_mode();
             maybe_list_excluded(
                 &common.path,
                 common.include_tests,
@@ -103,7 +104,7 @@ fn main() {
             );
             run_command(common.path, |t| {
                 let cfg = WalkConfig::new(t, common.include_tests, &filter);
-                loc::run(&cfg, verbose, common.json)
+                loc::run(&cfg, verbose, output)
             })
         }
         Commands::Dups {
@@ -119,13 +120,15 @@ fn main() {
                 &filter,
                 common.list_excluded(),
             );
+            let output = common.output_mode();
             run_command(common.path, |t| {
                 let cfg = WalkConfig::new(t, common.include_tests, &filter);
-                dups::run(&cfg, min_lines, report, show_all, common.json)
+                dups::run(&cfg, min_lines, report, show_all, output)
             })
         }
         Commands::Indent { common } => {
             let filter = common.exclude_filter();
+            let output = common.output_mode();
             maybe_list_excluded(
                 &common.path,
                 common.include_tests,
@@ -134,7 +137,7 @@ fn main() {
             );
             run_command(common.path, |t| {
                 let cfg = WalkConfig::new(t, common.include_tests, &filter);
-                indent::run(&cfg, common.json)
+                indent::run(&cfg, output)
             })
         }
         Commands::Hal {
@@ -149,9 +152,10 @@ fn main() {
                 &filter,
                 common.list_excluded(),
             );
+            let output = common.output_mode();
             run_command(common.path, |t| {
                 let cfg = WalkConfig::new(t, common.include_tests, &filter);
-                hal::run(&cfg, common.json, top, &sort_by)
+                hal::run(&cfg, output, top, &sort_by)
             })
         }
         Commands::Cycom {
@@ -168,16 +172,10 @@ fn main() {
                 &filter,
                 common.list_excluded(),
             );
+            let output = common.output_mode();
             run_command(common.path, |t| {
                 let cfg = WalkConfig::new(t, common.include_tests, &filter);
-                cycom::run(
-                    &cfg,
-                    common.json,
-                    min_complexity,
-                    top,
-                    per_function,
-                    &sort_by,
-                )
+                cycom::run(&cfg, output, min_complexity, top, per_function, &sort_by)
             })
         }
         Commands::Mi {
@@ -192,9 +190,10 @@ fn main() {
                 &filter,
                 common.list_excluded(),
             );
+            let output = common.output_mode();
             run_command(common.path, |t| {
                 let cfg = WalkConfig::new(t, common.include_tests, &filter);
-                mi::run(&cfg, common.json, top, &sort_by)
+                mi::run(&cfg, output, top, &sort_by)
             })
         }
         Commands::Report {
@@ -211,9 +210,10 @@ fn main() {
                 &filter,
                 common.list_excluded(),
             );
+            let output = common.output_mode();
             run_command(common.path, |t| {
                 let cfg = WalkConfig::new(t, common.include_tests, &filter);
-                report::run(&cfg, common.json, effective_top, min_lines)
+                report::run(&cfg, output, effective_top, min_lines)
             });
         }
         Commands::Miv {
@@ -228,9 +228,10 @@ fn main() {
                 &filter,
                 common.list_excluded(),
             );
+            let output = common.output_mode();
             run_command(common.path, |t| {
                 let cfg = WalkConfig::new(t, common.include_tests, &filter);
-                miv::run(&cfg, common.json, top, &sort_by)
+                miv::run(&cfg, output, top, &sort_by)
             })
         }
         Commands::Hotspots {
@@ -247,16 +248,10 @@ fn main() {
                 &filter,
                 common.list_excluded(),
             );
+            let output = common.output_mode();
             run_command(common.path, |t| {
                 let cfg = WalkConfig::new(t, common.include_tests, &filter);
-                hotspots::run(
-                    &cfg,
-                    common.json,
-                    top,
-                    &sort_by,
-                    since.as_deref(),
-                    &complexity,
-                )
+                hotspots::run(&cfg, output, top, &sort_by, since.as_deref(), &complexity)
             })
         }
         Commands::Knowledge {
@@ -273,16 +268,10 @@ fn main() {
                 &filter,
                 common.list_excluded(),
             );
+            let output = common.output_mode();
             run_command(common.path, |t| {
                 let cfg = WalkConfig::new(t, common.include_tests, &filter);
-                knowledge::run(
-                    &cfg,
-                    common.json,
-                    top,
-                    &sort_by,
-                    since.as_deref(),
-                    risk_only,
-                )
+                knowledge::run(&cfg, output, top, &sort_by, since.as_deref(), risk_only)
             })
         }
         Commands::Tc {
@@ -301,10 +290,11 @@ fn main() {
                      (temporal coupling works from git history, not the filesystem)"
                 );
             }
+            let output = common.output_mode();
             run_command(common.path, |t| {
                 tc::run(
                     t,
-                    common.json,
+                    output,
                     common.include_tests,
                     top,
                     &sort_by,
@@ -327,9 +317,10 @@ fn main() {
                 &filter,
                 common.list_excluded(),
             );
+            let output = common.output_mode();
             run_command(common.path, |t| {
                 let cfg = WalkConfig::new(t, common.include_tests, &filter);
-                score::run(&cfg, common.json, bottom, min_lines)
+                score::run(&cfg, output, bottom, min_lines)
             })
         }
         Commands::Score {
@@ -338,6 +329,8 @@ fn main() {
                     git_ref,
                     path,
                     json,
+                    short,
+                    terse,
                     include_tests,
                     exclude_args,
                     bottom,
@@ -347,9 +340,18 @@ fn main() {
         } => {
             let filter = exclude_args.exclude_filter();
             maybe_list_excluded(&path, include_tests, &filter, exclude_args.list_excluded);
+            let output = if json {
+                OutputMode::Json
+            } else if short {
+                OutputMode::Short
+            } else if terse {
+                OutputMode::Terse
+            } else {
+                OutputMode::Table
+            };
             run_command(path, |t| {
                 let cfg = WalkConfig::new(t, include_tests, &filter);
-                score::run_diff(&cfg, &git_ref, json, bottom, min_lines)
+                score::run_diff(&cfg, &git_ref, output, bottom, min_lines)
             })
         }
         Commands::Ai { command } => match command {

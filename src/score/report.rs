@@ -187,6 +187,39 @@ pub fn print_json(
     report_helpers::print_json_stdout(&json)
 }
 
+/// Print compact single-line output for AI consumption.
+pub fn print_short(score: &ProjectScore) {
+    let mut dim_str = String::new();
+    for d in &score.dimensions {
+        let key = match d.name {
+            "Maintainability Index" => "mi",
+            "Cyclomatic Complexity" => "cx",
+            "Duplication" => "dup",
+            "Indentation Complexity" => "ind",
+            "Halstead Effort" => "hal",
+            "File Size" => "sz",
+            _ => continue,
+        };
+        if !dim_str.is_empty() {
+            dim_str.push(' ');
+        }
+        dim_str.push_str(&format!("{}:{:.1}", key, d.score));
+    }
+    println!(
+        "score s:{:.1} g:{} files:{} loc:{} {}",
+        score.score,
+        score.grade.as_str(),
+        score.files_analyzed,
+        score.total_loc,
+        dim_str,
+    );
+}
+
+/// Print only the headline metric (project score).
+pub fn print_terse(score: &ProjectScore) {
+    println!("{:.1}", score.score);
+}
+
 #[cfg(test)]
 #[path = "report_test.rs"]
 mod tests;

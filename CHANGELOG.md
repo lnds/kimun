@@ -1,3 +1,13 @@
+## Unreleased
+
+### Feat
+
+- add `--short` and `--terse` compact output modes for all analysis commands
+  - `--short`: single line of key:value pairs (AI/agent-friendly, minimizes token usage)
+  - `--terse`: just the headline metric value (for piping and embedding)
+  - All three flags (`--json`, `--short`, `--terse`) are mutually exclusive
+  - Introduced `OutputMode` enum in `cli.rs` replacing `json: bool` throughout
+
 ## 0.12.3 (2026-02-19)
 
 ### Refactor

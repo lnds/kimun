@@ -1,4 +1,5 @@
 use super::*;
+use crate::cli::OutputMode;
 use crate::walk::{ExcludeFilter, WalkConfig};
 use std::fs;
 
@@ -7,7 +8,7 @@ fn run_on_empty_dir() {
     let dir = tempfile::tempdir().unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, false).unwrap();
+    run(&cfg, OutputMode::Table).unwrap();
 }
 
 #[test]
@@ -20,7 +21,7 @@ fn run_on_rust_file() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, false).unwrap();
+    run(&cfg, OutputMode::Table).unwrap();
 }
 
 #[test]
@@ -33,7 +34,7 @@ fn run_json_output() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, true).unwrap();
+    run(&cfg, OutputMode::Json).unwrap();
 }
 
 #[test]
@@ -42,7 +43,7 @@ fn run_skips_binary() {
     fs::write(dir.path().join("data.c"), b"hello\x00world").unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, false).unwrap();
+    run(&cfg, OutputMode::Table).unwrap();
 }
 
 #[test]
@@ -57,7 +58,7 @@ fn run_excludes_tests_by_default() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     // No source files outside tests/ → prints "No recognized source files"
-    run(&cfg, false).unwrap();
+    run(&cfg, OutputMode::Table).unwrap();
 }
 
 #[test]
@@ -71,7 +72,7 @@ fn run_includes_tests_with_flag() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), true, &filter);
-    run(&cfg, false).unwrap();
+    run(&cfg, OutputMode::Table).unwrap();
 }
 
 #[test]
@@ -90,7 +91,7 @@ fn run_excludes_test_files_by_name() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     // parser_test.rs excluded, only parser.rs analyzed
-    run(&cfg, false).unwrap();
+    run(&cfg, OutputMode::Table).unwrap();
 }
 
 #[test]
@@ -110,7 +111,7 @@ fn run_sorts_by_stddev_descending() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, false).unwrap();
+    run(&cfg, OutputMode::Table).unwrap();
 }
 
 #[test]
@@ -128,5 +129,5 @@ fn run_multiple_languages() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), true, &filter);
-    run(&cfg, false).unwrap();
+    run(&cfg, OutputMode::Table).unwrap();
 }

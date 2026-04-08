@@ -10,11 +10,12 @@ pub(crate) mod report;
 use std::error::Error;
 use std::path::Path;
 
+use crate::cli::OutputMode;
 use crate::loc::language::LanguageSpec;
 use crate::util::read_and_classify;
 use crate::walk::WalkConfig;
 use analyzer::analyze;
-use report::{FileIndentMetrics, print_json, print_report};
+use report::{FileIndentMetrics, print_json, print_report, print_short, print_terse};
 
 /// Tab width used for converting tabs to spaces in indentation calculation.
 const TAB_WIDTH: usize = 4;
@@ -47,16 +48,17 @@ pub(crate) fn analyze_file(
 
 /// Walk source files, compute indentation metrics, sort by stddev
 /// descending, and print as a table or JSON.
-pub fn run(cfg: &WalkConfig<'_>, json: bool) -> Result<(), Box<dyn Error>> {
+pub fn run(cfg: &WalkConfig<'_>, output: OutputMode) -> Result<(), Box<dyn Error>> {
     let mut results = cfg.collect_analysis(analyze_file);
 
     // Sort by stddev descending
     results.sort_by(|a, b| b.stddev.total_cmp(&a.stddev));
 
-    if json {
-        print_json(&results)?;
-    } else {
-        print_report(&results);
+    match output {
+        OutputMode::Terse => print_terse(&results),
+        OutputMode::Short => print_short(&results),
+        OutputMode::Json => print_json(&results)?,
+        OutputMode::Table => print_report(&results),
     }
 
     Ok(())

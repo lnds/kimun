@@ -49,6 +49,17 @@ lang!("LangName", ext: ["ext1", "ext2"],
 
 Optional flags: `nested: true`, `sq: true` (single-quote strings), `tq: true` (triple-quote strings), `pragma: "{-#", "#-}"`. Use `lines: ["marker1", "marker2"]` for multiple line comment markers. For languages needing `line_comment_not_before`, write the `LanguageSpec` struct directly (see Haskell).
 
+## Output modes
+
+All analysis commands support four mutually exclusive output modes via `OutputMode` enum in `src/cli.rs`:
+
+- **Table** (default): Human-readable tables.
+- **`--json`**: Machine-readable JSON.
+- **`--short`**: Single line of `key:value` pairs (AI/agent-friendly).
+- **`--terse`**: Just the headline metric value (for piping/embedding).
+
+Each module's `report.rs` has `print_short()` and `print_terse()` functions alongside `print_report()` and `print_json()`. The dispatch in each `mod.rs` uses `match output { ... }`. For modules using `report_helpers::output_results_mode()`, pass all four function pointers.
+
 ## Conventions
 
 - The tool's output should match `cloc` as closely as possible — use `cloc` as the reference when validating changes.

@@ -67,3 +67,23 @@ fn json_structure_is_valid() {
     assert_eq!(arr.len(), 2);
     assert!(arr[0]["mi_score"].as_f64().unwrap() > 0.0);
 }
+
+#[test]
+fn print_short_does_not_panic() {
+    print_short(&sample_files());
+}
+
+#[test]
+fn print_short_empty() {
+    print_short(&[]);
+}
+
+#[test]
+fn print_terse_does_not_panic() {
+    print_terse(&sample_files());
+}
+
+#[test]
+fn print_terse_empty() {
+    print_terse(&[]);
+}

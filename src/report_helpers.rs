@@ -22,20 +22,33 @@ pub fn print_json_stdout(value: &impl Serialize) -> Result<(), Box<dyn std::erro
     Ok(())
 }
 
-/// Truncate results to `top` and output as JSON or table.
-pub fn output_results<T>(
+use crate::cli::OutputMode;
+
+/// Truncate results to `top` and output based on `OutputMode`.
+pub fn output_results_mode<T>(
     results: &mut Vec<T>,
     top: usize,
-    json: bool,
+    output: OutputMode,
     print_json_fn: impl FnOnce(&[T]) -> Result<(), Box<dyn std::error::Error>>,
     print_report_fn: impl FnOnce(&[T]),
+    print_short_fn: impl FnOnce(&[T]),
+    print_terse_fn: impl FnOnce(&[T]),
 ) -> Result<(), Box<dyn std::error::Error>> {
     results.truncate(top);
-    if json {
-        print_json_fn(results)
-    } else {
-        print_report_fn(results);
-        Ok(())
+    match output {
+        OutputMode::Terse => {
+            print_terse_fn(results);
+            Ok(())
+        }
+        OutputMode::Short => {
+            print_short_fn(results);
+            Ok(())
+        }
+        OutputMode::Json => print_json_fn(results),
+        OutputMode::Table => {
+            print_report_fn(results);
+            Ok(())
+        }
     }
 }
 

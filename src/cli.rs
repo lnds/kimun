@@ -9,6 +9,20 @@ use clap::{Args, Parser, Subcommand};
 use crate::cli_help;
 use crate::walk::ExcludeFilter;
 
+/// Output mode derived from `--json`, `--short`, and `--terse` flags.
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
+pub enum OutputMode {
+    /// Default human-readable table.
+    #[default]
+    Table,
+    /// Machine-readable JSON.
+    Json,
+    /// Compact single-line key:value pairs (AI-friendly).
+    Short,
+    /// Single headline metric value only.
+    Terse,
+}
+
 /// Top-level CLI parser with a single subcommand selector.
 #[derive(Parser)]
 #[command(name = "km", version, about = "Kimün — code metrics tools")]
@@ -80,6 +94,14 @@ pub struct CommonArgs {
     #[arg(long)]
     pub json: bool,
 
+    /// Compact single-line output (key:value pairs, AI-friendly)
+    #[arg(long, conflicts_with_all = ["json", "terse"])]
+    pub short: bool,
+
+    /// Output only the headline metric value (for piping/embedding)
+    #[arg(long, conflicts_with_all = ["json", "short"])]
+    pub terse: bool,
+
     /// Include test files and directories in analysis (excluded by default)
     #[arg(long)]
     pub include_tests: bool,
@@ -97,6 +119,19 @@ impl CommonArgs {
     /// Whether `--list-excluded` was requested.
     pub fn list_excluded(&self) -> bool {
         self.exclude_args.list_excluded
+    }
+
+    /// Derive the output mode from the `--json`, `--short`, and `--terse` flags.
+    pub fn output_mode(&self) -> OutputMode {
+        if self.json {
+            OutputMode::Json
+        } else if self.short {
+            OutputMode::Short
+        } else if self.terse {
+            OutputMode::Terse
+        } else {
+            OutputMode::Table
+        }
     }
 }
 
@@ -336,6 +371,14 @@ pub enum ScoreCommands {
         /// Output as JSON
         #[arg(long)]
         json: bool,
+
+        /// Compact single-line output (key:value pairs, AI-friendly)
+        #[arg(long, conflicts_with_all = ["json", "terse"])]
+        short: bool,
+
+        /// Output only the headline metric value (for piping/embedding)
+        #[arg(long, conflicts_with_all = ["json", "short"])]
+        terse: bool,
 
         /// Include test files and directories in analysis (excluded by default)
         #[arg(long)]
