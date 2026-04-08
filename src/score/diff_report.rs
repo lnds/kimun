@@ -97,6 +97,28 @@ pub fn print_report(diff: &ScoreDiff) {
     println!("{separator}");
 }
 
+/// Print score diff as a single compact line.
+///
+/// Format: `score_diff ref:<ref> s:<before>><after> g:<before>><after> d:<sign><delta>`
+pub fn print_short(diff: &ScoreDiff) {
+    let sign = if diff.overall.delta >= 0.0 { "+" } else { "" };
+    println!(
+        "score_diff ref:{} s:{:.1}>{:.1} g:{}>{} d:{sign}{:.1}",
+        diff.git_ref,
+        diff.overall.before,
+        diff.overall.after,
+        diff.before_grade,
+        diff.after_grade,
+        diff.overall.delta
+    );
+}
+
+/// Print only the score delta value.
+pub fn print_terse(diff: &ScoreDiff) {
+    let sign = if diff.overall.delta >= 0.0 { "+" } else { "" };
+    println!("{sign}{:.1}", diff.overall.delta);
+}
+
 // --- JSON output ---
 
 #[derive(Serialize)]

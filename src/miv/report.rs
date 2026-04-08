@@ -81,6 +81,40 @@ pub fn print_report(files: &[FileMIMetrics]) {
     );
 }
 
+/// Print MIv metrics as a single compact line.
+pub fn print_short(files: &[FileMIMetrics]) {
+    let count = files.len();
+    let avg_mi = if count > 0 {
+        files.iter().map(|f| f.metrics.mi_score).sum::<f64>() / count as f64
+    } else {
+        0.0
+    };
+    let good = files
+        .iter()
+        .filter(|f| f.metrics.level == MILevel::Good)
+        .count();
+    let moderate = files
+        .iter()
+        .filter(|f| f.metrics.level == MILevel::Moderate)
+        .count();
+    let difficult = files
+        .iter()
+        .filter(|f| f.metrics.level == MILevel::Difficult)
+        .count();
+    println!("miv files:{count} avg:{avg_mi:.1} good:{good} mod:{moderate} diff:{difficult}");
+}
+
+/// Print only the average MI.
+pub fn print_terse(files: &[FileMIMetrics]) {
+    let count = files.len();
+    let avg_mi = if count > 0 {
+        files.iter().map(|f| f.metrics.mi_score).sum::<f64>() / count as f64
+    } else {
+        0.0
+    };
+    println!("{avg_mi:.1}");
+}
+
 /// JSON-serializable representation of a file's MI breakdown.
 #[derive(Serialize)]
 struct JsonEntry {

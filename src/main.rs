@@ -67,7 +67,7 @@ use std::path::PathBuf;
 use clap::{CommandFactory, Parser};
 use clap_complete::{Shell, generate};
 
-use cli::{AiCommands, Cli, Commands, ScoreCommands};
+use cli::{AiCommands, Cli, Commands, OutputMode, ScoreCommands};
 use walk::{ExcludeFilter, WalkConfig};
 
 /// Resolve an optional path to a default of "." and run an analysis
@@ -103,16 +103,16 @@ fn maybe_list_excluded(
 
 /// Build filter, handle `--list-excluded`, then run a walk-based command.
 ///
-/// Exposes `$json` (bool) and `$cfg` (`WalkConfig`) inside `$body`.
+/// Exposes `$output` (`OutputMode`) and `$cfg` (`WalkConfig`) inside `$body`.
 /// Saves ~7 lines of identical boilerplate per subcommand arm.
 ///
-/// The `$json` identifier is explicit in the call site pattern so that Rust's
+/// The `$output` identifier is explicit in the call site pattern so that Rust's
 /// macro hygiene allows it to be referenced inside `$body`.
 macro_rules! dispatch {
-    ($common:expr, |$cfg:ident, $json:ident| $body:expr) => {{
+    ($common:expr, |$cfg:ident, $output:ident| $body:expr) => {{
         let _c = $common;
         let include_tests = _c.include_tests;
-        let $json = _c.json;
+        let $output = _c.output_mode();
         let filter = _c.exclude_filter();
         maybe_list_excluded(&_c.path, include_tests, &filter, _c.list_excluded());
         run_command(_c.path, |t| {
@@ -133,11 +133,11 @@ fn main() {
             common,
             verbose,
             by_author,
-        } => dispatch!(common, |cfg, json| {
+        } => dispatch!(common, |cfg, output| {
             if by_author {
-                loc::run_by_author(&cfg, json)
+                loc::run_by_author(&cfg, output)
             } else {
-                loc::run(&cfg, verbose, json)
+                loc::run(&cfg, verbose, output)
             }
         }),
         Commands::Dups {
@@ -149,22 +149,22 @@ fn main() {
             max_dup_ratio,
             fail_on_increase,
         } => {
-            dispatch!(common, |cfg, json| {
+            dispatch!(common, |cfg, output| {
                 let gate = dups::DupsGate {
                     max_duplicates,
                     max_dup_ratio,
                     fail_on_increase: fail_on_increase.clone(),
                 };
-                dups::run(&cfg, min_lines, report, show_all, json, gate)
+                dups::run(&cfg, min_lines, report, show_all, output, gate)
             })
         }
-        Commands::Indent { common } => dispatch!(common, |cfg, json| indent::run(&cfg, json)),
+        Commands::Indent { common } => dispatch!(common, |cfg, output| indent::run(&cfg, output)),
         Commands::Hal {
             common,
             top,
             sort_by,
         } => {
-            dispatch!(common, |cfg, json| hal::run(&cfg, json, top, &sort_by))
+            dispatch!(common, |cfg, output| hal::run(&cfg, output, top, &sort_by))
         }
         Commands::Cycom {
             common,
@@ -174,10 +174,10 @@ fn main() {
             sort_by,
             format,
         } => {
-            dispatch!(common, |cfg, json| {
+            dispatch!(common, |cfg, output| {
                 cycom::run(
                     &cfg,
-                    json,
+                    output,
                     min_complexity,
                     top,
                     per_function,
@@ -194,10 +194,10 @@ fn main() {
             sort_by,
             format,
         } => {
-            dispatch!(common, |cfg, json| {
+            dispatch!(common, |cfg, output| {
                 cogcom::run(
                     &cfg,
-                    json,
+                    output,
                     min_complexity,
                     top,
                     per_function,
@@ -211,7 +211,7 @@ fn main() {
             top,
             sort_by,
         } => {
-            dispatch!(common, |cfg, json| mi::run(&cfg, json, top, &sort_by))
+            dispatch!(common, |cfg, output| mi::run(&cfg, output, top, &sort_by))
         }
         Commands::Report {
             common,
@@ -220,9 +220,9 @@ fn main() {
             full,
         } => {
             let effective_top = if full { usize::MAX } else { top };
-            dispatch!(common, |cfg, json| report::run(
+            dispatch!(common, |cfg, output| report::run(
                 &cfg,
-                json,
+                output,
                 effective_top,
                 min_lines
             ))
@@ -232,7 +232,7 @@ fn main() {
             top,
             sort_by,
         } => {
-            dispatch!(common, |cfg, json| miv::run(&cfg, json, top, &sort_by))
+            dispatch!(common, |cfg, output| miv::run(&cfg, output, top, &sort_by))
         }
         Commands::Churn {
             common,
@@ -240,9 +240,9 @@ fn main() {
             sort_by,
             since,
         } => {
-            dispatch!(common, |cfg, json| churn::run(
+            dispatch!(common, |cfg, output| churn::run(
                 &cfg,
-                json,
+                output,
                 top,
                 &sort_by,
                 since.as_deref()
@@ -255,8 +255,8 @@ fn main() {
             since,
             complexity,
         } => {
-            dispatch!(common, |cfg, json| {
-                hotspots::run(&cfg, json, top, &sort_by, since.as_deref(), &complexity)
+            dispatch!(common, |cfg, output| {
+                hotspots::run(&cfg, output, top, &sort_by, since.as_deref(), &complexity)
             })
         }
         Commands::Age {
@@ -266,10 +266,10 @@ fn main() {
             sort_by,
             status,
         } => {
-            dispatch!(common, |cfg, json| {
+            dispatch!(common, |cfg, output| {
                 age::run(
                     &cfg,
-                    json,
+                    output,
                     active_days,
                     frozen_days,
                     &sort_by,
@@ -287,11 +287,11 @@ fn main() {
             bus_factor,
             author,
         } => {
-            dispatch!(common, |cfg, json| {
+            dispatch!(common, |cfg, output| {
                 knowledge::run(
                     &cfg,
                     &knowledge::KnowledgeOptions {
-                        json,
+                        output,
                         top,
                         sort_by: &sort_by,
                         since: since.as_deref(),
@@ -309,18 +309,18 @@ fn main() {
             sort_by,
             top,
         } => {
-            dispatch!(common, |cfg, json| deps::run(
+            dispatch!(common, |cfg, output| deps::run(
                 &cfg,
-                json,
+                output,
                 cycles_only,
                 &sort_by,
                 top
             ))
         }
         Commands::Authors { common, since } => {
-            dispatch!(common, |cfg, json| authors::run(
+            dispatch!(common, |cfg, output| authors::run(
                 &cfg,
-                json,
+                output,
                 since.as_deref()
             ))
         }
@@ -340,11 +340,13 @@ fn main() {
                      (temporal coupling works from git history, not the filesystem)"
                 );
             }
+            let output = common.output_mode();
+            let include_tests = common.include_tests;
             run_command(common.path, |t| {
                 tc::run(
                     t,
-                    common.json,
-                    common.include_tests,
+                    output,
+                    include_tests,
                     top,
                     &sort_by,
                     since.as_deref(),
@@ -363,7 +365,7 @@ fn main() {
             format,
         } => {
             let include_tests = common.include_tests;
-            let json = common.json;
+            let output = common.output_mode();
             let filter = common.exclude_filter();
             maybe_list_excluded(&common.path, include_tests, &filter, common.list_excluded());
             run_command(common.path, |t| {
@@ -373,7 +375,7 @@ fn main() {
                     let changed = git_repo.files_changed_since(git_ref)?;
                     smells::run_on_files(
                         &changed,
-                        json,
+                        output,
                         top,
                         max_lines,
                         max_params,
@@ -382,7 +384,7 @@ fn main() {
                 } else if !files.is_empty() {
                     smells::run_on_files(
                         &files,
-                        json,
+                        output,
                         top,
                         max_lines,
                         max_params,
@@ -390,7 +392,7 @@ fn main() {
                     )
                 } else {
                     let cfg = WalkConfig::new(t, include_tests, &filter);
-                    smells::run(&cfg, json, top, max_lines, max_params, format.as_deref())
+                    smells::run(&cfg, output, top, max_lines, max_params, format.as_deref())
                 }
             })
         }
@@ -415,15 +417,15 @@ fn main() {
                 },
                 None => None,
             };
-            dispatch!(common, |cfg, json| {
+            dispatch!(common, |cfg, output| {
                 if let Some(ref git_ref) = trend {
                     let gate = score::ScoreGate {
                         fail_if_worse,
                         fail_below: fail_below_grade,
                     };
-                    score::run_diff(&cfg, git_ref, json, bottom, min_lines, &model, gate)
+                    score::run_diff(&cfg, git_ref, output, bottom, min_lines, &model, gate)
                 } else {
-                    score::run(&cfg, json, bottom, min_lines, &model)
+                    score::run(&cfg, output, bottom, min_lines, &model)
                 }
             })
         }
@@ -433,6 +435,8 @@ fn main() {
                     git_ref,
                     path,
                     json,
+                    short,
+                    terse,
                     include_tests,
                     exclude_args,
                     bottom,
@@ -441,6 +445,15 @@ fn main() {
                 }),
             ..
         } => {
+            let output = if json {
+                OutputMode::Json
+            } else if short {
+                OutputMode::Short
+            } else if terse {
+                OutputMode::Terse
+            } else {
+                OutputMode::Table
+            };
             let filter = exclude_args.exclude_filter();
             maybe_list_excluded(&path, include_tests, &filter, exclude_args.list_excluded);
             run_command(path, |t| {
@@ -448,7 +461,7 @@ fn main() {
                 score::run_diff(
                     &cfg,
                     &git_ref,
-                    json,
+                    output,
                     bottom,
                     min_lines,
                     &model,

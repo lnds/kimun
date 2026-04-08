@@ -85,6 +85,30 @@ pub fn print_json(files: &[FileIndentMetrics]) -> Result<(), Box<dyn std::error:
     report_helpers::print_json_stdout(&entries)
 }
 
+/// Print indentation metrics as a single compact line.
+pub fn print_short(files: &[FileIndentMetrics]) {
+    let count = files.len();
+    let avg_sd = if count > 0 {
+        files.iter().map(|f| f.stddev).sum::<f64>() / count as f64
+    } else {
+        0.0
+    };
+    let max_sd = files.iter().map(|f| f.stddev).fold(0.0_f64, f64::max);
+    let max_depth = files.iter().map(|f| f.max_depth).max().unwrap_or(0);
+    println!("indent files:{count} avg_sd:{avg_sd:.2} max_sd:{max_sd:.2} max_depth:{max_depth}");
+}
+
+/// Print only the average standard deviation.
+pub fn print_terse(files: &[FileIndentMetrics]) {
+    let count = files.len();
+    let avg_sd = if count > 0 {
+        files.iter().map(|f| f.stddev).sum::<f64>() / count as f64
+    } else {
+        0.0
+    };
+    println!("{avg_sd:.2}");
+}
+
 #[cfg(test)]
 #[path = "report_test.rs"]
 mod tests;

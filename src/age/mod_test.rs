@@ -1,4 +1,5 @@
 use super::*;
+use crate::cli::OutputMode;
 use crate::walk::{ExcludeFilter, WalkConfig};
 use git2::Repository;
 use std::fs;
@@ -41,7 +42,7 @@ fn run_on_non_git_dir() {
     fs::create_dir_all(&sub).unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(&sub, false, &filter);
-    let err = run(&cfg, false, 90, 365, "date", None).unwrap_err();
+    let err = run(&cfg, OutputMode::Table, 90, 365, "date", None).unwrap_err();
     assert!(
         err.to_string().contains("not a git repository"),
         "should mention not a git repository, got: {err}"
@@ -56,7 +57,7 @@ fn run_active_days_not_less_than_frozen_days_error() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), true, &filter);
     // active_days == frozen_days should error
-    let err = run(&cfg, false, 365, 90, "date", None).unwrap_err();
+    let err = run(&cfg, OutputMode::Table, 365, 90, "date", None).unwrap_err();
     assert!(
         err.to_string().contains("--active-days"),
         "should mention --active-days, got: {err}"
@@ -74,7 +75,7 @@ fn integration_basic_table() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, false, 90, 365, "date", None);
+    let result = run(&cfg, OutputMode::Table, 90, 365, "date", None);
     assert!(result.is_ok(), "age analysis should succeed: {:?}", result);
 }
 
@@ -89,7 +90,7 @@ fn integration_json_output() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, true, 90, 365, "date", None);
+    let result = run(&cfg, OutputMode::Json, 90, 365, "date", None);
     assert!(result.is_ok(), "age JSON output should succeed");
 }
 
@@ -107,7 +108,7 @@ fn integration_sort_by_status() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, false, 90, 365, "status", None);
+    let result = run(&cfg, OutputMode::Table, 90, 365, "status", None);
     assert!(result.is_ok(), "sort by status should succeed");
 }
 
@@ -122,7 +123,7 @@ fn integration_sort_by_file() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, false, 90, 365, "file", None);
+    let result = run(&cfg, OutputMode::Table, 90, 365, "file", None);
     assert!(result.is_ok(), "sort by file should succeed");
 }
 
@@ -133,7 +134,7 @@ fn integration_status_filter_active() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, false, 90, 365, "date", Some("active"));
+    let result = run(&cfg, OutputMode::Table, 90, 365, "date", Some("active"));
     assert!(result.is_ok(), "filter by active should succeed");
 }
 
@@ -144,7 +145,7 @@ fn integration_status_filter_stale() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, false, 90, 365, "date", Some("stale"));
+    let result = run(&cfg, OutputMode::Table, 90, 365, "date", Some("stale"));
     assert!(result.is_ok(), "filter by stale should succeed");
 }
 
@@ -155,7 +156,7 @@ fn integration_status_filter_frozen() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, false, 90, 365, "date", Some("frozen"));
+    let result = run(&cfg, OutputMode::Table, 90, 365, "date", Some("frozen"));
     assert!(result.is_ok(), "filter by frozen should succeed");
 }
 
@@ -168,7 +169,7 @@ fn integration_empty_repo_no_files() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     // Should succeed even with no source files found
-    let result = run(&cfg, false, 90, 365, "date", None);
+    let result = run(&cfg, OutputMode::Table, 90, 365, "date", None);
     assert!(
         result.is_ok(),
         "no source files should not crash: {:?}",
@@ -181,7 +182,7 @@ fn run_on_current_repo() {
     // Smoke test on the actual project repo
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(StdPath::new("."), false, &filter);
-    let result = run(&cfg, false, 90, 365, "date", None);
+    let result = run(&cfg, OutputMode::Table, 90, 365, "date", None);
     assert!(result.is_ok(), "age analysis should work on current repo");
 }
 
@@ -189,6 +190,6 @@ fn run_on_current_repo() {
 fn run_on_current_repo_json() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(StdPath::new("."), false, &filter);
-    let result = run(&cfg, true, 90, 365, "date", None);
+    let result = run(&cfg, OutputMode::Json, 90, 365, "date", None);
     assert!(result.is_ok(), "age JSON should work on current repo");
 }

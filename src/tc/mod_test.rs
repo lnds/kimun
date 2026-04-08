@@ -1,4 +1,5 @@
 use super::*;
+use crate::cli::OutputMode;
 use std::fs;
 use std::path::Path as StdPath;
 
@@ -39,7 +40,17 @@ fn run_on_non_git_dir() {
     let dir = tempfile::tempdir().unwrap();
     let sub = dir.path().join("not_a_repo");
     fs::create_dir_all(&sub).unwrap();
-    let err = run(&sub, false, false, 20, "strength", None, 3, None).unwrap_err();
+    let err = run(
+        &sub,
+        OutputMode::Table,
+        false,
+        20,
+        "strength",
+        None,
+        3,
+        None,
+    )
+    .unwrap_err();
     assert!(
         err.to_string().contains("not a git repository"),
         "should mention not a git repository, got: {err}"
@@ -50,7 +61,7 @@ fn run_on_non_git_dir() {
 fn run_min_degree_zero_rejected() {
     let err = run(
         StdPath::new("."),
-        false,
+        OutputMode::Table,
         false,
         20,
         "strength",
@@ -93,7 +104,16 @@ fn integration_basic() {
     assert!((results[0].strength - 1.0).abs() < 0.001);
 
     // Also verify run() succeeds
-    let result = run(dir.path(), false, false, 20, "strength", None, 3, None);
+    let result = run(
+        dir.path(),
+        OutputMode::Table,
+        false,
+        20,
+        "strength",
+        None,
+        3,
+        None,
+    );
     assert!(result.is_ok(), "basic coupling should succeed");
 }
 
@@ -110,7 +130,16 @@ fn integration_json() {
             &format!("commit {i}"),
         );
     }
-    let result = run(dir.path(), true, false, 20, "strength", None, 3, None);
+    let result = run(
+        dir.path(),
+        OutputMode::Json,
+        false,
+        20,
+        "strength",
+        None,
+        3,
+        None,
+    );
     assert!(result.is_ok(), "JSON output should succeed");
 }
 
@@ -132,7 +161,16 @@ fn integration_no_coupling() {
             &format!("commit b {i}"),
         );
     }
-    let result = run(dir.path(), false, false, 20, "strength", None, 3, None);
+    let result = run(
+        dir.path(),
+        OutputMode::Table,
+        false,
+        20,
+        "strength",
+        None,
+        3,
+        None,
+    );
     assert!(result.is_ok(), "no coupling should succeed");
 }
 
@@ -150,7 +188,16 @@ fn integration_min_degree_filter() {
         &[("a.rs", "fn a() { 2 }"), ("b.rs", "fn b() { 2 }")],
         "c2",
     );
-    let result = run(dir.path(), false, false, 20, "strength", None, 3, None);
+    let result = run(
+        dir.path(),
+        OutputMode::Table,
+        false,
+        20,
+        "strength",
+        None,
+        3,
+        None,
+    );
     assert!(result.is_ok(), "min_degree filter should not crash");
 }
 
@@ -197,7 +244,7 @@ fn run_on_current_repo() {
     // Smoke test on the actual repo
     let result = run(
         StdPath::new("."),
-        false,
+        OutputMode::Table,
         false,
         5,
         "strength",
@@ -210,6 +257,15 @@ fn run_on_current_repo() {
 
 #[test]
 fn run_on_current_repo_json() {
-    let result = run(StdPath::new("."), true, false, 5, "strength", None, 3, None);
+    let result = run(
+        StdPath::new("."),
+        OutputMode::Json,
+        false,
+        5,
+        "strength",
+        None,
+        3,
+        None,
+    );
     assert!(result.is_ok(), "tc JSON should succeed on a git repo");
 }

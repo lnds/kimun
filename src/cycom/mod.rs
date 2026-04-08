@@ -11,6 +11,7 @@ pub(crate) mod report;
 use std::error::Error;
 use std::path::Path;
 
+use crate::cli::OutputMode;
 use crate::loc::counter::LineKind;
 use crate::loc::language::LanguageSpec;
 use crate::util::read_and_classify;
@@ -66,7 +67,7 @@ pub(crate) fn analyze_file(
 /// results, and print as a table, per-function breakdown, JSON, or GitHub annotations.
 pub fn run(
     cfg: &WalkConfig<'_>,
-    json: bool,
+    output: OutputMode,
     min_complexity: usize,
     top: usize,
     per_function: bool,
@@ -94,8 +95,10 @@ pub fn run(
     // Limit to top N
     results.truncate(top);
 
-    match (json, format) {
-        (true, _) | (_, Some("json")) => print_json(&results)?,
+    match (output, format) {
+        (OutputMode::Short, _) => report::print_short(&results),
+        (OutputMode::Terse, _) => report::print_terse(&results),
+        (OutputMode::Json, _) | (_, Some("json")) => print_json(&results)?,
         (_, Some("github")) => print_github(&results, min_complexity),
         (_, _) if per_function => print_per_function(&results),
         _ => print_report(&results),

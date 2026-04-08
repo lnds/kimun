@@ -4,7 +4,7 @@
 /// ownership concentration, contributor count, and knowledge loss risk.
 use serde::Serialize;
 
-use super::analyzer::{AuthorSummary, BusFactor, FileOwnership};
+use super::analyzer::{AuthorSummary, BusFactor, FileOwnership, RiskLevel};
 use crate::report_helpers;
 
 const COL_LANG: usize = 10;
@@ -321,6 +321,56 @@ pub fn print_bus_factor_json(bf: &BusFactor) -> Result<(), Box<dyn std::error::E
     };
 
     report_helpers::print_json_stdout(&out)
+}
+
+/// Print knowledge metrics as a single compact line.
+pub fn print_short(files: &[FileOwnership]) {
+    let count = files.len();
+    let at_risk = files
+        .iter()
+        .filter(|f| matches!(f.risk, RiskLevel::Critical | RiskLevel::High))
+        .count();
+    let avg_own = if count > 0 {
+        files.iter().map(|f| f.ownership_pct).sum::<f64>() / count as f64
+    } else {
+        0.0
+    };
+    println!("knowledge files:{count} at_risk:{at_risk} avg_own:{avg_own:.1}%");
+}
+
+/// Print only the number of at-risk files.
+pub fn print_terse(files: &[FileOwnership]) {
+    let at_risk = files
+        .iter()
+        .filter(|f| matches!(f.risk, RiskLevel::Critical | RiskLevel::High))
+        .count();
+    println!("{at_risk}");
+}
+
+/// Print bus factor as a single compact line.
+pub fn print_bus_factor_short(bf: &BusFactor) {
+    println!(
+        "knowledge_bf factor:{} contributors:{}",
+        bf.factor,
+        bf.contributors.len()
+    );
+}
+
+/// Print only the bus factor number.
+pub fn print_bus_factor_terse(bf: &BusFactor) {
+    println!("{}", bf.factor);
+}
+
+/// Print author summary as a single compact line.
+pub fn print_summary_short(authors: &[AuthorSummary]) {
+    let count = authors.len();
+    let total_files: usize = authors.iter().map(|a| a.files_owned).sum();
+    println!("knowledge_summary authors:{count} files:{total_files}");
+}
+
+/// Print only the author count from summary.
+pub fn print_summary_terse(authors: &[AuthorSummary]) {
+    println!("{}", authors.len());
 }
 
 #[cfg(test)]

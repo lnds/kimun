@@ -77,6 +77,40 @@ pub fn print_report(files: &[FileMIMetrics]) {
     );
 }
 
+/// Print MI metrics as a single compact line.
+pub fn print_short(files: &[FileMIMetrics]) {
+    let count = files.len();
+    let avg_mi = if count > 0 {
+        files.iter().map(|f| f.metrics.mi_score).sum::<f64>() / count as f64
+    } else {
+        0.0
+    };
+    let green = files
+        .iter()
+        .filter(|f| f.metrics.level == MILevel::Green)
+        .count();
+    let yellow = files
+        .iter()
+        .filter(|f| f.metrics.level == MILevel::Yellow)
+        .count();
+    let red = files
+        .iter()
+        .filter(|f| f.metrics.level == MILevel::Red)
+        .count();
+    println!("mi files:{count} avg:{avg_mi:.1} green:{green} yellow:{yellow} red:{red}");
+}
+
+/// Print only the average MI.
+pub fn print_terse(files: &[FileMIMetrics]) {
+    let count = files.len();
+    let avg_mi = if count > 0 {
+        files.iter().map(|f| f.metrics.mi_score).sum::<f64>() / count as f64
+    } else {
+        0.0
+    };
+    println!("{avg_mi:.1}");
+}
+
 /// JSON-serializable representation of a file's MI metrics.
 #[derive(Serialize)]
 struct JsonEntry {

@@ -10,10 +10,11 @@ use std::path::PathBuf;
 
 use chrono::Utc;
 
+use crate::cli::OutputMode;
 use crate::git::GitRepo;
 use crate::walk::{self, WalkConfig};
 use analyzer::{AgeStatus, AgeThresholds, classify};
-use report::{print_json, print_report};
+use report::{print_json, print_report, print_short, print_terse};
 
 /// Run code age analysis and print results.
 ///
@@ -22,7 +23,7 @@ use report::{print_json, print_report};
 /// Files not found in git history (e.g. untracked) are skipped with a warning.
 pub fn run(
     cfg: &WalkConfig<'_>,
-    json: bool,
+    output: OutputMode,
     active_days: u64,
     frozen_days: u64,
     sort_by: &str,
@@ -86,10 +87,11 @@ pub fn run(
         _ => files.sort_by_key(|f| f.last_modified), // "date" — oldest first
     }
 
-    if json {
-        print_json(&files);
-    } else {
-        print_report(&files, &thresholds);
+    match output {
+        OutputMode::Json => print_json(&files),
+        OutputMode::Short => print_short(&files),
+        OutputMode::Terse => print_terse(&files),
+        OutputMode::Table => print_report(&files, &thresholds),
     }
 
     Ok(())

@@ -165,6 +165,21 @@ pub fn print_json(files: &[FileHalsteadMetrics]) -> Result<(), Box<dyn std::erro
     report_helpers::print_json_stdout(&entries)
 }
 
+/// Print Halstead metrics as a single compact line.
+pub fn print_short(files: &[FileHalsteadMetrics]) {
+    let count = files.len();
+    let total_vol: f64 = files.iter().map(|f| f.metrics.volume).sum();
+    let total_effort: f64 = files.iter().map(|f| f.metrics.effort).sum();
+    let total_bugs: f64 = files.iter().map(|f| f.metrics.bugs).sum();
+    println!("hal files:{count} vol:{total_vol:.1} effort:{total_effort:.1} bugs:{total_bugs:.1}");
+}
+
+/// Print only the total effort.
+pub fn print_terse(files: &[FileHalsteadMetrics]) {
+    let total_effort: f64 = files.iter().map(|f| f.metrics.effort).sum();
+    println!("{total_effort:.1}");
+}
+
 #[cfg(test)]
 #[path = "report_test.rs"]
 mod tests;
