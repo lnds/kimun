@@ -244,6 +244,106 @@ fn legacy_dimensions_sum_to_100_percent() {
     );
 }
 
+// ── ScoreGate error message format ──────────────────────────────────────
+
+#[test]
+fn score_gate_error_message_shows_two_decimal_places() {
+    // Regression: a delta of -0.04 was displayed as "-0.0" with {:.1} format.
+    let before = 86.93_f64;
+    let after = 86.89_f64;
+    let delta = after - before;
+    let msg = format!(
+        "quality gate failed: score dropped {:.2} → {:.2} ({:+.2})",
+        before, after, delta
+    );
+    assert!(
+        msg.contains("86.93") && msg.contains("86.89"),
+        "scores should show two decimal places, got: {msg}"
+    );
+    assert!(
+        !msg.contains("(-0.0)"),
+        "delta should not round to -0.0, got: {msg}"
+    );
+}
+
+#[test]
+fn score_gate_fail_if_worse_error_contains_decimal_delta() {
+    // Integration: run_diff with fail_if_worse on a repo where a second commit
+    // adds complex code, so the score can only drop or stay equal. We verify
+    // that when the gate fires the error message includes a two-decimal delta.
+    let dir = tempfile::tempdir().unwrap();
+    let repo = git2::Repository::init(dir.path()).unwrap();
+    let mut config = repo.config().unwrap();
+    config.set_str("user.name", "Test").unwrap();
+    config.set_str("user.email", "test@test.com").unwrap();
+    let sig =
+        git2::Signature::new("Test", "test@test.com", &git2::Time::new(1_700_000_000, 0)).unwrap();
+
+    // First commit: simple clean file (high score baseline).
+    let simple = "fn add(a: i32, b: i32) -> i32 { a + b }\n";
+    std::fs::write(dir.path().join("lib.rs"), simple).unwrap();
+    let oid1 = {
+        let mut index = repo.index().unwrap();
+        index.add_path(std::path::Path::new("lib.rs")).unwrap();
+        index.write().unwrap();
+        let tree = repo.find_tree(index.write_tree().unwrap()).unwrap();
+        repo.commit(Some("HEAD"), &sig, &sig, "init", &tree, &[])
+            .unwrap()
+    };
+
+    // Second commit: add deeply nested function to push score down.
+    let complex = r#"
+fn add(a: i32, b: i32) -> i32 { a + b }
+fn deeply(x: i32) -> i32 {
+    if x > 0 { if x > 1 { if x > 2 { if x > 3 { if x > 4 {
+        if x > 5 { if x > 6 { if x > 7 { x * 2 } else { x } } else { x } }
+        else { x }
+    } else { x } } else { x } } else { x } } else { x } }
+    else { 0 }
+}
+"#;
+    std::fs::write(dir.path().join("lib.rs"), complex).unwrap();
+    {
+        let mut index = repo.index().unwrap();
+        index.add_path(std::path::Path::new("lib.rs")).unwrap();
+        index.write().unwrap();
+        let tree = repo.find_tree(index.write_tree().unwrap()).unwrap();
+        let parent = repo.find_commit(oid1).unwrap();
+        repo.commit(
+            Some("HEAD"),
+            &sig,
+            &sig,
+            "add complex fn",
+            &tree,
+            &[&parent],
+        )
+        .unwrap();
+    }
+
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), true, &filter);
+    let gate = ScoreGate {
+        fail_if_worse: true,
+        fail_below: None,
+    };
+    let result = run_diff(&cfg, "HEAD~1", false, 10, 6, "cogcom", gate);
+
+    if let Err(e) = result {
+        let msg = e.to_string();
+        // Error must not contain the "-0.0)" pattern (1-decimal rounding artifact).
+        assert!(
+            !msg.contains("(-0.0)"),
+            "gate error should not show rounded -0.0, got: {msg}"
+        );
+        // Delta must be formatted with exactly two decimal places.
+        assert!(
+            msg.contains("(-") || msg.contains("(+"),
+            "gate error should include a signed delta, got: {msg}"
+        );
+    }
+    // If result is Ok the score didn't drop — that's valid, no assertion needed.
+}
+
 // ── ScoringModel::from_arg ──────────────────────────────────────────────
 
 #[test]

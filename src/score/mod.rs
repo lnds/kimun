@@ -146,7 +146,7 @@ pub fn run_diff(
     // Quality gates: evaluated after output so the log is always complete.
     if gate.fail_if_worse && score_diff.overall.delta < 0.0 {
         return Err(format!(
-            "quality gate failed: score dropped {:.1} → {:.1} ({:+.1})",
+            "quality gate failed: score dropped {:.2} → {:.2} ({:+.2})",
             score_diff.overall.before, score_diff.overall.after, score_diff.overall.delta
         )
         .into());
