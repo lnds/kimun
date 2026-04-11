@@ -1,0 +1,101 @@
+name: Kimun CI (Kume)
+
+on: [push, pull_request]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Tripan
+        run: |
+          echo '                   ##*****#**#++++*##%                  '
+          echo '              ##*+*+------*++*------+***##              '
+          echo '           #**=----=+=----*++*----=+=----=+*%           '
+          echo '         #*+---------=+=--*++*--=+=---------+*#         '
+          echo '       #*=-------------=+-*++*=+=-------------+*#       '
+          echo '      #+-----------------=#++#=-----------------+#      '
+          echo '    #*----------==--------*++*--------=+----------*#    '
+          echo '   #*---------*#----------*++*-----=---++----------*#   '
+          echo '  #*---------##+----------*++*----+=+###*-==--------*#  '
+          echo ' ##----------##*=----=----*++*------+####++----------#% '
+          echo ' #=+=--------+####+*#=----*++*-----=*-=*=+---------=+=# '
+          echo '#*--=+=-------=+++==------*++*------=---==-------=+=--*#'
+          echo '#-----=+=-----------------*++*-----------------=+=-----#'
+          echo '#-------=+=---------------*++*---------------=+=-------#'
+          echo '#*************************####*************************#'
+          echo '#*************************####*************************#'
+          echo '*-------=+=---------------*++*----------------++-------*'
+          echo '#-----=+=-----------------*++*------------------++-----#'
+          echo '#+--=+=-------==---+------*++*---------=---------=++--+%'
+          echo ' #=+=--------==**=-#------*++*--------+#=----------=++# '
+          echo ' %#---------=*+####=------*++*-----+######*=---------## '
+          echo '  #*--------+--####=+=----*++*-------####+----------*#  '
+          echo '   #+----------*=--=------*++*------+*+=**---------*#   '
+          echo '    %*----------+---------*++*--------------------*#    '
+          echo '      *=-----------------+#++#=-----------------=*      '
+          echo '       #*--------------+*=*++*=+=-------------=*#       '
+          echo '         *+=---------+*=--*++*--=+=---------++*         '
+          echo '           #*+=----=+=----*++*----=+=----=**            '
+          echo '              #*++*+------*++*------+*+++               '
+          echo '                  ***#****#**#+++***+                   '
+
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache cargo registry
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Format check
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy -- -D warnings
+
+      - name: Tests
+        run: cargo test
+
+  quality-gates:
+    name: Quality Gates
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Score gate (no regression vs main)
+        run: cargo run --bin km -- score --trend origin/main --fail-if-worse
+
+      - name: Duplication gate (no increase vs main)
+        run: cargo run --bin km -- dups --fail-on-increase origin/main
