@@ -854,6 +854,41 @@ Options:
 | `--full` | Show all files instead of truncating to top N |
 | `--format {table,json,short,terse}` | Output format (default: table) |
 
+## Project configuration (`.kimun.toml`)
+
+Place a `.kimun.toml` file in the root of your repository to set project-level defaults for thresholds and quality gates. `km` searches for the file at the git repository root, falling back to the current directory.
+
+CLI flags always take precedence over `.kimun.toml`, which in turn takes precedence over built-in defaults.
+
+```toml
+[smells]
+max_lines  = 30    # flag functions longer than N body lines (default: 50)
+max_params = 3     # flag functions with more than N parameters (default: 4)
+
+[dups]
+min_lines      = 8     # minimum block size for duplication detection (default: 6)
+                       # also applies to `km report` and `km score`
+max_duplicates = 10    # CI gate: fail if duplicate groups exceed N
+max_dup_ratio  = 5.0   # CI gate: fail if duplicated-lines ratio exceeds this %
+
+[score]
+model      = "cogcom"  # scoring model: cogcom (default) or legacy
+fail_below = "B-"      # CI gate: fail if health score is below this grade
+
+[age]
+active_days = 60    # files modified within N days are Active (default: 90)
+frozen_days = 180   # files not modified for more than N days are Frozen (default: 365)
+
+[tc]
+min_degree   = 5    # minimum commits per file to include in coupling analysis (default: 3)
+min_strength = 0.5  # only show pairs with coupling strength >= this value
+
+[hotspots]
+complexity = "cogcom"  # complexity metric: indent (default), cycom, or cogcom
+```
+
+All sections and fields are optional — omit any you don't need. A fully documented template is available at [`.kimun.toml.example`](.kimun.toml.example).
+
 ## Features
 
 - Respects `.gitignore` rules automatically
