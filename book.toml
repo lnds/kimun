@@ -1,0 +1,10 @@
+[book]
+title = "Kimün (km)"
+description = "Fast command-line tool for code analysis"
+src = "docs"
+language = "en"
+
+[output.html]
+site-url = "/kimun/"
+git-repository-url = "https://github.com/lnds/kimun"
+edit-url-template = "https://github.com/lnds/kimun/edit/main/docs/{path}"
