@@ -126,7 +126,7 @@ pub fn run(
         OutputMode::Short => print_short(&results),
         OutputMode::Terse => print_terse(&results),
         OutputMode::Github => {
-            return Err("--format github is only supported by cycom, cogcom, and smells".into());
+            return Err(crate::cli::ERR_GITHUB_ONLY.into());
         }
         OutputMode::Table => print_report(&results, complexity_metric),
     }

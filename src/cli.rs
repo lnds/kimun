@@ -10,6 +10,9 @@ pub use clap_complete::Shell;
 use crate::cli_help;
 use crate::walk::ExcludeFilter;
 
+/// Error returned by commands that do not support `--format github`.
+pub const ERR_GITHUB_ONLY: &str = "--format github is only supported by cycom, cogcom, and smells";
+
 /// Output format for analysis commands.
 ///
 /// Driven by `--format` on `CommonArgs`. `Github` emits GitHub Actions

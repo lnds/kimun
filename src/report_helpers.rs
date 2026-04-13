@@ -126,9 +126,7 @@ pub fn output_results<T>(
             Ok(())
         }
         crate::cli::OutputMode::Json => print_json_fn(results),
-        crate::cli::OutputMode::Github => {
-            Err("--format github is only supported by cycom, cogcom, and smells".into())
-        }
+        crate::cli::OutputMode::Github => Err(crate::cli::ERR_GITHUB_ONLY.into()),
         crate::cli::OutputMode::Table => {
             print_report_fn(results);
             Ok(())

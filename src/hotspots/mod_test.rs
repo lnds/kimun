@@ -351,3 +351,29 @@ fn integration_sort_by_complexity() {
     let result = run(&cfg, OutputMode::Table, 20, "complexity", None, "indent");
     assert!(result.is_ok(), "sort by complexity should work");
 }
+
+#[test]
+fn run_short_format() {
+    let (dir, repo) = create_test_repo();
+    make_commit(
+        &repo,
+        &[("main.rs", "fn main() {\n    println!(\"hi\");\n}\n")],
+        "add main",
+    );
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, OutputMode::Short, 20, "score", None, "indent").unwrap();
+}
+
+#[test]
+fn run_terse_format() {
+    let (dir, repo) = create_test_repo();
+    make_commit(
+        &repo,
+        &[("main.rs", "fn main() {\n    println!(\"hi\");\n}\n")],
+        "add main",
+    );
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, OutputMode::Terse, 20, "score", None, "indent").unwrap();
+}

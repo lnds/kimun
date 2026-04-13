@@ -480,3 +480,36 @@ fn integration_summary_sort_by_risk() {
     );
     assert!(result.is_ok(), "summary risk sort should work: {result:?}");
 }
+#[test]
+fn run_short_format() {
+    let (dir, repo) = create_test_repo();
+    make_commit(
+        &repo,
+        &[("main.rs", "fn main() {\n    println!(\"hi\");\n}\n")],
+        "add main",
+    );
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run(
+        &cfg,
+        &opts(OutputMode::Short, 20, "concentration", None, false, false),
+    );
+    assert!(result.is_ok(), "short format should succeed: {result:?}");
+}
+
+#[test]
+fn run_terse_format() {
+    let (dir, repo) = create_test_repo();
+    make_commit(
+        &repo,
+        &[("main.rs", "fn main() {\n    println!(\"hi\");\n}\n")],
+        "add main",
+    );
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run(
+        &cfg,
+        &opts(OutputMode::Terse, 20, "concentration", None, false, false),
+    );
+    assert!(result.is_ok(), "terse format should succeed: {result:?}");
+}

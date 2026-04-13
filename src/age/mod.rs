@@ -92,7 +92,7 @@ pub fn run(
         OutputMode::Short => print_short(&files),
         OutputMode::Terse => print_terse(&files),
         OutputMode::Github => {
-            return Err("--format github is only supported by cycom, cogcom, and smells".into());
+            return Err(crate::cli::ERR_GITHUB_ONLY.into());
         }
         OutputMode::Table => print_report(&files, &thresholds),
     }

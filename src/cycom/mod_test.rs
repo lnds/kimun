@@ -142,3 +142,29 @@ fn run_skips_non_code_languages() {
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     run(&cfg, OutputMode::Table, 1, 20, false, "total").unwrap();
 }
+
+#[test]
+fn run_short_format() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("main.rs"),
+        "fn foo() {\n    if true {\n        println!(\"hi\");\n    }\n}\n",
+    )
+    .unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, OutputMode::Short, 0, 20, false, "total").unwrap();
+}
+
+#[test]
+fn run_terse_format() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("main.rs"),
+        "fn foo() {\n    if true {\n        println!(\"hi\");\n    }\n}\n",
+    )
+    .unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, OutputMode::Terse, 0, 20, false, "total").unwrap();
+}

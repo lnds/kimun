@@ -96,7 +96,7 @@ pub fn run(
         OutputMode::Short => print_short(&score),
         OutputMode::Terse => print_terse(&score),
         OutputMode::Github => {
-            return Err("--format github is only supported by cycom, cogcom, and smells".into());
+            return Err(crate::cli::ERR_GITHUB_ONLY.into());
         }
         OutputMode::Table => print_report(&score, bottom, target.as_deref()),
     }
@@ -146,7 +146,7 @@ pub fn run_diff(
         OutputMode::Short => diff_report::print_short(&score_diff),
         OutputMode::Terse => diff_report::print_terse(&score_diff),
         OutputMode::Github => {
-            return Err("--format github is only supported by cycom, cogcom, and smells".into());
+            return Err(crate::cli::ERR_GITHUB_ONLY.into());
         }
         OutputMode::Table => diff_report::print_report(&score_diff),
     }

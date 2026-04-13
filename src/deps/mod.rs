@@ -112,16 +112,7 @@ pub fn run(
     match output {
         crate::cli::OutputMode::Json => {
             let filtered = DepResult {
-                entries: entries
-                    .iter()
-                    .map(|e| analyzer::DepEntry {
-                        path: e.path.clone(),
-                        language: e.language.clone(),
-                        fan_in: e.fan_in,
-                        fan_out: e.fan_out,
-                        in_cycle: e.in_cycle,
-                    })
-                    .collect(),
+                entries: entries.iter().map(|e| (*e).clone()).collect(),
                 cycles: result.cycles.clone(),
             };
             report::print_json(&filtered)
@@ -134,20 +125,9 @@ pub fn run(
             report::print_terse(&result);
             Ok(())
         }
-        crate::cli::OutputMode::Github => {
-            Err("--format github is only supported by cycom, cogcom, and smells".into())
-        }
+        crate::cli::OutputMode::Github => Err(crate::cli::ERR_GITHUB_ONLY.into()),
         crate::cli::OutputMode::Table => {
-            let entries_vec: Vec<DepEntry> = entries
-                .into_iter()
-                .map(|e| analyzer::DepEntry {
-                    path: e.path.clone(),
-                    language: e.language.clone(),
-                    fan_in: e.fan_in,
-                    fan_out: e.fan_out,
-                    in_cycle: e.in_cycle,
-                })
-                .collect();
+            let entries_vec: Vec<DepEntry> = entries.into_iter().cloned().collect();
             report::print_report(&entries_vec, &result);
             Ok(())
         }

@@ -143,3 +143,25 @@ fn run_multiple_languages() {
     let cfg = WalkConfig::new(dir.path(), true, &filter);
     run(&cfg, OutputMode::Table).unwrap();
 }
+
+#[test]
+fn run_short_format() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("main.rs"),
+        "fn main() {\n    println!(\"hi\");\n}\n",
+    )
+    .unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, OutputMode::Short).unwrap();
+}
+
+#[test]
+fn run_terse_format() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("main.rs"), "fn main() {}\n").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, OutputMode::Terse).unwrap();
+}

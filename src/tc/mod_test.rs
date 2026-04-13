@@ -269,3 +269,33 @@ fn run_on_current_repo_json() {
     );
     assert!(result.is_ok(), "tc JSON should succeed on a git repo");
 }
+
+#[test]
+fn run_short_format() {
+    let result = run(
+        StdPath::new("."),
+        OutputMode::Short,
+        false,
+        5,
+        "strength",
+        None,
+        3,
+        None,
+    );
+    assert!(result.is_ok(), "tc short format should succeed on git repo");
+}
+
+#[test]
+fn run_terse_format() {
+    let result = run(
+        StdPath::new("."),
+        OutputMode::Terse,
+        false,
+        5,
+        "strength",
+        None,
+        3,
+        None,
+    );
+    assert!(result.is_ok(), "tc terse format should succeed on git repo");
+}

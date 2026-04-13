@@ -640,3 +640,21 @@ fn fail_on_increase_fails_when_duplication_increased() {
         "unexpected error message: {msg}"
     );
 }
+
+#[test]
+fn run_short_format() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("a.rs"), "fn foo() { 1 }\n").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, 6, false, false, OutputMode::Short, gate()).unwrap();
+}
+
+#[test]
+fn run_terse_format() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("a.rs"), "fn foo() { 1 }\n").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, 6, false, false, OutputMode::Terse, gate()).unwrap();
+}

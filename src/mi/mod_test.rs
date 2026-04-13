@@ -219,3 +219,29 @@ fn analyze_file_produces_valid_mi() {
         result.metrics.mi_score
     );
 }
+
+#[test]
+fn run_short_format() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("main.rs"),
+        "fn main() {\n    let x = 1;\n    println!(\"{}\", x);\n}\n",
+    )
+    .unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, OutputMode::Short, 20, "mi").unwrap();
+}
+
+#[test]
+fn run_terse_format() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("main.rs"),
+        "fn main() {\n    let x = 1;\n    println!(\"{}\", x);\n}\n",
+    )
+    .unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, OutputMode::Terse, 20, "mi").unwrap();
+}

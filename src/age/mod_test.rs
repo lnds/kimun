@@ -193,3 +193,17 @@ fn run_on_current_repo_json() {
     let result = run(&cfg, OutputMode::Json, 90, 365, "date", None);
     assert!(result.is_ok(), "age JSON should work on current repo");
 }
+
+#[test]
+fn run_short_format() {
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(StdPath::new("."), false, &filter);
+    run(&cfg, OutputMode::Short, 90, 365, "date", None).unwrap();
+}
+
+#[test]
+fn run_terse_format() {
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(StdPath::new("."), false, &filter);
+    run(&cfg, OutputMode::Terse, 90, 365, "date", None).unwrap();
+}

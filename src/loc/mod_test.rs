@@ -264,3 +264,17 @@ fn run_by_author_json_on_current_repo() {
         "run_by_author JSON on current repo should succeed"
     );
 }
+
+#[test]
+fn run_short_format() {
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(StdPath::new("."), false, &filter);
+    run(&cfg, false, OutputMode::Short).unwrap();
+}
+
+#[test]
+fn run_terse_format() {
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(StdPath::new("."), false, &filter);
+    run(&cfg, false, OutputMode::Terse).unwrap();
+}

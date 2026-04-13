@@ -87,3 +87,17 @@ fn run_on_empty_repo_with_since() {
         result
     );
 }
+
+#[test]
+fn run_short_format() {
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(std::path::Path::new("."), false, &filter);
+    super::run(&cfg, OutputMode::Short, 20, "commits", None).unwrap();
+}
+
+#[test]
+fn run_terse_format() {
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(std::path::Path::new("."), false, &filter);
+    super::run(&cfg, OutputMode::Terse, 20, "commits", None).unwrap();
+}

@@ -454,3 +454,45 @@ fn run_json_with_target_path() {
     let cfg = WalkConfig::new(Path::new("src"), false, &filter);
     run(&cfg, OutputMode::Json, 5, 6, "cogcom").unwrap();
 }
+
+#[test]
+fn run_short_format() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("main.rs"), "fn main() { let x = 1; }\n").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, OutputMode::Short, 10, 6, "cogcom").unwrap();
+}
+
+#[test]
+fn run_terse_format() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("main.rs"), "fn main() { let x = 1; }\n").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, OutputMode::Terse, 10, 6, "cogcom").unwrap();
+}
+
+#[test]
+fn run_diff_short_format() {
+    let dir = make_git_repo_with_file("fn main() { let x = 1; }\n");
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let gate = ScoreGate {
+        fail_if_worse: false,
+        fail_below: None,
+    };
+    run_diff(&cfg, "HEAD", OutputMode::Short, 10, 6, "cogcom", gate).unwrap();
+}
+
+#[test]
+fn run_diff_terse_format() {
+    let dir = make_git_repo_with_file("fn main() { let x = 1; }\n");
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let gate = ScoreGate {
+        fail_if_worse: false,
+        fail_below: None,
+    };
+    run_diff(&cfg, "HEAD", OutputMode::Terse, 10, 6, "cogcom", gate).unwrap();
+}

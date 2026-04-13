@@ -280,3 +280,29 @@ fn build_report_min_lines_affects_dups() {
     let report_high = build_report(&cfg_high, 20, 100).unwrap();
     assert_eq!(report_high.duplication.duplicate_groups, 0);
 }
+
+#[test]
+fn run_short_format() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("main.rs"),
+        "fn main() {\n    let x = 1;\n    println!(\"{}\", x);\n}\n",
+    )
+    .unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, OutputMode::Short, 20, 6).unwrap();
+}
+
+#[test]
+fn run_terse_format() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("main.rs"),
+        "fn main() {\n    let x = 1;\n    println!(\"{}\", x);\n}\n",
+    )
+    .unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, OutputMode::Terse, 20, 6).unwrap();
+}

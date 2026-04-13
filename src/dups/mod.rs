@@ -264,7 +264,7 @@ pub fn run(
         crate::cli::OutputMode::Short => print_short(&metrics),
         crate::cli::OutputMode::Terse => print_terse(&metrics),
         crate::cli::OutputMode::Github => {
-            return Err("--format github is only supported by cycom, cogcom, and smells".into());
+            return Err(crate::cli::ERR_GITHUB_ONLY.into());
         }
         crate::cli::OutputMode::Table => {
             if show_report {

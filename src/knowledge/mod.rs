@@ -163,9 +163,7 @@ pub fn run(cfg: &WalkConfig<'_>, opts: &KnowledgeOptions<'_>) -> Result<(), Box<
                 print_bus_factor_terse(&bf);
                 Ok(())
             }
-            OutputMode::Github => {
-                Err("--format github is only supported by cycom, cogcom, and smells".into())
-            }
+            OutputMode::Github => Err(crate::cli::ERR_GITHUB_ONLY.into()),
             OutputMode::Table => {
                 print_bus_factor_report(&bf);
                 Ok(())
@@ -193,9 +191,7 @@ pub fn run(cfg: &WalkConfig<'_>, opts: &KnowledgeOptions<'_>) -> Result<(), Box<
                 print_summary_terse(authors);
                 Ok(())
             }
-            OutputMode::Github => {
-                Err("--format github is only supported by cycom, cogcom, and smells".into())
-            }
+            OutputMode::Github => Err(crate::cli::ERR_GITHUB_ONLY.into()),
             OutputMode::Table => {
                 print_summary_report(authors);
                 Ok(())

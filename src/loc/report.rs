@@ -225,7 +225,7 @@ pub fn print_author_json(mut reports: Vec<AuthorReport>) {
 }
 
 /// Print LOC as a single compact line.
-pub fn print_short(reports: Vec<LanguageReport>) {
+pub fn print_short(reports: &[LanguageReport]) {
     let total_code: usize = reports.iter().map(|r| r.code).sum();
     let total_comment: usize = reports.iter().map(|r| r.comment).sum();
     let total_blank: usize = reports.iter().map(|r| r.blank).sum();
@@ -237,13 +237,13 @@ pub fn print_short(reports: Vec<LanguageReport>) {
 }
 
 /// Print only the total code line count.
-pub fn print_terse(reports: Vec<LanguageReport>) {
+pub fn print_terse(reports: &[LanguageReport]) {
     let total_code: usize = reports.iter().map(|r| r.code).sum();
     println!("{total_code}");
 }
 
 /// Print author LOC as a single compact line.
-pub fn print_author_short(reports: Vec<AuthorReport>) {
+pub fn print_author_short(reports: &[AuthorReport]) {
     let total_code: usize = reports.iter().map(|r| r.code).sum();
     let total_comment: usize = reports.iter().map(|r| r.comment).sum();
     let total_blank: usize = reports.iter().map(|r| r.blank).sum();
@@ -254,7 +254,7 @@ pub fn print_author_short(reports: Vec<AuthorReport>) {
 }
 
 /// Print only the total code line count for author mode.
-pub fn print_author_terse(reports: Vec<AuthorReport>) {
+pub fn print_author_terse(reports: &[AuthorReport]) {
     let total_code: usize = reports.iter().map(|r| r.code).sum();
     println!("{total_code}");
 }

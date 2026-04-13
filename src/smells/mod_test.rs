@@ -283,3 +283,29 @@ fn analyze_file_returns_none_for_unsupported_language() {
     let result = super::analyze_file(&file, spec, 50, 4).unwrap();
     assert!(result.is_none(), "JSON should have no markers, return None");
 }
+
+#[test]
+fn run_short_format() {
+    let dir = tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("main.rs"),
+        "fn foo() {\n    let x = 1;\n}\n",
+    )
+    .unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), true, &filter);
+    super::run(&cfg, OutputMode::Short, 20, 50, 4).unwrap();
+}
+
+#[test]
+fn run_terse_format() {
+    let dir = tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("main.rs"),
+        "fn foo() {\n    let x = 1;\n}\n",
+    )
+    .unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), true, &filter);
+    super::run(&cfg, OutputMode::Terse, 20, 50, 4).unwrap();
+}

@@ -116,9 +116,13 @@ pub fn print_short(files: &[FileAge]) {
     println!("age files:{count} active:{active} stale:{stale} frozen:{frozen}");
 }
 
-/// Print only the file count.
+/// Print only the count of frozen files (oldest, highest-priority attention).
 pub fn print_terse(files: &[FileAge]) {
-    println!("{}", files.len());
+    let frozen = files
+        .iter()
+        .filter(|f| f.status == AgeStatus::Frozen)
+        .count();
+    println!("{frozen}");
 }
 
 #[cfg(test)]

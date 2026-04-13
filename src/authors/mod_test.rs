@@ -181,3 +181,19 @@ fn run_on_current_repo_json() {
     let result = run(&cfg, OutputMode::Json, None);
     assert!(result.is_ok(), "author JSON should work on current repo");
 }
+
+#[test]
+fn run_short_format() {
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(StdPath::new("."), false, &filter);
+    let result = run(&cfg, OutputMode::Short, None);
+    assert!(result.is_ok(), "authors short format should succeed");
+}
+
+#[test]
+fn run_terse_format() {
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(StdPath::new("."), false, &filter);
+    let result = run(&cfg, OutputMode::Terse, None);
+    assert!(result.is_ok(), "authors terse format should succeed");
+}

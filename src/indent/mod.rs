@@ -58,7 +58,7 @@ pub fn run(cfg: &WalkConfig<'_>, output: crate::cli::OutputMode) -> Result<(), B
         crate::cli::OutputMode::Short => print_short(&results),
         crate::cli::OutputMode::Terse => print_terse(&results),
         crate::cli::OutputMode::Github => {
-            return Err("--format github is only supported by cycom, cogcom, and smells".into());
+            return Err(crate::cli::ERR_GITHUB_ONLY.into());
         }
         crate::cli::OutputMode::Table => print_report(&results),
     }
