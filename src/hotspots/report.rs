@@ -97,6 +97,31 @@ pub fn print_json(files: &[FileHotspot], metric: &str) -> Result<(), Box<dyn std
     report_helpers::print_json_stdout(&entries)
 }
 
+/// Print hotspots as a single compact line.
+pub fn print_short(files: &[FileHotspot]) {
+    if files.is_empty() {
+        println!("hotspots top:- score:0 commits:0 cx:0");
+        return;
+    }
+    let top = &files[0];
+    println!(
+        "hotspots top:{} score:{} commits:{} cx:{}",
+        top.path.display(),
+        top.score,
+        top.commits,
+        top.complexity
+    );
+}
+
+/// Print only the top hotspot file path.
+pub fn print_terse(files: &[FileHotspot]) {
+    if files.is_empty() {
+        println!("-");
+    } else {
+        println!("{}", files[0].path.display());
+    }
+}
+
 #[cfg(test)]
 #[path = "report_test.rs"]
 mod tests;

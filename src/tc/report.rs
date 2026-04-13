@@ -86,6 +86,22 @@ pub fn print_json(pairs: &[FileCoupling]) -> Result<(), Box<dyn std::error::Erro
     report_helpers::print_json_stdout(&entries)
 }
 
+/// Print temporal coupling as a single compact line.
+pub fn print_short(pairs: &[FileCoupling], total: usize) {
+    if pairs.is_empty() {
+        println!("tc pairs:0 max_strength:0.00");
+        return;
+    }
+    let max_strength = pairs.iter().map(|p| p.strength).fold(0.0_f64, f64::max);
+    let strong = pairs.iter().filter(|p| p.strength >= 0.5).count();
+    println!("tc pairs:{total} strong:{strong} max_strength:{max_strength:.2}");
+}
+
+/// Print only the total coupled pair count.
+pub fn print_terse(total: usize) {
+    println!("{total}");
+}
+
 #[cfg(test)]
 #[path = "report_test.rs"]
 mod tests;

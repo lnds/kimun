@@ -101,20 +101,38 @@ pub fn print_json_stdout(value: &impl Serialize) -> Result<(), Box<dyn std::erro
     Ok(())
 }
 
-/// Truncate results to `top` and output as JSON or table.
+/// Truncate results to `top` and dispatch to the appropriate output function
+/// based on `OutputMode`.
+///
+/// For `OutputMode::Github`, returns an error — modules that support it
+/// (cycom, cogcom, smells) handle it before calling this helper.
 pub fn output_results<T>(
     results: &mut Vec<T>,
     top: usize,
-    json: bool,
+    output: crate::cli::OutputMode,
     print_json_fn: impl FnOnce(&[T]) -> Result<(), Box<dyn std::error::Error>>,
     print_report_fn: impl FnOnce(&[T]),
+    print_short_fn: impl FnOnce(&[T]),
+    print_terse_fn: impl FnOnce(&[T]),
 ) -> Result<(), Box<dyn std::error::Error>> {
     results.truncate(top);
-    if json {
-        print_json_fn(results)
-    } else {
-        print_report_fn(results);
-        Ok(())
+    match output {
+        crate::cli::OutputMode::Terse => {
+            print_terse_fn(results);
+            Ok(())
+        }
+        crate::cli::OutputMode::Short => {
+            print_short_fn(results);
+            Ok(())
+        }
+        crate::cli::OutputMode::Json => print_json_fn(results),
+        crate::cli::OutputMode::Github => {
+            Err("--format github is only supported by cycom, cogcom, and smells".into())
+        }
+        crate::cli::OutputMode::Table => {
+            print_report_fn(results);
+            Ok(())
+        }
     }
 }
 

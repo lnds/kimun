@@ -77,6 +77,26 @@ pub fn print_report(files: &[FileOwnership]) {
     }
 }
 
+/// Print knowledge map as a single compact line.
+pub fn print_short(files: &[FileOwnership]) {
+    let count = files.len();
+    let critical = files
+        .iter()
+        .filter(|f| f.risk == super::analyzer::RiskLevel::Critical)
+        .count();
+    let loss = files.iter().filter(|f| f.knowledge_loss).count();
+    println!("knowledge files:{count} critical:{critical} loss_risk:{loss}");
+}
+
+/// Print only the count of files at critical risk.
+pub fn print_terse(files: &[FileOwnership]) {
+    let critical = files
+        .iter()
+        .filter(|f| f.risk == super::analyzer::RiskLevel::Critical)
+        .count();
+    println!("{critical}");
+}
+
 /// JSON-serializable representation of a single file's ownership data.
 #[derive(Serialize)]
 struct JsonEntry {
@@ -176,6 +196,19 @@ pub fn print_summary_report(authors: &[AuthorSummary]) {
     }
 
     println!("{separator}");
+}
+
+/// Print summary as a single compact line.
+pub fn print_summary_short(authors: &[AuthorSummary]) {
+    let count = authors.len();
+    let total_files: usize = authors.iter().map(|a| a.files_owned).sum();
+    let total_loss: usize = authors.iter().map(|a| a.knowledge_loss_files).sum();
+    println!("knowledge-summary authors:{count} files:{total_files} loss_risk:{total_loss}");
+}
+
+/// Print only the author count from summary.
+pub fn print_summary_terse(authors: &[AuthorSummary]) {
+    println!("{}", authors.len());
 }
 
 /// JSON-serializable representation of a single author's ownership summary.
@@ -280,6 +313,21 @@ pub fn print_bus_factor_report(bf: &BusFactor) {
     }
 
     println!("{separator}");
+}
+
+/// Print bus factor as a single compact line.
+pub fn print_bus_factor_short(bf: &BusFactor) {
+    println!(
+        "bus-factor factor:{} contributors:{} lines:{}",
+        bf.factor,
+        bf.contributors.len(),
+        bf.total_lines
+    );
+}
+
+/// Print only the bus factor number.
+pub fn print_bus_factor_terse(bf: &BusFactor) {
+    println!("{}", bf.factor);
 }
 
 /// JSON-serializable bus factor output.

@@ -1,3 +1,4 @@
+use crate::cli::OutputMode;
 use std::io::Write;
 use std::path::PathBuf;
 
@@ -140,7 +141,7 @@ fn json_output_runs_without_error() {
 
     let filter = crate::walk::ExcludeFilter::default();
     let cfg = crate::walk::WalkConfig::new(dir.path(), true, &filter);
-    let result = super::run(&cfg, true, 20, 50, 4, None);
+    let result = super::run(&cfg, OutputMode::Json, 20, 50, 4);
     assert!(result.is_ok());
 }
 
@@ -182,13 +183,13 @@ fn run_on_files_with_smell() {
     }
     writeln!(f, "}}").unwrap();
 
-    let result = super::run_on_files(&[file], false, 20, 50, 4, None);
+    let result = super::run_on_files(&[file], OutputMode::Table, 20, 50, 4);
     assert!(result.is_ok());
 }
 
 #[test]
 fn run_on_files_empty_list() {
-    let result = super::run_on_files(&[], false, 20, 50, 4, None);
+    let result = super::run_on_files(&[], OutputMode::Table, 20, 50, 4);
     assert!(result.is_ok());
 }
 
@@ -198,20 +199,20 @@ fn run_on_files_skips_unknown_extension() {
     let file = dir.path().join("data.xyz");
     std::fs::write(&file, "hello world").unwrap();
 
-    let result = super::run_on_files(&[file], false, 20, 50, 4, None);
+    let result = super::run_on_files(&[file], OutputMode::Table, 20, 50, 4);
     assert!(result.is_ok());
 }
 
 #[test]
 fn run_on_files_json_empty() {
-    let result = super::run_on_files(&[], true, 20, 50, 4, None);
+    let result = super::run_on_files(&[], OutputMode::Json, 20, 50, 4);
     assert!(result.is_ok());
 }
 
 #[test]
 fn run_on_files_nonexistent_path_skips() {
     let paths = vec![PathBuf::from("/nonexistent/path/fake.rs")];
-    let result = super::run_on_files(&paths, false, 20, 50, 4, None);
+    let result = super::run_on_files(&paths, OutputMode::Table, 20, 50, 4);
     assert!(
         result.is_ok(),
         "nonexistent files should be skipped, not panic"
@@ -229,7 +230,7 @@ fn run_on_files_github_format_with_smells() {
     }
     writeln!(f, "}}").unwrap();
 
-    let result = super::run_on_files(&[file], false, 20, 50, 4, Some("github"));
+    let result = super::run_on_files(&[file], OutputMode::Github, 20, 50, 4);
     assert!(result.is_ok(), "github format should succeed");
 }
 
@@ -244,14 +245,14 @@ fn run_on_files_json_format_via_format_param() {
     }
     writeln!(f, "}}").unwrap();
 
-    let result = super::run_on_files(&[file], false, 20, 50, 4, Some("json"));
+    let result = super::run_on_files(&[file], OutputMode::Json, 20, 50, 4);
     assert!(result.is_ok(), "json format param should succeed");
 }
 
 #[test]
 fn run_on_files_empty_json_format() {
     // json=false but format=Some("json") with empty list → print_json([])
-    let result = super::run_on_files(&[], false, 20, 50, 4, Some("json"));
+    let result = super::run_on_files(&[], OutputMode::Json, 20, 50, 4);
     assert!(result.is_ok());
 }
 
@@ -268,7 +269,7 @@ fn run_github_format_with_smells() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), true, &filter);
-    let result = super::run(&cfg, false, 20, 50, 4, Some("github"));
+    let result = super::run(&cfg, OutputMode::Github, 20, 50, 4);
     assert!(result.is_ok(), "run github format should succeed");
 }
 

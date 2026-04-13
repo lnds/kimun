@@ -10,10 +10,11 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
+use crate::cli::OutputMode;
 use crate::git::GitRepo;
 use crate::util::parse_since;
 use crate::walk::{self, WalkConfig};
-use report::{print_json, print_report};
+use report::{print_json, print_report, print_short, print_terse};
 
 /// A file's hotspot data: how often it changes (commits) and how complex
 /// it is, combined into a score = commits × complexity.
@@ -53,7 +54,7 @@ fn compute_complexity(
 /// per file, and sorts by the chosen metric (score, commits, or complexity).
 pub fn run(
     cfg: &WalkConfig<'_>,
-    json: bool,
+    output: OutputMode,
     top: usize,
     sort_by: &str,
     since: Option<&str>,
@@ -120,10 +121,14 @@ pub fn run(
 
     results.truncate(top);
 
-    if json {
-        print_json(&results, complexity_metric)?;
-    } else {
-        print_report(&results, complexity_metric);
+    match output {
+        OutputMode::Json => print_json(&results, complexity_metric)?,
+        OutputMode::Short => print_short(&results),
+        OutputMode::Terse => print_terse(&results),
+        OutputMode::Github => {
+            return Err("--format github is only supported by cycom, cogcom, and smells".into());
+        }
+        OutputMode::Table => print_report(&results, complexity_metric),
     }
 
     Ok(())

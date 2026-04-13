@@ -4,11 +4,30 @@
 /// Long help text is stored in `cli_help.rs` to keep this file focused on structure.
 use std::path::PathBuf;
 
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 pub use clap_complete::Shell;
 
 use crate::cli_help;
 use crate::walk::ExcludeFilter;
+
+/// Output format for analysis commands.
+///
+/// Driven by `--format` on `CommonArgs`. `Github` emits GitHub Actions
+/// workflow annotations and is only supported by cycom, cogcom, and smells.
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug, ValueEnum)]
+pub enum OutputMode {
+    /// Human-readable table (default)
+    #[default]
+    Table,
+    /// Machine-readable JSON
+    Json,
+    /// Single compact line of key:value pairs (AI-friendly)
+    Short,
+    /// Single headline metric value (for piping/embedding)
+    Terse,
+    /// GitHub Actions warning annotations (CI)
+    Github,
+}
 
 /// Top-level CLI parser with a single subcommand selector.
 #[derive(Parser)]
@@ -77,9 +96,12 @@ pub struct CommonArgs {
     /// Directory to analyze (default: current directory)
     pub path: Option<PathBuf>,
 
-    /// Output as JSON
-    #[arg(long)]
-    pub json: bool,
+    /// Output format: table (default), json, short, terse, or github.
+    /// `short` emits a single compact line of key:value pairs (AI-friendly).
+    /// `terse` emits a single headline metric value (for piping/embedding).
+    /// `github` emits GitHub Actions warning annotations (only cycom, cogcom, smells).
+    #[arg(long, value_enum, default_value_t)]
+    pub format: OutputMode,
 
     /// Include test files and directories in analysis (excluded by default)
     #[arg(long)]
@@ -195,12 +217,6 @@ pub enum Commands {
         /// Sort by metric: total, max, or avg (default: total)
         #[arg(long, default_value = "total", value_parser = ["total", "max", "avg"])]
         sort_by: String,
-
-        /// Output format: github emits GitHub Actions warning annotations
-        /// (::warning file=...,line=...,title=...::message) for use in CI.
-        /// Incompatible with --json.
-        #[arg(long, value_name = "FORMAT", value_parser = ["github", "json"], conflicts_with = "json")]
-        format: Option<String>,
     },
 
     /// Analyze cognitive complexity per file and per function (SonarSource method)
@@ -224,12 +240,6 @@ pub enum Commands {
         /// Sort by metric: total, max, or avg (default: total)
         #[arg(long, default_value = "total", value_parser = ["total", "max", "avg"])]
         sort_by: String,
-
-        /// Output format: github emits GitHub Actions warning annotations
-        /// (::warning file=...,line=...,title=...::message) for use in CI.
-        /// Incompatible with --json.
-        #[arg(long, value_name = "FORMAT", value_parser = ["github", "json"], conflicts_with = "json")]
-        format: Option<String>,
     },
 
     /// Compute Maintainability Index per file (Visual Studio variant, 0-100 scale)
@@ -413,12 +423,6 @@ pub enum Commands {
         /// Ideal for CI: km smells --since-ref origin/main
         #[arg(long, value_name = "REF")]
         since_ref: Option<String>,
-
-        /// Output format: github emits GitHub Actions warning annotations
-        /// (::warning file=...,line=...,title=...::message) for use in CI.
-        /// Incompatible with --json.
-        #[arg(long, value_name = "FORMAT", value_parser = ["github", "json"], conflicts_with = "json")]
-        format: Option<String>,
     },
 
     /// Compute an overall code health score for the project (A++ to F--)
@@ -536,9 +540,9 @@ pub enum ScoreCommands {
         /// Directory to analyze (default: current directory)
         path: Option<PathBuf>,
 
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
+        /// Output format: table (default), json, short, or terse
+        #[arg(long, value_enum, default_value_t)]
+        format: OutputMode,
 
         /// Include test files and directories in analysis (excluded by default)
         #[arg(long)]

@@ -1,4 +1,5 @@
 use super::*;
+use crate::cli::OutputMode;
 use crate::walk::{ExcludeFilter, WalkConfig};
 use std::fs;
 
@@ -7,7 +8,7 @@ fn run_on_empty_dir() {
     let dir = tempfile::tempdir().unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, false, 20, 6).unwrap();
+    run(&cfg, OutputMode::Table, 20, 6).unwrap();
 }
 
 #[test]
@@ -15,7 +16,7 @@ fn run_on_empty_dir_json() {
     let dir = tempfile::tempdir().unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, true, 20, 6).unwrap();
+    run(&cfg, OutputMode::Json, 20, 6).unwrap();
 }
 
 #[test]
@@ -28,7 +29,7 @@ fn run_on_rust_file() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, false, 20, 6).unwrap();
+    run(&cfg, OutputMode::Table, 20, 6).unwrap();
 }
 
 #[test]
@@ -41,7 +42,7 @@ fn run_json_output() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, true, 20, 6).unwrap();
+    run(&cfg, OutputMode::Json, 20, 6).unwrap();
 }
 
 #[test]
@@ -50,7 +51,7 @@ fn run_skips_binary() {
     fs::write(dir.path().join("data.c"), b"hello\x00world").unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, false, 20, 6).unwrap();
+    run(&cfg, OutputMode::Table, 20, 6).unwrap();
 }
 
 // --- Tests that verify actual report structure ---

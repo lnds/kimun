@@ -37,7 +37,7 @@ Examples:
   km cogcom --per-function            # per-function breakdown
   km cogcom --min-complexity 10       # only complex functions
   km cogcom --sort-by max             # sort by worst function
-  km cogcom --json                    # machine-readable output";
+  km cogcom --format json             # machine-readable output";
 
 /// Halstead complexity: operator/operand analysis per file.
 /// Shows volume, difficulty, effort, estimated bugs, and development time.
@@ -126,7 +126,7 @@ Examples:
   km hotspots --complexity cogcom # cognitive complexity
   km hotspots --since 6m          # last 6 months
   km hotspots --since 1y --sort-by commits
-  km hotspots --json              # machine-readable output";
+  km hotspots --format json       # machine-readable output";
 
 /// Knowledge maps: code ownership analysis via git blame.
 /// Identifies bus factor risk and knowledge concentration per file.
@@ -152,7 +152,7 @@ Examples:
   km knowledge                          # ownership by concentration
   km knowledge --sort-by risk           # highest risk first
   km knowledge --since 6m --risk-only   # knowledge loss detection
-  km knowledge --json                   # machine-readable output";
+  km knowledge --format json            # machine-readable output";
 
 /// Temporal coupling: files that change together in git commits.
 /// Reveals hidden dependencies between modules.
@@ -180,7 +180,7 @@ Examples:
   km tc --min-degree 5           # stricter filter
   km tc --since 6m               # last 6 months only
   km tc --min-strength 0.5       # only strong coupling
-  km tc --json                   # machine-readable output";
+  km tc --format json            # machine-readable output";
 
 /// Code smells: detect common patterns that suggest code quality issues.
 pub const SMELLS: &str = "\
@@ -202,7 +202,7 @@ Examples:
   km smells --max-lines 30         # stricter function length
   km smells --max-params 3         # stricter param count
   km smells --top 10               # top 10 files
-  km smells --json                 # machine-readable output";
+  km smells --format json          # machine-readable output";
 
 /// Overall code health score: weighted aggregate of quality dimensions.
 /// Produces a letter grade from A++ (exceptional) to F-- (severe issues).
@@ -247,7 +247,7 @@ Examples:
   km score                       # score current directory
   km score src/                  # score a subdirectory
   km score --model legacy        # use v0.13 scoring model
-  km score --json                # machine-readable output
+  km score --format json         # machine-readable output
   km score --bottom 20           # show 20 worst files
   km score --include-tests       # include test files";
 
@@ -279,7 +279,7 @@ Examples:
   km score diff --git-ref HEAD~1         # compare vs previous commit
   km score diff --git-ref main           # compare vs main branch
   km score diff --model legacy           # use v0.13 model
-  km score diff --json                   # machine-readable output
+  km score diff --format json            # machine-readable output
   km score diff src/                     # compare a subdirectory";
 
 /// AI-powered repository analysis using an external LLM provider.
