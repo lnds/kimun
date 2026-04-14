@@ -81,6 +81,36 @@ pub fn github_annotation(level: &str, file: &str, line: usize, title: &str, mess
     println!("::{level} file={file},line={line},title={title}::{message}");
 }
 
+/// Build one CodeClimate JSON entry (GitLab Code Quality format).
+///
+/// `severity` is one of `"info"`, `"minor"`, `"major"`, `"critical"`, or `"blocker"`.
+/// `fingerprint` is derived from `"file:line:title"` via FNV-1a, stable across runs
+/// and unique per finding without requiring an external hash dependency.
+pub fn codeclimate_entry(
+    severity: &str,
+    file: &str,
+    line: usize,
+    title: &str,
+    description: &str,
+) -> serde_json::Value {
+    serde_json::json!({
+        "description": description,
+        "fingerprint": fnv1a_hex(&format!("{file}:{line}:{title}")),
+        "severity": severity,
+        "location": { "path": file, "lines": { "begin": line } }
+    })
+}
+
+/// FNV-1a 64-bit hash, hex-encoded. Used for CodeClimate fingerprints.
+fn fnv1a_hex(s: &str) -> String {
+    let mut hash: u64 = 0xcbf29ce484222325;
+    for byte in s.bytes() {
+        hash ^= byte as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    format!("{hash:016x}")
+}
+
 /// Compute the max display width for paths, with a minimum of `min`.
 pub fn max_path_width<'a>(paths: impl Iterator<Item = &'a Path>, min: usize) -> usize {
     paths
@@ -104,8 +134,9 @@ pub fn print_json_stdout(value: &impl Serialize) -> Result<(), Box<dyn std::erro
 /// Truncate results to `top` and dispatch to the appropriate output function
 /// based on `OutputMode`.
 ///
-/// For `OutputMode::Github`, returns an error — modules that support it
-/// (cycom, cogcom, smells) handle it before calling this helper.
+/// For `OutputMode::Github` and `OutputMode::Codeclimate`, returns an error —
+/// modules that support CI formats (cycom, cogcom, smells) handle them before
+/// calling this helper.
 pub fn output_results<T>(
     results: &mut Vec<T>,
     top: usize,
@@ -126,7 +157,9 @@ pub fn output_results<T>(
             Ok(())
         }
         crate::cli::OutputMode::Json => print_json_fn(results),
-        crate::cli::OutputMode::Github => Err(crate::cli::ERR_GITHUB_ONLY.into()),
+        crate::cli::OutputMode::Github | crate::cli::OutputMode::Codeclimate => {
+            Err(crate::cli::ERR_CI_FORMAT_ONLY.into())
+        }
         crate::cli::OutputMode::Table => {
             print_report_fn(results);
             Ok(())

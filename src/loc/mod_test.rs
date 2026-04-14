@@ -278,3 +278,19 @@ fn run_terse_format() {
     let cfg = WalkConfig::new(StdPath::new("."), false, &filter);
     run(&cfg, false, OutputMode::Terse).unwrap();
 }
+
+#[test]
+fn run_codeclimate_returns_error() {
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(StdPath::new("."), false, &filter);
+    let result = run(&cfg, false, OutputMode::Codeclimate);
+    assert!(
+        result.is_err(),
+        "codeclimate format should not be supported by loc"
+    );
+    let msg = result.unwrap_err().to_string();
+    assert!(
+        msg.contains("codeclimate"),
+        "error message should mention codeclimate"
+    );
+}

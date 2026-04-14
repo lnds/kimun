@@ -263,8 +263,8 @@ pub fn run(
         }
         crate::cli::OutputMode::Short => print_short(&metrics),
         crate::cli::OutputMode::Terse => print_terse(&metrics),
-        crate::cli::OutputMode::Github => {
-            return Err(crate::cli::ERR_GITHUB_ONLY.into());
+        crate::cli::OutputMode::Github | crate::cli::OutputMode::Codeclimate => {
+            return Err(crate::cli::ERR_CI_FORMAT_ONLY.into());
         }
         crate::cli::OutputMode::Table => {
             if show_report {

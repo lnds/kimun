@@ -158,6 +158,48 @@ pub fn print_json(files: &[FileCogcomMetrics]) -> Result<(), Box<dyn std::error:
     report_helpers::print_json_stdout(&entries)
 }
 
+/// Emit a CodeClimate JSON array (GitLab Code Quality format) for functions
+/// that exceed the complexity threshold. Each entry includes a stable fingerprint,
+/// severity, file path, and line number for direct PR annotation.
+pub fn print_codeclimate(
+    files: &[FileCogcomMetrics],
+    min_complexity: usize,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let entries: Vec<_> = files
+        .iter()
+        .flat_map(|f| {
+            let path = f.path.display().to_string();
+            f.functions
+                .iter()
+                .filter(|func| func.complexity >= min_complexity)
+                .map(move |func| {
+                    let severity = complexity_severity(func.complexity);
+                    let description = format!(
+                        "function '{}' has cognitive complexity {} (threshold: {})",
+                        func.name, func.complexity, min_complexity
+                    );
+                    report_helpers::codeclimate_entry(
+                        severity,
+                        &path,
+                        func.start_line,
+                        "Cognitive Complexity",
+                        &description,
+                    )
+                })
+        })
+        .collect();
+    report_helpers::print_json_stdout(&entries)
+}
+
+fn complexity_severity(c: usize) -> &'static str {
+    match c {
+        25.. => "critical",
+        15..=24 => "major",
+        10..=14 => "minor",
+        _ => "info",
+    }
+}
+
 /// Emit one GitHub Actions warning annotation per function that exceeds
 /// the complexity threshold. Uses `start_line` for precise line linking.
 pub fn print_github(files: &[FileCogcomMetrics], min_complexity: usize) {

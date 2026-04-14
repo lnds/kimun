@@ -125,7 +125,9 @@ pub fn run(
             report::print_terse(&result);
             Ok(())
         }
-        crate::cli::OutputMode::Github => Err(crate::cli::ERR_GITHUB_ONLY.into()),
+        crate::cli::OutputMode::Github | crate::cli::OutputMode::Codeclimate => {
+            Err(crate::cli::ERR_CI_FORMAT_ONLY.into())
+        }
         crate::cli::OutputMode::Table => {
             let entries_vec: Vec<DepEntry> = entries.into_iter().cloned().collect();
             report::print_report(&entries_vec, &result);

@@ -17,7 +17,10 @@ use crate::util::read_and_classify;
 use crate::walk::WalkConfig;
 
 use analyzer::detect_smells;
-use report::{FileSmellMetrics, print_github, print_json, print_report, print_short, print_terse};
+use report::{
+    FileSmellMetrics, print_codeclimate, print_github, print_json, print_report, print_short,
+    print_terse,
+};
 
 /// Read a file, classify lines, and detect smells.
 fn analyze_file(
@@ -110,6 +113,7 @@ fn dispatch_output(output: OutputMode, results: &[FileSmellMetrics]) -> Result<(
     match output {
         OutputMode::Json => print_json(results)?,
         OutputMode::Github => print_github(results),
+        OutputMode::Codeclimate => print_codeclimate(results)?,
         OutputMode::Short => print_short(results),
         OutputMode::Terse => print_terse(results),
         OutputMode::Table => print_report(results),

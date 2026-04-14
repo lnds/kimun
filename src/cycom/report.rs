@@ -138,6 +138,47 @@ struct JsonFileEntry {
     functions: Vec<JsonFunctionEntry>,
 }
 
+/// Emit a CodeClimate JSON array (GitLab Code Quality format) for functions
+/// that exceed the complexity threshold.
+pub fn print_codeclimate(
+    files: &[FileCycomMetrics],
+    min_complexity: usize,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let entries: Vec<_> = files
+        .iter()
+        .flat_map(|f| {
+            let path = f.path.display().to_string();
+            f.functions
+                .iter()
+                .filter(|func| func.complexity >= min_complexity)
+                .map(move |func| {
+                    let severity = complexity_severity(func.complexity);
+                    let description = format!(
+                        "function '{}' has cyclomatic complexity {} (threshold: {})",
+                        func.name, func.complexity, min_complexity
+                    );
+                    report_helpers::codeclimate_entry(
+                        severity,
+                        &path,
+                        func.start_line,
+                        "Cyclomatic Complexity",
+                        &description,
+                    )
+                })
+        })
+        .collect();
+    report_helpers::print_json_stdout(&entries)
+}
+
+fn complexity_severity(c: usize) -> &'static str {
+    match c {
+        25.. => "critical",
+        15..=24 => "major",
+        10..=14 => "minor",
+        _ => "info",
+    }
+}
+
 /// Emit one GitHub Actions warning annotation per function that exceeds
 /// the complexity threshold. Uses `start_line` for precise line linking.
 pub fn print_github(files: &[FileCycomMetrics], min_complexity: usize) {

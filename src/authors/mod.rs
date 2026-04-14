@@ -71,8 +71,8 @@ pub fn run(
         OutputMode::Json => print_json(&authors),
         OutputMode::Short => print_short(&authors),
         OutputMode::Terse => print_terse(&authors),
-        OutputMode::Github => {
-            return Err(crate::cli::ERR_GITHUB_ONLY.into());
+        OutputMode::Github | OutputMode::Codeclimate => {
+            return Err(crate::cli::ERR_CI_FORMAT_ONLY.into());
         }
         OutputMode::Table => print_report(&authors),
     }

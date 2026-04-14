@@ -105,8 +105,8 @@ pub fn run(
         OutputMode::Json => print_json(&results)?,
         OutputMode::Short => print_short(&results, total),
         OutputMode::Terse => print_terse(total),
-        OutputMode::Github => {
-            return Err(crate::cli::ERR_GITHUB_ONLY.into());
+        OutputMode::Github | OutputMode::Codeclimate => {
+            return Err(crate::cli::ERR_CI_FORMAT_ONLY.into());
         }
         OutputMode::Table => print_report(&results, total),
     }

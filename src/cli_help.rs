@@ -39,7 +39,10 @@ Examples:
   km cogcom --sort-by max             # sort by worst function
   km cogcom --format json             # machine-readable output
   km cogcom --format short            # compact key:value summary
-  km cogcom --format terse            # average complexity only";
+  km cogcom --format terse            # average complexity only
+  km cogcom --format github           # GitHub Actions annotations (CI)
+  km cogcom --format codeclimate      # CodeClimate JSON (GitLab Code Quality)
+  km cogcom --format gitlab           # alias for --format codeclimate";
 
 /// Halstead complexity: operator/operand analysis per file.
 /// Shows volume, difficulty, effort, estimated bugs, and development time.
@@ -212,7 +215,10 @@ Examples:
   km smells --top 10               # top 10 files
   km smells --format json          # machine-readable output
   km smells --format short         # compact: file count + total smells
-  km smells --format terse         # total smell count only";
+  km smells --format terse         # total smell count only
+  km smells --format github        # GitHub Actions annotations (CI)
+  km smells --format codeclimate   # CodeClimate JSON (GitLab Code Quality)
+  km smells --format gitlab        # alias for --format codeclimate";
 
 /// Overall code health score: weighted aggregate of quality dimensions.
 /// Produces a letter grade from A++ (exceptional) to F-- (severe issues).

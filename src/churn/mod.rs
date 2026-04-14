@@ -76,8 +76,8 @@ pub fn run(
         OutputMode::Json => print_json(&files),
         OutputMode::Short => print_short(&files),
         OutputMode::Terse => print_terse(&files),
-        OutputMode::Github => {
-            return Err(crate::cli::ERR_GITHUB_ONLY.into());
+        OutputMode::Github | OutputMode::Codeclimate => {
+            return Err(crate::cli::ERR_CI_FORMAT_ONLY.into());
         }
         OutputMode::Table => print_report(&files),
     }

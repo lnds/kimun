@@ -57,8 +57,8 @@ pub fn run(cfg: &WalkConfig<'_>, output: crate::cli::OutputMode) -> Result<(), B
         crate::cli::OutputMode::Json => print_json(&results)?,
         crate::cli::OutputMode::Short => print_short(&results),
         crate::cli::OutputMode::Terse => print_terse(&results),
-        crate::cli::OutputMode::Github => {
-            return Err(crate::cli::ERR_GITHUB_ONLY.into());
+        crate::cli::OutputMode::Github | crate::cli::OutputMode::Codeclimate => {
+            return Err(crate::cli::ERR_CI_FORMAT_ONLY.into());
         }
         crate::cli::OutputMode::Table => print_report(&results),
     }

@@ -163,7 +163,9 @@ pub fn run(cfg: &WalkConfig<'_>, opts: &KnowledgeOptions<'_>) -> Result<(), Box<
                 print_bus_factor_terse(&bf);
                 Ok(())
             }
-            OutputMode::Github => Err(crate::cli::ERR_GITHUB_ONLY.into()),
+            OutputMode::Github | OutputMode::Codeclimate => {
+                Err(crate::cli::ERR_CI_FORMAT_ONLY.into())
+            }
             OutputMode::Table => {
                 print_bus_factor_report(&bf);
                 Ok(())
@@ -191,7 +193,9 @@ pub fn run(cfg: &WalkConfig<'_>, opts: &KnowledgeOptions<'_>) -> Result<(), Box<
                 print_summary_terse(authors);
                 Ok(())
             }
-            OutputMode::Github => Err(crate::cli::ERR_GITHUB_ONLY.into()),
+            OutputMode::Github | OutputMode::Codeclimate => {
+                Err(crate::cli::ERR_CI_FORMAT_ONLY.into())
+            }
             OutputMode::Table => {
                 print_summary_report(authors);
                 Ok(())

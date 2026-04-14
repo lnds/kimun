@@ -10,13 +10,14 @@ pub use clap_complete::Shell;
 use crate::cli_help;
 use crate::walk::ExcludeFilter;
 
-/// Error returned by commands that do not support `--format github`.
-pub const ERR_GITHUB_ONLY: &str = "--format github is only supported by cycom, cogcom, and smells";
+/// Error returned by commands that do not support CI annotation formats.
+pub const ERR_CI_FORMAT_ONLY: &str =
+    "--format github and --format codeclimate are only supported by cycom, cogcom, and smells";
 
 /// Output format for analysis commands.
 ///
-/// Driven by `--format` on `CommonArgs`. `Github` emits GitHub Actions
-/// workflow annotations and is only supported by cycom, cogcom, and smells.
+/// Driven by `--format` on `CommonArgs`. `Github` and `Codeclimate` emit CI
+/// annotations and are only supported by cycom, cogcom, and smells.
 #[derive(Clone, Copy, Default, PartialEq, Eq, Debug, ValueEnum)]
 pub enum OutputMode {
     /// Human-readable table (default)
@@ -30,6 +31,10 @@ pub enum OutputMode {
     Terse,
     /// GitHub Actions warning annotations (CI)
     Github,
+    /// CodeClimate JSON report (GitLab Code Quality, Codacy, etc.)
+    /// Also accepted as `--format gitlab` for discoverability.
+    #[value(alias = "gitlab")]
+    Codeclimate,
 }
 
 /// Top-level CLI parser with a single subcommand selector.
