@@ -104,6 +104,15 @@ pub fn run(
     Ok(())
 }
 
+/// Format the quality-gate failure message with two decimal places for before, after, and delta.
+/// Extracted so tests can verify the exact format without reconstructing it independently.
+pub(crate) fn format_gate_error(before: f64, after: f64, delta: f64) -> String {
+    format!(
+        "quality gate failed: score dropped {:.2} → {:.2} ({:+.2})",
+        before, after, delta
+    )
+}
+
 /// Entry point for `km score --trend`: compare current working tree against a git ref.
 /// Quality gates in `gate` are checked after the report is printed so CI logs are complete.
 pub fn run_diff(
@@ -153,9 +162,10 @@ pub fn run_diff(
 
     // Quality gates: evaluated after output so the log is always complete.
     if gate.fail_if_worse && score_diff.overall.delta < 0.0 {
-        return Err(format!(
-            "quality gate failed: score dropped {:.1} → {:.1} ({:+.1})",
-            score_diff.overall.before, score_diff.overall.after, score_diff.overall.delta
+        return Err(format_gate_error(
+            score_diff.overall.before,
+            score_diff.overall.after,
+            score_diff.overall.delta,
         )
         .into());
     }
