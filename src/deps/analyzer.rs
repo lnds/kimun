@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 
 /// A single file's dependency metrics.
+#[derive(Clone)]
 pub struct DepEntry {
     pub path: PathBuf,
     pub language: String,

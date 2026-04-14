@@ -15,11 +15,13 @@ use crate::git::GitRepo;
 use crate::util::parse_since;
 use crate::walk::{self, WalkConfig};
 
+use crate::cli::OutputMode;
 use crate::report_helpers;
 use analyzer::{FileOwnership, aggregate_by_author, compute_bus_factor, compute_ownership};
 use report::{
-    print_bus_factor_json, print_bus_factor_report, print_json, print_report, print_summary_json,
-    print_summary_report,
+    print_bus_factor_json, print_bus_factor_report, print_bus_factor_short, print_bus_factor_terse,
+    print_json, print_report, print_short, print_summary_json, print_summary_report,
+    print_summary_short, print_summary_terse, print_terse,
 };
 
 /// Check if a file is machine-generated (lock files, minified assets,
@@ -51,7 +53,7 @@ fn is_generated(path: &Path) -> bool {
 
 /// Options for knowledge map analysis.
 pub struct KnowledgeOptions<'a> {
-    pub json: bool,
+    pub output: OutputMode,
     pub top: usize,
     pub sort_by: &'a str,
     pub since: Option<&'a str>,
@@ -151,11 +153,21 @@ pub fn run(cfg: &WalkConfig<'_>, opts: &KnowledgeOptions<'_>) -> Result<(), Box<
 
     if opts.bus_factor {
         let bf = compute_bus_factor(&author_lines, 80.0);
-        return if opts.json {
-            print_bus_factor_json(&bf)
-        } else {
-            print_bus_factor_report(&bf);
-            Ok(())
+        return match opts.output {
+            OutputMode::Json => print_bus_factor_json(&bf),
+            OutputMode::Short => {
+                print_bus_factor_short(&bf);
+                Ok(())
+            }
+            OutputMode::Terse => {
+                print_bus_factor_terse(&bf);
+                Ok(())
+            }
+            OutputMode::Github => Err(crate::cli::ERR_GITHUB_ONLY.into()),
+            OutputMode::Table => {
+                print_bus_factor_report(&bf);
+                Ok(())
+            }
         };
     }
 
@@ -169,14 +181,32 @@ pub fn run(cfg: &WalkConfig<'_>, opts: &KnowledgeOptions<'_>) -> Result<(), Box<
         }
         let limit = opts.top.min(authors.len());
         let authors = &authors[..limit];
-        if opts.json {
-            print_summary_json(authors)
-        } else {
-            print_summary_report(authors);
-            Ok(())
+        match opts.output {
+            OutputMode::Json => print_summary_json(authors),
+            OutputMode::Short => {
+                print_summary_short(authors);
+                Ok(())
+            }
+            OutputMode::Terse => {
+                print_summary_terse(authors);
+                Ok(())
+            }
+            OutputMode::Github => Err(crate::cli::ERR_GITHUB_ONLY.into()),
+            OutputMode::Table => {
+                print_summary_report(authors);
+                Ok(())
+            }
         }
     } else {
-        report_helpers::output_results(&mut results, opts.top, opts.json, print_json, print_report)
+        report_helpers::output_results(
+            &mut results,
+            opts.top,
+            opts.output,
+            print_json,
+            print_report,
+            print_short,
+            print_terse,
+        )
     }
 }
 

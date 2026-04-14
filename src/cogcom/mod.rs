@@ -11,13 +11,17 @@ pub(crate) mod report;
 use std::error::Error;
 use std::path::Path;
 
+use crate::cli::OutputMode;
 use crate::loc::counter::LineKind;
 use crate::loc::language::LanguageSpec;
 use crate::util::read_and_classify;
 use crate::walk::WalkConfig;
 use analyzer::analyze;
 use markers::cognitive_markers_for;
-use report::{FileCogcomMetrics, print_github, print_json, print_per_function, print_report};
+use report::{
+    FileCogcomMetrics, print_github, print_json, print_per_function, print_report, print_short,
+    print_terse,
+};
 
 /// Analyze pre-read content (avoids re-reading the file).
 pub(crate) fn analyze_content(
@@ -65,12 +69,11 @@ pub(crate) fn analyze_file(
 /// results, and print as a table, per-function breakdown, JSON, or GitHub annotations.
 pub fn run(
     cfg: &WalkConfig<'_>,
-    json: bool,
+    output: OutputMode,
     min_complexity: usize,
     top: usize,
     per_function: bool,
     sort_by: &str,
-    format: Option<&str>,
 ) -> Result<(), Box<dyn Error>> {
     let mut results = cfg.collect_analysis(analyze_file);
 
@@ -93,11 +96,13 @@ pub fn run(
     // Limit to top N
     results.truncate(top);
 
-    match (json, format) {
-        (true, _) | (_, Some("json")) => print_json(&results)?,
-        (_, Some("github")) => print_github(&results, min_complexity),
-        (_, _) if per_function => print_per_function(&results),
-        _ => print_report(&results),
+    match output {
+        OutputMode::Json => print_json(&results)?,
+        OutputMode::Short => print_short(&results),
+        OutputMode::Terse => print_terse(&results),
+        OutputMode::Github => print_github(&results, min_complexity),
+        OutputMode::Table if per_function => print_per_function(&results),
+        OutputMode::Table => print_report(&results),
     }
 
     Ok(())

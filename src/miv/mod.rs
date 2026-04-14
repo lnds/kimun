@@ -24,7 +24,7 @@ use crate::report_helpers;
 use crate::util::read_and_classify;
 use crate::walk::WalkConfig;
 use analyzer::compute_mi;
-use report::{FileMIMetrics, print_json, print_report};
+use report::{FileMIMetrics, print_json, print_report, print_short, print_terse};
 
 fn analyze_file(path: &Path, spec: &LanguageSpec) -> Result<Option<FileMIMetrics>, Box<dyn Error>> {
     let (lines, kinds) = match read_and_classify(path, spec)? {
@@ -61,7 +61,7 @@ fn analyze_file(path: &Path, spec: &LanguageSpec) -> Result<Option<FileMIMetrics
 
 pub fn run(
     cfg: &WalkConfig<'_>,
-    json: bool,
+    output: crate::cli::OutputMode,
     top: usize,
     sort_by: &str,
 ) -> Result<(), Box<dyn Error>> {
@@ -85,7 +85,15 @@ pub fn run(
         _ => results.sort_by(|a, b| a.metrics.mi_score.total_cmp(&b.metrics.mi_score)),
     }
 
-    report_helpers::output_results(&mut results, top, json, print_json, print_report)
+    report_helpers::output_results(
+        &mut results,
+        top,
+        output,
+        print_json,
+        print_report,
+        print_short,
+        print_terse,
+    )
 }
 
 #[cfg(test)]

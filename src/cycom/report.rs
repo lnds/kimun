@@ -190,6 +190,32 @@ pub fn print_json(files: &[FileCycomMetrics]) -> Result<(), Box<dyn std::error::
     report_helpers::print_json_stdout(&entries)
 }
 
+/// Average complexity across all functions in the result set.
+fn avg_complexity(files: &[FileCycomMetrics]) -> f64 {
+    let total_fns: usize = files.iter().map(|f| f.functions.len()).sum();
+    let total: usize = files.iter().map(|f| f.total_complexity).sum();
+    if total_fns > 0 {
+        total as f64 / total_fns as f64
+    } else {
+        0.0
+    }
+}
+
+/// Print cyclomatic complexity as a single compact line.
+pub fn print_short(files: &[FileCycomMetrics]) {
+    let count = files.len();
+    let total_fns: usize = files.iter().map(|f| f.functions.len()).sum();
+    let total: usize = files.iter().map(|f| f.total_complexity).sum();
+    let max: usize = files.iter().map(|f| f.max_complexity).max().unwrap_or(0);
+    let avg = avg_complexity(files);
+    println!("cycom files:{count} fns:{total_fns} avg:{avg:.1} max:{max} total:{total}");
+}
+
+/// Print only the average complexity.
+pub fn print_terse(files: &[FileCycomMetrics]) {
+    println!("{:.1}", avg_complexity(files));
+}
+
 #[cfg(test)]
 #[path = "report_test.rs"]
 mod tests;

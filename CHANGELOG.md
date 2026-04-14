@@ -1,3 +1,14 @@
+## Unreleased
+
+### Breaking
+
+- **cli**: replace `--json`, `--short`, `--terse` flags with unified `--format {table,json,short,terse,github}` parameter
+- **cli**: remove per-command `--format` option from cycom, cogcom, smells (use `--format github` instead)
+
+### Feat
+
+- **all commands**: add `--format short` (compact key:value line for AI/scripting) and `--format terse` (single headline value for piping)
+
 ## 0.15.0 (2026-03-02)
 
 ### Feat

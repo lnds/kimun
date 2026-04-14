@@ -10,13 +10,14 @@ mod rules;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
+use crate::cli::OutputMode;
 use crate::cycom::markers::markers_for;
 use crate::loc::language::{LanguageSpec, detect};
 use crate::util::read_and_classify;
 use crate::walk::WalkConfig;
 
 use analyzer::detect_smells;
-use report::{FileSmellMetrics, print_github, print_json, print_report};
+use report::{FileSmellMetrics, print_github, print_json, print_report, print_short, print_terse};
 
 /// Read a file, classify lines, and detect smells.
 fn analyze_file(
@@ -54,11 +55,10 @@ fn analyze_file(
 /// Used by `--files` and `--since-ref` to limit analysis to a PR's changed files.
 pub fn run_on_files(
     paths: &[PathBuf],
-    json: bool,
+    output: OutputMode,
     top: usize,
     max_lines: usize,
     max_params: usize,
-    format: Option<&str>,
 ) -> Result<(), Box<dyn Error>> {
     let mut results: Vec<FileSmellMetrics> = Vec::new();
 
@@ -75,7 +75,7 @@ pub fn run_on_files(
     }
 
     if results.is_empty() {
-        if json || format == Some("json") {
+        if output == OutputMode::Json {
             return report::print_json(&[]);
         }
         println!("No recognized source files in the provided list.");
@@ -85,23 +85,16 @@ pub fn run_on_files(
     results.sort_by(|a, b| b.total.cmp(&a.total));
     results.truncate(top);
 
-    match (json, format) {
-        (true, _) | (_, Some("json")) => print_json(&results)?,
-        (_, Some("github")) => print_github(&results),
-        _ => print_report(&results),
-    }
-
-    Ok(())
+    dispatch_output(output, &results)
 }
 
 /// Walk source files, detect smells, sort by count, and output.
 pub fn run(
     cfg: &WalkConfig<'_>,
-    json: bool,
+    output: OutputMode,
     top: usize,
     max_lines: usize,
     max_params: usize,
-    format: Option<&str>,
 ) -> Result<(), Box<dyn Error>> {
     let mut results =
         cfg.collect_analysis(|path, spec| analyze_file(path, spec, max_lines, max_params));
@@ -110,12 +103,17 @@ pub fn run(
     results.sort_by(|a, b| b.total.cmp(&a.total));
     results.truncate(top);
 
-    match (json, format) {
-        (true, _) | (_, Some("json")) => print_json(&results)?,
-        (_, Some("github")) => print_github(&results),
-        _ => print_report(&results),
-    }
+    dispatch_output(output, &results)
+}
 
+fn dispatch_output(output: OutputMode, results: &[FileSmellMetrics]) -> Result<(), Box<dyn Error>> {
+    match output {
+        OutputMode::Json => print_json(results)?,
+        OutputMode::Github => print_github(results),
+        OutputMode::Short => print_short(results),
+        OutputMode::Terse => print_terse(results),
+        OutputMode::Table => print_report(results),
+    }
     Ok(())
 }
 

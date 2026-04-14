@@ -98,6 +98,33 @@ pub fn print_json(files: &[FileAge]) {
     report_helpers::print_json_stdout(&entries).unwrap();
 }
 
+/// Print age as a single compact line.
+pub fn print_short(files: &[FileAge]) {
+    let count = files.len();
+    let active = files
+        .iter()
+        .filter(|f| f.status == AgeStatus::Active)
+        .count();
+    let stale = files
+        .iter()
+        .filter(|f| f.status == AgeStatus::Stale)
+        .count();
+    let frozen = files
+        .iter()
+        .filter(|f| f.status == AgeStatus::Frozen)
+        .count();
+    println!("age files:{count} active:{active} stale:{stale} frozen:{frozen}");
+}
+
+/// Print only the count of frozen files (oldest, highest-priority attention).
+pub fn print_terse(files: &[FileAge]) {
+    let frozen = files
+        .iter()
+        .filter(|f| f.status == AgeStatus::Frozen)
+        .count();
+    println!("{frozen}");
+}
+
 #[cfg(test)]
 #[path = "report_test.rs"]
 mod tests;

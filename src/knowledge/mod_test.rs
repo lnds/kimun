@@ -1,4 +1,5 @@
 use super::*;
+use crate::cli::OutputMode;
 use crate::walk::{ExcludeFilter, WalkConfig};
 use std::fs;
 use std::path::Path as StdPath;
@@ -6,7 +7,7 @@ use std::path::Path as StdPath;
 use git2::Repository;
 
 fn opts<'a>(
-    json: bool,
+    output: OutputMode,
     top: usize,
     sort_by: &'a str,
     since: Option<&'a str>,
@@ -14,7 +15,7 @@ fn opts<'a>(
     summary: bool,
 ) -> KnowledgeOptions<'a> {
     KnowledgeOptions {
-        json,
+        output,
         top,
         sort_by,
         since,
@@ -45,7 +46,11 @@ fn run_on_non_git_dir() {
     fs::create_dir_all(&sub).unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(&sub, false, &filter);
-    let err = run(&cfg, &opts(false, 20, "concentration", None, false, false)).unwrap_err();
+    let err = run(
+        &cfg,
+        &opts(OutputMode::Table, 20, "concentration", None, false, false),
+    )
+    .unwrap_err();
     assert!(
         err.to_string().contains("not a git repository"),
         "should mention not a git repo, got: {err}"
@@ -97,7 +102,10 @@ fn integration_basic() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, &opts(false, 20, "concentration", None, false, false));
+    let result = run(
+        &cfg,
+        &opts(OutputMode::Table, 20, "concentration", None, false, false),
+    );
     assert!(result.is_ok(), "knowledge map should succeed on a git repo");
 }
 
@@ -112,7 +120,10 @@ fn integration_json() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, &opts(true, 20, "concentration", None, false, false));
+    let result = run(
+        &cfg,
+        &opts(OutputMode::Json, 20, "concentration", None, false, false),
+    );
     assert!(result.is_ok(), "JSON output should succeed");
 }
 
@@ -127,7 +138,10 @@ fn integration_risk_only() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, &opts(false, 20, "risk", None, true, false));
+    let result = run(
+        &cfg,
+        &opts(OutputMode::Table, 20, "risk", None, true, false),
+    );
     assert!(result.is_ok(), "risk-only filter should work");
 }
 
@@ -142,7 +156,10 @@ fn integration_sort_by_risk() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, &opts(false, 20, "risk", None, false, false));
+    let result = run(
+        &cfg,
+        &opts(OutputMode::Table, 20, "risk", None, false, false),
+    );
     assert!(result.is_ok(), "sort by risk should work");
 }
 
@@ -157,7 +174,10 @@ fn integration_sort_by_diffusion() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, &opts(false, 20, "diffusion", None, false, false));
+    let result = run(
+        &cfg,
+        &opts(OutputMode::Table, 20, "diffusion", None, false, false),
+    );
     assert!(result.is_ok(), "sort by diffusion should work");
 }
 
@@ -165,7 +185,10 @@ fn integration_sort_by_diffusion() {
 fn run_on_current_repo() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(StdPath::new("."), false, &filter);
-    let result = run(&cfg, &opts(true, 5, "concentration", None, false, false));
+    let result = run(
+        &cfg,
+        &opts(OutputMode::Json, 5, "concentration", None, false, false),
+    );
     assert!(result.is_ok(), "knowledge map should work on current repo");
 }
 
@@ -183,7 +206,10 @@ fn integration_summary() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, &opts(false, 20, "concentration", None, false, true));
+    let result = run(
+        &cfg,
+        &opts(OutputMode::Table, 20, "concentration", None, false, true),
+    );
     assert!(result.is_ok(), "summary mode should work");
 }
 
@@ -198,7 +224,10 @@ fn integration_summary_json() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, &opts(true, 20, "concentration", None, false, true));
+    let result = run(
+        &cfg,
+        &opts(OutputMode::Json, 20, "concentration", None, false, true),
+    );
     assert!(result.is_ok(), "summary JSON mode should work");
 }
 
@@ -215,7 +244,14 @@ fn integration_with_since_filter() {
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     let result = run(
         &cfg,
-        &opts(false, 20, "concentration", Some("1y"), false, false),
+        &opts(
+            OutputMode::Table,
+            20,
+            "concentration",
+            Some("1y"),
+            false,
+            false,
+        ),
     );
     assert!(result.is_ok(), "since filter should work: {:?}", result);
 }
@@ -233,7 +269,14 @@ fn integration_with_since_filter_json() {
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     let result = run(
         &cfg,
-        &opts(true, 20, "concentration", Some("1d"), false, false),
+        &opts(
+            OutputMode::Json,
+            20,
+            "concentration",
+            Some("1d"),
+            false,
+            false,
+        ),
     );
     assert!(
         result.is_ok(),
@@ -256,7 +299,10 @@ fn integration_with_generated_file_skipped() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, &opts(false, 20, "concentration", None, false, false));
+    let result = run(
+        &cfg,
+        &opts(OutputMode::Table, 20, "concentration", None, false, false),
+    );
     assert!(result.is_ok(), "generated files should be skipped");
 }
 
@@ -278,7 +324,7 @@ fn integration_author_filter_match() {
     let result = run(
         &cfg,
         &KnowledgeOptions {
-            json: false,
+            output: OutputMode::Table,
             top: 20,
             sort_by: "concentration",
             since: None,
@@ -302,7 +348,7 @@ fn integration_author_filter_no_match() {
     let result = run(
         &cfg,
         &KnowledgeOptions {
-            json: false,
+            output: OutputMode::Table,
             top: 20,
             sort_by: "concentration",
             since: None,
@@ -332,7 +378,7 @@ fn integration_bus_factor_table() {
     let result = run(
         &cfg,
         &KnowledgeOptions {
-            json: false,
+            output: OutputMode::Table,
             top: 20,
             sort_by: "concentration",
             since: None,
@@ -362,7 +408,7 @@ fn integration_bus_factor_json() {
     let result = run(
         &cfg,
         &KnowledgeOptions {
-            json: true,
+            output: OutputMode::Json,
             top: 20,
             sort_by: "concentration",
             since: None,
@@ -392,7 +438,7 @@ fn integration_summary_sort_by_diffusion() {
     let result = run(
         &cfg,
         &KnowledgeOptions {
-            json: false,
+            output: OutputMode::Table,
             top: 20,
             sort_by: "diffusion",
             since: None,
@@ -422,7 +468,7 @@ fn integration_summary_sort_by_risk() {
     let result = run(
         &cfg,
         &KnowledgeOptions {
-            json: false,
+            output: OutputMode::Table,
             top: 20,
             sort_by: "risk",
             since: None,
@@ -433,4 +479,37 @@ fn integration_summary_sort_by_risk() {
         },
     );
     assert!(result.is_ok(), "summary risk sort should work: {result:?}");
+}
+#[test]
+fn run_short_format() {
+    let (dir, repo) = create_test_repo();
+    make_commit(
+        &repo,
+        &[("main.rs", "fn main() {\n    println!(\"hi\");\n}\n")],
+        "add main",
+    );
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run(
+        &cfg,
+        &opts(OutputMode::Short, 20, "concentration", None, false, false),
+    );
+    assert!(result.is_ok(), "short format should succeed: {result:?}");
+}
+
+#[test]
+fn run_terse_format() {
+    let (dir, repo) = create_test_repo();
+    make_commit(
+        &repo,
+        &[("main.rs", "fn main() {\n    println!(\"hi\");\n}\n")],
+        "add main",
+    );
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run(
+        &cfg,
+        &opts(OutputMode::Terse, 20, "concentration", None, false, false),
+    );
+    assert!(result.is_ok(), "terse format should succeed: {result:?}");
 }

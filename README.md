@@ -62,7 +62,7 @@ Options:
 |------|-------------|
 | `-v`, `--verbose` | Show summary stats (files read, unique, ignored, elapsed time) |
 | `--by-author` | Break down lines of code by git author (requires a git repository) |
-| `--json` | Output as JSON |
+| `--format {table,json,short,terse}` | Output format (default: table) |
 
 Example output:
 
@@ -98,7 +98,7 @@ Options:
 | `--max-duplicates N` | Exit with code 1 if duplicate groups exceed this limit (`--max-duplicates 0` fails on any duplicate) |
 | `--max-dup-ratio PERCENT` | Exit with code 1 if the duplicated-lines ratio exceeds this percentage (e.g. `--max-dup-ratio 5.0`) |
 | `--fail-on-increase REF` | Exit with code 1 if the current duplication ratio is higher than at the given git ref (e.g. `origin/main`). Prevents debt from growing silently in CI |
-| `--json` | Output as JSON |
+| `--format {table,json,short,terse}` | Output format (default: table) |
 
 Example summary output:
 
@@ -172,7 +172,7 @@ Options:
 
 | Flag | Description |
 |------|-------------|
-| `--json` | Output as JSON |
+| `--format {table,json,short,terse}` | Output format (default: table) |
 | `--include-tests` | Include test files in analysis (excluded by default) |
 
 ### `km hal` -- Halstead complexity metrics
@@ -205,7 +205,7 @@ Options:
 
 | Flag | Description |
 |------|-------------|
-| `--json` | Output as JSON (includes all metrics) |
+| `--format {table,json,short,terse}` | Output format (default: table) |
 | `--include-tests` | Include test files in analysis (excluded by default) |
 | `--top N` | Show only the top N files (default: 20) |
 | `--sort-by METRIC` | Sort by `effort`, `volume`, or `bugs` (default: `effort`) |
@@ -239,7 +239,7 @@ Options:
 
 | Flag | Description |
 |------|-------------|
-| `--json` | Output as JSON |
+| `--format {table,json,short,terse,github}` | Output format (default: table). `github` emits CI annotations |
 | `--include-tests` | Include test files in analysis (excluded by default) |
 | `--top N` | Show only the top N files (default: 20) |
 | `--min-complexity N` | Minimum max-complexity to include a file (default: 1) |
@@ -257,7 +257,7 @@ Options:
 
 | Flag | Description |
 |------|-------------|
-| `--json` | Output as JSON |
+| `--format {table,json,short,terse,github}` | Output format (default: table). `github` emits CI annotations |
 | `--include-tests` | Include test files in analysis (excluded by default) |
 | `--top N` | Show only the top N files (default: 20) |
 | `--min-complexity N` | Minimum max-complexity to include a file (default: 1) |
@@ -292,7 +292,7 @@ Options:
 
 | Flag | Description |
 |------|-------------|
-| `--json` | Output as JSON |
+| `--format {table,json,short,terse}` | Output format (default: table) |
 | `--include-tests` | Include test files in analysis (excluded by default) |
 | `--top N` | Show only the top N files (default: 20) |
 | `--sort-by METRIC` | Sort by `mi` (ascending), `volume`, `complexity`, or `loc` (default: `mi`) |
@@ -343,7 +343,7 @@ Options:
 
 | Flag | Description |
 |------|-------------|
-| `--json` | Output as JSON |
+| `--format {table,json,short,terse}` | Output format (default: table) |
 | `--include-tests` | Include test files in analysis (excluded by default) |
 | `--top N` | Show only the top N files (default: 20) |
 | `--sort-by METRIC` | Sort by `mi` (ascending), `volume`, `complexity`, or `loc` (default: `mi`) |
@@ -386,7 +386,7 @@ Options:
 
 | Flag | Description |
 |------|-------------|
-| `--json` | Output as JSON |
+| `--format {table,json,short,terse}` | Output format (default: table) |
 | `--include-tests` | Include test files in analysis (excluded by default) |
 | `--top N` | Show only the top N files (default: 20) |
 | `--sort-by METRIC` | Sort by `score`, `commits`, or `complexity` (default: `score`) |
@@ -458,7 +458,7 @@ Options:
 
 | Flag | Description |
 |------|-------------|
-| `--json` | Output as JSON |
+| `--format {table,json,short,terse}` | Output format (default: table) |
 | `--include-tests` | Include test files in analysis (excluded by default) |
 | `--top N` | Show only the top N files (default: 20) |
 | `--sort-by METRIC` | Sort by `concentration`, `diffusion`, or `risk` (default: `concentration`) |
@@ -530,7 +530,7 @@ Options:
 
 | Flag | Description |
 |------|-------------|
-| `--json` | Output as JSON |
+| `--format {table,json,short,terse}` | Output format (default: table) |
 | `--top N` | Show only the top N file pairs (default: 20) |
 | `--sort-by METRIC` | Sort by `strength` or `shared` (default: `strength`) |
 | `--since DURATION` | Only consider commits since this time (e.g. `6m`, `1y`, `30d`) |
@@ -570,7 +570,7 @@ Options:
 | `--top N` | Show only the top N files (default: 20) |
 | `--sort-by METRIC` | Sort by `commits` (default), `rate` (commits/month), or `file` |
 | `--since DURATION` | Only consider commits since this time (e.g. `6m`, `1y`, `30d`) |
-| `--json` | Output as JSON |
+| `--format {table,json,short,terse}` | Output format (default: table) |
 
 Example output:
 
@@ -612,7 +612,7 @@ Options:
 | `--max-params N` | Maximum parameter count before flagging (default: 4) |
 | `--files FILE` | Analyze only these specific files (repeatable). Useful for scripting |
 | `--since-ref REF` | Analyze only files changed since this git ref (e.g. `origin/main`, `HEAD~1`). Ideal for CI |
-| `--json` | Output as JSON |
+| `--format {table,json,short,terse,github}` | Output format (default: table). `github` emits CI annotations |
 
 Example output:
 
@@ -640,7 +640,7 @@ Supports Rust (`mod X;`), Python (relative `from .X import`), JavaScript/TypeScr
 
 | Flag | Description |
 |------|-------------|
-| `--json` | Output as JSON |
+| `--format {table,json,short,terse}` | Output format (default: table) |
 | `--cycles-only` | Show only files that participate in a dependency cycle |
 | `--sort-by METRIC` | Sort by `fan-out` (default) or `fan-in` |
 | `--top N` | Show only top N files (default: 20) |
@@ -672,7 +672,7 @@ Options:
 | Flag | Description |
 |------|-------------|
 | `--since DURATION` | Only consider activity since this time (e.g. `6m`, `1y`, `30d`) |
-| `--json` | Output as JSON |
+| `--format {table,json,short,terse}` | Output format (default: table) |
 
 Example output:
 
@@ -709,7 +709,7 @@ Options:
 | `--frozen-days N` | Days threshold for Frozen status (default: 365) |
 | `--sort-by METRIC` | Sort by `date` (oldest first, default), `status`, or `file` |
 | `--status FILTER` | Show only files with this status: `active`, `stale`, or `frozen` |
-| `--json` | Output as JSON |
+| `--format {table,json,short,terse}` | Output format (default: table) |
 
 Example output:
 
@@ -783,7 +783,7 @@ Options:
 |------|-------------|
 | `--model MODEL` | Scoring model: `cogcom` (default, v0.14+) or `legacy` (MI + cyclomatic, v0.13) |
 | `--trend [REF]` | Compare current score against a git ref (default: `HEAD`). Shows change: `B- → B (+2.3)`. Useful for PR review: `--trend origin/main` |
-| `--json` | Output as JSON |
+| `--format {table,json,short,terse}` | Output format (default: table) |
 | `--include-tests` | Include test files in analysis (excluded by default) |
 | `--bottom N` | Number of worst files to show in "needs attention" (default: 10) |
 | `--min-lines N` | Minimum lines for a duplicate block (default: 6) |
@@ -824,7 +824,7 @@ Extracts the file tree at the given ref, computes the score for both snapshots, 
 km score diff                          # compare vs HEAD (uncommitted changes)
 km score diff --git-ref HEAD~1         # compare vs previous commit
 km score diff --git-ref main           # compare vs main branch
-km score diff --json                   # machine-readable output
+km score diff --format json            # machine-readable output
 ```
 
 Options:
@@ -833,7 +833,7 @@ Options:
 |------|-------------|
 | `--git-ref REF` | Git ref to compare against (default: `HEAD`) |
 | `--model MODEL` | Scoring model: `cogcom` (default) or `legacy` |
-| `--json` | Output as JSON |
+| `--format {table,json,short,terse}` | Output format (default: table) |
 | `--bottom N` | Number of worst files to show (default: 10) |
 | `--min-lines N` | Minimum lines for a duplicate block (default: 6) |
 
@@ -852,7 +852,7 @@ Options:
 | `--top N` | Show only the top N files per section (default: 20) |
 | `--min-lines N` | Minimum lines for a duplicate block (default: 6) |
 | `--full` | Show all files instead of truncating to top N |
-| `--json` | Output as JSON |
+| `--format {table,json,short,terse}` | Output format (default: table) |
 
 ## Features
 

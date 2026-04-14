@@ -275,6 +275,21 @@ pub fn print_json(
     Ok(())
 }
 
+/// Print duplication as a single compact line.
+pub fn print_short(metrics: &DuplicationMetrics) {
+    println!(
+        "dups dup:{:.1}% lines:{} groups:{}",
+        metrics.percentage(),
+        metrics.duplicated_lines,
+        metrics.duplicate_groups
+    );
+}
+
+/// Print only the duplication percentage.
+pub fn print_terse(metrics: &DuplicationMetrics) {
+    println!("{:.1}", metrics.percentage());
+}
+
 #[cfg(test)]
 #[path = "report_test.rs"]
 mod tests;

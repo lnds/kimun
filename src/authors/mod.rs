@@ -7,14 +7,19 @@ mod report;
 
 use std::error::Error;
 
+use crate::cli::OutputMode;
 use crate::git::GitRepo;
 use crate::util::parse_since;
 use crate::walk::{self, WalkConfig};
 use analyzer::compute_authors;
-use report::{print_json, print_report};
+use report::{print_json, print_report, print_short, print_terse};
 
 /// Run author summary analysis and print results.
-pub fn run(cfg: &WalkConfig<'_>, json: bool, since: Option<&str>) -> Result<(), Box<dyn Error>> {
+pub fn run(
+    cfg: &WalkConfig<'_>,
+    output: OutputMode,
+    since: Option<&str>,
+) -> Result<(), Box<dyn Error>> {
     let git = GitRepo::open(cfg.path)
         .map_err(|e| format!("not a git repository (or any parent): {e}"))?;
 
@@ -47,7 +52,7 @@ pub fn run(cfg: &WalkConfig<'_>, json: bool, since: Option<&str>) -> Result<(), 
     }
 
     if file_blames.is_empty() {
-        if json {
+        if output == OutputMode::Json {
             println!("[]");
         } else {
             println!("No authors found.");
@@ -62,10 +67,14 @@ pub fn run(cfg: &WalkConfig<'_>, json: bool, since: Option<&str>) -> Result<(), 
 
     let authors = compute_authors(&refs);
 
-    if json {
-        print_json(&authors);
-    } else {
-        print_report(&authors);
+    match output {
+        OutputMode::Json => print_json(&authors),
+        OutputMode::Short => print_short(&authors),
+        OutputMode::Terse => print_terse(&authors),
+        OutputMode::Github => {
+            return Err(crate::cli::ERR_GITHUB_ONLY.into());
+        }
+        OutputMode::Table => print_report(&authors),
     }
 
     Ok(())

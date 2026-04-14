@@ -97,6 +97,23 @@ pub fn print_report(diff: &ScoreDiff) {
     println!("{separator}");
 }
 
+/// Print score diff as a single compact line.
+pub fn print_short(diff: &ScoreDiff) {
+    println!(
+        "score-diff ref:{} before:{:.1} after:{:.1} delta:{:+.1} grade:{}",
+        diff.git_ref,
+        diff.overall.before,
+        diff.overall.after,
+        diff.overall.delta,
+        diff.after_grade.as_str(),
+    );
+}
+
+/// Print only the score delta.
+pub fn print_terse(diff: &ScoreDiff) {
+    println!("{:+.1}", diff.overall.delta);
+}
+
 // --- JSON output ---
 
 #[derive(Serialize)]

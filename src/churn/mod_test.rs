@@ -1,3 +1,4 @@
+use crate::cli::OutputMode;
 use crate::walk::{ExcludeFilter, WalkConfig};
 use git2::Repository;
 use std::fs;
@@ -7,35 +8,35 @@ use std::path::Path as StdPath;
 fn run_on_current_repo() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(std::path::Path::new("."), false, &filter);
-    super::run(&cfg, false, 20, "commits", None).unwrap();
+    super::run(&cfg, OutputMode::Table, 20, "commits", None).unwrap();
 }
 
 #[test]
 fn run_json_on_current_repo() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(std::path::Path::new("."), false, &filter);
-    super::run(&cfg, true, 20, "commits", None).unwrap();
+    super::run(&cfg, OutputMode::Json, 20, "commits", None).unwrap();
 }
 
 #[test]
 fn run_sort_by_rate() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(std::path::Path::new("."), false, &filter);
-    super::run(&cfg, false, 20, "rate", None).unwrap();
+    super::run(&cfg, OutputMode::Table, 20, "rate", None).unwrap();
 }
 
 #[test]
 fn run_sort_by_file() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(std::path::Path::new("."), false, &filter);
-    super::run(&cfg, false, 20, "file", None).unwrap();
+    super::run(&cfg, OutputMode::Table, 20, "file", None).unwrap();
 }
 
 #[test]
 fn run_with_since() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(std::path::Path::new("."), false, &filter);
-    super::run(&cfg, false, 20, "commits", Some("1y")).unwrap();
+    super::run(&cfg, OutputMode::Table, 20, "commits", Some("1y")).unwrap();
 }
 
 #[test]
@@ -45,7 +46,7 @@ fn run_on_non_git_dir() {
     fs::create_dir_all(&sub).unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(&sub, false, &filter);
-    let err = super::run(&cfg, false, 20, "commits", None).unwrap_err();
+    let err = super::run(&cfg, OutputMode::Table, 20, "commits", None).unwrap_err();
     assert!(
         err.to_string().contains("not a git repository"),
         "should mention not a git repository, got: {err}"
@@ -79,10 +80,24 @@ fn run_on_empty_repo_with_since() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     // 1d filter: commits from epoch 1_700_000_000 are old, so freqs will be empty
-    let result = super::run(&cfg, false, 20, "commits", Some("1d"));
+    let result = super::run(&cfg, OutputMode::Table, 20, "commits", Some("1d"));
     assert!(
         result.is_ok(),
         "since-filtered empty repo should not crash: {:?}",
         result
     );
+}
+
+#[test]
+fn run_short_format() {
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(std::path::Path::new("."), false, &filter);
+    super::run(&cfg, OutputMode::Short, 20, "commits", None).unwrap();
+}
+
+#[test]
+fn run_terse_format() {
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(std::path::Path::new("."), false, &filter);
+    super::run(&cfg, OutputMode::Terse, 20, "commits", None).unwrap();
 }

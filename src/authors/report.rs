@@ -94,6 +94,19 @@ pub fn print_json(authors: &[AuthorSummary]) {
     report_helpers::print_json_stdout(&entries).unwrap();
 }
 
+/// Print authors as a single compact line.
+pub fn print_short(authors: &[AuthorSummary]) {
+    let count = authors.len();
+    let total_files: usize = authors.iter().map(|a| a.owned_files).sum();
+    let total_lines: usize = authors.iter().map(|a| a.lines).sum();
+    println!("authors count:{count} files:{total_files} lines:{total_lines}");
+}
+
+/// Print only the author count.
+pub fn print_terse(authors: &[AuthorSummary]) {
+    println!("{}", authors.len());
+}
+
 #[cfg(test)]
 #[path = "report_test.rs"]
 mod tests;

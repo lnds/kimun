@@ -1,4 +1,5 @@
 use super::*;
+use crate::cli::OutputMode;
 use crate::walk::{ExcludeFilter, WalkConfig};
 use git2::Repository;
 use std::fs;
@@ -45,7 +46,7 @@ fn run_on_non_git_dir() {
     fs::create_dir_all(&sub).unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(&sub, false, &filter);
-    let err = run(&cfg, false, None).unwrap_err();
+    let err = run(&cfg, OutputMode::Table, None).unwrap_err();
     assert!(
         err.to_string().contains("not a git repository"),
         "should mention not a git repository, got: {err}"
@@ -63,7 +64,7 @@ fn integration_basic_table() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, false, None);
+    let result = run(&cfg, OutputMode::Table, None);
     assert!(
         result.is_ok(),
         "author analysis should succeed: {:?}",
@@ -82,7 +83,7 @@ fn integration_json_output() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, true, None);
+    let result = run(&cfg, OutputMode::Json, None);
     assert!(result.is_ok(), "author JSON output should succeed");
 }
 
@@ -100,7 +101,7 @@ fn integration_multiple_files() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, false, None);
+    let result = run(&cfg, OutputMode::Table, None);
     assert!(result.is_ok(), "multi-file author analysis should succeed");
 }
 
@@ -113,7 +114,7 @@ fn integration_empty_repo() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     // Should return Ok with "No authors found." or empty JSON
-    let result = run(&cfg, false, None);
+    let result = run(&cfg, OutputMode::Table, None);
     assert!(result.is_ok(), "empty repo should not crash: {:?}", result);
 }
 
@@ -124,7 +125,7 @@ fn integration_empty_json() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, true, None);
+    let result = run(&cfg, OutputMode::Json, None);
     assert!(result.is_ok(), "empty repo JSON should not crash");
 }
 
@@ -136,7 +137,7 @@ fn integration_with_since_filter() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     // Use "1y" — all commits should pass (happened recently)
-    let result = run(&cfg, false, Some("1y"));
+    let result = run(&cfg, OutputMode::Table, Some("1y"));
     assert!(
         result.is_ok(),
         "since filter should not crash: {:?}",
@@ -152,7 +153,7 @@ fn integration_with_since_filter_excludes_all() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     // Use "1d" — commits at epoch 1_700_000_000 are old, so lines should be filtered out
-    let result = run(&cfg, false, Some("1d"));
+    let result = run(&cfg, OutputMode::Table, Some("1d"));
     // Should succeed (returns empty or "No authors found.")
     assert!(
         result.is_ok(),
@@ -166,7 +167,7 @@ fn run_on_current_repo() {
     // Smoke test on the actual project repo
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(StdPath::new("."), false, &filter);
-    let result = run(&cfg, false, None);
+    let result = run(&cfg, OutputMode::Table, None);
     assert!(
         result.is_ok(),
         "author analysis should work on current repo"
@@ -177,6 +178,22 @@ fn run_on_current_repo() {
 fn run_on_current_repo_json() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(StdPath::new("."), false, &filter);
-    let result = run(&cfg, true, None);
+    let result = run(&cfg, OutputMode::Json, None);
     assert!(result.is_ok(), "author JSON should work on current repo");
+}
+
+#[test]
+fn run_short_format() {
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(StdPath::new("."), false, &filter);
+    let result = run(&cfg, OutputMode::Short, None);
+    assert!(result.is_ok(), "authors short format should succeed");
+}
+
+#[test]
+fn run_terse_format() {
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(StdPath::new("."), false, &filter);
+    let result = run(&cfg, OutputMode::Terse, None);
+    assert!(result.is_ok(), "authors terse format should succeed");
 }

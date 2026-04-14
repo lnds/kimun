@@ -18,7 +18,10 @@ use crate::loc::language::LanguageSpec;
 use crate::util::{find_test_block_start, read_and_classify};
 use crate::walk::WalkConfig;
 use detector::{NormalizedFile, NormalizedLine, detect_duplicates};
-use report::{DuplicationMetrics, display_limit, print_detailed, print_json, print_summary};
+use report::{
+    DuplicationMetrics, display_limit, print_detailed, print_json, print_short, print_summary,
+    print_terse,
+};
 
 /// Normalize pre-read content (avoids re-reading the file).
 pub(crate) fn normalize_content(lines: &[String], kinds: &[LineKind]) -> Vec<NormalizedLine> {
@@ -195,7 +198,7 @@ pub fn run(
     min_lines: usize,
     show_report: bool,
     show_all: bool,
-    json: bool,
+    output: crate::cli::OutputMode,
     gate: DupsGate,
 ) -> Result<(), Box<dyn Error>> {
     let exclude_tests = cfg.exclude_tests();
@@ -216,22 +219,25 @@ pub fn run(
     }
 
     if files.is_empty() {
-        if json {
-            let metrics = DuplicationMetrics {
-                total_code_lines: 0,
-                duplicated_lines: 0,
-                duplicate_groups: 0,
-                files_with_duplicates: 0,
-                largest_block: 0,
-            };
-            print_json(&metrics, &[])?;
-        } else {
-            println!("No recognized source files found.");
+        match output {
+            crate::cli::OutputMode::Json => {
+                let metrics = DuplicationMetrics {
+                    total_code_lines: 0,
+                    duplicated_lines: 0,
+                    duplicate_groups: 0,
+                    files_with_duplicates: 0,
+                    largest_block: 0,
+                };
+                print_json(&metrics, &[])?;
+            }
+            _ => {
+                println!("No recognized source files found.");
+            }
         }
         return Ok(());
     }
 
-    let groups = detect_duplicates(&files, min_lines, json);
+    let groups = detect_duplicates(&files, min_lines, output == crate::cli::OutputMode::Json);
 
     let duplicated_lines: usize = groups.iter().map(|g| g.duplicated_lines()).sum();
     let largest_block = groups.iter().map(|g| g.line_count).max().unwrap_or(0);
@@ -250,14 +256,24 @@ pub fn run(
     };
 
     // Always print first so CI logs show the full report before any gate error.
-    if json {
-        let limit = display_limit(groups.len(), show_all);
-        print_json(&metrics, &groups[..limit])?;
-    } else if show_report {
-        let limit = display_limit(groups.len(), show_all);
-        print_detailed(&metrics, &groups[..limit], groups.len());
-    } else {
-        print_summary(&metrics, &groups);
+    match output {
+        crate::cli::OutputMode::Json => {
+            let limit = display_limit(groups.len(), show_all);
+            print_json(&metrics, &groups[..limit])?;
+        }
+        crate::cli::OutputMode::Short => print_short(&metrics),
+        crate::cli::OutputMode::Terse => print_terse(&metrics),
+        crate::cli::OutputMode::Github => {
+            return Err(crate::cli::ERR_GITHUB_ONLY.into());
+        }
+        crate::cli::OutputMode::Table => {
+            if show_report {
+                let limit = display_limit(groups.len(), show_all);
+                print_detailed(&metrics, &groups[..limit], groups.len());
+            } else {
+                print_summary(&metrics, &groups);
+            }
+        }
     }
 
     check_quality_gates(&gate, &metrics, &groups, cfg, min_lines)

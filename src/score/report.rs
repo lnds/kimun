@@ -106,6 +106,36 @@ fn format_thousands(n: usize) -> String {
     result.chars().rev().collect()
 }
 
+/// Print score as a single compact line.
+pub fn print_short(score: &ProjectScore) {
+    let dim_scores: Vec<String> = score
+        .dimensions
+        .iter()
+        .map(|d| {
+            let key = d
+                .name
+                .split_whitespace()
+                .next()
+                .unwrap_or(d.name)
+                .to_lowercase();
+            format!("{key}:{:.1}", d.score)
+        })
+        .collect();
+    println!(
+        "score s:{:.1} g:{} files:{} loc:{} {}",
+        score.score,
+        score.grade,
+        score.files_analyzed,
+        score.total_loc,
+        dim_scores.join(" "),
+    );
+}
+
+/// Print only the overall score value.
+pub fn print_terse(score: &ProjectScore) {
+    println!("{:.1}", score.score);
+}
+
 /// JSON-serializable representation of a single score dimension.
 #[derive(Serialize)]
 struct JsonDimension {

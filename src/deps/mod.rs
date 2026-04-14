@@ -32,7 +32,7 @@ fn detect_go_module(root: &Path) -> Option<String> {
 /// Run dependency graph analysis: walk files, extract imports, build graph, output.
 pub fn run(
     cfg: &WalkConfig<'_>,
-    json: bool,
+    output: crate::cli::OutputMode,
     cycles_only: bool,
     sort_by: &str,
     top: usize,
@@ -109,35 +109,28 @@ pub fn run(
         result.entries.iter().take(top).collect()
     };
 
-    if json {
-        // For JSON always emit full result (with filtered entries if cycles_only)
-        let filtered = DepResult {
-            entries: entries
-                .iter()
-                .map(|e| analyzer::DepEntry {
-                    path: e.path.clone(),
-                    language: e.language.clone(),
-                    fan_in: e.fan_in,
-                    fan_out: e.fan_out,
-                    in_cycle: e.in_cycle,
-                })
-                .collect(),
-            cycles: result.cycles.clone(),
-        };
-        report::print_json(&filtered)
-    } else {
-        let entries_vec: Vec<DepEntry> = entries
-            .into_iter()
-            .map(|e| analyzer::DepEntry {
-                path: e.path.clone(),
-                language: e.language.clone(),
-                fan_in: e.fan_in,
-                fan_out: e.fan_out,
-                in_cycle: e.in_cycle,
-            })
-            .collect();
-        report::print_report(&entries_vec, &result);
-        Ok(())
+    match output {
+        crate::cli::OutputMode::Json => {
+            let filtered = DepResult {
+                entries: entries.iter().map(|e| (*e).clone()).collect(),
+                cycles: result.cycles.clone(),
+            };
+            report::print_json(&filtered)
+        }
+        crate::cli::OutputMode::Short => {
+            report::print_short(&result);
+            Ok(())
+        }
+        crate::cli::OutputMode::Terse => {
+            report::print_terse(&result);
+            Ok(())
+        }
+        crate::cli::OutputMode::Github => Err(crate::cli::ERR_GITHUB_ONLY.into()),
+        crate::cli::OutputMode::Table => {
+            let entries_vec: Vec<DepEntry> = entries.into_iter().cloned().collect();
+            report::print_report(&entries_vec, &result);
+            Ok(())
+        }
     }
 }
 

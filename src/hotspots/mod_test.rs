@@ -1,4 +1,5 @@
 use super::*;
+use crate::cli::OutputMode;
 use crate::walk::{ExcludeFilter, WalkConfig};
 use std::fs;
 use std::path::Path as StdPath;
@@ -139,7 +140,7 @@ fn run_on_non_git_dir() {
     fs::create_dir_all(&sub).unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(&sub, false, &filter);
-    let err = run(&cfg, false, 20, "score", None, "indent").unwrap_err();
+    let err = run(&cfg, OutputMode::Table, 20, "score", None, "indent").unwrap_err();
     assert!(
         err.to_string().contains("not a git repository"),
         "should mention not a git repository, got: {err}"
@@ -150,7 +151,7 @@ fn run_on_non_git_dir() {
 fn run_json_output_indent() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(StdPath::new("."), false, &filter);
-    let result = run(&cfg, true, 5, "score", None, "indent");
+    let result = run(&cfg, OutputMode::Json, 5, "score", None, "indent");
     assert!(
         result.is_ok(),
         "hotspots (indent) should succeed on a git repo"
@@ -161,7 +162,7 @@ fn run_json_output_indent() {
 fn run_json_output_cycom() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(StdPath::new("."), false, &filter);
-    let result = run(&cfg, true, 5, "score", None, "cycom");
+    let result = run(&cfg, OutputMode::Json, 5, "score", None, "cycom");
     assert!(
         result.is_ok(),
         "hotspots (cycom) should succeed on a git repo"
@@ -222,7 +223,7 @@ fn integration_indent_scores() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, false, 20, "score", None, "indent");
+    let result = run(&cfg, OutputMode::Table, 20, "score", None, "indent");
     assert!(result.is_ok(), "indent hotspots should succeed");
 }
 
@@ -240,7 +241,7 @@ fn integration_cycom_scores() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, false, 20, "score", None, "cycom");
+    let result = run(&cfg, OutputMode::Table, 20, "score", None, "cycom");
     assert!(result.is_ok(), "cycom hotspots should succeed");
 }
 
@@ -265,7 +266,7 @@ fn integration_sort_by_commits() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, false, 20, "commits", None, "indent");
+    let result = run(&cfg, OutputMode::Table, 20, "commits", None, "indent");
     assert!(result.is_ok(), "sort by commits should work");
 }
 
@@ -281,7 +282,7 @@ fn integration_since_filters_commits() {
     // Commits at epoch 2023 → --since 1d from 2026 excludes all
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, false, 20, "score", Some("1d"), "indent");
+    let result = run(&cfg, OutputMode::Table, 20, "score", Some("1d"), "indent");
     assert!(result.is_ok(), "since filter should not crash");
 }
 
@@ -290,7 +291,7 @@ fn integration_empty_repo() {
     let (dir, _repo) = create_test_repo();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, false, 20, "score", None, "indent");
+    let result = run(&cfg, OutputMode::Table, 20, "score", None, "indent");
     // Empty repo: file_frequencies fails, which is ok
     assert!(
         result.is_ok() || result.is_err(),
@@ -311,7 +312,7 @@ fn integration_json_structure() {
     );
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, true, 20, "score", None, "indent");
+    let result = run(&cfg, OutputMode::Json, 20, "score", None, "indent");
     assert!(result.is_ok(), "JSON output should succeed");
 }
 
@@ -329,7 +330,7 @@ fn integration_cogcom_scores() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, false, 20, "score", None, "cogcom");
+    let result = run(&cfg, OutputMode::Table, 20, "score", None, "cogcom");
     assert!(result.is_ok(), "cogcom hotspots should succeed");
 }
 
@@ -347,6 +348,32 @@ fn integration_sort_by_complexity() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(&cfg, false, 20, "complexity", None, "indent");
+    let result = run(&cfg, OutputMode::Table, 20, "complexity", None, "indent");
     assert!(result.is_ok(), "sort by complexity should work");
+}
+
+#[test]
+fn run_short_format() {
+    let (dir, repo) = create_test_repo();
+    make_commit(
+        &repo,
+        &[("main.rs", "fn main() {\n    println!(\"hi\");\n}\n")],
+        "add main",
+    );
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, OutputMode::Short, 20, "score", None, "indent").unwrap();
+}
+
+#[test]
+fn run_terse_format() {
+    let (dir, repo) = create_test_repo();
+    make_commit(
+        &repo,
+        &[("main.rs", "fn main() {\n    println!(\"hi\");\n}\n")],
+        "add main",
+    );
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, OutputMode::Terse, 20, "score", None, "indent").unwrap();
 }

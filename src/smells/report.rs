@@ -115,6 +115,19 @@ pub fn print_json(files: &[FileSmellMetrics]) -> Result<(), Box<dyn std::error::
     report_helpers::print_json_stdout(&entries)
 }
 
+/// Print smells as a single compact line.
+pub fn print_short(files: &[FileSmellMetrics]) {
+    let total_smells: usize = files.iter().map(|f| f.total).sum();
+    let file_count = files.len();
+    println!("smells files:{file_count} total:{total_smells}");
+}
+
+/// Print only the total smell count.
+pub fn print_terse(files: &[FileSmellMetrics]) {
+    let total_smells: usize = files.iter().map(|f| f.total).sum();
+    println!("{total_smells}");
+}
+
 /// Emit one GitHub Actions warning annotation per smell instance.
 /// Each annotation links directly to the file and line in the PR diff.
 pub fn print_github(files: &[FileSmellMetrics]) {
