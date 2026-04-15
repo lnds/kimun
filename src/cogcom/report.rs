@@ -85,6 +85,9 @@ impl PerFunctionRow for FunctionCognitive {
     fn name(&self) -> &str {
         &self.name
     }
+    fn start_line(&self) -> usize {
+        self.start_line
+    }
     fn complexity(&self) -> usize {
         self.complexity
     }
@@ -159,36 +162,17 @@ pub fn print_json(files: &[FileCogcomMetrics]) -> Result<(), Box<dyn std::error:
 }
 
 /// Emit a CodeClimate JSON array (GitLab Code Quality format) for functions
-/// that exceed the complexity threshold. Each entry includes a stable fingerprint,
-/// severity, file path, and line number for direct PR annotation.
+/// that exceed the complexity threshold.
 pub fn print_codeclimate(
     files: &[FileCogcomMetrics],
     min_complexity: usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let entries: Vec<_> = files
-        .iter()
-        .flat_map(|f| {
-            let path = f.path.display().to_string();
-            f.functions
-                .iter()
-                .filter(|func| func.complexity >= min_complexity)
-                .map(move |func| {
-                    let severity = report_helpers::complexity_severity(func.complexity);
-                    let description = format!(
-                        "function '{}' has cognitive complexity {} (threshold: {})",
-                        func.name, func.complexity, min_complexity
-                    );
-                    report_helpers::codeclimate_entry(
-                        severity,
-                        &path,
-                        func.start_line,
-                        "Cognitive Complexity",
-                        &description,
-                    )
-                })
-        })
-        .collect();
-    report_helpers::print_json_stdout(&entries)
+    report_helpers::print_codeclimate_complexity(
+        files,
+        min_complexity,
+        "Cognitive Complexity",
+        "cognitive",
+    )
 }
 
 /// Emit one GitHub Actions warning annotation per function that exceeds

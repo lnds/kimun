@@ -92,6 +92,9 @@ impl PerFunctionRow for FunctionComplexity {
     fn name(&self) -> &str {
         &self.name
     }
+    fn start_line(&self) -> usize {
+        self.start_line
+    }
     fn complexity(&self) -> usize {
         self.complexity
     }
@@ -144,30 +147,12 @@ pub fn print_codeclimate(
     files: &[FileCycomMetrics],
     min_complexity: usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let entries: Vec<_> = files
-        .iter()
-        .flat_map(|f| {
-            let path = f.path.display().to_string();
-            f.functions
-                .iter()
-                .filter(|func| func.complexity >= min_complexity)
-                .map(move |func| {
-                    let severity = report_helpers::complexity_severity(func.complexity);
-                    let description = format!(
-                        "function '{}' has cyclomatic complexity {} (threshold: {})",
-                        func.name, func.complexity, min_complexity
-                    );
-                    report_helpers::codeclimate_entry(
-                        severity,
-                        &path,
-                        func.start_line,
-                        "Cyclomatic Complexity",
-                        &description,
-                    )
-                })
-        })
-        .collect();
-    report_helpers::print_json_stdout(&entries)
+    report_helpers::print_codeclimate_complexity(
+        files,
+        min_complexity,
+        "Cyclomatic Complexity",
+        "cyclomatic",
+    )
 }
 
 /// Emit one GitHub Actions warning annotation per function that exceeds

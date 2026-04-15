@@ -6,6 +6,7 @@ use unicode_width::UnicodeWidthStr;
 /// A single function row for per-function complexity breakdown reports.
 pub trait PerFunctionRow {
     fn name(&self) -> &str;
+    fn start_line(&self) -> usize;
     fn complexity(&self) -> usize;
     fn level_str(&self) -> &str;
 }
@@ -122,6 +123,44 @@ pub fn complexity_severity(c: usize) -> &'static str {
         10..=14 => "minor",
         _ => "info",
     }
+}
+
+/// Emit a CodeClimate JSON array for functions whose complexity meets the threshold.
+///
+/// Generic over any `PerFunctionFile` so cogcom and cycom share one implementation.
+/// `title` is the CodeClimate issue title (e.g. `"Cognitive Complexity"`);
+/// `kind` is the lowercase word used in the description (e.g. `"cognitive"`).
+pub fn print_codeclimate_complexity<F>(
+    files: &[F],
+    min_complexity: usize,
+    title: &str,
+    kind: &str,
+) -> Result<(), Box<dyn std::error::Error>>
+where
+    F: PerFunctionFile,
+{
+    let mut entries = Vec::new();
+    for f in files {
+        let path = f.path_str();
+        for func in f.rows() {
+            if func.complexity() < min_complexity {
+                continue;
+            }
+            let description = format!(
+                "function '{}' has {kind} complexity {} (threshold: {min_complexity})",
+                func.name(),
+                func.complexity(),
+            );
+            entries.push(codeclimate_entry(
+                complexity_severity(func.complexity()),
+                &path,
+                func.start_line(),
+                title,
+                &description,
+            ));
+        }
+    }
+    print_json_stdout(&entries)
 }
 
 /// Compute the max display width for paths, with a minimum of `min`.
