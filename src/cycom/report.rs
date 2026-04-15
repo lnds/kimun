@@ -152,7 +152,7 @@ pub fn print_codeclimate(
                 .iter()
                 .filter(|func| func.complexity >= min_complexity)
                 .map(move |func| {
-                    let severity = complexity_severity(func.complexity);
+                    let severity = report_helpers::complexity_severity(func.complexity);
                     let description = format!(
                         "function '{}' has cyclomatic complexity {} (threshold: {})",
                         func.name, func.complexity, min_complexity
@@ -168,15 +168,6 @@ pub fn print_codeclimate(
         })
         .collect();
     report_helpers::print_json_stdout(&entries)
-}
-
-fn complexity_severity(c: usize) -> &'static str {
-    match c {
-        25.. => "critical",
-        15..=24 => "major",
-        10..=14 => "minor",
-        _ => "info",
-    }
 }
 
 /// Emit one GitHub Actions warning annotation per function that exceeds

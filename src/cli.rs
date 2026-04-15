@@ -104,10 +104,11 @@ pub struct CommonArgs {
     /// Directory to analyze (default: current directory)
     pub path: Option<PathBuf>,
 
-    /// Output format: table (default), json, short, terse, or github.
+    /// Output format: table (default), json, short, terse, github, or codeclimate.
     /// `short` emits a single compact line of key:value pairs (AI-friendly).
     /// `terse` emits a single headline metric value (for piping/embedding).
     /// `github` emits GitHub Actions warning annotations (only cycom, cogcom, smells).
+    /// `codeclimate` (alias: `gitlab`) emits CodeClimate JSON for GitLab Code Quality (only cycom, cogcom, smells).
     #[arg(long, value_enum, default_value_t)]
     pub format: OutputMode,
 

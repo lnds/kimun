@@ -111,6 +111,19 @@ fn fnv1a_hex(s: &str) -> String {
     format!("{hash:016x}")
 }
 
+/// Map a raw complexity score to a CodeClimate severity string.
+///
+/// Thresholds match the SonarQube/Clippy conventions used by cogcom and cycom:
+/// `< 10 → "info"`, `10-14 → "minor"`, `15-24 → "major"`, `≥ 25 → "critical"`.
+pub fn complexity_severity(c: usize) -> &'static str {
+    match c {
+        25.. => "critical",
+        15..=24 => "major",
+        10..=14 => "minor",
+        _ => "info",
+    }
+}
+
 /// Compute the max display width for paths, with a minimum of `min`.
 pub fn max_path_width<'a>(paths: impl Iterator<Item = &'a Path>, min: usize) -> usize {
     paths
