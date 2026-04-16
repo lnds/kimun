@@ -125,6 +125,34 @@ pub fn complexity_severity(c: usize) -> &'static str {
     }
 }
 
+/// Collect CodeClimate entries for one file's function rows into `out`.
+fn append_codeclimate_entries<R: PerFunctionRow>(
+    path: &str,
+    rows: &[R],
+    min_complexity: usize,
+    title: &str,
+    kind: &str,
+    out: &mut Vec<serde_json::Value>,
+) {
+    for func in rows {
+        if func.complexity() < min_complexity {
+            continue;
+        }
+        let description = format!(
+            "function '{}' has {kind} complexity {} (threshold: {min_complexity})",
+            func.name(),
+            func.complexity(),
+        );
+        out.push(codeclimate_entry(
+            complexity_severity(func.complexity()),
+            path,
+            func.start_line(),
+            title,
+            &description,
+        ));
+    }
+}
+
 /// Emit a CodeClimate JSON array for functions whose complexity meets the threshold.
 ///
 /// Generic over any `PerFunctionFile` so cogcom and cycom share one implementation.
@@ -141,24 +169,14 @@ where
 {
     let mut entries = Vec::new();
     for f in files {
-        let path = f.path_str();
-        for func in f.rows() {
-            if func.complexity() < min_complexity {
-                continue;
-            }
-            let description = format!(
-                "function '{}' has {kind} complexity {} (threshold: {min_complexity})",
-                func.name(),
-                func.complexity(),
-            );
-            entries.push(codeclimate_entry(
-                complexity_severity(func.complexity()),
-                &path,
-                func.start_line(),
-                title,
-                &description,
-            ));
-        }
+        append_codeclimate_entries(
+            &f.path_str(),
+            f.rows(),
+            min_complexity,
+            title,
+            kind,
+            &mut entries,
+        );
     }
     print_json_stdout(&entries)
 }
