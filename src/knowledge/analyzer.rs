@@ -3,6 +3,7 @@
 /// For each file, determines the primary owner, ownership concentration,
 /// contributor count, and bus-factor risk level. Optionally detects
 /// knowledge loss when the primary owner is no longer active.
+use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
@@ -248,7 +249,7 @@ pub fn compute_bus_factor(author_lines: &HashMap<String, usize>, threshold: f64)
     // Sort by lines descending, then by name for determinism.
     let mut sorted: Vec<(String, usize)> =
         author_lines.iter().map(|(k, &v)| (k.clone(), v)).collect();
-    sorted.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    sorted.sort_by_key(|(k, v)| (Reverse(*v), k.clone()));
 
     let mut cumulative = 0.0;
     let mut contributors: Vec<BusFactorEntry> = Vec::new();

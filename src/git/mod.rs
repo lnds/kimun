@@ -7,6 +7,7 @@
 //! resolved working directory root, providing a safe API for walking
 //! commits, diffing trees, and resolving paths between the filesystem
 //! walk and git's path namespace.
+use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fs;
@@ -131,7 +132,7 @@ impl GitRepo {
         })?;
 
         let mut result: Vec<FileFrequency> = map.into_values().collect();
-        result.sort_by(|a, b| b.commits.cmp(&a.commits));
+        result.sort_by_key(|r| Reverse(r.commits));
         Ok(result)
     }
 
@@ -218,7 +219,7 @@ impl GitRepo {
         }
 
         let mut result: Vec<BlameInfo> = map.into_values().collect();
-        result.sort_by(|a, b| b.lines.cmp(&a.lines));
+        result.sort_by_key(|r| Reverse(r.lines));
         Ok(result)
     }
 

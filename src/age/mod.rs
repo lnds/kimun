@@ -83,7 +83,7 @@ pub fn run(
 
     match sort_by {
         "status" => files.sort_by_key(|f| (f.status as u8, f.last_modified)),
-        "file" => files.sort_by(|a, b| a.path.cmp(&b.path)),
+        "file" => files.sort_by_key(|f| f.path.clone()),
         _ => files.sort_by_key(|f| f.last_modified), // "date" — oldest first
     }
 

@@ -64,6 +64,6 @@ pub fn validate_hashes(
         );
     }
 
-    valid_hashes.sort_by(|a, b| a.1.cmp(&b.1));
+    valid_hashes.sort_by_key(|x| x.1.clone());
     (location_to_hash, valid_hashes)
 }

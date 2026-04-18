@@ -1,4 +1,5 @@
 /// Per-author summary computed from git blame across all source files.
+use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
 
 use crate::git::BlameInfo;
@@ -75,7 +76,7 @@ pub fn compute_authors(file_blames: &[(&str, &[BlameInfo])]) -> Vec<AuthorSummar
         })
         .collect();
 
-    result.sort_by(|a, b| b.lines.cmp(&a.lines));
+    result.sort_by_key(|r| Reverse(r.lines));
     result
 }
 

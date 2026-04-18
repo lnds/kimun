@@ -7,6 +7,7 @@ mod analyzer;
 mod report;
 mod rules;
 
+use std::cmp::Reverse;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
@@ -82,7 +83,7 @@ pub fn run_on_files(
         return Ok(());
     }
 
-    results.sort_by(|a, b| b.total.cmp(&a.total));
+    results.sort_by_key(|r| Reverse(r.total));
     results.truncate(top);
 
     dispatch_output(output, &results)
@@ -100,7 +101,7 @@ pub fn run(
         cfg.collect_analysis(|path, spec| analyze_file(path, spec, max_lines, max_params));
 
     // Sort by smell count descending
-    results.sort_by(|a, b| b.total.cmp(&a.total));
+    results.sort_by_key(|r| Reverse(r.total));
     results.truncate(top);
 
     dispatch_output(output, &results)

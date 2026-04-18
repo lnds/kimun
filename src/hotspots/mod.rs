@@ -6,6 +6,7 @@
 
 mod report;
 
+use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::error::Error;
 use std::path::{Path, PathBuf};
@@ -114,9 +115,9 @@ pub fn run(
 
     // Sort by chosen metric descending
     match sort_by {
-        "commits" => results.sort_by(|a, b| b.commits.cmp(&a.commits)),
-        "complexity" => results.sort_by(|a, b| b.complexity.cmp(&a.complexity)),
-        _ => results.sort_by(|a, b| b.score.cmp(&a.score)),
+        "commits" => results.sort_by_key(|r| Reverse(r.commits)),
+        "complexity" => results.sort_by_key(|r| Reverse(r.complexity)),
+        _ => results.sort_by_key(|r| Reverse(r.score)),
     }
 
     results.truncate(top);

@@ -8,6 +8,7 @@ mod detection;
 pub(crate) mod markers;
 pub(crate) mod report;
 
+use std::cmp::Reverse;
 use std::error::Error;
 use std::path::Path;
 
@@ -85,13 +86,13 @@ pub fn run(
 
     // Sort by chosen metric descending
     match sort_by {
-        "max" => results.sort_by(|a, b| b.max_complexity.cmp(&a.max_complexity)),
+        "max" => results.sort_by_key(|r| Reverse(r.max_complexity)),
         "avg" => results.sort_by(|a, b| {
             b.avg_complexity
                 .partial_cmp(&a.avg_complexity)
                 .unwrap_or(std::cmp::Ordering::Equal)
         }),
-        _ => results.sort_by(|a, b| b.total_complexity.cmp(&a.total_complexity)),
+        _ => results.sort_by_key(|r| Reverse(r.total_complexity)),
     }
 
     // Limit to top N

@@ -3,6 +3,7 @@
 /// Provides a cloc-style table (sorted by code lines descending),
 /// a by-author table (sorted by code lines descending), and
 /// a JSON output with per-language and total breakdowns.
+use std::cmp::Reverse;
 use std::time::Duration;
 
 use serde::Serialize;
@@ -36,7 +37,7 @@ const SEP_WIDTH: usize = 1 + COL_LANG + 1 + COL_FILES + 1 + COL_NUM + 1 + COL_NU
 /// Print a cloc-style table with per-language line counts and totals.
 /// When `verbose` is provided, prints file counts and throughput first.
 pub fn print_report(mut reports: Vec<LanguageReport>, verbose: Option<VerboseStats>) {
-    reports.sort_by(|a, b| b.code.cmp(&a.code));
+    reports.sort_by_key(|r| Reverse(r.code));
 
     if let Some(stats) = &verbose {
         let secs = stats.elapsed.as_secs_f64();
@@ -113,7 +114,7 @@ struct JsonTotals {
 
 /// Serialize line counts as pretty-printed JSON to stdout.
 pub fn print_json(mut reports: Vec<LanguageReport>) {
-    reports.sort_by(|a, b| b.code.cmp(&a.code));
+    reports.sort_by_key(|r| Reverse(r.code));
 
     let totals = JsonTotals {
         files: reports.iter().map(|r| r.files).sum(),
@@ -145,7 +146,7 @@ pub struct AuthorReport {
 /// The author column width adapts to the longest name in the dataset,
 /// measured in terminal display columns rather than codepoints.
 pub fn print_author_report(mut reports: Vec<AuthorReport>) {
-    reports.sort_by(|a, b| b.code.cmp(&a.code));
+    reports.sort_by_key(|r| Reverse(r.code));
 
     let col_author = reports
         .iter()
@@ -202,7 +203,7 @@ pub fn print_author_report(mut reports: Vec<AuthorReport>) {
 
 /// Serialize by-author line counts as pretty-printed JSON to stdout.
 pub fn print_author_json(mut reports: Vec<AuthorReport>) {
-    reports.sort_by(|a, b| b.code.cmp(&a.code));
+    reports.sort_by_key(|r| Reverse(r.code));
 
     #[derive(Serialize)]
     struct JsonOutput {
