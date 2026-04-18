@@ -9,6 +9,7 @@ mod analyzer;
 mod extractor;
 mod report;
 
+use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::path::{Path, PathBuf};
@@ -90,8 +91,8 @@ pub fn run(
 
     // Apply sort
     match sort_by {
-        "fan-in" => result.entries.sort_by(|a, b| b.fan_in.cmp(&a.fan_in)),
-        "fan-out" => result.entries.sort_by(|a, b| b.fan_out.cmp(&a.fan_out)),
+        "fan-in" => result.entries.sort_by_key(|e| Reverse(e.fan_in)),
+        "fan-out" => result.entries.sort_by_key(|e| Reverse(e.fan_out)),
         _ => {
             // Default: fan-out descending, then fan-in descending
             result.entries.sort_by(|a, b| {

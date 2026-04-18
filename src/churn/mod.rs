@@ -7,6 +7,7 @@
 pub mod analyzer;
 mod report;
 
+use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::error::Error;
 use std::path::PathBuf;
@@ -66,8 +67,8 @@ pub fn run(
 
     match sort_by {
         "rate" => files.sort_by(|a, b| b.rate.partial_cmp(&a.rate).unwrap()),
-        "file" => files.sort_by(|a, b| a.path.cmp(&b.path)),
-        _ => files.sort_by(|a, b| b.commits.cmp(&a.commits)),
+        "file" => files.sort_by_key(|f| f.path.clone()),
+        _ => files.sort_by_key(|f| Reverse(f.commits)),
     }
 
     files.truncate(top);

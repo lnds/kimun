@@ -15,6 +15,7 @@
 pub(crate) mod analyzer;
 pub(crate) mod report;
 
+use std::cmp::Reverse;
 use std::error::Error;
 use std::path::Path;
 
@@ -75,13 +76,9 @@ pub fn run(
                 .total_cmp(&a.metrics.halstead_volume)
         }),
         "complexity" => {
-            results.sort_by(|a, b| {
-                b.metrics
-                    .cyclomatic_complexity
-                    .cmp(&a.metrics.cyclomatic_complexity)
-            });
+            results.sort_by_key(|r| Reverse(r.metrics.cyclomatic_complexity));
         }
-        "loc" => results.sort_by(|a, b| b.metrics.loc.cmp(&a.metrics.loc)),
+        "loc" => results.sort_by_key(|r| Reverse(r.metrics.loc)),
         _ => results.sort_by(|a, b| a.metrics.mi_score.total_cmp(&b.metrics.mi_score)),
     }
 

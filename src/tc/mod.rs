@@ -7,6 +7,7 @@
 pub mod analyzer;
 mod report;
 
+use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::error::Error;
 use std::path::{Path, PathBuf};
@@ -91,7 +92,7 @@ pub fn run(
 
     // Sort by chosen metric
     match sort_by {
-        "shared" => results.sort_by(|a, b| b.shared_commits.cmp(&a.shared_commits)),
+        "shared" => results.sort_by_key(|r| Reverse(r.shared_commits)),
         _ => results.sort_by(|a, b| {
             b.strength
                 .partial_cmp(&a.strength)

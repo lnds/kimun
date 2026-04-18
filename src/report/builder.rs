@@ -5,6 +5,7 @@
 //! runs project-level duplication detection after the walk completes.
 //! Sections are sorted (worst first) and truncated to `top` entries.
 
+use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::path::Path;
@@ -256,6 +257,6 @@ fn build_loc_reports(
             code: fs.code,
         })
         .collect();
-    reports.sort_by(|a, b| b.code.cmp(&a.code).then_with(|| a.name.cmp(&b.name)));
+    reports.sort_by_key(|r| (Reverse(r.code), r.name.clone()));
     reports
 }

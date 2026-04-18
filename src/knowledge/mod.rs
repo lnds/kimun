@@ -8,6 +8,7 @@
 pub mod analyzer;
 mod report;
 
+use std::cmp::Reverse;
 use std::error::Error;
 use std::path::Path;
 
@@ -69,7 +70,7 @@ pub struct KnowledgeOptions<'a> {
 /// and anything else (default "concentration") by highest ownership percentage first.
 fn sort_results(results: &mut [FileOwnership], sort_by: &str) {
     match sort_by {
-        "diffusion" => results.sort_by(|a, b| b.contributors.cmp(&a.contributors)),
+        "diffusion" => results.sort_by_key(|r| Reverse(r.contributors)),
         "risk" => results.sort_by(|a, b| {
             a.risk.sort_key().cmp(&b.risk.sort_key()).then_with(|| {
                 b.ownership_pct
@@ -175,9 +176,9 @@ pub fn run(cfg: &WalkConfig<'_>, opts: &KnowledgeOptions<'_>) -> Result<(), Box<
         let mut authors = aggregate_by_author(&results);
         // In summary mode sort_by maps: concentration→files owned, diffusion→lines, risk→worst risk
         match opts.sort_by {
-            "diffusion" => authors.sort_by(|a, b| b.total_lines.cmp(&a.total_lines)),
-            "risk" => authors.sort_by(|a, b| a.worst_risk.sort_key().cmp(&b.worst_risk.sort_key())),
-            _ => authors.sort_by(|a, b| b.files_owned.cmp(&a.files_owned)),
+            "diffusion" => authors.sort_by_key(|a| Reverse(a.total_lines)),
+            "risk" => authors.sort_by_key(|a| a.worst_risk.sort_key()),
+            _ => authors.sort_by_key(|a| Reverse(a.files_owned)),
         }
         let limit = opts.top.min(authors.len());
         let authors = &authors[..limit];
