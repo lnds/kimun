@@ -345,7 +345,7 @@ fn deeply_nested(x: i32) -> i32 {
         fail_if_worse: true,
         fail_below: None,
     };
-    let result = run_diff(&cfg, "HEAD~1", false, 10, 6, "cogcom", gate);
+    let result = run_diff(&cfg, "HEAD~1", OutputMode::Table, 10, 6, "cogcom", gate);
 
     let msg = result
         .expect_err(
