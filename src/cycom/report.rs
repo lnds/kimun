@@ -92,6 +92,9 @@ impl PerFunctionRow for FunctionComplexity {
     fn name(&self) -> &str {
         &self.name
     }
+    fn start_line(&self) -> usize {
+        self.start_line
+    }
     fn complexity(&self) -> usize {
         self.complexity
     }
@@ -136,6 +139,20 @@ struct JsonFileEntry {
     total_complexity: usize,
     level: CyclomaticLevel,
     functions: Vec<JsonFunctionEntry>,
+}
+
+/// Emit a CodeClimate JSON array (GitLab Code Quality format) for functions
+/// that exceed the complexity threshold.
+pub fn print_codeclimate(
+    files: &[FileCycomMetrics],
+    min_complexity: usize,
+) -> Result<(), Box<dyn std::error::Error>> {
+    report_helpers::print_codeclimate_complexity(
+        files,
+        min_complexity,
+        "Cyclomatic Complexity",
+        "cyclomatic",
+    )
 }
 
 /// Emit one GitHub Actions warning annotation per function that exceeds

@@ -20,8 +20,8 @@ use crate::walk::WalkConfig;
 use analyzer::analyze;
 use markers::markers_for;
 use report::{
-    FileCycomMetrics, print_github, print_json, print_per_function, print_report, print_short,
-    print_terse,
+    FileCycomMetrics, print_codeclimate, print_github, print_json, print_per_function,
+    print_report, print_short, print_terse,
 };
 
 /// Analyze pre-read content (avoids re-reading the file).
@@ -103,6 +103,7 @@ pub fn run(
         OutputMode::Short => print_short(&results),
         OutputMode::Terse => print_terse(&results),
         OutputMode::Github => print_github(&results, min_complexity),
+        OutputMode::Codeclimate => print_codeclimate(&results, min_complexity)?,
         OutputMode::Table if per_function => print_per_function(&results),
         OutputMode::Table => print_report(&results),
     }

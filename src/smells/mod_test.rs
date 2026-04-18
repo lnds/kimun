@@ -309,3 +309,34 @@ fn run_terse_format() {
     let cfg = WalkConfig::new(dir.path(), true, &filter);
     super::run(&cfg, OutputMode::Terse, 20, 50, 4).unwrap();
 }
+
+#[test]
+fn run_codeclimate_format_with_smells() {
+    let dir = tempdir().unwrap();
+    let file = dir.path().join("main.rs");
+    // A long function to trigger a smell
+    let mut content = "fn big_func() {\n".to_string();
+    for i in 0..60 {
+        content.push_str(&format!("    let x{i} = {i};\n"));
+    }
+    content.push_str("}\n");
+    std::fs::write(&file, content).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), true, &filter);
+    let result = super::run(&cfg, OutputMode::Codeclimate, 20, 50, 4);
+    assert!(result.is_ok(), "codeclimate format should succeed");
+}
+
+#[test]
+fn run_on_files_codeclimate_format_with_smells() {
+    let dir = tempdir().unwrap();
+    let file = dir.path().join("main.rs");
+    let mut content = "fn big_func() {\n".to_string();
+    for i in 0..60 {
+        content.push_str(&format!("    let x{i} = {i};\n"));
+    }
+    content.push_str("}\n");
+    std::fs::write(&file, &content).unwrap();
+    let result = super::run_on_files(&[file], OutputMode::Codeclimate, 20, 50, 4);
+    assert!(result.is_ok(), "codeclimate format on files should succeed");
+}

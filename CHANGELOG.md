@@ -8,6 +8,7 @@
 ### Feat
 
 - **all commands**: add `--format short` (compact key:value line for AI/scripting) and `--format terse` (single headline value for piping)
+- **cycom, cogcom, smells**: add `--format codeclimate` (alias: `--format gitlab`) emitting CodeClimate JSON for GitLab Code Quality reports; severity mapped from complexity thresholds (info/minor/major/critical)
 
 ## v0.20.0 (2026-04-05)
 

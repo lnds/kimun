@@ -6,6 +6,7 @@ use unicode_width::UnicodeWidthStr;
 /// A single function row for per-function complexity breakdown reports.
 pub trait PerFunctionRow {
     fn name(&self) -> &str;
+    fn start_line(&self) -> usize;
     fn complexity(&self) -> usize;
     fn level_str(&self) -> &str;
 }
@@ -81,6 +82,105 @@ pub fn github_annotation(level: &str, file: &str, line: usize, title: &str, mess
     println!("::{level} file={file},line={line},title={title}::{message}");
 }
 
+/// Build one CodeClimate JSON entry (GitLab Code Quality format).
+///
+/// `severity` is one of `"info"`, `"minor"`, `"major"`, `"critical"`, or `"blocker"`.
+/// `fingerprint` is derived from `"file:line:title"` via FNV-1a, stable across runs
+/// and unique per finding without requiring an external hash dependency.
+pub fn codeclimate_entry(
+    severity: &str,
+    file: &str,
+    line: usize,
+    title: &str,
+    description: &str,
+) -> serde_json::Value {
+    serde_json::json!({
+        "description": description,
+        "fingerprint": fnv1a_hex(&format!("{file}:{line}:{title}")),
+        "severity": severity,
+        "location": { "path": file, "lines": { "begin": line } }
+    })
+}
+
+/// FNV-1a 64-bit hash, hex-encoded. Used for CodeClimate fingerprints.
+fn fnv1a_hex(s: &str) -> String {
+    let mut hash: u64 = 0xcbf29ce484222325;
+    for byte in s.bytes() {
+        hash ^= byte as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    format!("{hash:016x}")
+}
+
+/// Map a raw complexity score to a CodeClimate severity string.
+///
+/// Thresholds match the SonarQube/Clippy conventions used by cogcom and cycom:
+/// `< 10 → "info"`, `10-14 → "minor"`, `15-24 → "major"`, `≥ 25 → "critical"`.
+pub fn complexity_severity(c: usize) -> &'static str {
+    match c {
+        25.. => "critical",
+        15..=24 => "major",
+        10..=14 => "minor",
+        _ => "info",
+    }
+}
+
+/// Collect CodeClimate entries for one file's function rows into `out`.
+fn append_codeclimate_entries<R: PerFunctionRow>(
+    path: &str,
+    rows: &[R],
+    min_complexity: usize,
+    title: &str,
+    kind: &str,
+    out: &mut Vec<serde_json::Value>,
+) {
+    for func in rows {
+        if func.complexity() < min_complexity {
+            continue;
+        }
+        let description = format!(
+            "function '{}' has {kind} complexity {} (threshold: {min_complexity})",
+            func.name(),
+            func.complexity(),
+        );
+        out.push(codeclimate_entry(
+            complexity_severity(func.complexity()),
+            path,
+            func.start_line(),
+            title,
+            &description,
+        ));
+    }
+}
+
+/// Emit a CodeClimate JSON array for functions whose complexity meets the threshold.
+///
+/// Generic over any `PerFunctionFile` so cogcom and cycom share one implementation.
+/// `title` is the CodeClimate issue title (e.g. `"Cognitive Complexity"`);
+/// `kind` is the lowercase word used in the description (e.g. `"cognitive"`).
+pub fn print_codeclimate_complexity<F>(
+    files: &[F],
+    min_complexity: usize,
+    title: &str,
+    kind: &str,
+) -> Result<(), Box<dyn std::error::Error>>
+where
+    F: PerFunctionFile,
+{
+    let mut entries = Vec::new();
+    for f in files {
+        append_codeclimate_entries(
+            &f.path_str(),
+            f.rows(),
+            min_complexity,
+            title,
+            kind,
+            &mut entries,
+        );
+    }
+    print_json_stdout(&entries)
+}
+
 /// Compute the max display width for paths, with a minimum of `min`.
 pub fn max_path_width<'a>(paths: impl Iterator<Item = &'a Path>, min: usize) -> usize {
     paths
@@ -104,8 +204,9 @@ pub fn print_json_stdout(value: &impl Serialize) -> Result<(), Box<dyn std::erro
 /// Truncate results to `top` and dispatch to the appropriate output function
 /// based on `OutputMode`.
 ///
-/// For `OutputMode::Github`, returns an error — modules that support it
-/// (cycom, cogcom, smells) handle it before calling this helper.
+/// For `OutputMode::Github` and `OutputMode::Codeclimate`, returns an error —
+/// modules that support CI formats (cycom, cogcom, smells) handle them before
+/// calling this helper.
 pub fn output_results<T>(
     results: &mut Vec<T>,
     top: usize,
@@ -126,7 +227,9 @@ pub fn output_results<T>(
             Ok(())
         }
         crate::cli::OutputMode::Json => print_json_fn(results),
-        crate::cli::OutputMode::Github => Err(crate::cli::ERR_GITHUB_ONLY.into()),
+        crate::cli::OutputMode::Github | crate::cli::OutputMode::Codeclimate => {
+            Err(crate::cli::ERR_CI_FORMAT_ONLY.into())
+        }
         crate::cli::OutputMode::Table => {
             print_report_fn(results);
             Ok(())

@@ -126,8 +126,8 @@ pub fn run(
         OutputMode::Json => print_json(&results, complexity_metric)?,
         OutputMode::Short => print_short(&results),
         OutputMode::Terse => print_terse(&results),
-        OutputMode::Github => {
-            return Err(crate::cli::ERR_GITHUB_ONLY.into());
+        OutputMode::Github | OutputMode::Codeclimate => {
+            return Err(crate::cli::ERR_CI_FORMAT_ONLY.into());
         }
         OutputMode::Table => print_report(&results, complexity_metric),
     }

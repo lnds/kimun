@@ -128,6 +128,20 @@ pub fn print_terse(files: &[FileSmellMetrics]) {
     println!("{total_smells}");
 }
 
+/// Emit a CodeClimate JSON array (GitLab Code Quality format) for all smell instances.
+pub fn print_codeclimate(files: &[FileSmellMetrics]) -> Result<(), Box<dyn std::error::Error>> {
+    let entries: Vec<_> = files
+        .iter()
+        .flat_map(|f| {
+            let path = f.path.display().to_string();
+            f.smells.smells.iter().map(move |s| {
+                report_helpers::codeclimate_entry("minor", &path, s.line, s.kind.title(), &s.detail)
+            })
+        })
+        .collect();
+    report_helpers::print_json_stdout(&entries)
+}
+
 /// Emit one GitHub Actions warning annotation per smell instance.
 /// Each annotation links directly to the file and line in the PR diff.
 pub fn print_github(files: &[FileSmellMetrics]) {

@@ -98,8 +98,8 @@ pub fn run(
             crate::cli::OutputMode::Json => print_json(reports),
             crate::cli::OutputMode::Short => print_short(&reports),
             crate::cli::OutputMode::Terse => print_terse(&reports),
-            crate::cli::OutputMode::Github => {
-                return Err(crate::cli::ERR_GITHUB_ONLY.into());
+            crate::cli::OutputMode::Github | crate::cli::OutputMode::Codeclimate => {
+                return Err(crate::cli::ERR_CI_FORMAT_ONLY.into());
             }
             crate::cli::OutputMode::Table => {
                 let verbose_stats = if verbose {
@@ -203,8 +203,8 @@ pub fn run_by_author(
         crate::cli::OutputMode::Json => print_author_json(reports),
         crate::cli::OutputMode::Short => print_author_short(&reports),
         crate::cli::OutputMode::Terse => print_author_terse(&reports),
-        crate::cli::OutputMode::Github => {
-            return Err(crate::cli::ERR_GITHUB_ONLY.into());
+        crate::cli::OutputMode::Github | crate::cli::OutputMode::Codeclimate => {
+            return Err(crate::cli::ERR_CI_FORMAT_ONLY.into());
         }
         crate::cli::OutputMode::Table => print_author_report(reports),
     }

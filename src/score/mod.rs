@@ -95,8 +95,8 @@ pub fn run(
         OutputMode::Json => print_json(&score, target.as_deref())?,
         OutputMode::Short => print_short(&score),
         OutputMode::Terse => print_terse(&score),
-        OutputMode::Github => {
-            return Err(crate::cli::ERR_GITHUB_ONLY.into());
+        OutputMode::Github | OutputMode::Codeclimate => {
+            return Err(crate::cli::ERR_CI_FORMAT_ONLY.into());
         }
         OutputMode::Table => print_report(&score, bottom, target.as_deref()),
     }
@@ -154,8 +154,8 @@ pub fn run_diff(
         OutputMode::Json => diff_report::print_json(&score_diff)?,
         OutputMode::Short => diff_report::print_short(&score_diff),
         OutputMode::Terse => diff_report::print_terse(&score_diff),
-        OutputMode::Github => {
-            return Err(crate::cli::ERR_GITHUB_ONLY.into());
+        OutputMode::Github | OutputMode::Codeclimate => {
+            return Err(crate::cli::ERR_CI_FORMAT_ONLY.into());
         }
         OutputMode::Table => diff_report::print_report(&score_diff),
     }

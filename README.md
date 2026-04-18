@@ -239,7 +239,7 @@ Options:
 
 | Flag | Description |
 |------|-------------|
-| `--format {table,json,short,terse,github}` | Output format (default: table). `github` emits CI annotations |
+| `--format {table,json,short,terse,github,codeclimate}` | Output format (default: table). `github` emits GitHub Actions annotations; `codeclimate` (alias: `gitlab`) emits CodeClimate JSON for GitLab Code Quality |
 | `--include-tests` | Include test files in analysis (excluded by default) |
 | `--top N` | Show only the top N files (default: 20) |
 | `--min-complexity N` | Minimum max-complexity to include a file (default: 1) |
@@ -257,7 +257,7 @@ Options:
 
 | Flag | Description |
 |------|-------------|
-| `--format {table,json,short,terse,github}` | Output format (default: table). `github` emits CI annotations |
+| `--format {table,json,short,terse,github,codeclimate}` | Output format (default: table). `github` emits GitHub Actions annotations; `codeclimate` (alias: `gitlab`) emits CodeClimate JSON for GitLab Code Quality |
 | `--include-tests` | Include test files in analysis (excluded by default) |
 | `--top N` | Show only the top N files (default: 20) |
 | `--min-complexity N` | Minimum max-complexity to include a file (default: 1) |
@@ -612,7 +612,7 @@ Options:
 | `--max-params N` | Maximum parameter count before flagging (default: 4) |
 | `--files FILE` | Analyze only these specific files (repeatable). Useful for scripting |
 | `--since-ref REF` | Analyze only files changed since this git ref (e.g. `origin/main`, `HEAD~1`). Ideal for CI |
-| `--format {table,json,short,terse,github}` | Output format (default: table). `github` emits CI annotations |
+| `--format {table,json,short,terse,github,codeclimate}` | Output format (default: table). `github` emits GitHub Actions annotations; `codeclimate` (alias: `gitlab`) emits CodeClimate JSON for GitLab Code Quality |
 
 Example output:
 

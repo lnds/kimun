@@ -42,8 +42,8 @@ pub fn run(
         OutputMode::Json => json::print_json(&report)?,
         OutputMode::Short => print_short(&report),
         OutputMode::Terse => print_terse(&report),
-        OutputMode::Github => {
-            return Err(crate::cli::ERR_GITHUB_ONLY.into());
+        OutputMode::Github | OutputMode::Codeclimate => {
+            return Err(crate::cli::ERR_CI_FORMAT_ONLY.into());
         }
         OutputMode::Table => markdown::print_markdown(&report),
     }

@@ -127,6 +127,19 @@ fn run_github_format() {
 }
 
 #[test]
+fn run_codeclimate_format() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("main.rs"),
+        "fn foo() {\n    if x > 0 {\n        bar();\n    }\n}\n",
+    )
+    .unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run(&cfg, OutputMode::Codeclimate, 1, 20, false, "total").unwrap();
+}
+
+#[test]
 fn run_format_json_via_format_param() {
     let dir = tempfile::tempdir().unwrap();
     fs::write(
