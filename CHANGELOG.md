@@ -1,14 +1,27 @@
-## Unreleased
+## v0.21.0 (2026-04-19)
 
-### Breaking
+### BREAKING CHANGE
 
-- **cli**: replace `--json`, `--short`, `--terse` flags with unified `--format {table,json,short,terse,github}` parameter
-- **cli**: remove per-command `--format` option from cycom, cogcom, smells (use `--format github` instead)
+- `--json` flag removed. Use `--format json` instead.
+The per-command `--format` option on cycom/cogcom/smells is replaced by
+the common `--format` flag (e.g. `--format github` for CI annotations).
 
 ### Feat
 
-- **all commands**: add `--format short` (compact key:value line for AI/scripting) and `--format terse` (single headline value for piping)
-- **cycom, cogcom, smells**: add `--format codeclimate` (alias: `--format gitlab`) emitting CodeClimate JSON for GitLab Code Quality reports; severity mapped from complexity thresholds (info/minor/major/critical)
+- add project-level configuration via .kimun.toml
+- add --format codeclimate (alias --format gitlab) for GitLab Code Quality (#31)
+- consolidate --json/--short/--terse into --format flag
+
+### Fix
+
+- replace sort_by with sort_by_key (clippy::unnecessary_sort_by) (#32)
+- **score**: address review issues in quality gate format tests
+- **score**: use two decimal places in quality gate failure message
+- address code review findings from --format consolidation
+
+### Refactor
+
+- **main**: extract complex match arms to dedicated dispatch functions
 
 ## v0.20.0 (2026-04-05)
 
