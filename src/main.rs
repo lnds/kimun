@@ -23,6 +23,8 @@ mod cli;
 mod cli_help;
 /// Cognitive complexity analysis (SonarSource, 2017).
 mod cogcom;
+/// Project-level configuration loaded from `.kimun.toml`.
+mod config;
 /// Cyclomatic complexity analysis (per-file and per-function).
 mod cycom;
 /// Dependency graph analysis: internal module coupling via import parsing.
@@ -129,9 +131,12 @@ fn dispatch_tc(
     top: usize,
     sort_by: String,
     since: Option<String>,
-    min_degree: usize,
+    min_degree: Option<usize>,
     min_strength: Option<f64>,
 ) {
+    let cfg = config::KimunConfig::load();
+    let min_degree = cfg.tc.resolve_min_degree(min_degree);
+    let min_strength = cfg.tc.resolve_min_strength(min_strength);
     if !common.exclude_args.is_empty() {
         eprintln!(
             "warning: --exclude-ext/--exclude-dir/--exclude have no effect on `tc` \
@@ -157,11 +162,14 @@ fn dispatch_tc(
 fn dispatch_smells(
     common: cli::CommonArgs,
     top: usize,
-    max_lines: usize,
-    max_params: usize,
+    max_lines: Option<usize>,
+    max_params: Option<usize>,
     files: Vec<PathBuf>,
     since_ref: Option<String>,
 ) {
+    let cfg = config::KimunConfig::load();
+    let max_lines = cfg.smells.resolve_max_lines(max_lines);
+    let max_params = cfg.smells.resolve_max_params(max_params);
     let include_tests = common.include_tests;
     let output = common.format;
     let filter = common.exclude_filter();
@@ -186,12 +194,16 @@ fn dispatch_smells(
 fn dispatch_score(
     common: cli::CommonArgs,
     bottom: usize,
-    min_lines: usize,
-    model: String,
+    min_lines: Option<usize>,
+    model: Option<String>,
     trend: Option<String>,
     fail_if_worse: bool,
     fail_below: Option<String>,
 ) {
+    let kcfg = config::KimunConfig::load();
+    let min_lines = kcfg.dups.resolve_min_lines(min_lines);
+    let model = kcfg.score.resolve_model(model);
+    let fail_below = kcfg.score.resolve_fail_below(fail_below);
     let fail_below_grade = match fail_below {
         Some(ref s) => match score::analyzer::Grade::parse(s) {
             Ok(g) => Some(g),
@@ -279,6 +291,10 @@ fn main() {
             max_dup_ratio,
             fail_on_increase,
         } => {
+            let kcfg = config::KimunConfig::load();
+            let min_lines = kcfg.dups.resolve_min_lines(min_lines);
+            let max_duplicates = kcfg.dups.resolve_max_duplicates(max_duplicates);
+            let max_dup_ratio = kcfg.dups.resolve_max_dup_ratio(max_dup_ratio);
             dispatch!(common, |cfg, output| {
                 let gate = dups::DupsGate {
                     max_duplicates,
@@ -333,6 +349,8 @@ fn main() {
             min_lines,
             full,
         } => {
+            let kcfg = config::KimunConfig::load();
+            let min_lines = kcfg.dups.resolve_min_lines(min_lines);
             let effective_top = if full { usize::MAX } else { top };
             dispatch!(common, |cfg, output| report::run(
                 &cfg,
@@ -369,6 +387,8 @@ fn main() {
             since,
             complexity,
         } => {
+            let kcfg = config::KimunConfig::load();
+            let complexity = kcfg.hotspots.resolve_complexity(complexity);
             dispatch!(common, |cfg, output| {
                 hotspots::run(&cfg, output, top, &sort_by, since.as_deref(), &complexity)
             })
@@ -380,6 +400,9 @@ fn main() {
             sort_by,
             status,
         } => {
+            let kcfg = config::KimunConfig::load();
+            let active_days = kcfg.age.resolve_active_days(active_days);
+            let frozen_days = kcfg.age.resolve_frozen_days(frozen_days);
             dispatch!(common, |cfg, output| {
                 age::run(
                     &cfg,
@@ -486,6 +509,9 @@ fn main() {
                 }),
             ..
         } => {
+            let kcfg = config::KimunConfig::load();
+            let min_lines = kcfg.dups.resolve_min_lines(min_lines);
+            let model = kcfg.score.resolve_model(model);
             let filter = exclude_args.exclude_filter();
             maybe_list_excluded(&path, include_tests, &filter, exclude_args.list_excluded);
             run_command(path, |t| {

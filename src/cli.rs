@@ -163,18 +163,20 @@ pub enum Commands {
         #[arg(long)]
         show_all: bool,
 
-        /// Minimum lines for a duplicate block (default: 6)
-        #[arg(long, default_value = "6")]
-        min_lines: usize,
+        /// Minimum lines for a duplicate block (default: 6, overridable via .kimun.toml)
+        #[arg(long)]
+        min_lines: Option<usize>,
 
         /// Exit with code 1 if duplicate groups exceed this limit.
         /// Useful as a CI quality gate: --max-duplicates 0 fails on any duplicate.
+        /// Overridable via .kimun.toml [dups] max_duplicates.
         #[arg(long, value_name = "N")]
         max_duplicates: Option<usize>,
 
         /// Exit with code 1 if the duplicated-lines ratio exceeds this percentage.
         /// Useful for ratcheting down duplication over time: --max-dup-ratio 5.0
         /// fails when more than 5% of code lines are duplicated.
+        /// Overridable via .kimun.toml [dups] max_dup_ratio.
         #[arg(long, value_name = "PERCENT")]
         max_dup_ratio: Option<f64>,
 
@@ -275,9 +277,9 @@ pub enum Commands {
         #[arg(long, default_value = "20")]
         top: usize,
 
-        /// Minimum lines for a duplicate block (default: 6)
-        #[arg(long, default_value = "6")]
-        min_lines: usize,
+        /// Minimum lines for a duplicate block (default: 6, overridable via .kimun.toml)
+        #[arg(long)]
+        min_lines: Option<usize>,
 
         /// Show all files instead of truncating to top N
         #[arg(long)]
@@ -335,9 +337,10 @@ pub enum Commands {
         #[arg(long)]
         since: Option<String>,
 
-        /// Complexity metric: indent (default, Thornhill), cycom (cyclomatic), or cogcom (cognitive)
-        #[arg(long, default_value = "indent", value_parser = ["indent", "cycom", "cogcom"])]
-        complexity: String,
+        /// Complexity metric: indent (default, Thornhill), cycom (cyclomatic), or cogcom (cognitive).
+        /// Overridable via .kimun.toml [hotspots] complexity.
+        #[arg(long, value_parser = ["indent", "cycom", "cogcom"])]
+        complexity: Option<String>,
     },
 
     /// Analyze code ownership patterns via git blame (knowledge maps)
@@ -395,11 +398,12 @@ pub enum Commands {
         #[arg(long)]
         since: Option<String>,
 
-        /// Minimum commits per file to be included (default: 3)
-        #[arg(long, default_value = "3")]
-        min_degree: usize,
+        /// Minimum commits per file to be included (default: 3, overridable via .kimun.toml)
+        #[arg(long)]
+        min_degree: Option<usize>,
 
-        /// Filter results: show only pairs with strength >= threshold (e.g. 0.5 for strong coupling only)
+        /// Filter results: show only pairs with strength >= threshold (e.g. 0.5 for strong coupling only).
+        /// Overridable via .kimun.toml [tc] min_strength.
         #[arg(long)]
         min_strength: Option<f64>,
     },
@@ -414,13 +418,13 @@ pub enum Commands {
         #[arg(long, default_value = "20")]
         top: usize,
 
-        /// Maximum function length before flagging (default: 50)
-        #[arg(long, default_value = "50")]
-        max_lines: usize,
+        /// Maximum function length before flagging (default: 50, overridable via .kimun.toml)
+        #[arg(long)]
+        max_lines: Option<usize>,
 
-        /// Maximum parameter count before flagging (default: 4)
-        #[arg(long, default_value = "4")]
-        max_params: usize,
+        /// Maximum parameter count before flagging (default: 4, overridable via .kimun.toml)
+        #[arg(long)]
+        max_params: Option<usize>,
 
         /// Analyze only these specific files (repeatable).
         /// Useful for scripting: km smells --files src/foo.rs --files src/bar.ex
@@ -447,13 +451,14 @@ pub enum Commands {
         #[arg(long, default_value = "10")]
         bottom: usize,
 
-        /// Minimum lines for a duplicate block (default: 6)
-        #[arg(long, default_value = "6")]
-        min_lines: usize,
+        /// Minimum lines for a duplicate block (default: 6, overridable via .kimun.toml)
+        #[arg(long)]
+        min_lines: Option<usize>,
 
-        /// Scoring model: cogcom (default, v0.14+) or legacy (MI + cyclomatic, v0.13)
-        #[arg(long, default_value = "cogcom", value_parser = ["cogcom", "legacy"])]
-        model: String,
+        /// Scoring model: cogcom (default, v0.14+) or legacy (MI + cyclomatic, v0.13).
+        /// Overridable via .kimun.toml [score] model.
+        #[arg(long, value_parser = ["cogcom", "legacy"])]
+        model: Option<String>,
 
         /// Compare current score against a git ref (default: HEAD).
         /// Shows how the score changed: "B- → B (+2.3)".
@@ -469,6 +474,7 @@ pub enum Commands {
         /// Exit with code 1 if the score is below GRADE (requires --trend).
         /// Example: --trend origin/main --fail-below B-
         /// Valid grades: A++, A+, A, A-, B+, B, B-, C+, C, C-, D+, D, D-, F, F-, F--
+        /// Overridable via .kimun.toml [score] fail_below.
         #[arg(long, value_name = "GRADE", requires = "trend")]
         fail_below: Option<String>,
     },
@@ -478,13 +484,13 @@ pub enum Commands {
         #[command(flatten)]
         common: CommonArgs,
 
-        /// Files modified within this many days are Active (default: 90)
-        #[arg(long, default_value = "90")]
-        active_days: u64,
+        /// Files modified within this many days are Active (default: 90, overridable via .kimun.toml)
+        #[arg(long)]
+        active_days: Option<u64>,
 
-        /// Files not modified for more than this many days are Frozen (default: 365)
-        #[arg(long, default_value = "365")]
-        frozen_days: u64,
+        /// Files not modified for more than this many days are Frozen (default: 365, overridable via .kimun.toml)
+        #[arg(long)]
+        frozen_days: Option<u64>,
 
         /// Sort by: date (oldest first, default), status, or file
         #[arg(long, default_value = "date", value_parser = ["date", "status", "file"])]
@@ -564,13 +570,14 @@ pub enum ScoreCommands {
         #[arg(long, default_value = "10")]
         bottom: usize,
 
-        /// Minimum lines for a duplicate block (default: 6)
-        #[arg(long, default_value = "6")]
-        min_lines: usize,
+        /// Minimum lines for a duplicate block (default: 6, overridable via .kimun.toml)
+        #[arg(long)]
+        min_lines: Option<usize>,
 
-        /// Scoring model: cogcom (default, v0.14+) or legacy (MI + cyclomatic, v0.13)
-        #[arg(long, default_value = "cogcom", value_parser = ["cogcom", "legacy"])]
-        model: String,
+        /// Scoring model: cogcom (default, v0.14+) or legacy (MI + cyclomatic, v0.13).
+        /// Overridable via .kimun.toml [score] model.
+        #[arg(long, value_parser = ["cogcom", "legacy"])]
+        model: Option<String>,
     },
 }
 
