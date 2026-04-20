@@ -63,7 +63,7 @@ pub(crate) fn normalize_file(
 }
 
 /// Compute duplication metrics for a given walk config without printing anything.
-fn compute_metrics(cfg: &WalkConfig<'_>, min_lines: usize) -> DuplicationMetrics {
+pub(crate) fn compute_metrics(cfg: &WalkConfig<'_>, min_lines: usize) -> DuplicationMetrics {
     let exclude_tests = cfg.exclude_tests();
     let mut files: Vec<NormalizedFile> = Vec::new();
     let mut total_code_lines: usize = 0;

@@ -184,7 +184,7 @@ pub fn run_diff(
 
 /// Walk all source files, compute per-file and project-level metrics,
 /// normalize each dimension, and produce the final `ProjectScore`.
-fn compute_score(
+pub(crate) fn compute_score(
     cfg: &WalkConfig<'_>,
     bottom: usize,
     min_lines: usize,
