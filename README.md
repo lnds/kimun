@@ -4,6 +4,8 @@
 
 A fast command-line tool for code analysis, written in Rust. Run `km score` on any project to get an overall health grade (A++ to F--) across five quality dimensions — cognitive complexity, duplication, indentation depth, Halstead effort, and file size — with a list of the files that need the most attention.
 
+> Note: This repository is not the same as the Rust console note-taking app `kimun` by nico2sh. That project is available at https://github.com/nico2sh/kimun.
+
 Beyond the aggregate score, Kimün provides 17 specialized commands:
 
 - **Static metrics** — lines of code by language ([cloc](https://github.com/AlDanial/cloc)-compatible), duplicate detection (Rule of Three), Halstead complexity, cyclomatic complexity, cognitive complexity (SonarSource), indentation complexity, two Maintainability Index variants (Visual Studio and verifysoft), code smell detection, and a comprehensive multi-metric report.
