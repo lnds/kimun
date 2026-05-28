@@ -105,3 +105,9 @@ fn detect_pot() {
     let spec = detect(Path::new("default.pot")).unwrap();
     assert_eq!(spec.name, "PO File");
 }
+
+#[test]
+fn detect_kaikai() {
+    let spec = detect(Path::new("main.kai")).unwrap();
+    assert_eq!(spec.name, "Kaikai");
+}

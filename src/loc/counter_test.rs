@@ -81,6 +81,22 @@ fn spec_haskell() -> LanguageSpec {
     }
 }
 
+fn spec_kaikai() -> LanguageSpec {
+    LanguageSpec {
+        name: "Kaikai",
+        extensions: &["kai"],
+        filenames: &[],
+        line_comments: &["#"],
+        line_comment_not_before: "",
+        block_comment: None,
+        nested_block_comments: false,
+        single_quote_strings: false,
+        triple_quote_strings: true,
+        pragma: None,
+        shebangs: &[],
+    }
+}
+
 fn count(spec: &LanguageSpec, text: &str) -> FileStats {
     count_reader(Cursor::new(text.as_bytes()), spec)
 }
@@ -227,6 +243,48 @@ fn python_triple_single_quote() {
 #[test]
 fn python_comment_inside_triple_string() {
     let stats = count(&spec_python(), "s = \"\"\"# not a comment\"\"\"\n");
+    assert_eq!(stats.code, 1);
+    assert_eq!(stats.comment, 0);
+}
+
+// --- Kaikai ---
+
+#[test]
+fn kaikai_hash_line_comment() {
+    let stats = count(
+        &spec_kaikai(),
+        "# a comment\nfn add(a: Int, b: Int) : Int = a + b\n",
+    );
+    assert_eq!(stats.comment, 1);
+    assert_eq!(stats.code, 1);
+}
+
+#[test]
+fn kaikai_interpolation_hash_is_code() {
+    // `#{...}` interpolation lives inside a string, not a comment
+    let stats = count(&spec_kaikai(), "let s = \"hi #{name}\"\n");
+    assert_eq!(stats.code, 1);
+    assert_eq!(stats.comment, 0);
+}
+
+#[test]
+fn kaikai_char_literal_is_code() {
+    // single quotes denote Char, not strings — must not open a string
+    let stats = count(&spec_kaikai(), "let c = 'A'\n");
+    assert_eq!(stats.code, 1);
+    assert_eq!(stats.comment, 0);
+}
+
+#[test]
+fn kaikai_triple_quote_string() {
+    let stats = count(&spec_kaikai(), "let m = \"\"\"\nfirst\nsecond\n\"\"\"\n");
+    assert_eq!(stats.code, 4);
+    assert_eq!(stats.comment, 0);
+}
+
+#[test]
+fn kaikai_hash_inside_triple_quote_not_comment() {
+    let stats = count(&spec_kaikai(), "let m = \"\"\"# not a comment\"\"\"\n");
     assert_eq!(stats.code, 1);
     assert_eq!(stats.comment, 0);
 }

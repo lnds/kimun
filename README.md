@@ -927,6 +927,7 @@ All sections and fields are optional — omit any you don't need. A fully docume
 | JavaScript | `.js`, `.mjs`, `.cjs` |
 | JSON | `.json` |
 | Julia | `.jl` |
+| Kaikai | `.kai` |
 | Kotlin | `.kt`, `.kts` |
 | Lua | `.lua` |
 | Makefile | `.mk`, `Makefile`, `makefile`, `GNUmakefile` |

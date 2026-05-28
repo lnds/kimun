@@ -142,6 +142,8 @@ pub fn languages() -> &'static [LanguageSpec] {
               line: ";"),
         lang_spec!("Zig", ext: ["zig"],
               line: "//"),
+        lang_spec!("Kaikai", ext: ["kai"],
+              line: "#", tq: true),
         lang_spec!("Objective-C", ext: ["m", "mm"],
               line: "//", block: "/*", "*/"),
         lang_spec!("OCaml", ext: ["ml", "mli"],
