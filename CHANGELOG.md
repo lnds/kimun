@@ -1,3 +1,9 @@
+## v0.22.0 (2026-05-28)
+
+### Feat
+
+- add Kaikai language support (.kai)
+
 ## v0.21.0 (2026-04-19)
 
 ### BREAKING CHANGE
