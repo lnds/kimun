@@ -373,6 +373,31 @@ pub static SHELL: TokenRules = TokenRules {
     ],
 };
 
+/// Kaikai tokenization rules.
+///
+/// Functional language with algebraic effects. Control flow keywords
+/// (`if`, `match`, `case`, `when`, `handle`, `with`) and boolean keywords
+/// (`and`, `or`, `not`) are operators. `as` is an operator (capability/import
+/// alias binding). Pipeline operators (`|>`, `||`, `|?`, `|`) drive
+/// dataflow. `:=` is mutable cell write, `++` is concat, `=>` lambda arrow,
+/// `->` type/pattern arrow. Declarations (`fn`, `let`, `var`, `type`,
+/// `effect`, `protocol`, `impl`, `import`, `use`, visibility) are ignored.
+pub static KAIKAI: TokenRules = TokenRules {
+    operator_keywords: &[
+        "if", "else", "match", "case", "when", "handle", "with", "and", "or", "not", "as",
+    ],
+    operator_symbols: &[
+        "|>", "|?", "...", "++", "==", "!=", "<=", ">=", ":=", "=>", "->", "||", "..", "+", "-",
+        "*", "/", "%", "^", "|", "!", "<", ">", "=", ";", ",", ".", ":", "(", ")", "[", "]", "{",
+        "}", "@", "?",
+    ],
+    ignored_keywords: &[
+        "fn", "let", "var", "const", "type", "effect", "protocol", "impl", "import", "use", "pub",
+        "priv", "extern", "test", "bench", "axiom", "check", "where", "requires", "ensures",
+        "assert", "unit", "true", "false", "Int", "Real", "Bool", "String", "Char", "Unit",
+    ],
+};
+
 /// Look up the tokenization rules for a language by name.
 /// Returns `None` for unsupported languages (no Halstead analysis available).
 pub fn rules_for(language: &str) -> Option<&'static TokenRules> {
@@ -386,6 +411,7 @@ pub fn rules_for(language: &str) -> Option<&'static TokenRules> {
         "Kotlin" => Some(&KOTLIN),
         "Swift" => Some(&SWIFT),
         "Bourne Shell" | "Bourne Again Shell" | "Zsh" => Some(&SHELL),
+        "Kaikai" => Some(&KAIKAI),
         _ => None,
     }
 }

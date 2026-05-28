@@ -233,6 +233,18 @@ static CLOJURE: ComplexityMarkers = ComplexityMarkers {
     line_comments: &[";"],
 };
 
+/// Kaikai: functional language with brace-delimited blocks. Branching comes
+/// from `if`, `match` arms, multi-clause `case`, `when` guards, and effect
+/// `handle`/`with` clauses. Boolean operators `and`/`or`/`not` are keywords,
+/// not symbols. No `while`/`for` keywords — iteration is via stdlib helpers.
+static KAIKAI: ComplexityMarkers = ComplexityMarkers {
+    keywords: &["if", "match", "case", "when", "handle", "with", "and", "or"],
+    operators: &[],
+    function_markers: &["fn "],
+    brace_scoped: true,
+    line_comments: &["#"],
+};
+
 /// Look up the complexity markers for a given language name.
 ///
 /// Returns `None` for languages without cyclomatic complexity support
@@ -263,6 +275,7 @@ pub fn markers_for(language_name: &str) -> Option<&'static ComplexityMarkers> {
         "Nim" => Some(&NIM),
         "Zig" => Some(&ZIG),
         "Clojure" => Some(&CLOJURE),
+        "Kaikai" => Some(&KAIKAI),
         _ => None,
     }
 }

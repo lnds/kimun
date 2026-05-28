@@ -93,6 +93,7 @@ fn all_supported_languages_have_markers() {
         "Nim",
         "Zig",
         "Clojure",
+        "Kaikai",
     ];
     for lang in &languages {
         assert!(
@@ -100,6 +101,24 @@ fn all_supported_languages_have_markers() {
             "{lang} should have cognitive markers"
         );
     }
+}
+
+#[test]
+fn kaikai_markers_exist() {
+    assert!(cognitive_markers_for("Kaikai").is_some());
+}
+
+#[test]
+fn kaikai_has_structural_and_boolean_keywords() {
+    let m = cognitive_markers_for("Kaikai").unwrap();
+    assert!(m.structural_keywords.contains(&"if"));
+    assert!(m.structural_keywords.contains(&"match"));
+    assert!(m.structural_keywords.contains(&"case"));
+    assert!(m.structural_keywords.contains(&"when"));
+    assert!(m.structural_keywords.contains(&"handle"));
+    assert!(m.fundamental_keywords.contains(&"else"));
+    assert!(m.boolean_operators.contains(&"and"));
+    assert!(m.boolean_operators.contains(&"or"));
 }
 
 #[test]

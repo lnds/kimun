@@ -172,3 +172,28 @@ fn ignored_keywords_not_counted() {
     assert!(counts.distinct_operands.contains("foo"));
     assert!(counts.distinct_operands.contains("x"));
 }
+
+#[test]
+fn kaikai_rules_present() {
+    assert!(rules_for("Kaikai").is_some());
+}
+
+#[test]
+fn kaikai_pipeline_and_keywords() {
+    let rules = rules_for("Kaikai").unwrap();
+    let lines = vec![
+        "fn f(x: Int) : Int = x |> g |> h",
+        "let y = if x and z { 1 } else { 2 }",
+    ];
+    let counts = count_tokens(&lines, rules, &[]);
+    assert!(counts.total_operators > 0);
+    assert!(counts.total_operands > 0);
+    // `fn`/`let` are declarations → ignored
+    assert!(!counts.distinct_operators.contains("fn"));
+    assert!(!counts.distinct_operators.contains("let"));
+    // control-flow and boolean keywords are operators
+    assert!(counts.distinct_operators.contains("if"));
+    assert!(counts.distinct_operators.contains("and"));
+    // pipeline symbol is an operator
+    assert!(counts.distinct_operators.contains("|>"));
+}

@@ -240,6 +240,20 @@ static CLOJURE: CognitiveMarkers = CognitiveMarkers {
     line_comments: &[";"],
 };
 
+/// Kaikai: `if`, `match`, multi-clause `case`, `when` guards, and effect
+/// `handle` blocks all introduce nesting. `else` is fundamental (+1, nests
+/// its body). Boolean operators `and`/`or` are keywords. `with` is omitted
+/// because it shares the `handle ... with` line and would double-count.
+static KAIKAI: CognitiveMarkers = CognitiveMarkers {
+    structural_keywords: &["if", "match", "case", "when", "handle"],
+    hybrid_keywords: &[],
+    fundamental_keywords: &["else"],
+    boolean_operators: &["and", "or"],
+    function_markers: &["fn "],
+    brace_scoped: true,
+    line_comments: &["#"],
+};
+
 /// Look up the cognitive complexity markers for a given language name.
 ///
 /// Returns `None` for languages without cognitive complexity support
@@ -267,6 +281,7 @@ pub fn cognitive_markers_for(language_name: &str) -> Option<&'static CognitiveMa
         "Nim" => Some(&NIM),
         "Zig" => Some(&ZIG),
         "Clojure" => Some(&CLOJURE),
+        "Kaikai" => Some(&KAIKAI),
         _ => None,
     }
 }

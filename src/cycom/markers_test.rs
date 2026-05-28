@@ -45,3 +45,15 @@ fn unknown_language_returns_none() {
     assert!(markers_for("Markdown").is_none());
     assert!(markers_for("TOML").is_none());
 }
+
+#[test]
+fn kaikai_markers_present() {
+    let m = markers_for("Kaikai").unwrap();
+    assert_eq!(m.function_markers, &["fn "]);
+    assert!(m.brace_scoped);
+    assert!(m.keywords.contains(&"match"));
+    assert!(m.keywords.contains(&"when"));
+    assert!(m.keywords.contains(&"handle"));
+    assert!(m.keywords.contains(&"and"));
+    assert!(m.keywords.contains(&"or"));
+}
