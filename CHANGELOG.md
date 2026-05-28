@@ -1,3 +1,13 @@
+## v0.23.0 (2026-05-28)
+
+### Feat
+
+- add Kaikai complexity and Halstead metrics support
+
+### Fix
+
+- link advapi32 on Windows for libgit2-sys
+
 ## v0.22.0 (2026-05-28)
 
 ### Feat
