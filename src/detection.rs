@@ -47,9 +47,14 @@ fn is_function_declaration(trimmed: &str, markers: &dyn FunctionDetectionMarkers
 /// - Multiline declarations where '{' is on a separate line are missed.
 /// - Function pointers (e.g., `void (*fp)(int)`) may be misdetected.
 /// - C++ constructor initializer lists are not handled.
-/// - Macros that look like functions (e.g., `DEFINE_TEST(name)`) are
-///   treated as functions.
 fn is_c_family_function(trimmed: &str) -> bool {
+    // Preprocessor directives (`#define`, `#if`, `#include`, ...) are not
+    // functions. A function-like `#define NAME(args) body` otherwise looks
+    // like a C function (`identifier (params) body`) and would be misdetected,
+    // absorbing the cognitive complexity of the code that follows it.
+    if trimmed.starts_with('#') {
+        return false;
+    }
     if !trimmed.contains('(') {
         return false;
     }
@@ -204,6 +209,19 @@ mod tests {
         assert!(is_c_family_function("int foo(int x) {"));
         assert!(is_c_family_function("void bar()"));
         assert!(is_c_family_function("static void baz(int a, int b) {"));
+    }
+
+    #[test]
+    fn is_c_family_function_preprocessor_directive_returns_false() {
+        // Function-like #define looks like a C function but is not one.
+        assert!(!is_c_family_function(
+            "#define TRACE_ALLOC(name) trace_record(name)"
+        ));
+        assert!(!is_c_family_function(
+            "#define MAX(a, b) ((a) > (b) ? (a) : (b))"
+        ));
+        assert!(!is_c_family_function("#if defined(FOO)"));
+        assert!(!is_c_family_function("#include <stdio.h>"));
     }
 }
 
