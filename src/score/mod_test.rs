@@ -268,6 +268,29 @@ fn score_gate_error_message_shows_two_decimal_places() {
 }
 
 #[test]
+fn gate_score_worsened_ignores_sub_centi_regression() {
+    // Regression for the CI false positive: a sub-0.01 drop renders as
+    // `-0.00` in the report and must NOT trip the gate.
+    assert!(!gate_score_worsened(87.814, 87.811));
+    assert!(!gate_score_worsened(87.81, 87.81));
+    // Same value, no regression.
+    assert!(!gate_score_worsened(90.0, 90.0));
+}
+
+#[test]
+fn gate_score_worsened_catches_visible_regression() {
+    // A drop visible at 2 decimals must trip the gate.
+    assert!(gate_score_worsened(87.81, 87.80));
+    assert!(gate_score_worsened(90.0, 89.5));
+}
+
+#[test]
+fn gate_score_worsened_allows_improvement() {
+    assert!(!gate_score_worsened(87.80, 87.81));
+    assert!(!gate_score_worsened(89.5, 90.0));
+}
+
+#[test]
 fn score_gate_fail_if_worse_error_contains_decimal_delta() {
     // Integration: run_diff with fail_if_worse on a repo whose second commit
     // introduces a function with 10 levels of nesting (cognitive complexity ≈ 55,
