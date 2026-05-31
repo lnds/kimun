@@ -535,6 +535,16 @@ pub enum Commands {
         command: AiCommands,
     },
 
+    /// Analyze the project and generate a calibrated .kimun.toml
+    Init {
+        /// Directory to analyze (default: current directory)
+        path: Option<PathBuf>,
+
+        /// Write .kimun.toml without prompting
+        #[arg(short, long)]
+        yes: bool,
+    },
+
     /// Generate shell completion scripts (zsh, bash, fish, ...)
     Completions {
         /// Shell to generate completions for

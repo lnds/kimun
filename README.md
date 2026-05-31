@@ -858,7 +858,24 @@ Options:
 
 ## Project configuration (`.kimun.toml`)
 
-Place a `.kimun.toml` file in the root of your repository to set project-level defaults for thresholds and quality gates. `km` searches for the file at the git repository root, falling back to the current directory.
+Run `km init` to analyze your project and generate a calibrated `.kimun.toml` in one step:
+
+```
+$ km init
+Analyzing project... done.
+
+Current state:
+  avg function length: 38 lines  →  suggested max_lines = 45
+  avg param count:     3.2       →  suggested max_params = 4
+  dup ratio:           4.1%      →  suggested max_dup_ratio = 5.0
+  health score:        B+        →  suggested fail_below = B
+
+Write .kimun.toml with these values? [Y/n]
+```
+
+Use `--yes` to skip the prompt. Add `-y` in CI to write the file non-interactively.
+
+Alternatively, place a `.kimun.toml` file manually in the root of your repository to set project-level defaults for thresholds and quality gates. `km` searches for the file at the git repository root, falling back to the current directory.
 
 CLI flags always take precedence over `.kimun.toml`, which in turn takes precedence over built-in defaults.
 

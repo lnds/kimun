@@ -41,6 +41,8 @@ mod hal;
 mod hotspots;
 /// Indentation complexity (stddev and max depth).
 mod indent;
+/// Interactive wizard: analyze current project state and write `.kimun.toml`.
+mod init;
 /// Knowledge maps: code ownership via git blame.
 mod knowledge;
 /// Lines of code counting with FSM-based line classification.
@@ -528,6 +530,7 @@ fn main() {
             })
         }
         Commands::Ai { command } => dispatch_ai(command),
+        Commands::Init { path, yes } => run_command(path, |t| init::run(t, yes)),
         Commands::Completions { shell } => {
             write_completions(shell, &mut std::io::stdout());
         }
