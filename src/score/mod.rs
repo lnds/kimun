@@ -104,6 +104,13 @@ pub fn run(
     Ok(())
 }
 
+/// Decide whether the `--fail-if-worse` gate should fire, comparing scores as
+/// displayed (rounded to 2 decimals). This avoids failing on sub-0.01
+/// floating-point regressions that the report renders as `-0.00`.
+pub(crate) fn gate_score_worsened(before: f64, after: f64) -> bool {
+    (after * 100.0).round() < (before * 100.0).round()
+}
+
 /// Format the quality-gate failure message with two decimal places for before, after, and delta.
 /// Extracted so tests can verify the exact format without reconstructing it independently.
 pub(crate) fn format_gate_error(before: f64, after: f64, delta: f64) -> String {
@@ -161,7 +168,13 @@ pub fn run_diff(
     }
 
     // Quality gates: evaluated after output so the log is always complete.
-    if gate.fail_if_worse && score_diff.overall.delta < 0.0 {
+    // Compare the scores as displayed (rounded to 2 decimals) so a sub-0.01
+    // floating-point regression — which the report shows as `-0.00` — does not
+    // fail the gate. Adding a few lines of code can nudge a normalized
+    // dimension by ~1e-3; that is rounding noise, not a real quality drop.
+    if gate.fail_if_worse
+        && gate_score_worsened(score_diff.overall.before, score_diff.overall.after)
+    {
         return Err(format_gate_error(
             score_diff.overall.before,
             score_diff.overall.after,
