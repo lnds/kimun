@@ -19,16 +19,6 @@ pub enum SmellKind {
 }
 
 impl SmellKind {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::LongFunction => "long_function",
-            Self::LongParameterList => "long_params",
-            Self::TodoDebt => "todo_debt",
-            Self::MagicNumber => "magic_number",
-            Self::CommentedOutCode => "commented_code",
-        }
-    }
-
     /// Human-readable title for GitHub annotation titles.
     pub fn title(self) -> &'static str {
         match self {
@@ -38,6 +28,28 @@ impl SmellKind {
             Self::MagicNumber => "Magic Number",
             Self::CommentedOutCode => "Commented-Out Code",
         }
+    }
+
+    /// Short column header used in the per-file breakdown table.
+    pub fn short_label(self) -> &'static str {
+        match self {
+            Self::LongFunction => "long",
+            Self::LongParameterList => "param",
+            Self::TodoDebt => "todo",
+            Self::MagicNumber => "magic",
+            Self::CommentedOutCode => "comm",
+        }
+    }
+
+    /// All smell kinds in a fixed canonical order (used for stable table columns).
+    pub const fn all() -> [SmellKind; 5] {
+        [
+            Self::MagicNumber,
+            Self::LongFunction,
+            Self::LongParameterList,
+            Self::TodoDebt,
+            Self::CommentedOutCode,
+        ]
     }
 }
 
@@ -91,12 +103,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn smell_kind_as_str_all_variants() {
-        assert_eq!(SmellKind::LongFunction.as_str(), "long_function");
-        assert_eq!(SmellKind::LongParameterList.as_str(), "long_params");
-        assert_eq!(SmellKind::TodoDebt.as_str(), "todo_debt");
-        assert_eq!(SmellKind::MagicNumber.as_str(), "magic_number");
-        assert_eq!(SmellKind::CommentedOutCode.as_str(), "commented_code");
+    fn smell_kind_short_label_all_variants() {
+        assert_eq!(SmellKind::LongFunction.short_label(), "long");
+        assert_eq!(SmellKind::LongParameterList.short_label(), "param");
+        assert_eq!(SmellKind::TodoDebt.short_label(), "todo");
+        assert_eq!(SmellKind::MagicNumber.short_label(), "magic");
+        assert_eq!(SmellKind::CommentedOutCode.short_label(), "comm");
+    }
+
+    #[test]
+    fn smell_kind_all_is_canonical_order() {
+        assert_eq!(
+            SmellKind::all(),
+            [
+                SmellKind::MagicNumber,
+                SmellKind::LongFunction,
+                SmellKind::LongParameterList,
+                SmellKind::TodoDebt,
+                SmellKind::CommentedOutCode,
+            ]
+        );
     }
 
     #[test]

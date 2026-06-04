@@ -616,18 +616,20 @@ Options:
 | `--since-ref REF` | Analyze only files changed since this git ref (e.g. `origin/main`, `HEAD~1`). Ideal for CI |
 | `--format {table,json,short,terse,github,codeclimate}` | Output format (default: table). `github` emits GitHub Actions annotations; `codeclimate` (alias: `gitlab`) emits CodeClimate JSON for GitLab Code Quality |
 
+The table breaks each file's smell count down by type, with one column per smell kind (`magic`, `long`, `param`, `todo`, `comm`) and a per-column total in the footer.
+
 Example output:
 
 ```
 Code Smells
-──────────────────────────────────────────────────────────────────────────────
- File                            Smells  Top Smell
-──────────────────────────────────────────────────────────────────────────────
- src/loc/counter.rs                  12  magic_number (7)
- src/main.rs                          6  todo_debt (4)
- src/dups/detector.rs                 3  long_function (2)
-──────────────────────────────────────────────────────────────────────────────
- Total (3 files)                     21
+──────────────────────────────────────────────────────────────────────
+ File                            Total  magic  long  param  todo  comm
+──────────────────────────────────────────────────────────────────────
+ src/loc/counter.rs                 12      7     1      0     4     0
+ src/main.rs                         6      2     0      0     4     0
+ src/dups/detector.rs                3      0     2      1     0     0
+──────────────────────────────────────────────────────────────────────
+ Total (3 files)                    21      9     3      1     8     0
 ```
 
 ### `km deps` -- Dependency graph analysis

@@ -1,6 +1,5 @@
 //! Report formatters for code smell analysis.
 
-use std::collections::HashMap;
 use std::path::PathBuf;
 
 use serde::Serialize;
@@ -16,62 +15,95 @@ pub struct FileSmellMetrics {
     pub total: usize,
 }
 
-/// Print a table of per-file code smell counts.
+/// Count how many smells of each kind a file has, in canonical column order.
+fn kind_counts(smells: &FileSmells) -> [usize; 5] {
+    let mut counts = [0usize; 5];
+    for s in &smells.smells {
+        for (i, kind) in SmellKind::all().iter().enumerate() {
+            if *kind == s.kind {
+                counts[i] += 1;
+                break;
+            }
+        }
+    }
+    counts
+}
+
+/// Print a table of per-file code smell counts with one column per smell kind.
 pub fn print_report(files: &[FileSmellMetrics]) {
     if files.is_empty() {
         println!("No code smells found.");
         return;
     }
 
+    let kinds = SmellKind::all();
     let max_path_len = report_helpers::max_path_width(files.iter().map(|f| f.path.as_path()), 4);
-    let header_width = max_path_len + 40;
-    let separator = report_helpers::separator(header_width.max(55));
+
+    // Per-file kind counts and column-wide totals (for the footer and column widths).
+    let per_file: Vec<[usize; 5]> = files.iter().map(|f| kind_counts(&f.smells)).collect();
+    let mut totals = [0usize; 5];
+    for counts in &per_file {
+        for (t, c) in totals.iter_mut().zip(counts) {
+            *t += c;
+        }
+    }
+    let total_smells: usize = files.iter().map(|f| f.total).sum();
+
+    // Each kind column is as wide as the widest of its header or any count it must hold.
+    let kind_widths: [usize; 5] = std::array::from_fn(|i| {
+        kinds[i]
+            .short_label()
+            .len()
+            .max(totals[i].to_string().len())
+    });
+    let total_col = "Total".len().max(total_smells.to_string().len());
+
+    // Build the header row to derive the separator width.
+    let mut header = format!(
+        " {:<width$}  {:>tw$}",
+        "File",
+        "Total",
+        width = max_path_len,
+        tw = total_col
+    );
+    for (i, kind) in kinds.iter().enumerate() {
+        header.push_str(&format!("  {:>w$}", kind.short_label(), w = kind_widths[i]));
+    }
+    let separator = report_helpers::separator(header.len().max(55));
 
     println!("Code Smells");
     println!("{separator}");
-    println!(
-        " {:<width$}  {:>7}  Top Smell",
-        "File",
-        "Smells",
-        width = max_path_len
-    );
+    println!("{header}");
     println!("{separator}");
 
-    for f in files {
-        let top = top_smell(&f.smells);
-        println!(
-            " {:<width$}  {:>7}  {}",
+    for (f, counts) in files.iter().zip(&per_file) {
+        let mut row = format!(
+            " {:<width$}  {:>tw$}",
             f.path.display(),
             f.total,
-            top,
-            width = max_path_len
+            width = max_path_len,
+            tw = total_col
         );
+        for (i, c) in counts.iter().enumerate() {
+            row.push_str(&format!("  {:>w$}", c, w = kind_widths[i]));
+        }
+        println!("{row}");
     }
 
     println!("{separator}");
 
-    let total_smells: usize = files.iter().map(|f| f.total).sum();
     let total_label = format!(" Total ({} files)", files.len());
-    println!(
-        "{:<width$}  {:>7}",
+    let mut footer = format!(
+        "{:<width$}  {:>tw$}",
         total_label,
         total_smells,
-        width = max_path_len + 1
+        width = max_path_len + 1,
+        tw = total_col
     );
-}
-
-/// Find the most common smell kind in a file and format it as "kind (count)".
-fn top_smell(smells: &FileSmells) -> String {
-    let mut counts: HashMap<SmellKind, usize> = HashMap::new();
-    for s in &smells.smells {
-        *counts.entry(s.kind).or_default() += 1;
+    for (i, t) in totals.iter().enumerate() {
+        footer.push_str(&format!("  {:>w$}", t, w = kind_widths[i]));
     }
-
-    counts
-        .into_iter()
-        .max_by_key(|&(_, c)| c)
-        .map(|(kind, count)| format!("{} ({count})", kind.as_str()))
-        .unwrap_or_default()
+    println!("{footer}");
 }
 
 /// JSON-serializable smell instance.
@@ -229,21 +261,23 @@ mod tests {
     }
 
     #[test]
-    fn top_smell_returns_most_common() {
-        // Two TodoDebt, one LongFunction => TodoDebt wins
+    fn kind_counts_tallies_each_kind_in_canonical_order() {
+        // Canonical column order: [magic, long, param, todo, comm]
         let smells = vec![
             make_smell(SmellKind::TodoDebt, 1, "TODO"),
             make_smell(SmellKind::TodoDebt, 2, "FIXME"),
             make_smell(SmellKind::LongFunction, 3, "big_func"),
+            make_smell(SmellKind::MagicNumber, 4, "42"),
+            make_smell(SmellKind::MagicNumber, 5, "99"),
+            make_smell(SmellKind::MagicNumber, 6, "7"),
         ];
-        let top = top_smell(&FileSmells { smells });
-        assert!(top.contains("todo_debt"), "expected todo_debt, got: {top}");
-        assert!(top.contains("(2)"), "expected count 2, got: {top}");
+        let counts = kind_counts(&FileSmells { smells });
+        assert_eq!(counts, [3, 1, 0, 2, 0]);
     }
 
     #[test]
-    fn top_smell_empty_smells_returns_empty_string() {
-        let top = top_smell(&FileSmells { smells: vec![] });
-        assert!(top.is_empty(), "expected empty string, got: {top}");
+    fn kind_counts_empty_smells_is_all_zero() {
+        let counts = kind_counts(&FileSmells { smells: vec![] });
+        assert_eq!(counts, [0; 5]);
     }
 }
