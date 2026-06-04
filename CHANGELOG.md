@@ -1,3 +1,15 @@
+## v0.24.0 (2026-06-04)
+
+### Feat
+
+- **smells**: break down per-file table by smell type
+- add km init to generate calibrated .kimun.toml
+
+### Fix
+
+- don't fail score gate on sub-0.01 rounding-noise regression
+- don't treat function-like #define macros as functions
+
 ## v0.23.0 (2026-05-28)
 
 ### Feat
