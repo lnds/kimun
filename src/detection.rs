@@ -41,10 +41,10 @@ fn is_function_declaration(trimmed: &str, markers: &dyn FunctionDetectionMarkers
 }
 
 /// Heuristic for C/C++/Java/C# function detection: line contains '(' and
-/// ends with '{' or ')', and the first word is NOT a control keyword.
+/// ends with '{', ')' or ',' (comma indicates multi-line parameter list),
+/// and the first word is NOT a control keyword.
 ///
 /// Known limitations:
-/// - Multiline declarations where '{' is on a separate line are missed.
 /// - Function pointers (e.g., `void (*fp)(int)`) may be misdetected.
 /// - C++ constructor initializer lists are not handled.
 fn is_c_family_function(trimmed: &str) -> bool {
@@ -58,7 +58,7 @@ fn is_c_family_function(trimmed: &str) -> bool {
     if !trimmed.contains('(') {
         return false;
     }
-    if !(trimmed.ends_with('{') || trimmed.ends_with(')')) {
+    if !(trimmed.ends_with('{') || trimmed.ends_with(')') || trimmed.ends_with(',')) {
         return false;
     }
 
@@ -192,9 +192,24 @@ mod tests {
 
     #[test]
     fn is_c_family_function_no_open_brace_or_closing_paren() {
-        // Has '(' but doesn't end with '{' or ')'
-        assert!(!is_c_family_function("foo(x, y,"));
-        assert!(!is_c_family_function("bar(x, y;"));
+        // Has '(' but doesn't end with '{', ')' or ','
+        // Note: comma is accepted for multi-line parameter lists
+        assert!(is_c_family_function("foo(x, y,")); // multi-line param list
+        assert!(!is_c_family_function("bar(x, y;")); // ends with ';' — statement
+    }
+
+    #[test]
+    fn is_c_family_function_multiline_declaration() {
+        // Multi-line function declarations ending with ',' should be detected
+        assert!(is_c_family_function(
+            "static unsigned char *allocate_derived_key(EVP_MD_CTX *mdctx,"
+        ));
+        assert!(is_c_family_function(
+            "unsigned char *encrypt_ecdh(const unsigned char *plaintext, size_t plaintext_len,"
+        ));
+        // Verify first-word check still holds
+        assert!(!is_c_family_function("if (condition_a || condition_b,"));
+        assert!(!is_c_family_function("for (int i = 0; i < n; i++,"));
     }
 
     #[test]
