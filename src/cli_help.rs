@@ -234,7 +234,7 @@ Default model (cogcom, v0.14+) — 5 dimensions:
   Duplication             20%  (project-wide duplicate code %)
   Indentation Complexity  15%  (stddev of indentation depth)
   Halstead Effort         20%  (mental effort per LOC)
-  File Size               15%  (optimal 50-300 LOC)
+  File Size               15%  (optimal ≤500 LOC)
 
 Legacy model (--model legacy, v0.13) — 6 dimensions:
   Maintainability Index   30%  (verifysoft MI with comment weight)
@@ -242,7 +242,7 @@ Legacy model (--model legacy, v0.13) — 6 dimensions:
   Duplication             15%  (project-wide duplicate code %)
   Indentation Complexity  15%  (stddev of indentation depth)
   Halstead Effort         15%  (mental effort per LOC)
-  File Size                5%  (optimal 50-300 LOC)
+  File Size                5%  (optimal ≤500 LOC)
 
 Non-code files (Markdown, TOML, JSON, etc.) are automatically excluded.
 Inline test blocks (#[cfg(test)]) are excluded from duplication analysis.
