@@ -191,7 +191,16 @@ pub fn detect_todo_debt(lines: &[String], kinds: &[LineKind]) -> Vec<SmellInstan
 
 /// Declaration keywords that exclude a line from magic number detection.
 /// Matched against the first token of the line (case-insensitive).
-const DECL_KEYWORDS: &[&str] = &["const", "let", "static", "final", "val", "#define", "enum"];
+///
+/// Shell keywords (`readonly`, `declare`, `export`, `local`) are included so
+/// that idiomatic shell constant declarations (`readonly FOO=16`,
+/// `declare -r FOO=16`, `export FOO=16`, `local -r FOO=16`) don't trip the
+/// magic_number smell — extracting a literal into a named constant is the
+/// standard fix for this smell, so the linter shouldn't flag the fix itself.
+const DECL_KEYWORDS: &[&str] = &[
+    "const", "let", "static", "final", "val", "#define", "enum",
+    "readonly", "declare", "export", "local",
+];
 
 /// Trivial numeric values that are not considered magic numbers.
 const TRIVIAL_NUMBERS: &[&str] = &["0", "1", "2", "-1"];
