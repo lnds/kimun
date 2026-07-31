@@ -162,10 +162,25 @@ fn find_matching_paren(s: &str) -> usize {
     s.len()
 }
 
-/// TODO/FIXME/HACK/XXX/BUG keywords in comment lines.
-const DEBT_KEYWORDS: &[&str] = &["TODO", "FIXME", "HACK", "XXX", "BUG"];
+/// Debt markers matched case-insensitively — these are jargon tokens unlikely
+/// to appear inside natural-English prose (nobody writes "my todo list" or
+/// "the fixme approach" or "an xxx-rated joke" in a code comment about
+/// production behavior).
+const DEBT_KEYWORDS_CI: &[&str] = &["TODO", "FIXME", "HACK", "XXX"];
+
+/// Debt markers matched case-sensitively (uppercase only) — `BUG` is a common
+/// English word (`a bug report`, `a buggy release`), so case-folding produces
+/// false positives on comments that discuss bugs in prose rather than mark
+/// technical debt. Canonical debt-marker usage is `# BUG: ...` in uppercase.
+const DEBT_KEYWORDS_CS: &[&str] = &["BUG"];
 
 /// Detect TODO/FIXME debt in comment lines.
+///
+/// Matches whole-word debt-marker tokens. TODO/FIXME/HACK/XXX are matched
+/// case-insensitively; BUG is matched case-sensitively (uppercase only)
+/// because it's a common English word. In both branches the match uses
+/// whole-word boundaries, so `debugging`, `todolist`, `hackathon`, `buggy`
+/// don't fire.
 pub fn detect_todo_debt(lines: &[String], kinds: &[LineKind]) -> Vec<SmellInstance> {
     let mut smells = Vec::new();
 
@@ -174,19 +189,56 @@ pub fn detect_todo_debt(lines: &[String], kinds: &[LineKind]) -> Vec<SmellInstan
             continue;
         }
         let upper = line.to_uppercase();
-        for &kw in DEBT_KEYWORDS {
-            if upper.contains(kw) {
-                smells.push(SmellInstance {
-                    kind: SmellKind::TodoDebt,
-                    line: i + 1,
-                    detail: format!("{kw} comment"),
-                });
+        let mut matched: Option<&&str> = None;
+        for kw in DEBT_KEYWORDS_CI {
+            if contains_word(&upper, kw) {
+                matched = Some(kw);
                 break;
             }
+        }
+        if matched.is_none() {
+            for kw in DEBT_KEYWORDS_CS {
+                if contains_word(line, kw) {
+                    matched = Some(kw);
+                    break;
+                }
+            }
+        }
+        if let Some(kw) = matched {
+            smells.push(SmellInstance {
+                kind: SmellKind::TodoDebt,
+                line: i + 1,
+                detail: format!("{kw} comment"),
+            });
         }
     }
 
     smells
+}
+
+/// Whole-word substring match: returns true when `needle` appears in `haystack`
+/// with both boundaries being non-word chars (or string ends). "Word char"
+/// here is ASCII alphanumeric or `_`, matching the common regex `\b` behavior.
+fn contains_word(haystack: &str, needle: &str) -> bool {
+    let bytes = haystack.as_bytes();
+    let nlen = needle.len();
+    if nlen == 0 || nlen > bytes.len() {
+        return false;
+    }
+    let is_word = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
+    let needle_bytes = needle.as_bytes();
+    let mut i = 0;
+    while i + nlen <= bytes.len() {
+        if &bytes[i..i + nlen] == needle_bytes {
+            let left_ok = i == 0 || !is_word(bytes[i - 1]);
+            let right_ok = i + nlen == bytes.len() || !is_word(bytes[i + nlen]);
+            if left_ok && right_ok {
+                return true;
+            }
+        }
+        i += 1;
+    }
+    false
 }
 
 /// Declaration keywords that exclude a line from magic number detection.
