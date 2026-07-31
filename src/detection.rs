@@ -30,18 +30,32 @@ const CONTROL_KEYWORDS: &[&str] = &[
 ];
 
 /// Check whether a line is a function declaration, using explicit markers
-/// or the C-family heuristic as fallback.
+/// AND the C-family heuristic as fallback.
+///
+/// If any explicit marker matches, the line is a function declaration. If
+/// not, the C-family heuristic is tried as a fallback (has `(`, ends with
+/// `{` or `)`, first word not a control keyword, no `=` before the `(`).
+/// This covers languages that have BOTH a keyword-prefixed form and a
+/// paren-suffixed form — for example, Bash allows both
+/// `function foo { ... }` (matched by the `"function "` marker) and
+/// `foo() { ... }` (matched by the C-family heuristic).
+///
+/// The fallback is safe for marker-only languages: it only fires on lines
+/// ending with `{` or `)`. Python `def foo(x):` ends with `:` and doesn't
+/// reach it; Rust `fn foo() {` and JavaScript `function foo() {` already
+/// match via their markers.
 fn is_function_declaration(trimmed: &str, markers: &dyn FunctionDetectionMarkers) -> bool {
-    let fm = markers.function_markers();
-    if !fm.is_empty() {
-        fm.iter().any(|m| trimmed.contains(m))
-    } else {
-        is_c_family_function(trimmed)
+    if markers.function_markers().iter().any(|m| trimmed.contains(m)) {
+        return true;
     }
+    is_c_family_function(trimmed)
 }
 
-/// Heuristic for C/C++/Java/C# function detection: line contains '(' and
-/// ends with '{' or ')', and the first word is NOT a control keyword.
+/// Heuristic for C/C++/Java/C#/Bash function detection: line contains '('
+/// and ends with '{' or ')', and the first word is NOT a control keyword,
+/// and there is no '=' before the first '(' (which would make it an
+/// assignment such as `x = foo(...)` or a shell command substitution
+/// `VAR=$(cmd ...)` rather than a function definition).
 ///
 /// Known limitations:
 /// - Multiline declarations where '{' is on a separate line are missed.
@@ -55,10 +69,22 @@ fn is_c_family_function(trimmed: &str) -> bool {
     if trimmed.starts_with('#') {
         return false;
     }
-    if !trimmed.contains('(') {
+    let paren_pos = match trimmed.find('(') {
+        Some(p) => p,
+        None => return false,
+    };
+    if !(trimmed.ends_with('{') || trimmed.ends_with(')')) {
         return false;
     }
-    if !(trimmed.ends_with('{') || trimmed.ends_with(')')) {
+
+    // Assignment before the first '(' means this is a variable assignment
+    // or a shell command substitution, not a function definition. Examples:
+    //   x = foo(bar)             (C-family)
+    //   VAR=$(cmd | filter)      (Bash command substitution)
+    //   local FOO=$(...)         (Bash local assignment)
+    // The `=` is checked in the prefix only; a `=` inside the parens
+    // (default-argument, comparison) is unrelated.
+    if trimmed[..paren_pos].contains('=') {
         return false;
     }
 
@@ -222,6 +248,39 @@ mod tests {
         ));
         assert!(!is_c_family_function("#if defined(FOO)"));
         assert!(!is_c_family_function("#include <stdio.h>"));
+    }
+
+    #[test]
+    fn is_c_family_function_matches_bash_posix_form() {
+        // `foo() {` on its own line is a bash function definition (POSIX form).
+        // The C-family heuristic must accept it so `Bourne Shell` files get
+        // per-function decomposition — SHELL markers include `"function "`
+        // for the `function foo { ... }` shape, but the more common POSIX
+        // `foo() {` shape has no keyword prefix and relies on this fallback.
+        assert!(is_c_family_function("foo() {"));
+        assert!(is_c_family_function("_private_helper() {"));
+    }
+
+    #[test]
+    fn is_c_family_function_rejects_shell_command_substitution() {
+        // `VAR=$(cmd | filter)` has `(`, ends with `)`, first word not a
+        // control keyword — but the `=` before the `(` means it's an
+        // assignment, not a function definition. Same for local/readonly
+        // assignments with command substitution.
+        assert!(!is_c_family_function(
+            "SRC_FINGERPRINT=$(cd \"$SCRIPT_DIR\" && cat file | sha256sum | cut -c1-16)"
+        ));
+        assert!(!is_c_family_function("OUT_SIZE=$(wc -c < \"$OUT\")"));
+        assert!(!is_c_family_function("local pid=$(pgrep vault)"));
+        assert!(!is_c_family_function("readonly FOO=$(date +%s)"));
+    }
+
+    #[test]
+    fn is_c_family_function_rejects_c_family_assignment() {
+        // `x = foo(bar)` — same category as bash assignments: an assignment,
+        // not a function definition.
+        assert!(!is_c_family_function("x = foo(bar)"));
+        assert!(!is_c_family_function("let x = compute(a, b)"));
     }
 }
 

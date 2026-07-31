@@ -120,13 +120,17 @@ static SCALA: CognitiveMarkers = CognitiveMarkers {
     line_comments: &["//"],
 };
 
+/// Shell (Bourne / Bash / Zsh): mirrors the cycom SHELL markers.
+/// See the equivalent comment in `cycom/markers.rs` for the reasoning about
+/// `brace_scoped: true`, the `"function "` explicit marker, and the
+/// single-line-function limitation.
 static SHELL: CognitiveMarkers = CognitiveMarkers {
     structural_keywords: &["if", "for", "while", "until", "case"],
     hybrid_keywords: &["elif"],
     fundamental_keywords: &["else"],
     boolean_operators: &["&&", "||"],
-    function_markers: &[],
-    brace_scoped: false,
+    function_markers: &["function "],
+    brace_scoped: true,
     line_comments: &["#"],
 };
 

@@ -127,11 +127,26 @@ static SCALA: ComplexityMarkers = ComplexityMarkers {
     line_comments: &["//"],
 };
 
+/// Shell (Bourne / Bash / Zsh): functions are `foo() { ... }` (POSIX form)
+/// or `function foo { ... }` / `function foo() { ... }` (bash extension).
+/// Both are brace-delimited, so `brace_scoped: true` uses the same
+/// body-detection path as C/JS.
+///
+/// The `foo() {` shape is picked up by the shared C-family heuristic in
+/// `detection::is_c_family_function` (has `(`, ends with `{`, first word
+/// not a control keyword, no `=` before the `(`). The `function foo { ... }`
+/// shape needs the explicit `"function "` marker.
+///
+/// Known limitation: single-line function bodies like `foo() { echo hi; }`
+/// are NOT detected — the C-family heuristic requires the opening `{` at
+/// end-of-line, and adding `}` to that condition would false-positive on
+/// single-line class declarations in JS/TS/Java. Multi-line function bodies
+/// (the dominant style in real shell code) work correctly.
 static SHELL: ComplexityMarkers = ComplexityMarkers {
     keywords: &["elif", "if", "for", "while", "until", "case"],
     operators: &["&&", "||"],
-    function_markers: &[],
-    brace_scoped: false,
+    function_markers: &["function "],
+    brace_scoped: true,
     line_comments: &["#"],
 };
 
