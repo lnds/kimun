@@ -143,6 +143,69 @@ fn no_debt_in_code() {
     assert!(smells.is_empty());
 }
 
+#[test]
+fn debt_keyword_not_matched_as_substring_in_prose() {
+    // Descriptive comment prose containing "debugging" and "bug report" —
+    // must NOT fire the todo_debt smell (lowercase `bug` in English prose
+    // is a common word, not a debt marker).
+    let ls = lines("# harmless prose: this is about debugging a bug report from a customer");
+    let kinds = vec![LineKind::Comment];
+    let smells = detect_todo_debt(&ls, &kinds);
+    assert!(
+        smells.is_empty(),
+        "prose containing 'bug' as a common English word should not trigger todo_debt: got {:?}",
+        smells
+    );
+}
+
+#[test]
+fn debt_keyword_matched_as_whole_word_with_colon() {
+    // Canonical `BUG: description` form (uppercase) must still fire.
+    let ls = lines("// BUG: race condition when N > 100");
+    let kinds = vec![LineKind::Comment];
+    let smells = detect_todo_debt(&ls, &kinds);
+    assert_eq!(smells.len(), 1);
+    assert!(smells[0].detail.contains("BUG"));
+}
+
+#[test]
+fn debt_keyword_matched_as_whole_word_with_parens() {
+    // Canonical `FIXME(user) description` form must still fire.
+    let ls = lines("# FIXME(alice) revisit after cache lands");
+    let kinds = vec![LineKind::Comment];
+    let smells = detect_todo_debt(&ls, &kinds);
+    assert_eq!(smells.len(), 1);
+    assert!(smells[0].detail.contains("FIXME"));
+}
+
+#[test]
+fn debt_keyword_not_matched_inside_longer_word() {
+    // "hackathon", "todolist", "buggy" — all contain a debt keyword as a
+    // substring but shouldn't fire the smell.
+    let ls = lines(
+        "# hackathon last week\n# my todolist for the sprint\n# fixed a buggy behavior",
+    );
+    let kinds = vec![LineKind::Comment, LineKind::Comment, LineKind::Comment];
+    let smells = detect_todo_debt(&ls, &kinds);
+    assert!(
+        smells.is_empty(),
+        "words containing debt keywords as substrings should not trigger: got {:?}",
+        smells
+    );
+}
+
+#[test]
+fn lowercase_bug_in_prose_not_matched() {
+    // The uppercase BUG debt marker must not match the lowercase common
+    // English noun "bug" — this is the specific case-sensitivity rule for
+    // BUG (unlike TODO/FIXME/HACK/XXX which stay case-insensitive since
+    // they don't collide with prose).
+    let ls = lines("# the bug fix landed yesterday");
+    let kinds = vec![LineKind::Comment];
+    let smells = detect_todo_debt(&ls, &kinds);
+    assert!(smells.is_empty());
+}
+
 // ── Magic numbers ──
 
 #[test]
