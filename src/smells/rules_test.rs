@@ -179,6 +179,42 @@ fn let_declaration_not_detected() {
 }
 
 #[test]
+fn readonly_declaration_not_detected() {
+    // Shell: `readonly NAME=16` is the idiomatic constant declaration.
+    let ls = lines("readonly FINGERPRINT_LEN=16");
+    let kinds = vec![LineKind::Code];
+    let smells = detect_magic_numbers(&ls, &kinds, &["#"][..]);
+    assert!(smells.is_empty());
+}
+
+#[test]
+fn declare_r_declaration_not_detected() {
+    // Shell: `declare -r NAME=N` is another way to declare a readonly constant.
+    let ls = lines("declare -r MAX_RETRIES=42");
+    let kinds = vec![LineKind::Code];
+    let smells = detect_magic_numbers(&ls, &kinds, &["#"][..]);
+    assert!(smells.is_empty());
+}
+
+#[test]
+fn export_declaration_not_detected() {
+    // Shell: `export NAME=N` at file top is commonly used for config values.
+    let ls = lines("export PORT=8443");
+    let kinds = vec![LineKind::Code];
+    let smells = detect_magic_numbers(&ls, &kinds, &["#"][..]);
+    assert!(smells.is_empty());
+}
+
+#[test]
+fn local_r_declaration_not_detected() {
+    // Shell: `local -r NAME=N` — function-scoped readonly constant.
+    let ls = lines("    local -r TIMEOUT=30");
+    let kinds = vec![LineKind::Code];
+    let smells = detect_magic_numbers(&ls, &kinds, &["#"][..]);
+    assert!(smells.is_empty());
+}
+
+#[test]
 fn decl_keyword_not_matched_as_substring() {
     // "deleteable" contains "let " as substring — should NOT be excluded
     let ls = lines("    is_deleteable(3600);");
