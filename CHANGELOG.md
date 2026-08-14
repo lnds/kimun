@@ -1,3 +1,14 @@
+## v0.25.0 (2026-08-14)
+
+### Feat
+
+- **shell**: decompose Bourne/Bash/Zsh files into per-function metrics
+
+### Fix
+
+- **smells**: match debt markers as whole words; keep BUG case-sensitive
+- **smells**: don't flag magic numbers in shell constant declarations
+
 ## v0.24.0 (2026-06-04)
 
 ### Feat
