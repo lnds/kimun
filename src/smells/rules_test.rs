@@ -182,9 +182,7 @@ fn debt_keyword_matched_as_whole_word_with_parens() {
 fn debt_keyword_not_matched_inside_longer_word() {
     // "hackathon", "todolist", "buggy" — all contain a debt keyword as a
     // substring but shouldn't fire the smell.
-    let ls = lines(
-        "# hackathon last week\n# my todolist for the sprint\n# fixed a buggy behavior",
-    );
+    let ls = lines("# hackathon last week\n# my todolist for the sprint\n# fixed a buggy behavior");
     let kinds = vec![LineKind::Comment, LineKind::Comment, LineKind::Comment];
     let smells = detect_todo_debt(&ls, &kinds);
     assert!(

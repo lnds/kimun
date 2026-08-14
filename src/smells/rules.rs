@@ -250,8 +250,8 @@ fn contains_word(haystack: &str, needle: &str) -> bool {
 /// magic_number smell — extracting a literal into a named constant is the
 /// standard fix for this smell, so the linter shouldn't flag the fix itself.
 const DECL_KEYWORDS: &[&str] = &[
-    "const", "let", "static", "final", "val", "#define", "enum",
-    "readonly", "declare", "export", "local",
+    "const", "let", "static", "final", "val", "#define", "enum", "readonly", "declare", "export",
+    "local",
 ];
 
 /// Trivial numeric values that are not considered magic numbers.

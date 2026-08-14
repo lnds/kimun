@@ -45,7 +45,11 @@ const CONTROL_KEYWORDS: &[&str] = &[
 /// reach it; Rust `fn foo() {` and JavaScript `function foo() {` already
 /// match via their markers.
 fn is_function_declaration(trimmed: &str, markers: &dyn FunctionDetectionMarkers) -> bool {
-    if markers.function_markers().iter().any(|m| trimmed.contains(m)) {
+    if markers
+        .function_markers()
+        .iter()
+        .any(|m| trimmed.contains(m))
+    {
         return true;
     }
     is_c_family_function(trimmed)
