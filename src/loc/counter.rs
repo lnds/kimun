@@ -68,7 +68,7 @@ fn classify_line(line: &str, state: &mut State, spec: &LanguageSpec) -> LineKind
     while i < len {
         let result = match &state {
             State::Normal => step_normal(&bytes[i..], spec, bytes, i),
-            State::InString(kind) => step_in_string(&bytes[i..], bytes[i], kind, len, i),
+            State::InString(kind) => step_in_string(&bytes[i..], kind),
             State::InBlockComment(depth) => step_in_block_comment(&bytes[i..], spec, *depth),
             State::InDocAttribute(inner) => step_in_doc_attribute(&bytes[i..], spec, inner),
         };

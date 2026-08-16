@@ -115,14 +115,10 @@ pub(super) fn step_normal(
     full_bytes: &[u8],
     pos: usize,
 ) -> StepResult {
-    // Triple-quote strings (before regular quotes)
-    if spec.triple_quote_strings {
-        if rest.len() >= 3 && &rest[..3] == b"\"\"\"" {
-            return StepResult::code(3, Some(State::InString(StringKind::TripleDouble)));
-        }
-        if spec.single_quote_strings && rest.len() >= 3 && &rest[..3] == b"'''" {
-            return StepResult::code(3, Some(State::InString(StringKind::TripleSingle)));
-        }
+    // String delimiters — triple quotes are matched before the single-byte
+    // ones, so `"""` never reads as an empty string followed by a quote.
+    if let Some((width, kind)) = string_open(rest, spec) {
+        return StepResult::code(width, Some(State::InString(kind)));
     }
 
     // Documentation attribute (e.g. Kaikai `#[doc(`) — before the line comment
@@ -165,66 +161,63 @@ pub(super) fn step_normal(
         return StepResult::line_comment();
     }
 
-    let ch = rest[0];
-
-    // Double-quote string
-    if ch == b'"' {
-        return StepResult::code(1, Some(State::InString(StringKind::Double)));
-    }
-
-    // Single-quote string
-    if spec.single_quote_strings && ch == b'\'' {
-        return StepResult::code(1, Some(State::InString(StringKind::Single)));
-    }
-
     StepResult {
         advance: 1,
         new_state: None,
-        has_code: !ch.is_ascii_whitespace(),
+        has_code: !rest[0].is_ascii_whitespace(),
         has_comment: false,
         break_line: false,
     }
 }
 
-/// Process one byte inside a string literal. Handles escape sequences for
-/// single/double quotes and closing delimiters for triple-quote strings.
-/// All content inside strings is classified as code.
-pub(super) fn step_in_string(
-    rest: &[u8],
-    ch: u8,
-    kind: &StringKind,
-    len: usize,
-    pos: usize,
-) -> StepResult {
+/// The delimiter of a string kind and how many bytes it spans.
+fn string_delimiter(kind: &StringKind) -> &'static [u8] {
     match kind {
-        StringKind::TripleDouble => {
-            if rest.len() >= 3 && &rest[..3] == b"\"\"\"" {
-                return StepResult::code(3, Some(State::Normal));
-            }
-        }
-        StringKind::TripleSingle => {
-            if rest.len() >= 3 && &rest[..3] == b"'''" {
-                return StepResult::code(3, Some(State::Normal));
-            }
-        }
-        StringKind::Double => {
-            if ch == b'\\' {
-                return StepResult::code((pos + 2).min(len) - pos, None);
-            }
-            if ch == b'"' {
-                return StepResult::code(1, Some(State::Normal));
-            }
-        }
-        StringKind::Single => {
-            if ch == b'\\' {
-                return StepResult::code((pos + 2).min(len) - pos, None);
-            }
-            if ch == b'\'' {
-                return StepResult::code(1, Some(State::Normal));
-            }
-        }
+        StringKind::TripleDouble => b"\"\"\"",
+        StringKind::TripleSingle => b"'''",
+        StringKind::Double => b"\"",
+        StringKind::Single => b"'",
     }
-    StepResult::code(1, None)
+}
+
+/// Detect a string literal opening at `rest`, honouring the spec's opt-in
+/// flags. Triple quotes win over single-byte ones so `"""` is not read as an
+/// empty string. Returns the delimiter width and the kind that was opened.
+fn string_open(rest: &[u8], spec: &LanguageSpec) -> Option<(usize, StringKind)> {
+    let candidates = [
+        (spec.triple_quote_strings, StringKind::TripleDouble),
+        (
+            spec.triple_quote_strings && spec.single_quote_strings,
+            StringKind::TripleSingle,
+        ),
+        (true, StringKind::Double),
+        (spec.single_quote_strings, StringKind::Single),
+    ];
+    candidates.into_iter().find_map(|(enabled, kind)| {
+        let delim = string_delimiter(&kind);
+        (enabled && rest.starts_with(delim)).then_some((delim.len(), kind))
+    })
+}
+
+/// Scan one byte inside a string literal: how far to advance, and whether the
+/// literal closes here. Escapes are only honoured in single-byte-delimited
+/// strings; a triple-quoted body ends at its delimiter.
+fn string_scan(rest: &[u8], kind: &StringKind) -> (usize, bool) {
+    let delim = string_delimiter(kind);
+    if rest.starts_with(delim) {
+        return (delim.len(), true);
+    }
+    if delim.len() == 1 && rest[0] == b'\\' {
+        return (rest.len().min(2), false);
+    }
+    (1, false)
+}
+
+/// Process one byte inside a string literal. All content inside strings is
+/// classified as code.
+pub(super) fn step_in_string(rest: &[u8], kind: &StringKind) -> StepResult {
+    let (advance, closed) = string_scan(rest, kind);
+    StepResult::code(advance, closed.then_some(State::Normal))
 }
 
 /// Process one byte inside a documentation attribute. The body is
@@ -236,48 +229,17 @@ pub(super) fn step_in_doc_attribute(
     spec: &LanguageSpec,
     inner: &Option<StringKind>,
 ) -> StepResult {
-    let close = spec.doc_attribute.map(|(_, c)| c).unwrap_or(")]");
-
     if let Some(kind) = inner {
-        let closed = match kind {
-            StringKind::TripleDouble => rest.starts_with(b"\"\"\""),
-            StringKind::TripleSingle => rest.starts_with(b"'''"),
-            StringKind::Double => rest[0] == b'"',
-            StringKind::Single => rest[0] == b'\'',
-        };
-        let width = match kind {
-            StringKind::TripleDouble | StringKind::TripleSingle => 3,
-            _ => 1,
-        };
-        if closed {
-            return StepResult::comment(width, Some(State::InDocAttribute(None)));
-        }
-        if rest[0] == b'\\' && !matches!(kind, StringKind::TripleDouble | StringKind::TripleSingle)
-        {
-            return StepResult::comment(rest.len().min(2), None);
-        }
-        return StepResult::comment(1, None);
+        let (advance, closed) = string_scan(rest, kind);
+        return StepResult::comment(advance, closed.then_some(State::InDocAttribute(None)));
     }
 
+    let close = spec.doc_attribute.map(|(_, c)| c).unwrap_or(")]");
     if bytes_start_with(rest, close) {
         return StepResult::comment(close.len(), Some(State::Normal));
     }
 
-    let opened = match rest[0] {
-        b'"' if spec.triple_quote_strings && rest.starts_with(b"\"\"\"") => {
-            Some((3, StringKind::TripleDouble))
-        }
-        b'"' => Some((1, StringKind::Double)),
-        b'\'' if spec.single_quote_strings => {
-            if spec.triple_quote_strings && rest.starts_with(b"'''") {
-                Some((3, StringKind::TripleSingle))
-            } else {
-                Some((1, StringKind::Single))
-            }
-        }
-        _ => None,
-    };
-    match opened {
+    match string_open(rest, spec) {
         Some((width, kind)) => StepResult::comment(width, Some(State::InDocAttribute(Some(kind)))),
         None => StepResult::comment(1, None),
     }
