@@ -15,6 +15,7 @@ use std::path::Path;
 use crate::cli::OutputMode;
 use crate::loc::counter::LineKind;
 use crate::loc::language::LanguageSpec;
+use crate::string_mask::demote_multi_line_strings;
 use crate::util::read_and_classify;
 use crate::walk::WalkConfig;
 use analyzer::analyze;
@@ -31,7 +32,8 @@ pub(crate) fn analyze_content(
     spec: &LanguageSpec,
 ) -> Option<analyzer::FileComplexity> {
     let cm = markers_for(spec.name)?;
-    analyze(lines, kinds, cm)
+    let kinds = demote_multi_line_strings(lines, kinds, spec);
+    analyze(lines, &kinds, cm)
 }
 
 /// Read a file from disk, classify lines, detect functions, and compute
@@ -50,6 +52,7 @@ pub(crate) fn analyze_file(
         None => return Ok(None),
     };
 
+    let kinds = demote_multi_line_strings(&lines, &kinds, spec);
     let fc = match analyze(&lines, &kinds, cm) {
         Some(fc) => fc,
         None => return Ok(None),

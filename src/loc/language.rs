@@ -39,6 +39,10 @@ pub struct LanguageSpec {
     pub triple_quote_strings: bool,
     /// Pragma delimiters that override block comment detection (Haskell).
     pub pragma: Option<(&'static str, &'static str)>,
+    /// Documentation attribute delimiters, e.g. Kaikai's `#[doc(` … `)]`.
+    /// Their body is documentation, so it is classified as comment even
+    /// though it is written as a string literal.
+    pub doc_attribute: Option<(&'static str, &'static str)>,
     /// Shebang interpreter names for extensionless script detection.
     pub shebangs: &'static [&'static str],
 }
@@ -109,6 +113,7 @@ pub fn languages() -> &'static [LanguageSpec] {
             filenames: &[],
             line_comments: &["--"],
             line_comment_not_before: "!#$%&*+./<=>?@\\^|~",
+            doc_attribute: None,
             block_comment: Some(("{-", "-}")),
             nested_block_comments: true,
             single_quote_strings: false,
@@ -142,8 +147,23 @@ pub fn languages() -> &'static [LanguageSpec] {
               line: ";"),
         lang_spec!("Zig", ext: ["zig"],
               line: "//"),
-        lang_spec!("Kaikai", ext: ["kai"],
-              line: "#", tq: true),
+        // Kaikai is defined manually because it needs two fields the macro
+        // does not carry: `#[` opens an attribute (not a `#` comment), and
+        // `#[doc( ... )]` wraps documentation that must not count as code.
+        LanguageSpec {
+            name: "Kaikai",
+            extensions: &["kai"],
+            filenames: &[],
+            line_comments: &["#"],
+            line_comment_not_before: "[",
+            block_comment: None,
+            nested_block_comments: false,
+            single_quote_strings: false,
+            triple_quote_strings: true,
+            pragma: None,
+            doc_attribute: Some(("#[doc(", ")]")),
+            shebangs: &[],
+        },
         lang_spec!("Objective-C", ext: ["m", "mm"],
               line: "//", block: "/*", "*/"),
         lang_spec!("OCaml", ext: ["ml", "mli"],

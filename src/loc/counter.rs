@@ -2,7 +2,9 @@ use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::path::Path;
 
-use super::fsm::{State, StringKind, step_in_block_comment, step_in_string, step_normal};
+use super::fsm::{
+    State, StringKind, step_in_block_comment, step_in_doc_attribute, step_in_string, step_normal,
+};
 use super::language::LanguageSpec;
 use crate::util::is_binary_reader;
 
@@ -58,7 +60,7 @@ pub fn count_reader<R: BufRead>(reader: R, spec: &LanguageSpec) -> FileStats {
 /// Updates `state` in place and returns the line classification.
 fn classify_line(line: &str, state: &mut State, spec: &LanguageSpec) -> LineKind {
     let mut has_code = matches!(state, State::InString(_));
-    let mut has_comment = matches!(state, State::InBlockComment(_));
+    let mut has_comment = matches!(state, State::InBlockComment(_) | State::InDocAttribute(_));
     let bytes = line.as_bytes();
     let len = bytes.len();
     let mut i = 0;
@@ -66,8 +68,9 @@ fn classify_line(line: &str, state: &mut State, spec: &LanguageSpec) -> LineKind
     while i < len {
         let result = match &state {
             State::Normal => step_normal(&bytes[i..], spec, bytes, i),
-            State::InString(kind) => step_in_string(&bytes[i..], bytes[i], kind, len, i),
+            State::InString(kind) => step_in_string(&bytes[i..], kind),
             State::InBlockComment(depth) => step_in_block_comment(&bytes[i..], spec, *depth),
+            State::InDocAttribute(inner) => step_in_doc_attribute(&bytes[i..], spec, inner),
         };
         has_code |= result.has_code;
         has_comment |= result.has_comment;
@@ -86,6 +89,13 @@ fn classify_line(line: &str, state: &mut State, spec: &LanguageSpec) -> LineKind
         State::InString(StringKind::Double | StringKind::Single)
     ) {
         *state = State::Normal;
+    }
+    // Same rule inside a doc attribute: a single-line string cannot span lines.
+    if matches!(
+        state,
+        State::InDocAttribute(Some(StringKind::Double | StringKind::Single))
+    ) {
+        *state = State::InDocAttribute(None);
     }
 
     if has_code {
@@ -119,7 +129,9 @@ fn process_lines<R: BufRead>(reader: R, spec: &LanguageSpec) -> Vec<LineKind> {
             }
         }
 
-        if line.trim().is_empty() && !matches!(state, State::InBlockComment(_)) {
+        if line.trim().is_empty()
+            && !matches!(state, State::InBlockComment(_) | State::InDocAttribute(_))
+        {
             kinds.push(LineKind::Blank);
             continue;
         }

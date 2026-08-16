@@ -7,7 +7,6 @@
 mod analyzer;
 pub(crate) mod report;
 mod rules;
-mod string_mask;
 mod tokenizer;
 
 use std::error::Error;
@@ -16,11 +15,11 @@ use std::path::Path;
 use crate::loc::counter::LineKind;
 use crate::loc::language::LanguageSpec;
 use crate::report_helpers;
+use crate::string_mask::multi_line_string_mask;
 use crate::util::read_and_classify;
 use crate::walk::WalkConfig;
 use analyzer::compute;
 use report::{FileHalsteadMetrics, print_json, print_report, print_short, print_terse};
-use string_mask::multi_line_string_mask;
 use tokenizer::{count_tokens, rules_for};
 
 /// Analyze pre-read content (avoids re-reading the file).
