@@ -128,6 +128,43 @@ fn mask_triple_opens_and_closes_same_line() {
 }
 
 #[test]
+fn demote_turns_string_interior_into_blank() {
+    let spec = detect(std::path::Path::new("test.kai")).unwrap();
+    let lines: Vec<String> = vec![
+        "fn banner() : String =",
+        "  \"\"\"",
+        "  if you match this",
+        "  \"\"\"",
+    ]
+    .into_iter()
+    .map(String::from)
+    .collect();
+    let kinds = vec![LineKind::Code; 4];
+    let demoted = demote_multi_line_strings(&lines, &kinds, spec);
+    assert_eq!(
+        demoted,
+        vec![
+            LineKind::Code,
+            LineKind::Code,
+            LineKind::Blank,
+            LineKind::Code
+        ]
+    );
+}
+
+#[test]
+fn demote_leaves_non_triple_languages_untouched() {
+    let spec = detect(std::path::Path::new("test.rs")).unwrap();
+    let lines: Vec<String> = vec!["let x = 1;", "let y = 2;"]
+        .into_iter()
+        .map(String::from)
+        .collect();
+    let kinds = vec![LineKind::Code, LineKind::Comment];
+    let demoted = demote_multi_line_strings(&lines, &kinds, spec);
+    assert_eq!(demoted, kinds);
+}
+
+#[test]
 fn mask_empty_lines() {
     let spec = detect(std::path::Path::new("test.py")).unwrap();
     let mask = multi_line_string_mask(&[], spec);

@@ -1,6 +1,7 @@
+use crate::loc::counter::LineKind;
 use crate::loc::language::LanguageSpec;
 
-/// For languages with triple-quoted strings (Python), mark interior lines
+/// For languages with triple-quoted strings (Python, Kaikai), mark interior lines
 /// of multi-line strings so the tokenizer can skip them.
 /// Only marks lines that both start AND end inside a triple-quoted string
 /// (true interior lines). Opening/closing lines are not masked — their
@@ -17,6 +18,33 @@ pub fn multi_line_string_mask(lines: &[String], spec: &LanguageSpec) -> Vec<bool
         mask[idx] = started_in_string && in_triple.is_some();
     }
     mask
+}
+
+/// Demote the interior lines of multi-line strings from `Code` to `Blank`.
+///
+/// Prose and data embedded in a triple-quoted literal are not control flow:
+/// counting them inflates complexity and smell metrics. Analyzers that select
+/// `LineKind::Code` call this first so those lines drop out.
+pub fn demote_multi_line_strings(
+    lines: &[String],
+    kinds: &[LineKind],
+    spec: &LanguageSpec,
+) -> Vec<LineKind> {
+    if !spec.triple_quote_strings {
+        return kinds.to_vec();
+    }
+    let mask = multi_line_string_mask(lines, spec);
+    kinds
+        .iter()
+        .enumerate()
+        .map(|(i, k)| {
+            if mask.get(i).copied().unwrap_or(false) {
+                LineKind::Blank
+            } else {
+                *k
+            }
+        })
+        .collect()
 }
 
 /// Advance past a character while inside a triple-quoted string.

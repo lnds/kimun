@@ -26,13 +26,14 @@ CLI tool for code metrics: lines of code (like `cloc`), duplicate detection, Hal
 
 - **`language.rs`** — `LanguageSpec` struct + `lang!` macro defining 40+ languages. Detection by filename, extension, or shebang. Each spec declares: line comment markers, block comment delimiters, nesting support, string delimiter rules, pragma syntax, and exception characters for comment detection.
 
-- **`counter.rs`** — FSM with states `Normal`, `InString(StringKind)`, `InBlockComment(depth)`. Processes files line-by-line via `BufReader`, classifying each line as blank/comment/code. Mixed lines (code + comment) count as code. Key design decisions:
+- **`counter.rs`** — FSM with states `Normal`, `InString(StringKind)`, `InBlockComment(depth)`, `InDocAttribute(Option<StringKind>)`. Processes files line-by-line via `BufReader`, classifying each line as blank/comment/code. Mixed lines (code + comment) count as code. Key design decisions:
   - Only `"` triggers string mode (not `'`) unless `single_quote_strings` is set — avoids Rust lifetime false positives
   - `InString` resets at line end for single/double quotes but persists for triple-quotes (Python)
   - Block comments track nesting depth when `nested_block_comments` is true
   - Pragmas (Haskell `{-# ... #-}`) are checked before block comments and counted as code
   - Shebang lines (`#!`) are always counted as code
-  - `line_comment_not_before` field prevents `-->` from matching `--` in Haskell
+  - `line_comment_not_before` field prevents `-->` from matching `--` in Haskell, and `#[` from matching `#` in Kaikai
+  - `doc_attribute` delimiters (Kaikai `#[doc(` … `)]`) classify the whole attribute as comment; the state tracks the enclosed string literal so a `)]` inside the doc text does not close it early
 
 - **`report.rs`** — Formats results as a table sorted by code lines descending, with totals.
 
@@ -47,7 +48,7 @@ lang!("LangName", ext: ["ext1", "ext2"],
       shebangs: ["interpreter"]),
 ```
 
-Optional flags: `nested: true`, `sq: true` (single-quote strings), `tq: true` (triple-quote strings), `pragma: "{-#", "#-}"`. Use `lines: ["marker1", "marker2"]` for multiple line comment markers. For languages needing `line_comment_not_before`, write the `LanguageSpec` struct directly (see Haskell).
+Optional flags: `nested: true`, `sq: true` (single-quote strings), `tq: true` (triple-quote strings), `pragma: "{-#", "#-}"`. Use `lines: ["marker1", "marker2"]` for multiple line comment markers. For languages needing `line_comment_not_before` or `doc_attribute`, write the `LanguageSpec` struct directly (see Haskell and Kaikai).
 
 ## Conventions
 
@@ -115,6 +116,15 @@ Code churn — pure change frequency per source file. Invoked via `km churn`.
 - **`analyzer.rs`** — `ChurnLevel` enum (High/Medium/Low), `FileChurn` struct, rate computed as commits ÷ active months (minimum 1 month).
 - **`report.rs`** — Table and JSON output formatters.
 - **`mod.rs`** — Orchestration: opens git repo, counts commits per file, computes rate, sorts/filters. Uses `util::parse_since` for `--since` flag.
+
+### Shared: `src/string_mask.rs`
+
+`multi_line_string_mask` marks the interior lines of triple-quoted strings;
+`demote_multi_line_strings` turns those lines into `LineKind::Blank` so the
+analyzers that select `LineKind::Code` skip them. Used by `hal`, `cycom`,
+`cogcom`, and `smells` — prose or data inside a multi-line literal must not
+count as control flow. `loc` is deliberately left alone: those lines are still
+code for line counting.
 
 ### Module structure: `src/smells/`
 

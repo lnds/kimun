@@ -20,6 +20,9 @@
 /// - `sq: true` — treat single quotes as string delimiters
 /// - `tq: true` — enable triple-quote string support
 /// - `shebangs: [...]` — shebang interpreter names
+///
+/// Languages needing `line_comment_not_before` or `doc_attribute` are written
+/// as `LanguageSpec` struct literals instead (see Haskell and Kaikai).
 macro_rules! lang_spec {
     ($name:expr, ext: [$($ext:expr),*], files: [$($f:expr),*], $($rest:tt)*) => {
         lang_spec!(@build $name, &[$($ext),*], &[$($f),*], $($rest)*)
@@ -47,6 +50,7 @@ macro_rules! lang_spec {
             single_quote_strings: false $(|| $sq)?,
             triple_quote_strings: false $(|| $tq)?,
             pragma: Some(($po, $pc)),
+            doc_attribute: None,
             shebangs: &[$($($sh),*)?],
         }
     };
@@ -69,6 +73,7 @@ macro_rules! lang_spec {
             single_quote_strings: false $(|| $sq)?,
             triple_quote_strings: false $(|| $tq)?,
             pragma: None,
+            doc_attribute: None,
             shebangs: &[$($($sh),*)?],
         }
     };
@@ -91,6 +96,7 @@ macro_rules! lang_spec {
             single_quote_strings: false $(|| $sq)?,
             triple_quote_strings: false $(|| $tq)?,
             pragma: None,
+            doc_attribute: None,
             shebangs: &[$($($sh),*)?],
         }
     };
@@ -114,6 +120,7 @@ macro_rules! lang_spec {
             single_quote_strings: false $(|| $sq)?,
             triple_quote_strings: false $(|| $tq)?,
             pragma: Some(($po, $pc)),
+            doc_attribute: None,
             shebangs: &[$($($sh),*)?],
         }
     };
@@ -136,6 +143,7 @@ macro_rules! lang_spec {
             single_quote_strings: false $(|| $sq)?,
             triple_quote_strings: false $(|| $tq)?,
             pragma: None,
+            doc_attribute: None,
             shebangs: &[$($($sh),*)?],
         }
     };
@@ -155,6 +163,7 @@ macro_rules! lang_spec {
             single_quote_strings: false,
             triple_quote_strings: false,
             pragma: None,
+            doc_attribute: None,
             shebangs: &[$($($sh),*)?],
         }
     };
@@ -175,6 +184,7 @@ macro_rules! lang_spec {
             single_quote_strings: false $(|| $sq)?,
             triple_quote_strings: false,
             pragma: None,
+            doc_attribute: None,
             shebangs: &[$($($sh),*)?],
         }
     };

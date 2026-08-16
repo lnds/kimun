@@ -973,6 +973,17 @@ All sections and fields are optional — omit any you don't need. A fully docume
 | Zig | `.zig` |
 | Zsh | `.zsh` |
 
+### Language-specific notes
+
+- **Kaikai** — `#[...]` opens an attribute, not a `#` comment, so attributes count
+  as code. Documentation attributes (`#[doc("...")]`, including the multi-line
+  `#[doc("""...""")]` form) count as comments and are excluded from the
+  complexity, Halstead, and smell analyses.
+- **Interior lines of multi-line strings** (Kaikai and Python triple-quoted
+  literals) count as code for `km loc`, but are excluded from cyclomatic,
+  cognitive, Halstead, and smell analyses: prose and embedded data are not
+  control flow.
+
 ## Development
 
 ```bash

@@ -24,6 +24,10 @@ pub(super) enum State {
     Normal,
     InString(StringKind),
     InBlockComment(usize), // nesting depth
+    /// Inside a documentation attribute (Kaikai `#[doc( … )]`). The payload
+    /// tracks the string literal being read, so that the closing `)]` is only
+    /// recognised outside a string.
+    InDocAttribute(Option<StringKind>),
 }
 
 /// Result of processing one FSM step: how many bytes to advance, optional
@@ -121,6 +125,14 @@ pub(super) fn step_normal(
         }
     }
 
+    // Documentation attribute (e.g. Kaikai `#[doc(`) — before the line comment
+    // check, since the marker starts with the `#` comment character.
+    if let Some((open, _)) = spec.doc_attribute
+        && bytes_start_with(rest, open)
+    {
+        return StepResult::comment(open.len(), Some(State::InDocAttribute(None)));
+    }
+
     // Pragma (e.g. Haskell {-# ... #-}) — must check before block comment
     if let Some((popen, pclose)) = spec.pragma
         && bytes_start_with(rest, popen)
@@ -213,6 +225,62 @@ pub(super) fn step_in_string(
         }
     }
     StepResult::code(1, None)
+}
+
+/// Process one byte inside a documentation attribute. The body is
+/// documentation, so every byte counts as comment. String literals are
+/// tracked because the closing delimiter (`)]`) is only meaningful outside
+/// a string — a doc text may well contain `)]` itself.
+pub(super) fn step_in_doc_attribute(
+    rest: &[u8],
+    spec: &LanguageSpec,
+    inner: &Option<StringKind>,
+) -> StepResult {
+    let close = spec.doc_attribute.map(|(_, c)| c).unwrap_or(")]");
+
+    if let Some(kind) = inner {
+        let closed = match kind {
+            StringKind::TripleDouble => rest.starts_with(b"\"\"\""),
+            StringKind::TripleSingle => rest.starts_with(b"'''"),
+            StringKind::Double => rest[0] == b'"',
+            StringKind::Single => rest[0] == b'\'',
+        };
+        let width = match kind {
+            StringKind::TripleDouble | StringKind::TripleSingle => 3,
+            _ => 1,
+        };
+        if closed {
+            return StepResult::comment(width, Some(State::InDocAttribute(None)));
+        }
+        if rest[0] == b'\\' && !matches!(kind, StringKind::TripleDouble | StringKind::TripleSingle)
+        {
+            return StepResult::comment(rest.len().min(2), None);
+        }
+        return StepResult::comment(1, None);
+    }
+
+    if bytes_start_with(rest, close) {
+        return StepResult::comment(close.len(), Some(State::Normal));
+    }
+
+    let opened = match rest[0] {
+        b'"' if spec.triple_quote_strings && rest.starts_with(b"\"\"\"") => {
+            Some((3, StringKind::TripleDouble))
+        }
+        b'"' => Some((1, StringKind::Double)),
+        b'\'' if spec.single_quote_strings => {
+            if spec.triple_quote_strings && rest.starts_with(b"'''") {
+                Some((3, StringKind::TripleSingle))
+            } else {
+                Some((1, StringKind::Single))
+            }
+        }
+        _ => None,
+    };
+    match opened {
+        Some((width, kind)) => StepResult::comment(width, Some(State::InDocAttribute(Some(kind)))),
+        None => StepResult::comment(1, None),
+    }
 }
 
 /// Process one byte inside a block comment. Tracks nesting depth when

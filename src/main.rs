@@ -59,6 +59,8 @@ mod report_helpers;
 mod score;
 /// Code smell detection (long functions, magic numbers, etc.).
 mod smells;
+/// Multi-line string interior detection, shared by the metric analyzers.
+mod string_mask;
 /// Temporal coupling analysis (co-changing files in git history).
 mod tc;
 /// Shared utilities (string masking, file reading, since parsing).

@@ -13,6 +13,7 @@ fn spec_c_like() -> LanguageSpec {
         single_quote_strings: false,
         triple_quote_strings: false,
         pragma: None,
+        doc_attribute: None,
         shebangs: &[],
     }
 }
@@ -29,6 +30,7 @@ fn spec_rust() -> LanguageSpec {
         single_quote_strings: false,
         triple_quote_strings: false,
         pragma: None,
+        doc_attribute: None,
         shebangs: &[],
     }
 }
@@ -45,6 +47,7 @@ fn spec_python() -> LanguageSpec {
         single_quote_strings: true,
         triple_quote_strings: true,
         pragma: None,
+        doc_attribute: None,
         shebangs: &["python", "python3"],
     }
 }
@@ -61,6 +64,7 @@ fn spec_js() -> LanguageSpec {
         single_quote_strings: true,
         triple_quote_strings: false,
         pragma: None,
+        doc_attribute: None,
         shebangs: &["node"],
     }
 }
@@ -77,6 +81,7 @@ fn spec_haskell() -> LanguageSpec {
         single_quote_strings: false,
         triple_quote_strings: false,
         pragma: Some(("{-#", "#-}")),
+        doc_attribute: None,
         shebangs: &[],
     }
 }
@@ -87,12 +92,13 @@ fn spec_kaikai() -> LanguageSpec {
         extensions: &["kai"],
         filenames: &[],
         line_comments: &["#"],
-        line_comment_not_before: "",
+        line_comment_not_before: "[",
         block_comment: None,
         nested_block_comments: false,
         single_quote_strings: false,
         triple_quote_strings: true,
         pragma: None,
+        doc_attribute: Some(("#[doc(", ")]")),
         shebangs: &[],
     }
 }
@@ -287,6 +293,52 @@ fn kaikai_hash_inside_triple_quote_not_comment() {
     let stats = count(&spec_kaikai(), "let m = \"\"\"# not a comment\"\"\"\n");
     assert_eq!(stats.code, 1);
     assert_eq!(stats.comment, 0);
+}
+
+#[test]
+fn kaikai_attribute_is_code() {
+    // `#[` opens an attribute, so it must not be read as a `#` comment
+    let stats = count(&spec_kaikai(), "#[constructor]\nfn make() : Int = 1\n");
+    assert_eq!(stats.code, 2);
+    assert_eq!(stats.comment, 0);
+}
+
+#[test]
+fn kaikai_single_line_doc_attribute_is_comment() {
+    let stats = count(
+        &spec_kaikai(),
+        "#[doc(\"Adds two integers.\")]\nfn add(a: Int, b: Int) : Int = a + b\n",
+    );
+    assert_eq!(stats.comment, 1);
+    assert_eq!(stats.code, 1);
+}
+
+#[test]
+fn kaikai_multi_line_doc_attribute_is_comment() {
+    let stats = count(
+        &spec_kaikai(),
+        "#[doc(\"\"\"\nSummary line.\nfn not_really_code() : Int = 42\n\"\"\")]\nfn f() : Int = 1\n",
+    );
+    assert_eq!(stats.comment, 4);
+    assert_eq!(stats.code, 1);
+}
+
+#[test]
+fn kaikai_doc_attribute_body_can_contain_closing_delimiter() {
+    // `)]` inside the doc text belongs to the string, it does not close the attribute
+    let stats = count(
+        &spec_kaikai(),
+        "#[doc(\"\"\"\nsee list(xs)] for details\n\"\"\")]\nfn f() : Int = 1\n",
+    );
+    assert_eq!(stats.comment, 3);
+    assert_eq!(stats.code, 1);
+}
+
+#[test]
+fn kaikai_doc_attribute_body_hash_is_comment() {
+    let stats = count(&spec_kaikai(), "#[doc(\"count #{n} items\")]\n");
+    assert_eq!(stats.comment, 1);
+    assert_eq!(stats.code, 0);
 }
 
 // --- Haskell pragmas ---
@@ -486,6 +538,7 @@ fn spec_no_comments() -> LanguageSpec {
         single_quote_strings: false,
         triple_quote_strings: false,
         pragma: None,
+        doc_attribute: None,
         shebangs: &[],
     }
 }
@@ -509,6 +562,7 @@ fn spec_batch() -> LanguageSpec {
         single_quote_strings: false,
         triple_quote_strings: false,
         pragma: None,
+        doc_attribute: None,
         shebangs: &[],
     }
 }
@@ -535,6 +589,7 @@ fn spec_heex() -> LanguageSpec {
         single_quote_strings: true,
         triple_quote_strings: false,
         pragma: None,
+        doc_attribute: None,
         shebangs: &[],
     }
 }
@@ -551,6 +606,7 @@ fn spec_po() -> LanguageSpec {
         single_quote_strings: false,
         triple_quote_strings: false,
         pragma: None,
+        doc_attribute: None,
         shebangs: &[],
     }
 }
