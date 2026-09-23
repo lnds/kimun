@@ -81,10 +81,13 @@ pub fn run(
 ) -> Result<(), Box<dyn Error>> {
     let mut results = cfg.collect_analysis(analyze_file);
 
-    // Filter by min_complexity
-    if min_complexity > 1 {
-        results.retain(|f| f.max_complexity >= min_complexity);
-    }
+    // Cognitive scores start at 0, so the default of 1 must not hide anything.
+    let threshold = if min_complexity > 1 {
+        min_complexity
+    } else {
+        0
+    };
+    results.retain(|f| f.max_complexity >= threshold);
 
     // Sort by chosen metric descending
     match sort_by {
@@ -106,7 +109,7 @@ pub fn run(
         OutputMode::Terse => print_terse(&results),
         OutputMode::Github => print_github(&results, min_complexity),
         OutputMode::Codeclimate => print_codeclimate(&results, min_complexity)?,
-        OutputMode::Table if per_function => print_per_function(&results),
+        OutputMode::Table if per_function => print_per_function(&results, threshold),
         OutputMode::Table => print_report(&results),
     }
 

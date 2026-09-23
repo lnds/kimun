@@ -115,8 +115,12 @@ impl PerFunctionFile for FileCycomMetrics {
 
 /// Print per-function complexity breakdown grouped by file, showing
 /// each function's name, complexity value, and level classification.
-pub fn print_per_function(files: &[FileCycomMetrics]) {
-    report_helpers::print_per_function_breakdown("Cyclomatic Complexity (per function)", files);
+pub fn print_per_function(files: &[FileCycomMetrics], min_complexity: usize) {
+    report_helpers::print_per_function_breakdown(
+        "Cyclomatic Complexity (per function)",
+        files,
+        min_complexity,
+    );
 }
 
 /// JSON-serializable representation of a single function's complexity.

@@ -35,7 +35,7 @@ SonarQube default threshold: 15. Clippy default: 25.
 Examples:
   km cogcom                           # cognitive complexity
   km cogcom --per-function            # per-function breakdown
-  km cogcom --min-complexity 10       # only complex functions
+  km cogcom --min-complexity 10       # files with a function scoring 10+
   km cogcom --sort-by max             # sort by worst function
   km cogcom --format json             # machine-readable output
   km cogcom --format short            # compact key:value summary

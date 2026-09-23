@@ -31,13 +31,13 @@ fn print_report_with_files() {
 
 #[test]
 fn print_per_function_empty() {
-    print_per_function(&[]);
+    print_per_function(&[], 1);
 }
 
 #[test]
 fn print_per_function_with_files() {
     let files = vec![make_metrics("src/main.rs", 5, 10)];
-    print_per_function(&files);
+    print_per_function(&files, 1);
 }
 
 #[test]

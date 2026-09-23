@@ -107,7 +107,7 @@ pub fn run(
         OutputMode::Terse => print_terse(&results),
         OutputMode::Github => print_github(&results, min_complexity),
         OutputMode::Codeclimate => print_codeclimate(&results, min_complexity)?,
-        OutputMode::Table if per_function => print_per_function(&results),
+        OutputMode::Table if per_function => print_per_function(&results, min_complexity),
         OutputMode::Table => print_report(&results),
     }
 
