@@ -213,7 +213,7 @@ pub enum Commands {
         #[command(flatten)]
         common: CommonArgs,
 
-        /// Minimum max-complexity to include a file (default: 1)
+        /// Skip files whose most complex function is below N; with --per-function, also hide functions below N (default: 1)
         #[arg(long, default_value = "1")]
         min_complexity: usize,
 
@@ -236,7 +236,7 @@ pub enum Commands {
         #[command(flatten)]
         common: CommonArgs,
 
-        /// Minimum max-complexity to include a file (default: 1)
+        /// Skip files whose most complex function is below N; with --per-function, also hide functions below N (default: 1)
         #[arg(long, default_value = "1")]
         min_complexity: usize,
 

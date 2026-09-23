@@ -37,3 +37,39 @@ fn print_json_stdout_works() {
     let data = vec![1, 2, 3];
     print_json_stdout(&data).unwrap();
 }
+
+struct Row(&'static str, usize);
+
+impl PerFunctionRow for Row {
+    fn name(&self) -> &str {
+        self.0
+    }
+    fn start_line(&self) -> usize {
+        1
+    }
+    fn complexity(&self) -> usize {
+        self.1
+    }
+    fn level_str(&self) -> &str {
+        ""
+    }
+}
+
+#[test]
+fn rows_at_least_keeps_only_rows_meeting_threshold() {
+    let rows = [Row("trivial", 0), Row("medium", 6), Row("nasty", 23)];
+    let names: Vec<&str> = rows_at_least(&rows, 6).iter().map(|r| r.name()).collect();
+    assert_eq!(names, ["medium", "nasty"]);
+}
+
+#[test]
+fn rows_at_least_zero_keeps_everything() {
+    let rows = [Row("trivial", 0), Row("nasty", 23)];
+    assert_eq!(rows_at_least(&rows, 0).len(), 2);
+}
+
+#[test]
+fn rows_at_least_above_max_keeps_nothing() {
+    let rows = [Row("trivial", 0), Row("nasty", 23)];
+    assert!(rows_at_least(&rows, 24).is_empty());
+}

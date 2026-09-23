@@ -55,12 +55,12 @@ fn print_report_empty() {
 
 #[test]
 fn print_per_function_does_not_panic() {
-    print_per_function(&sample_files());
+    print_per_function(&sample_files(), 1);
 }
 
 #[test]
 fn print_per_function_empty() {
-    print_per_function(&[]);
+    print_per_function(&[], 1);
 }
 
 #[test]

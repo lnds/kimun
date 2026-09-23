@@ -18,10 +18,21 @@ pub trait PerFunctionFile {
     fn rows(&self) -> &[Self::Row];
 }
 
-/// Print a per-function complexity breakdown grouped by file.
+fn rows_at_least<R: PerFunctionRow>(rows: &[R], min_complexity: usize) -> Vec<&R> {
+    rows.iter()
+        .filter(|r| r.complexity() >= min_complexity)
+        .collect()
+}
+
+/// Print a per-function complexity breakdown grouped by file, listing only
+/// functions whose complexity is at least `min_complexity`.
 ///
 /// `title` is printed as the report header (e.g. "Cyclomatic Complexity (per function)").
-pub fn print_per_function_breakdown<F: PerFunctionFile>(title: &str, files: &[F]) {
+pub fn print_per_function_breakdown<F: PerFunctionFile>(
+    title: &str,
+    files: &[F],
+    min_complexity: usize,
+) {
     if files.is_empty() {
         println!("No recognized source files found.");
         return;
@@ -35,7 +46,7 @@ pub fn print_per_function_breakdown<F: PerFunctionFile>(title: &str, files: &[F]
         println!();
         println!("{}:", f.path_str());
 
-        let rows = f.rows();
+        let rows = rows_at_least(f.rows(), min_complexity);
         let max_name_len = rows
             .iter()
             .map(|r| display_width(r.name()))

@@ -107,8 +107,12 @@ impl PerFunctionFile for FileCogcomMetrics {
 }
 
 /// Print per-function cognitive complexity breakdown grouped by file.
-pub fn print_per_function(files: &[FileCogcomMetrics]) {
-    report_helpers::print_per_function_breakdown("Cognitive Complexity (per function)", files);
+pub fn print_per_function(files: &[FileCogcomMetrics], min_complexity: usize) {
+    report_helpers::print_per_function_breakdown(
+        "Cognitive Complexity (per function)",
+        files,
+        min_complexity,
+    );
 }
 
 /// JSON-serializable representation of a single function's complexity.
