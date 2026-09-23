@@ -1,3 +1,14 @@
+## v0.25.1 (2026-09-23)
+
+### Fix
+
+- filter --per-function rows by --min-complexity
+- **kaikai**: treat #[doc] as comment and skip multi-line string interiors
+
+### Refactor
+
+- **loc**: factor out string scanning and collapse the lang_spec arms
+
 ## v0.25.0 (2026-08-14)
 
 ### Feat
