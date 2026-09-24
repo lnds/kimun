@@ -6,6 +6,7 @@
 use serde::Serialize;
 
 use super::analyzer::{Grade, ProjectScore};
+use super::changed::ChangedScope;
 
 /// Numeric delta: before, after, and signed difference.
 #[derive(Debug, Clone, Serialize)]
@@ -39,6 +40,8 @@ pub struct ScoreDiff {
     pub loc_before: usize,
     pub loc_after: usize,
     pub dimensions: Vec<DimensionDelta>,
+    /// Per-file breakdown, present only under `--gate-scope changed`.
+    pub changed: Option<ChangedScope>,
 }
 
 /// Compare two `ProjectScore` snapshots and produce a `ScoreDiff`.
@@ -92,6 +95,7 @@ pub fn compute_diff(git_ref: &str, before: &ProjectScore, after: &ProjectScore) 
         loc_before: before.total_loc,
         loc_after: after.total_loc,
         dimensions,
+        changed: None,
     }
 }
 

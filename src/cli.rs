@@ -45,6 +45,26 @@ pub enum OutputMode {
     Codeclimate,
 }
 
+/// What `km score --fail-if-worse` compares against the ref.
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug, ValueEnum)]
+pub enum GateScope {
+    /// The project's aggregate score
+    #[default]
+    Project,
+    /// Modified files that end below the project score, plus duplicated lines
+    Changed,
+}
+
+impl GateScope {
+    /// A single file's score moves far more per edited line than the project's.
+    pub fn default_tolerance(self) -> f64 {
+        match self {
+            Self::Project => 0.01,
+            Self::Changed => 0.5,
+        }
+    }
+}
+
 /// Top-level CLI parser with a single subcommand selector.
 #[derive(Parser)]
 #[command(name = "km", version, about = "Kimün — code metrics tools")]
@@ -479,11 +499,18 @@ pub enum Commands {
         #[arg(long, requires = "trend")]
         fail_if_worse: bool,
 
-        /// Score drop allowed by --fail-if-worse before it fails (default: 0.01).
+        /// Score drop allowed by --fail-if-worse before it fails
+        /// (default: 0.01 with --gate-scope project, 0.5 with --gate-scope changed).
         /// Example: --fail-if-worse --gate-tolerance 0.05
-        #[arg(long, value_name = "POINTS", default_value = "0.01",
+        #[arg(long, value_name = "POINTS",
               value_parser = parse_non_negative_f64, requires = "fail_if_worse")]
-        gate_tolerance: f64,
+        gate_tolerance: Option<f64>,
+
+        /// What --fail-if-worse compares: `project` (aggregate score) or `changed`
+        /// (modified files already below the project score, plus duplicated lines;
+        /// deleting code or touching healthy files cannot fail it)
+        #[arg(long, value_enum, default_value_t = GateScope::Project, requires = "fail_if_worse")]
+        gate_scope: GateScope,
 
         /// Exit with code 1 if the score is below GRADE (requires --trend).
         /// Example: --trend origin/main --fail-below B-

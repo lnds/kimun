@@ -788,7 +788,8 @@ Options:
 | `--model MODEL` | Scoring model: `cogcom` (default, v0.14+) or `legacy` (MI + cyclomatic, v0.13) |
 | `--trend [REF]` | Compare current score against a git ref (default: `HEAD`). Shows change: `B- → B (+2.3)`. Useful for PR review: `--trend origin/main` |
 | `--fail-if-worse` | With `--trend`: exit with code 1 if the score dropped by more than `--gate-tolerance` |
-| `--gate-tolerance POINTS` | Score drop `--fail-if-worse` allows before failing (default: `0.01`). Compares unrounded scores |
+| `--gate-tolerance POINTS` | Score drop `--fail-if-worse` allows before failing (default: `0.01` with `--gate-scope project`, `0.5` with `--gate-scope changed`). Compares unrounded scores |
+| `--gate-scope {project,changed}` | What `--fail-if-worse` compares (default: `project`, the aggregate score). `changed` looks only at the files the diff touches: it fails if a modified or renamed file ends below the project score at the ref after dropping more than `--gate-tolerance`, or if the project's duplicated lines grow. Files above the project score, new files and deleted files never fail it, so removing healthy code cannot lower the verdict. The report lists every changed file with its before/after score |
 | `--fail-below GRADE` | With `--trend`: exit with code 1 if the score is below `GRADE` (e.g. `B-`). Overridable via `.kimun.toml` |
 | `--format {table,json,short,terse}` | Output format (default: table) |
 | `--include-tests` | Include test files in analysis (excluded by default) |
