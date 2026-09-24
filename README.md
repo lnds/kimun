@@ -787,6 +787,9 @@ Options:
 |------|-------------|
 | `--model MODEL` | Scoring model: `cogcom` (default, v0.14+) or `legacy` (MI + cyclomatic, v0.13) |
 | `--trend [REF]` | Compare current score against a git ref (default: `HEAD`). Shows change: `B- → B (+2.3)`. Useful for PR review: `--trend origin/main` |
+| `--fail-if-worse` | With `--trend`: exit with code 1 if the score dropped by more than `--gate-tolerance` |
+| `--gate-tolerance POINTS` | Score drop `--fail-if-worse` allows before failing (default: `0.01`). Compares unrounded scores |
+| `--fail-below GRADE` | With `--trend`: exit with code 1 if the score is below `GRADE` (e.g. `B-`). Overridable via `.kimun.toml` |
 | `--format {table,json,short,terse}` | Output format (default: table) |
 | `--include-tests` | Include test files in analysis (excluded by default) |
 | `--bottom N` | Number of worst files to show in "needs attention" (default: 10) |

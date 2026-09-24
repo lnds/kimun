@@ -14,6 +14,14 @@ use crate::walk::ExcludeFilter;
 pub const ERR_CI_FORMAT_ONLY: &str =
     "--format github and --format codeclimate are only supported by cycom, cogcom, and smells";
 
+fn parse_non_negative_f64(s: &str) -> Result<f64, String> {
+    match s.parse::<f64>() {
+        Ok(v) if v >= 0.0 => Ok(v),
+        Ok(_) => Err("must not be negative".to_string()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
 /// Output format for analysis commands.
 ///
 /// Driven by `--format` on `CommonArgs`. `Github` and `Codeclimate` emit CI
@@ -470,6 +478,12 @@ pub enum Commands {
         /// Example: --trend origin/main --fail-if-worse
         #[arg(long, requires = "trend")]
         fail_if_worse: bool,
+
+        /// Score drop allowed by --fail-if-worse before it fails (default: 0.01).
+        /// Example: --fail-if-worse --gate-tolerance 0.05
+        #[arg(long, value_name = "POINTS", default_value = "0.01",
+              value_parser = parse_non_negative_f64, requires = "fail_if_worse")]
+        gate_tolerance: f64,
 
         /// Exit with code 1 if the score is below GRADE (requires --trend).
         /// Example: --trend origin/main --fail-below B-

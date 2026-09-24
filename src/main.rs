@@ -489,6 +489,7 @@ fn main() {
             model,
             trend,
             fail_if_worse,
+            gate_tolerance,
             fail_below,
         } => dispatch_score(
             common,
@@ -496,7 +497,7 @@ fn main() {
             min_lines,
             model,
             trend,
-            fail_if_worse.then_some(0.01),
+            fail_if_worse.then_some(gate_tolerance),
             fail_below,
         ),
         Commands::Score {
