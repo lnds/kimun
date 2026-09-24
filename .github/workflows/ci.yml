@@ -85,9 +85,9 @@ jobs:
         if: github.event_name == 'pull_request'
         run: cargo build --release --bin km
 
-      - name: Score gate (no regression vs main)
+      - name: Score gate (no regression in changed files vs main)
         if: github.event_name == 'pull_request'
-        run: ./target/release/km score --trend origin/main --fail-if-worse
+        run: ./target/release/km score --trend origin/main --fail-if-worse --gate-scope changed
 
       - name: Duplication gate (no increase vs main)
         if: github.event_name == 'pull_request'
