@@ -6,6 +6,7 @@
 use serde::Serialize;
 
 use super::analyzer::Grade;
+use super::changed::ChangedScope;
 use super::diff::ScoreDiff;
 use crate::report_helpers;
 
@@ -16,17 +17,22 @@ const YELLOW: &str = "\x1b[33m";
 const BOLD: &str = "\x1b[1m";
 const RESET: &str = "\x1b[0m";
 
-/// Format a signed delta with color and sign prefix. A delta that rounds to
-/// zero at `decimals` places is shown as zero, not as a signed `-0.0`.
-fn colored_delta(delta: f64, decimals: usize) -> String {
+/// Color and signed text for a delta. A delta that rounds to zero at
+/// `decimals` places is shown unsigned, not as `-0.0`.
+fn delta_parts(delta: f64, decimals: usize) -> (&'static str, String) {
     let half_unit = 0.5 / 10f64.powi(decimals as i32);
     if delta > half_unit {
-        format!("{GREEN}+{delta:.decimals$}{RESET}")
+        (GREEN, format!("+{delta:.decimals$}"))
     } else if delta < -half_unit {
-        format!("{RED}{delta:.decimals$}{RESET}")
+        (RED, format!("{delta:.decimals$}"))
     } else {
-        format!("{YELLOW} {:.decimals$}{RESET}", 0.0)
+        (YELLOW, format!(" {:.decimals$}", 0.0))
     }
+}
+
+fn colored_delta(delta: f64, decimals: usize) -> String {
+    let (color, text) = delta_parts(delta, decimals);
+    format!("{color}{text}{RESET}")
 }
 
 /// Format a signed integer delta with color and sign prefix.
@@ -97,6 +103,40 @@ pub fn print_report(diff: &ScoreDiff) {
     }
 
     println!("{separator}");
+
+    if let Some(scope) = &diff.changed {
+        print_changed_files(scope, diff.overall.before, &separator);
+    }
+}
+
+fn print_changed_files(scope: &ChangedScope, baseline: f64, separator: &str) {
+    println!();
+    println!(" Changed Files (--gate-scope changed)");
+    println!("{separator}");
+    println!(" {:>7}  {:>7}  {:>8}  File", "Before", "After", "Delta");
+    println!("{separator}");
+    for f in &scope.files {
+        let (before, (color, delta)) = match (f.before, f.delta) {
+            (Some(b), Some(d)) => (format!("{b:.2}"), delta_parts(d, 2)),
+            _ => ("-".to_string(), ("", "new".to_string())),
+        };
+        println!(
+            " {before:>7}  {:>7.2}  {color}{delta:>8}{RESET}  {}",
+            f.after, f.path
+        );
+    }
+    if scope.files.is_empty() {
+        println!(" No scored source files changed.");
+    }
+    println!("{separator}");
+    println!(
+        " Files ending below the ref score ({baseline:.2}) may not drop more than the tolerance."
+    );
+    let (dup_before, dup_after) = (scope.duplicated_lines_before, scope.duplicated_lines_after);
+    println!(
+        " Duplicated lines: {dup_before} → {dup_after}  ({})",
+        colored_int_delta(dup_after as i64 - dup_before as i64)
+    );
 }
 
 /// Print score diff as a single compact line.
@@ -138,12 +178,14 @@ struct JsonDimensionDelta {
 }
 
 #[derive(Serialize)]
-struct JsonScoreDiff {
+struct JsonScoreDiff<'a> {
     git_ref: String,
     before: JsonScoreSnapshot,
     after: JsonScoreSnapshot,
     delta: f64,
     dimensions: Vec<JsonDimensionDelta>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    changed: Option<&'a ChangedScope>,
 }
 
 /// Serialize the score diff as pretty-printed JSON to stdout.
@@ -176,6 +218,7 @@ pub fn print_json(diff: &ScoreDiff) -> Result<(), Box<dyn std::error::Error>> {
                 delta: d.delta,
             })
             .collect(),
+        changed: diff.changed.as_ref(),
     };
     report_helpers::print_json_stdout(&json)
 }

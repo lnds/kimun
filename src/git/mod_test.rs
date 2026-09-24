@@ -223,3 +223,57 @@ fn test_empty_repo() {
     let co = git_repo.co_changing_commits(None);
     assert!(co.is_err() || co.unwrap().is_empty());
 }
+
+fn change_for<'a>(changes: &'a [FileChange], path: &str) -> Option<&'a FileChange> {
+    changes.iter().find(|c| c.path == Path::new(path))
+}
+
+#[test]
+fn changes_since_in_workdir_classifies_changes() {
+    let (dir, repo) = create_test_repo();
+    let body = "fn body() {\n    let a = 1;\n    let b = 2;\n    let c = 3;\n    println!(\"{a} {b} {c}\");\n}\n";
+    make_commit(
+        &repo,
+        &[
+            ("kept.rs", "fn kept() {}\n"),
+            ("edited.rs", "fn edited() {}\n"),
+            ("moved.rs", body),
+            ("gone.rs", "fn gone() {}\n"),
+        ],
+        "base",
+    );
+    let root = dir.path();
+    fs::write(root.join("edited.rs"), "fn edited() { let x = 1; }\n").unwrap();
+    fs::rename(root.join("moved.rs"), root.join("renamed.rs")).unwrap();
+    fs::remove_file(root.join("gone.rs")).unwrap();
+    fs::write(root.join("new.rs"), "fn new() {}\n").unwrap();
+
+    let git_repo = GitRepo::open(root).unwrap();
+    let changes = git_repo.changes_since_in_workdir("HEAD").unwrap();
+
+    assert!(change_for(&changes, "kept.rs").is_none());
+    assert!(change_for(&changes, "gone.rs").is_none());
+    assert_eq!(
+        change_for(&changes, "edited.rs")
+            .unwrap()
+            .old_path
+            .as_deref(),
+        Some(Path::new("edited.rs"))
+    );
+    assert_eq!(
+        change_for(&changes, "renamed.rs")
+            .unwrap()
+            .old_path
+            .as_deref(),
+        Some(Path::new("moved.rs"))
+    );
+    assert!(change_for(&changes, "new.rs").unwrap().old_path.is_none());
+}
+
+#[test]
+fn changes_since_in_workdir_rejects_unknown_ref() {
+    let (dir, repo) = create_test_repo();
+    make_commit(&repo, &[("a.rs", "fn a() {}\n")], "base");
+    let git_repo = GitRepo::open(dir.path()).unwrap();
+    assert!(git_repo.changes_since_in_workdir("no-such-ref").is_err());
+}

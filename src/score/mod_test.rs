@@ -388,6 +388,7 @@ fn deeply_nested(x: i32) -> i32 {
     let gate = ScoreGate {
         max_drop: Some(0.01),
         fail_below: None,
+        ..ScoreGate::default()
     };
     let result = run_diff(&cfg, "HEAD~1", OutputMode::Table, 10, 6, "cogcom", gate);
 
@@ -452,6 +453,10 @@ fn create_test_repo_with_rust_file() -> (tempfile::TempDir, Repository) {
 }
 
 fn make_git_repo_with_file(content: &str) -> tempfile::TempDir {
+    make_git_repo_with_files(&[("main.rs", content)])
+}
+
+fn make_git_repo_with_files(files: &[(&str, &str)]) -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
     let repo = git2::Repository::init(dir.path()).unwrap();
     let mut config = repo.config().unwrap();
@@ -459,9 +464,11 @@ fn make_git_repo_with_file(content: &str) -> tempfile::TempDir {
     config.set_str("user.email", "test@test.com").unwrap();
     let sig =
         git2::Signature::new("Test", "test@test.com", &git2::Time::new(1_700_000_000, 0)).unwrap();
-    fs::write(dir.path().join("main.rs"), content).unwrap();
     let mut index = repo.index().unwrap();
-    index.add_path(Path::new("main.rs")).unwrap();
+    for (name, content) in files {
+        fs::write(dir.path().join(name), content).unwrap();
+        index.add_path(Path::new(name)).unwrap();
+    }
     index.write().unwrap();
     let tree_oid = index.write_tree().unwrap();
     let tree = repo.find_tree(tree_oid).unwrap();
@@ -545,6 +552,7 @@ fn score_gate_fail_below_passes_when_above_threshold() {
     let gate = ScoreGate {
         max_drop: None,
         fail_below: Some(analyzer::Grade::FMinusMinus),
+        ..ScoreGate::default()
     };
     let result = run_diff(&cfg, "HEAD", OutputMode::Table, 10, 6, "cogcom", gate);
     assert!(
@@ -572,6 +580,7 @@ fn score_gate_fail_below_unit() {
         loc_before: 10,
         loc_after: 10,
         dimensions: vec![],
+        changed: None,
     };
     // Gate: fail if below B — current score is C, so should fail
     let threshold = analyzer::Grade::B;
@@ -598,6 +607,7 @@ fn score_gate_fail_if_worse_same_ref_passes() {
     let gate = ScoreGate {
         max_drop: Some(0.01),
         fail_below: None,
+        ..ScoreGate::default()
     };
     let result = run_diff(&cfg, "HEAD", OutputMode::Table, 10, 6, "cogcom", gate);
     assert!(
@@ -647,6 +657,7 @@ fn run_diff_short_format() {
     let gate = ScoreGate {
         max_drop: None,
         fail_below: None,
+        ..ScoreGate::default()
     };
     run_diff(&cfg, "HEAD", OutputMode::Short, 10, 6, "cogcom", gate).unwrap();
 }
@@ -659,6 +670,157 @@ fn run_diff_terse_format() {
     let gate = ScoreGate {
         max_drop: None,
         fail_below: None,
+        ..ScoreGate::default()
     };
     run_diff(&cfg, "HEAD", OutputMode::Terse, 10, 6, "cogcom", gate).unwrap();
+}
+
+// ── --gate-scope changed ────────────────────────────────────────────────
+
+const SIMPLE_FNS: &str = "fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n\n\
+fn sub(a: i32, b: i32) -> i32 {\n    a - b\n}\n\n\
+fn mul(a: i32, b: i32) -> i32 {\n    a * b\n}\n";
+
+const NESTED_FN: &str = "fn tangle(a: i32, b: i32, c: i32) -> i32 {
+    let mut r = 0;
+    if a > 0 {
+        for i in 0..a {
+            if i % 2 == 0 {
+                while r < b {
+                    if c > 3 && b > 2 || a < 1 {
+                        match i {
+                            0 => { if b > 1 { r += 1; } else { r += 2; } }
+                            _ => { r += 3; }
+                        }
+                    }
+                    r += 1;
+                }
+            }
+        }
+    }
+    r
+}
+";
+
+fn changed_scope_gate() -> ScoreGate {
+    ScoreGate {
+        max_drop: Some(GateScope::Changed.default_tolerance()),
+        scope: GateScope::Changed,
+        ..ScoreGate::default()
+    }
+}
+
+fn run_gate(dir: &Path, gate: ScoreGate) -> Result<(), Box<dyn std::error::Error>> {
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir, false, &filter);
+    run_diff(&cfg, "HEAD", OutputMode::Table, 10, 6, "cogcom", gate)
+}
+
+#[test]
+fn changed_scope_passes_when_healthy_code_is_deleted() {
+    let dir = make_git_repo_with_files(&[("good.rs", SIMPLE_FNS), ("bad.rs", NESTED_FN)]);
+    fs::write(
+        dir.path().join("good.rs"),
+        "fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n",
+    )
+    .unwrap();
+
+    let project = ScoreGate {
+        max_drop: Some(0.01),
+        ..ScoreGate::default()
+    };
+    assert!(
+        run_gate(dir.path(), project).is_err(),
+        "the project aggregate drops when healthy code leaves the denominator"
+    );
+    run_gate(dir.path(), changed_scope_gate()).expect("no changed file got worse");
+}
+
+#[test]
+fn changed_scope_ignores_deleted_files() {
+    let dir = make_git_repo_with_files(&[("good.rs", SIMPLE_FNS), ("bad.rs", NESTED_FN)]);
+    fs::remove_file(dir.path().join("good.rs")).unwrap();
+    run_gate(dir.path(), changed_scope_gate()).expect("deleting a file never fails");
+}
+
+#[test]
+fn changed_scope_fails_naming_the_file_that_got_worse() {
+    let dir = make_git_repo_with_files(&[("good.rs", SIMPLE_FNS), ("other.rs", SIMPLE_FNS)]);
+    fs::write(
+        dir.path().join("good.rs"),
+        format!("{SIMPLE_FNS}\n{NESTED_FN}"),
+    )
+    .unwrap();
+
+    let msg = run_gate(dir.path(), changed_scope_gate())
+        .expect_err("good.rs gained a deeply nested function")
+        .to_string();
+    assert!(msg.contains("good.rs dropped"), "{msg}");
+    assert!(!msg.contains("other.rs"), "{msg}");
+}
+
+#[test]
+fn changed_scope_does_not_fail_on_new_files() {
+    let dir = make_git_repo_with_files(&[("good.rs", SIMPLE_FNS)]);
+    fs::write(dir.path().join("bad.rs"), NESTED_FN).unwrap();
+    run_gate(dir.path(), changed_scope_gate()).expect("new files have no score to fall from");
+}
+
+#[test]
+fn changed_scope_fails_when_duplicated_lines_grow() {
+    let dir = make_git_repo_with_files(&[("a.rs", NESTED_FN)]);
+    fs::write(
+        dir.path().join("b.rs"),
+        NESTED_FN.replace("tangle", "tangle_copy"),
+    )
+    .unwrap();
+
+    let msg = run_gate(dir.path(), changed_scope_gate())
+        .expect_err("b.rs duplicates a.rs")
+        .to_string();
+    assert!(msg.contains("duplicated lines grew"), "{msg}");
+}
+
+#[test]
+fn changed_scope_json_includes_changed_files() {
+    let dir = make_git_repo_with_files(&[("good.rs", SIMPLE_FNS)]);
+    fs::write(dir.path().join("new.rs"), "fn new() {}\n").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run_diff(
+        &cfg,
+        "HEAD",
+        OutputMode::Json,
+        10,
+        6,
+        "cogcom",
+        changed_scope_gate(),
+    )
+    .unwrap();
+}
+
+#[test]
+fn changed_scope_maps_paths_when_analyzing_a_subdirectory() {
+    let dir = make_git_repo_with_files(&[("root.rs", SIMPLE_FNS)]);
+    let lib = dir.path().join("lib");
+    fs::create_dir(&lib).unwrap();
+    fs::write(lib.join("good.rs"), SIMPLE_FNS).unwrap();
+    let repo = Repository::open(dir.path()).unwrap();
+    let mut index = repo.index().unwrap();
+    index.add_path(Path::new("lib/good.rs")).unwrap();
+    index.write().unwrap();
+    let tree = repo.find_tree(index.write_tree().unwrap()).unwrap();
+    let head = repo.head().unwrap().peel_to_commit().unwrap();
+    let sig = git2::Signature::now("Test", "test@test.com").unwrap();
+    repo.commit(Some("HEAD"), &sig, &sig, "lib", &tree, &[&head])
+        .unwrap();
+
+    fs::write(lib.join("good.rs"), format!("{SIMPLE_FNS}\n{NESTED_FN}")).unwrap();
+    fs::write(dir.path().join("root.rs"), NESTED_FN).unwrap();
+
+    let msg = run_gate(&lib, changed_scope_gate())
+        .expect_err("lib/good.rs got worse")
+        .to_string();
+    assert!(msg.contains("lib/good.rs dropped"), "{msg}");
+    assert!(!msg.contains("root.rs"), "{msg}");
 }

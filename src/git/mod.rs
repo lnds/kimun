@@ -14,7 +14,7 @@ use std::fs;
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 
-use git2::{BlameOptions, Delta, DiffOptions, ObjectType, Repository, Sort, Tree};
+use git2::{BlameOptions, Delta, DiffFindOptions, DiffOptions, ObjectType, Repository, Sort, Tree};
 
 /// Wrapper around a `git2::Repository` with its resolved root path.
 pub struct GitRepo {
@@ -32,6 +32,13 @@ pub struct FileFrequency {
     pub first_commit: i64,
     /// Unix timestamp of the most recent commit touching this file.
     pub last_commit: i64,
+}
+
+/// A file that differs between a ref and the working tree. Paths are repo-relative.
+pub struct FileChange {
+    pub path: PathBuf,
+    /// Where the file lived at the ref, or `None` if it is new.
+    pub old_path: Option<PathBuf>,
 }
 
 /// Per-hunk blame data with line range, used to join against FSM line classification.
@@ -295,6 +302,11 @@ impl GitRepo {
     /// a destination directory. Writes blobs as files and recurses into subtrees.
     /// Skips submodules and symlinks.
     pub fn extract_tree_to_dir(&self, refspec: &str, dest: &Path) -> Result<(), Box<dyn Error>> {
+        let tree = self.ref_tree(refspec)?;
+        self.write_tree_recursive(&tree, dest)
+    }
+
+    fn ref_tree(&self, refspec: &str) -> Result<Tree<'_>, Box<dyn Error>> {
         let obj = self
             .repo
             .revparse_single(refspec)
@@ -302,8 +314,7 @@ impl GitRepo {
         let commit = obj
             .peel_to_commit()
             .map_err(|e| format!("'{refspec}' is not a commit: {e}"))?;
-        let tree = commit.tree()?;
-        self.write_tree_recursive(&tree, dest)
+        Ok(commit.tree()?)
     }
 
     /// Recursively write a git tree to a filesystem directory.
@@ -330,19 +341,10 @@ impl GitRepo {
         Ok(())
     }
 
-    /// Diff a commit against its parent to get the list of changed file paths.
     /// Return the absolute paths of files added or modified between `since_ref`
     /// and HEAD. Deleted files are excluded — they no longer exist on disk.
-    /// Paths are absolute (joined with the git working directory root).
     pub fn files_changed_since(&self, since_ref: &str) -> Result<Vec<PathBuf>, Box<dyn Error>> {
-        let old_obj = self
-            .repo
-            .revparse_single(since_ref)
-            .map_err(|e| format!("cannot resolve ref '{since_ref}': {e}"))?;
-        let old_tree = old_obj
-            .peel_to_commit()
-            .map_err(|e| format!("'{since_ref}' is not a commit: {e}"))?
-            .tree()?;
+        let old_tree = self.ref_tree(since_ref)?;
 
         let head_tree = self.repo.head()?.peel_to_commit()?.tree()?;
 
@@ -365,6 +367,42 @@ impl GitRepo {
         Ok(paths)
     }
 
+    /// Files added, modified or renamed between `refspec` and the working tree,
+    /// including uncommitted and untracked changes. Deletions are omitted.
+    pub fn changes_since_in_workdir(
+        &self,
+        refspec: &str,
+    ) -> Result<Vec<FileChange>, Box<dyn Error>> {
+        let tree = self.ref_tree(refspec)?;
+        let mut opts = DiffOptions::new();
+        opts.include_untracked(true).recurse_untracked_dirs(true);
+        let mut diff = self
+            .repo
+            .diff_tree_to_workdir_with_index(Some(&tree), Some(&mut opts))?;
+        let mut find = DiffFindOptions::new();
+        find.renames(true).for_untracked(true);
+        diff.find_similar(Some(&mut find))?;
+
+        let mut changes = Vec::new();
+        for delta in diff.deltas() {
+            let old_path = match delta.status() {
+                Delta::Added | Delta::Untracked | Delta::Copied => None,
+                Delta::Modified | Delta::Renamed | Delta::Typechange => {
+                    delta.old_file().path().map(Path::to_path_buf)
+                }
+                _ => continue,
+            };
+            if let Some(path) = delta.new_file().path() {
+                changes.push(FileChange {
+                    path: path.to_path_buf(),
+                    old_path,
+                });
+            }
+        }
+        Ok(changes)
+    }
+
+    /// Diff a commit against its parent to get the list of changed file paths.
     fn changed_files(&self, commit: &git2::Commit) -> Result<Vec<PathBuf>, Box<dyn Error>> {
         let tree = commit.tree()?;
         let parent_tree = if commit.parent_count() > 0 {

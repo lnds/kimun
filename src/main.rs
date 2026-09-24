@@ -201,14 +201,14 @@ fn dispatch_score(
     min_lines: Option<usize>,
     model: Option<String>,
     trend: Option<String>,
-    max_drop: Option<f64>,
+    mut gate: score::ScoreGate,
     fail_below: Option<String>,
 ) {
     let kcfg = config::KimunConfig::load();
     let min_lines = kcfg.dups.resolve_min_lines(min_lines);
     let model = kcfg.score.resolve_model(model);
     let fail_below = kcfg.score.resolve_fail_below(fail_below);
-    let fail_below_grade = match fail_below {
+    gate.fail_below = match fail_below {
         Some(ref s) => match score::analyzer::Grade::parse(s) {
             Ok(g) => Some(g),
             Err(e) => {
@@ -220,10 +220,6 @@ fn dispatch_score(
     };
     dispatch!(common, |cfg, output| {
         if let Some(ref git_ref) = trend {
-            let gate = score::ScoreGate {
-                max_drop,
-                fail_below: fail_below_grade,
-            };
             score::run_diff(&cfg, git_ref, output, bottom, min_lines, &model, gate)
         } else {
             score::run(&cfg, output, bottom, min_lines, &model)
@@ -490,6 +486,7 @@ fn main() {
             trend,
             fail_if_worse,
             gate_tolerance,
+            gate_scope,
             fail_below,
         } => dispatch_score(
             common,
@@ -497,7 +494,12 @@ fn main() {
             min_lines,
             model,
             trend,
-            fail_if_worse.then_some(gate_tolerance),
+            score::ScoreGate {
+                max_drop: fail_if_worse
+                    .then(|| gate_tolerance.unwrap_or(gate_scope.default_tolerance())),
+                scope: gate_scope,
+                fail_below: None,
+            },
             fail_below,
         ),
         Commands::Score {

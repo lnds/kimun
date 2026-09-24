@@ -15,6 +15,8 @@
 
 /// Grading system: letter grades, dimension/file/project scores.
 pub(crate) mod analyzer;
+/// Per-file comparison behind `--gate-scope changed`.
+pub(crate) mod changed;
 /// Single-file metric extraction (reads once, computes all dimensions).
 mod collector;
 /// Diff data types and computation for comparing two ProjectScore snapshots.
@@ -28,13 +30,15 @@ mod report;
 /// Dimension scoring, per-file scoring, and LOC-weighted aggregation.
 mod scoring;
 
+use std::collections::HashMap;
 use std::error::Error;
+use std::path::{Path, PathBuf};
 
 use crate::dups;
 use crate::git::GitRepo;
 use crate::walk::WalkConfig;
 
-use crate::cli::OutputMode;
+use crate::cli::{GateScope, OutputMode};
 use analyzer::{FileScore, ProjectScore, compute_project_score, score_to_grade};
 use collector::{FileMetrics, analyze_single_file};
 use report::{print_json, print_report, print_short, print_terse};
@@ -46,6 +50,8 @@ use scoring::{build_dimensions, build_empty_dimensions, score_file};
 pub struct ScoreGate {
     /// Fail if the score drops by more than this many points.
     pub max_drop: Option<f64>,
+    /// Whether `max_drop` applies to the project aggregate or to each changed file.
+    pub scope: GateScope,
     /// Fail if the current grade is below this threshold.
     pub fail_below: Option<analyzer::Grade>,
 }
@@ -133,7 +139,7 @@ pub fn run_diff(
     let scoring_model = ScoringModel::from_arg(model);
 
     // Score the current working tree.
-    let after = compute_score(cfg, bottom, min_lines, &scoring_model)?;
+    let after = compute_snapshot(cfg, bottom, min_lines, &scoring_model)?;
 
     // Open the git repo and extract the ref tree into a temp directory.
     let repo = GitRepo::open(cfg.path)?;
@@ -151,9 +157,22 @@ pub fn run_diff(
 
     // Score the ref tree.
     let ref_cfg = WalkConfig::new(&tmp_path, cfg.include_tests, cfg.filter);
-    let before = compute_score(&ref_cfg, bottom, min_lines, &scoring_model)?;
+    let before = compute_snapshot(&ref_cfg, bottom, min_lines, &scoring_model)?;
 
-    let score_diff = diff::compute_diff(git_ref, &before, &after);
+    let mut score_diff = diff::compute_diff(git_ref, &before.score, &after.score);
+    if gate.scope == GateScope::Changed {
+        let changes = repo.changes_since_in_workdir(git_ref)?;
+        score_diff.changed = Some(changed::ChangedScope {
+            files: changed::changed_files(
+                &changes,
+                &prefix,
+                &before.scores_by_path(&tmp_path),
+                &after.scores_by_path(cfg.path),
+            ),
+            duplicated_lines_before: before.duplicated_lines,
+            duplicated_lines_after: after.duplicated_lines,
+        });
+    }
 
     // Always print first so CI logs show the full report before any gate error.
     match output {
@@ -167,25 +186,31 @@ pub fn run_diff(
     }
 
     // Quality gates: evaluated after output so the log is always complete.
-    let overall = &score_diff.overall;
-    if let Some(tolerance) = gate.max_drop
-        && gate_score_worsened(overall.before, overall.after, tolerance)
-    {
-        return Err(
-            format_gate_error(overall.before, overall.after, overall.delta, tolerance).into(),
-        );
+    match gate_failure(&score_diff, gate) {
+        Some(msg) => Err(msg.into()),
+        None => Ok(()),
     }
-    if let Some(threshold) = gate.fail_below
-        && score_diff.after_grade.numeric_rank() < threshold.numeric_rank()
-    {
-        return Err(format!(
-            "quality gate failed: score {} is below minimum threshold {}",
-            score_diff.after_grade, threshold
-        )
-        .into());
-    }
+}
 
-    Ok(())
+fn gate_failure(score_diff: &diff::ScoreDiff, gate: ScoreGate) -> Option<String> {
+    let overall = &score_diff.overall;
+    let drop_failure = gate
+        .max_drop
+        .and_then(|tolerance| match &score_diff.changed {
+            Some(scope) => changed::gate_failure(scope, tolerance, overall.before),
+            None => gate_score_worsened(overall.before, overall.after, tolerance).then(|| {
+                format_gate_error(overall.before, overall.after, overall.delta, tolerance)
+            }),
+        });
+    drop_failure.or_else(|| {
+        let threshold = gate.fail_below?;
+        (score_diff.after_grade.numeric_rank() < threshold.numeric_rank()).then(|| {
+            format!(
+                "quality gate failed: score {} is below minimum threshold {}",
+                score_diff.after_grade, threshold
+            )
+        })
+    })
 }
 
 /// Walk all source files, compute per-file and project-level metrics,
@@ -196,6 +221,35 @@ pub(crate) fn compute_score(
     min_lines: usize,
     model: &ScoringModel,
 ) -> Result<ProjectScore, Box<dyn Error>> {
+    compute_snapshot(cfg, bottom, min_lines, model).map(|s| s.score)
+}
+
+/// A `ProjectScore` plus the per-file and duplication data the gates compare.
+struct Snapshot {
+    score: ProjectScore,
+    files: Vec<FileScore>,
+    duplicated_lines: usize,
+}
+
+impl Snapshot {
+    /// File scores keyed by path relative to `root`, the directory that was walked.
+    fn scores_by_path(&self, root: &Path) -> HashMap<PathBuf, f64> {
+        self.files
+            .iter()
+            .map(|f| {
+                let rel = f.path.strip_prefix(root).unwrap_or(&f.path);
+                (rel.to_path_buf(), f.score)
+            })
+            .collect()
+    }
+}
+
+fn compute_snapshot(
+    cfg: &WalkConfig<'_>,
+    bottom: usize,
+    min_lines: usize,
+    model: &ScoringModel,
+) -> Result<Snapshot, Box<dyn Error>> {
     let exclude_tests = cfg.exclude_tests();
     let mut file_metrics: Vec<FileMetrics> = Vec::new();
     let mut dup_files: Vec<dups::detector::NormalizedFile> = Vec::new();
@@ -227,13 +281,17 @@ pub(crate) fn compute_score(
 
     if files_analyzed == 0 {
         let dimensions = build_empty_dimensions(model);
-        return Ok(ProjectScore {
-            score: 0.0,
-            grade: score_to_grade(0.0),
-            files_analyzed: 0,
-            total_loc: 0,
-            dimensions,
-            needs_attention: vec![],
+        return Ok(Snapshot {
+            score: ProjectScore {
+                score: 0.0,
+                grade: score_to_grade(0.0),
+                files_analyzed: 0,
+                total_loc: 0,
+                dimensions,
+                needs_attention: vec![],
+            },
+            files: vec![],
+            duplicated_lines,
         });
     }
 
@@ -242,15 +300,19 @@ pub(crate) fn compute_score(
     let mut file_scores: Vec<FileScore> =
         file_metrics.iter().map(|f| score_file(f, model)).collect();
     file_scores.sort_by(|a, b| a.score.total_cmp(&b.score));
-    file_scores.truncate(bottom);
+    let needs_attention = file_scores.iter().take(bottom).cloned().collect();
 
-    Ok(ProjectScore {
-        score: project_score,
-        grade: score_to_grade(project_score),
-        files_analyzed,
-        total_loc,
-        dimensions,
-        needs_attention: file_scores,
+    Ok(Snapshot {
+        score: ProjectScore {
+            score: project_score,
+            grade: score_to_grade(project_score),
+            files_analyzed,
+            total_loc,
+            dimensions,
+            needs_attention,
+        },
+        files: file_scores,
+        duplicated_lines,
     })
 }
 
