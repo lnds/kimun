@@ -168,5 +168,5 @@ Overall code health score (A++ to F--). Invoked via `km score`. Static metrics o
 - **`report.rs`** — Table and JSON output formatters.
 - **`diff.rs`** — `ScoreDiff`/`ScoreDelta` types and `compute_diff()`. Asserts dimension count and names match before zipping to prevent silent model mismatches.
 - **`diff_report.rs`** — Table and JSON formatters for diff output.
-- **`mod.rs`** — `ScoreGate` struct (`fail_if_worse`, `fail_below`). `run()` for normal score. `run_diff()` for `--trend`/`km score diff`: computes before/after snapshots, prints report, then evaluates quality gates (gates always evaluated after output so CI logs are complete).
+- **`mod.rs`** — `ScoreGate` struct (`max_drop` from `--fail-if-worse` + `--gate-tolerance`, compared on unrounded scores; `fail_below`). `run()` for normal score. `run_diff()` for `--trend`/`km score diff`: computes before/after snapshots, prints report, then evaluates quality gates (gates always evaluated after output so CI logs are complete).
 - **`scoring.rs`** / **`collector.rs`** / **`normalizer.rs`** — Dimension definitions, per-file metric extraction, and piecewise linear normalization curves.

@@ -248,46 +248,67 @@ fn legacy_dimensions_sum_to_100_percent() {
 // ── ScoreGate error message format ──────────────────────────────────────
 
 #[test]
-fn score_gate_error_message_shows_two_decimal_places() {
-    // Regression: a delta of -0.04 was displayed as "-0.0" with {:.1} format.
-    // Uses format_gate_error directly so reverting {:.2} → {:.1} in production
-    // breaks this test.
+fn score_gate_error_message_shows_scores_delta_and_tolerance() {
     let before = 86.93_f64;
     let after = 86.89_f64;
-    let delta = after - before; // -0.04
-    let msg = format_gate_error(before, after, delta);
+    let msg = format_gate_error(before, after, after - before, 0.01);
     assert!(
-        msg.contains("86.93") && msg.contains("86.89"),
+        msg.contains("86.93 → 86.89"),
         "scores should show two decimal places, got: {msg}"
     );
-    // With {:.1} this would be "(-0.0)"; with {:.2} it must be "(-0.04)".
     assert!(
-        msg.contains("(-0.04)"),
-        "delta should be formatted as (-0.04) not (-0.0), got: {msg}"
+        msg.contains("(-0.0400)"),
+        "delta should show four decimal places, got: {msg}"
+    );
+    assert!(
+        msg.contains("0.01 tolerance"),
+        "message should name the tolerance, got: {msg}"
     );
 }
 
 #[test]
-fn gate_score_worsened_ignores_sub_centi_regression() {
-    // Regression for the CI false positive: a sub-0.01 drop renders as
-    // `-0.00` in the report and must NOT trip the gate.
-    assert!(!gate_score_worsened(87.814, 87.811));
-    assert!(!gate_score_worsened(87.81, 87.81));
-    // Same value, no regression.
-    assert!(!gate_score_worsened(90.0, 90.0));
+fn score_gate_error_message_separates_drop_just_over_tolerance() {
+    let msg = format_gate_error(77.7800, 77.7696, 77.7696 - 77.7800, 0.01);
+    assert!(
+        msg.contains("(-0.0104)"),
+        "a drop just over the tolerance must not print as -0.01, got: {msg}"
+    );
 }
 
 #[test]
-fn gate_score_worsened_catches_visible_regression() {
-    // A drop visible at 2 decimals must trip the gate.
-    assert!(gate_score_worsened(87.81, 87.80));
-    assert!(gate_score_worsened(90.0, 89.5));
+fn gate_score_worsened_ignores_drop_within_tolerance() {
+    assert!(!gate_score_worsened(87.814, 87.811, 0.01));
+    assert!(!gate_score_worsened(90.0, 90.0, 0.01));
+}
+
+#[test]
+fn gate_score_worsened_ignores_sub_tolerance_drop_across_rounding_boundary() {
+    // -0.0078, but rounds to 77.78 → 77.77.
+    assert!(!gate_score_worsened(77.77897, 77.77122, 0.01));
+}
+
+#[test]
+fn gate_score_worsened_catches_drop_over_tolerance() {
+    assert!(gate_score_worsened(87.81, 87.79, 0.01));
+    assert!(gate_score_worsened(90.0, 89.5, 0.01));
+}
+
+#[test]
+fn gate_score_worsened_honors_custom_tolerance() {
+    assert!(!gate_score_worsened(90.0, 89.96, 0.05));
+    assert!(gate_score_worsened(90.0, 89.9, 0.05));
+}
+
+#[test]
+fn gate_score_worsened_zero_tolerance_catches_any_drop() {
+    assert!(gate_score_worsened(90.0, 89.999, 0.0));
+    assert!(!gate_score_worsened(90.0, 90.0, 0.0));
 }
 
 #[test]
 fn gate_score_worsened_allows_improvement() {
-    assert!(!gate_score_worsened(87.80, 87.81));
-    assert!(!gate_score_worsened(89.5, 90.0));
+    assert!(!gate_score_worsened(87.80, 87.81, 0.01));
+    assert!(!gate_score_worsened(89.5, 90.0, 0.0));
 }
 
 #[test]
@@ -365,7 +386,7 @@ fn deeply_nested(x: i32) -> i32 {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), true, &filter);
     let gate = ScoreGate {
-        fail_if_worse: true,
+        max_drop: Some(0.01),
         fail_below: None,
     };
     let result = run_diff(&cfg, "HEAD~1", OutputMode::Table, 10, 6, "cogcom", gate);
@@ -376,25 +397,17 @@ fn deeply_nested(x: i32) -> i32 {
         )
         .to_string();
 
-    // Delta must not show the {:.1} rounding artifact.
-    assert!(
-        !msg.contains("(-0.0)"),
-        "delta should not round to -0.0, got: {msg}"
-    );
-
-    // Extract the parenthesized delta and verify exactly 2 decimal places.
-    // The message format is: "... (±X.XX)"
     let paren_start = msg.rfind('(').expect("message should contain '('");
     let paren_end = msg.rfind(')').expect("message should contain ')'");
-    let delta_str = &msg[paren_start + 1..paren_end]; // e.g. "-42.17" or "+0.04"
+    let delta_str = &msg[paren_start + 1..paren_end];
     let dot_idx = delta_str.find('.').unwrap_or_else(|| {
         panic!("delta '{delta_str}' should contain a decimal point, full msg: {msg}")
     });
     let decimals = &delta_str[dot_idx + 1..];
     assert_eq!(
         decimals.len(),
-        2,
-        "delta should have exactly 2 decimal places, got '{delta_str}' in: {msg}"
+        4,
+        "delta should have exactly 4 decimal places, got '{delta_str}' in: {msg}"
     );
 }
 
@@ -530,7 +543,7 @@ fn score_gate_fail_below_passes_when_above_threshold() {
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     // A small clean file should score high — F-- threshold should never trigger
     let gate = ScoreGate {
-        fail_if_worse: false,
+        max_drop: None,
         fail_below: Some(analyzer::Grade::FMinusMinus),
     };
     let result = run_diff(&cfg, "HEAD", OutputMode::Table, 10, 6, "cogcom", gate);
@@ -583,7 +596,7 @@ fn score_gate_fail_if_worse_same_ref_passes() {
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     // Comparing HEAD to itself — score cannot be worse
     let gate = ScoreGate {
-        fail_if_worse: true,
+        max_drop: Some(0.01),
         fail_below: None,
     };
     let result = run_diff(&cfg, "HEAD", OutputMode::Table, 10, 6, "cogcom", gate);
@@ -632,7 +645,7 @@ fn run_diff_short_format() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     let gate = ScoreGate {
-        fail_if_worse: false,
+        max_drop: None,
         fail_below: None,
     };
     run_diff(&cfg, "HEAD", OutputMode::Short, 10, 6, "cogcom", gate).unwrap();
@@ -644,7 +657,7 @@ fn run_diff_terse_format() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     let gate = ScoreGate {
-        fail_if_worse: false,
+        max_drop: None,
         fail_below: None,
     };
     run_diff(&cfg, "HEAD", OutputMode::Terse, 10, 6, "cogcom", gate).unwrap();

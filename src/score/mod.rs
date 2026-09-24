@@ -44,8 +44,8 @@ use scoring::{build_dimensions, build_empty_dimensions, score_file};
 /// Both conditions are independent and checked after the report is printed.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ScoreGate {
-    /// Fail if the current grade is lower than the ref grade.
-    pub fail_if_worse: bool,
+    /// Fail if the score drops by more than this many points.
+    pub max_drop: Option<f64>,
     /// Fail if the current grade is below this threshold.
     pub fail_below: Option<analyzer::Grade>,
 }
@@ -104,19 +104,18 @@ pub fn run(
     Ok(())
 }
 
-/// Decide whether the `--fail-if-worse` gate should fire, comparing scores as
-/// displayed (rounded to 2 decimals). This avoids failing on sub-0.01
-/// floating-point regressions that the report renders as `-0.00`.
-pub(crate) fn gate_score_worsened(before: f64, after: f64) -> bool {
-    (after * 100.0).round() < (before * 100.0).round()
+/// Compares raw scores: rounding first would fail a sub-tolerance drop
+/// whenever it happens to straddle a rounding boundary.
+pub(crate) fn gate_score_worsened(before: f64, after: f64, tolerance: f64) -> bool {
+    before - after > tolerance
 }
 
-/// Format the quality-gate failure message with two decimal places for before, after, and delta.
-/// Extracted so tests can verify the exact format without reconstructing it independently.
-pub(crate) fn format_gate_error(before: f64, after: f64, delta: f64) -> String {
+/// The delta gets four decimals so a drop just over the tolerance never
+/// prints as equal to it.
+pub(crate) fn format_gate_error(before: f64, after: f64, delta: f64, tolerance: f64) -> String {
     format!(
-        "quality gate failed: score dropped {:.2} → {:.2} ({:+.2})",
-        before, after, delta
+        "quality gate failed: score dropped {before:.2} → {after:.2} ({delta:+.4}), \
+         more than the {tolerance} tolerance"
     )
 }
 
@@ -168,19 +167,13 @@ pub fn run_diff(
     }
 
     // Quality gates: evaluated after output so the log is always complete.
-    // Compare the scores as displayed (rounded to 2 decimals) so a sub-0.01
-    // floating-point regression — which the report shows as `-0.00` — does not
-    // fail the gate. Adding a few lines of code can nudge a normalized
-    // dimension by ~1e-3; that is rounding noise, not a real quality drop.
-    if gate.fail_if_worse
-        && gate_score_worsened(score_diff.overall.before, score_diff.overall.after)
+    let overall = &score_diff.overall;
+    if let Some(tolerance) = gate.max_drop
+        && gate_score_worsened(overall.before, overall.after, tolerance)
     {
-        return Err(format_gate_error(
-            score_diff.overall.before,
-            score_diff.overall.after,
-            score_diff.overall.delta,
-        )
-        .into());
+        return Err(
+            format_gate_error(overall.before, overall.after, overall.delta, tolerance).into(),
+        );
     }
     if let Some(threshold) = gate.fail_below
         && score_diff.after_grade.numeric_rank() < threshold.numeric_rank()
