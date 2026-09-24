@@ -1,3 +1,21 @@
+## v0.26.0 (2026-09-24)
+
+### Feat
+
+- **score**: add --gate-scope changed to gate on the files a diff touches
+  - `km score --trend REF --fail-if-worse --gate-scope changed` looks only at the files the diff touches. It fails when a modified or renamed file ends below the project score at `REF` after dropping more than `--gate-tolerance`, or when the project's duplicated lines grow.
+  - Files above the project score, new files and deleted files never fail it, so deleting healthy code no longer fails the gate.
+  - The report and JSON list every changed file with its before/after score, and the error names each file responsible.
+  - The default scope stays `project` (the aggregate score), so existing pipelines are unchanged.
+- **score**: add --gate-tolerance to set the drop --fail-if-worse allows
+  - `--gate-tolerance POINTS` sets how many points the score may drop before `--fail-if-worse` fails. Defaults: `0.01` with `--gate-scope project`, `0.5` with `--gate-scope changed`.
+
+### Fix
+
+- **score**: gate on unrounded scores and show the overall at two decimals
+  - `--fail-if-worse` rounded scores before comparing, so a drop under 0.01 could fail when it crossed a rounding boundary. It now compares the unrounded scores.
+  - The `--trend` report (table, `short` and `terse`) now shows the overall score with two decimals. The gate error shows the drop with four decimals and names the tolerance.
+
 ## v0.25.1 (2026-09-23)
 
 ### Fix
