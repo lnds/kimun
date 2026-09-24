@@ -16,14 +16,16 @@ const YELLOW: &str = "\x1b[33m";
 const BOLD: &str = "\x1b[1m";
 const RESET: &str = "\x1b[0m";
 
-/// Format a signed delta with color and sign prefix.
-fn colored_delta(delta: f64) -> String {
-    if delta > 0.05 {
-        format!("{GREEN}+{delta:.1}{RESET}")
-    } else if delta < -0.05 {
-        format!("{RED}{delta:.1}{RESET}")
+/// Format a signed delta with color and sign prefix. A delta that rounds to
+/// zero at `decimals` places is shown as zero, not as a signed `-0.0`.
+fn colored_delta(delta: f64, decimals: usize) -> String {
+    let half_unit = 0.5 / 10f64.powi(decimals as i32);
+    if delta > half_unit {
+        format!("{GREEN}+{delta:.decimals$}{RESET}")
+    } else if delta < -half_unit {
+        format!("{RED}{delta:.decimals$}{RESET}")
     } else {
-        format!("{YELLOW} 0.0{RESET}")
+        format!("{YELLOW} {:.decimals$}{RESET}", 0.0)
     }
 }
 
@@ -56,10 +58,10 @@ pub fn print_report(diff: &ScoreDiff) {
     };
 
     println!(
-        " Overall Score: {:.1} → {:.1}  ({})  Grade: {grade_change}",
+        " Overall Score: {:.2} → {:.2}  ({})  Grade: {grade_change}",
         diff.overall.before,
         diff.overall.after,
-        colored_delta(diff.overall.delta),
+        colored_delta(diff.overall.delta, 2),
     );
 
     let files_delta = diff.files_after as i64 - diff.files_before as i64;
@@ -90,7 +92,7 @@ pub fn print_report(diff: &ScoreDiff) {
             d.before_grade.as_str(),
             d.after_score,
             d.after_grade.as_str(),
-            colored_delta(d.delta),
+            colored_delta(d.delta, 1),
         );
     }
 
@@ -100,7 +102,7 @@ pub fn print_report(diff: &ScoreDiff) {
 /// Print score diff as a single compact line.
 pub fn print_short(diff: &ScoreDiff) {
     println!(
-        "score-diff ref:{} before:{:.1} after:{:.1} delta:{:+.1} grade:{}",
+        "score-diff ref:{} before:{:.2} after:{:.2} delta:{:+.2} grade:{}",
         diff.git_ref,
         diff.overall.before,
         diff.overall.after,
@@ -111,7 +113,7 @@ pub fn print_short(diff: &ScoreDiff) {
 
 /// Print only the score delta.
 pub fn print_terse(diff: &ScoreDiff) {
-    println!("{:+.1}", diff.overall.delta);
+    println!("{:+.2}", diff.overall.delta);
 }
 
 // --- JSON output ---
@@ -252,20 +254,35 @@ mod tests {
 
     #[test]
     fn colored_delta_positive() {
-        let s = colored_delta(5.0);
+        let s = colored_delta(5.0, 1);
         assert!(s.contains('+'), "positive delta should have + prefix: {s}");
     }
 
     #[test]
     fn colored_delta_negative() {
-        let s = colored_delta(-5.0);
+        let s = colored_delta(-5.0, 1);
         assert!(s.contains('-'), "negative delta should have - prefix: {s}");
     }
 
     #[test]
     fn colored_delta_near_zero() {
-        let s = colored_delta(0.0);
+        let s = colored_delta(0.0, 1);
         assert!(s.contains("0.0"), "zero delta should show 0.0: {s}");
+    }
+
+    #[test]
+    fn colored_delta_two_decimals_shows_sub_tenth_drop() {
+        let s = colored_delta(-0.0123, 2);
+        assert!(s.contains("-0.01"), "a -0.0123 drop should show -0.01: {s}");
+    }
+
+    #[test]
+    fn colored_delta_rounding_to_zero_is_unsigned() {
+        let s = colored_delta(-0.004, 2);
+        assert!(
+            s.contains(" 0.00") && !s.contains('-'),
+            "a drop that rounds to zero should show 0.00 without a sign: {s}"
+        );
     }
 
     #[test]

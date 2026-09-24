@@ -201,7 +201,7 @@ fn dispatch_score(
     min_lines: Option<usize>,
     model: Option<String>,
     trend: Option<String>,
-    fail_if_worse: bool,
+    max_drop: Option<f64>,
     fail_below: Option<String>,
 ) {
     let kcfg = config::KimunConfig::load();
@@ -221,7 +221,7 @@ fn dispatch_score(
     dispatch!(common, |cfg, output| {
         if let Some(ref git_ref) = trend {
             let gate = score::ScoreGate {
-                fail_if_worse,
+                max_drop,
                 fail_below: fail_below_grade,
             };
             score::run_diff(&cfg, git_ref, output, bottom, min_lines, &model, gate)
@@ -496,7 +496,7 @@ fn main() {
             min_lines,
             model,
             trend,
-            fail_if_worse,
+            fail_if_worse.then_some(0.01),
             fail_below,
         ),
         Commands::Score {
