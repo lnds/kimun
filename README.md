@@ -640,7 +640,7 @@ Analyzes internal module dependencies by parsing import/use/require statements. 
 km deps [path]
 ```
 
-Supports Rust (`mod X;`), Python (relative `from .X import`), JavaScript/TypeScript (relative `import`/`require`), Go (imports matching the module path from `go.mod`), and Kaikai (`import a.b.c`, including the `as` and `.{…}` forms). External dependencies (crates, npm packages, the Kaikai stdlib) are ignored.
+Supports Rust (`mod X;`, with any visibility qualifier: `pub`, `pub(crate)`, `pub(in path)`), Python (relative `from .X import`), JavaScript/TypeScript (relative `import`/`require`), Go (imports matching the module path from `go.mod`), and Kaikai (`import a.b.c`, including the `as` and `.{…}` forms). External dependencies (crates, npm packages, the Kaikai stdlib) are ignored.
 
 Files in any other language are left out of the graph instead of being listed with zero dependencies. The table footer, the `unsupported` array of the JSON output and the `unsupported:N` field of the short format say how many files were skipped, so "not measured" is never shown as "no dependencies".
 

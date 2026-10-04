@@ -41,13 +41,7 @@ fn extract_rust(_path: &Path, source: &str) -> Vec<String> {
         if !trimmed.ends_with(';') || trimmed.contains('{') {
             continue;
         }
-        // Strip visibility qualifiers, then look for `mod <name>;`
-        let bare = trimmed
-            .trim_start_matches("pub(crate) ")
-            .trim_start_matches("pub(super) ")
-            .trim_start_matches("pub(in ")
-            .trim_start_matches("pub ");
-        if let Some(rest) = bare.strip_prefix("mod ") {
+        if let Some(rest) = strip_visibility(trimmed).strip_prefix("mod ") {
             let name = rest.trim_end_matches(';').trim();
             if !name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_') {
                 imports.push(name.to_string());
@@ -55,6 +49,22 @@ fn extract_rust(_path: &Path, source: &str) -> Vec<String> {
         }
     }
     imports
+}
+
+/// Drop a leading visibility qualifier: `pub`, `pub(crate)`, `pub(in path)`.
+fn strip_visibility(decl: &str) -> &str {
+    let Some(rest) = decl.strip_prefix("pub") else {
+        return decl;
+    };
+    let rest = match rest.strip_prefix('(') {
+        Some(scoped) => scoped.split_once(')').map_or(rest, |(_, after)| after),
+        None => rest,
+    };
+    if rest.starts_with(char::is_whitespace) {
+        rest.trim_start()
+    } else {
+        decl
+    }
 }
 
 /// Python: extract relative imports (`from .foo import bar`, `from . import bar`).
@@ -223,6 +233,13 @@ import (
     fn rust_pub_super_mod_is_extracted() {
         let result = extract_rust(&PathBuf::from("src/lib.rs"), "pub(super) mod helpers;\n");
         assert_eq!(result, vec!["helpers"]);
+    }
+
+    #[test]
+    fn rust_pub_in_path_mod_is_extracted() {
+        let src = "pub(in crate::deps) mod scoped;\npub(in  mod broken;\npublic mod other;\n";
+        let result = extract_rust(&PathBuf::from("src/lib.rs"), src);
+        assert_eq!(result, vec!["scoped"]);
     }
 
     #[test]
