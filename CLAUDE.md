@@ -117,6 +117,16 @@ Code churn — pure change frequency per source file. Invoked via `km churn`.
 - **`report.rs`** — Table and JSON output formatters.
 - **`mod.rs`** — Orchestration: opens git repo, counts commits per file, computes rate, sorts/filters. Uses `util::parse_since` for `--since` flag.
 
+### Module structure: `src/deps/`
+
+Dependency graph (file-level coupling from imports, cycles via Tarjan SCC). Invoked via `km deps`.
+
+- **`extractor.rs`** — `extract_imports` dispatches by language name and returns raw import strings: Rust `mod X;` declarations (`strip_visibility` drops `pub`, `pub(crate)`, `pub(in path)` first), relative imports for Python and JS/TS, every quoted import path for Go. `is_supported` decides which languages enter the graph.
+- **`kaikai.rs`** — Kaikai extraction and resolution: `import a.b.c` names a file under a package root, found by trying each ancestor directory of the importer.
+- **`analyzer.rs`** — `resolve_import` maps a raw import to project files per language; `build_graph` computes fan-in, fan-out and cycles (`tarjan_scc`, iterative).
+- **`report.rs`** — `render_report` builds the table as a `String` and `print_report` prints it, so tests assert on the text. JSON, short and terse formatters.
+- **`mod.rs`** — Orchestration: walks files, leaves unsupported languages out of the graph and counts them, extracts and resolves imports. `sort_entries` and `visible_entries` hold the `--sort-by` and `--cycles-only`/`--top` logic apart from `run`, which only prints.
+
 ### Shared: `src/string_mask.rs`
 
 `multi_line_string_mask` marks the interior lines of triple-quoted strings;

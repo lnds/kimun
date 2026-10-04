@@ -116,6 +116,29 @@ fn analyze(cfg: &WalkConfig<'_>) -> DepResult {
     result
 }
 
+/// Order entries by the requested key. Any other key means fan-out
+/// descending, then fan-in descending.
+fn sort_entries(entries: &mut [DepEntry], sort_by: &str) {
+    match sort_by {
+        "fan-in" => entries.sort_by_key(|e| Reverse(e.fan_in)),
+        "fan-out" => entries.sort_by_key(|e| Reverse(e.fan_out)),
+        _ => entries.sort_by(|a, b| {
+            b.fan_out
+                .cmp(&a.fan_out)
+                .then_with(|| b.fan_in.cmp(&a.fan_in))
+        }),
+    }
+}
+
+/// The entries to display: every file in a cycle, or else the first `top`.
+fn visible_entries(entries: &[DepEntry], cycles_only: bool, top: usize) -> Vec<&DepEntry> {
+    if cycles_only {
+        entries.iter().filter(|e| e.in_cycle).collect()
+    } else {
+        entries.iter().take(top).collect()
+    }
+}
+
 /// Run dependency graph analysis: walk files, extract imports, build graph, output.
 pub fn run(
     cfg: &WalkConfig<'_>,
@@ -126,26 +149,8 @@ pub fn run(
 ) -> Result<(), Box<dyn Error>> {
     let mut result = analyze(cfg);
 
-    // Apply sort
-    match sort_by {
-        "fan-in" => result.entries.sort_by_key(|e| Reverse(e.fan_in)),
-        "fan-out" => result.entries.sort_by_key(|e| Reverse(e.fan_out)),
-        _ => {
-            // Default: fan-out descending, then fan-in descending
-            result.entries.sort_by(|a, b| {
-                b.fan_out
-                    .cmp(&a.fan_out)
-                    .then_with(|| b.fan_in.cmp(&a.fan_in))
-            });
-        }
-    }
-
-    // Filter to cycles-only if requested
-    let entries: Vec<&DepEntry> = if cycles_only {
-        result.entries.iter().filter(|e| e.in_cycle).collect()
-    } else {
-        result.entries.iter().take(top).collect()
-    };
+    sort_entries(&mut result.entries, sort_by);
+    let entries = visible_entries(&result.entries, cycles_only, top);
 
     match output {
         crate::cli::OutputMode::Json => {
