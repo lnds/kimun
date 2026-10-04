@@ -41,13 +41,7 @@ fn extract_rust(_path: &Path, source: &str) -> Vec<String> {
         if !trimmed.ends_with(';') || trimmed.contains('{') {
             continue;
         }
-        // Strip visibility qualifiers, then look for `mod <name>;`
-        let bare = trimmed
-            .trim_start_matches("pub(crate) ")
-            .trim_start_matches("pub(super) ")
-            .trim_start_matches("pub(in ")
-            .trim_start_matches("pub ");
-        if let Some(rest) = bare.strip_prefix("mod ") {
+        if let Some(rest) = strip_visibility(trimmed).strip_prefix("mod ") {
             let name = rest.trim_end_matches(';').trim();
             if !name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_') {
                 imports.push(name.to_string());
@@ -55,6 +49,22 @@ fn extract_rust(_path: &Path, source: &str) -> Vec<String> {
         }
     }
     imports
+}
+
+/// Drop a leading visibility qualifier: `pub`, `pub(crate)`, `pub(in path)`.
+fn strip_visibility(decl: &str) -> &str {
+    let Some(rest) = decl.strip_prefix("pub") else {
+        return decl;
+    };
+    let rest = match rest.strip_prefix('(') {
+        Some(scoped) => scoped.split_once(')').map_or(rest, |(_, after)| after),
+        None => rest,
+    };
+    if rest.starts_with(char::is_whitespace) {
+        rest.trim_start()
+    } else {
+        decl
+    }
 }
 
 /// Python: extract relative imports (`from .foo import bar`, `from . import bar`).
@@ -157,76 +167,5 @@ fn extract_quoted(s: &str) -> Option<String> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::path::PathBuf;
-
-    #[test]
-    fn rust_mod_declarations() {
-        let src = r#"
-pub mod analyzer;
-mod report;
-pub(crate) mod utils;
-mod inline { fn foo() {} }  // should be skipped (has {)
-// mod commented_out;
-"#;
-        let result = extract_rust(&PathBuf::from("src/lib.rs"), src);
-        assert_eq!(result, vec!["analyzer", "report", "utils"]);
-    }
-
-    #[test]
-    fn python_relative_imports() {
-        let src =
-            "from .foo import bar\nfrom . import baz\nfrom ..utils import helper\nimport os\n";
-        let result = extract_python(src);
-        assert_eq!(result, vec![".foo", "..utils"]);
-    }
-
-    #[test]
-    fn js_relative_imports() {
-        let src = r#"
-import foo from './foo';
-import { bar } from '../bar';
-import external from 'lodash';
-const x = require('./utils');
-"#;
-        let result = extract_js(src);
-        assert_eq!(result, vec!["./foo", "../bar", "./utils"]);
-    }
-
-    #[test]
-    fn go_block_import() {
-        let src = r#"
-import (
-    "fmt"
-    "github.com/user/project/pkg/foo"
-    alias "github.com/user/project/internal/bar"
-)
-"#;
-        let result = extract_go(src);
-        assert_eq!(
-            result,
-            vec![
-                "fmt",
-                "github.com/user/project/pkg/foo",
-                "github.com/user/project/internal/bar",
-            ]
-        );
-    }
-
-    #[test]
-    fn kaikai_is_extracted_through_the_dispatcher() {
-        let result = extract_imports(&PathBuf::from("app/main.kai"), "Kaikai", "import app.b\n");
-        assert_eq!(result, vec!["app.b"]);
-    }
-
-    #[test]
-    fn supported_languages() {
-        for lang in ["Rust", "Python", "TypeScript", "TSX", "Go", "Kaikai"] {
-            assert!(is_supported(lang), "{lang} should be supported");
-        }
-        for lang in ["Bash", "TOML", "Java"] {
-            assert!(!is_supported(lang), "{lang} should not be supported");
-        }
-    }
-}
+#[path = "extractor_test.rs"]
+mod tests;

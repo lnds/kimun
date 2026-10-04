@@ -293,3 +293,60 @@ fn run_on_unsupported_languages_only() {
         run(&cfg, mode, false, "default", 20).unwrap();
     }
 }
+
+// ── sorting and selection ────────────────────────────────────────────────────
+
+fn entry(path: &str, fan_in: usize, fan_out: usize, in_cycle: bool) -> DepEntry {
+    DepEntry {
+        path: PathBuf::from(path),
+        language: "Rust".to_string(),
+        fan_in,
+        fan_out,
+        in_cycle,
+    }
+}
+
+fn sorted_paths(sort_by: &str) -> Vec<String> {
+    let mut entries = vec![
+        entry("c.rs", 2, 2, false),
+        entry("b.rs", 3, 2, false),
+        entry("a.rs", 1, 5, false),
+    ];
+    sort_entries(&mut entries, sort_by);
+    entries
+        .iter()
+        .map(|e| e.path.display().to_string())
+        .collect()
+}
+
+#[test]
+fn sort_by_fan_in_orders_by_fan_in_descending() {
+    assert_eq!(sorted_paths("fan-in"), vec!["b.rs", "c.rs", "a.rs"]);
+}
+
+#[test]
+fn sort_by_fan_out_keeps_ties_in_their_original_order() {
+    assert_eq!(sorted_paths("fan-out"), vec!["a.rs", "c.rs", "b.rs"]);
+}
+
+#[test]
+fn default_sort_breaks_fan_out_ties_by_fan_in() {
+    assert_eq!(sorted_paths("default"), vec!["a.rs", "b.rs", "c.rs"]);
+}
+
+#[test]
+fn visible_entries_are_the_cycle_members_or_the_first_ones() {
+    let entries = vec![
+        entry("clean.rs", 0, 3, false),
+        entry("a.rs", 1, 1, true),
+        entry("b.rs", 1, 1, true),
+    ];
+    let paths = |cycles_only| -> Vec<String> {
+        visible_entries(&entries, cycles_only, 1)
+            .iter()
+            .map(|e| e.path.display().to_string())
+            .collect()
+    };
+    assert_eq!(paths(true), vec!["a.rs", "b.rs"]);
+    assert_eq!(paths(false), vec!["clean.rs"]);
+}

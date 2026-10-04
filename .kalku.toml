@@ -1,0 +1,27 @@
+# Written by `kalku init`. Every key is optional; these are the ones that
+# make a run work without arguments.
+language = "rust"
+
+# The executable that speaks the kalku protocol for this language. It is
+# a script in this project so that whatever its toolchain needs — a build
+# path, an environment — is written down where it can be read.
+summon = ".kalku/summon"
+
+# Where a run's artefacts go. Left to kalku, which puts them under this
+# machine's temporary directory, outside the project — a run's artefacts
+# are not the project's, and a kalku that copies the tree would otherwise
+# copy them into itself. On this machine that is:
+#   /var/folders/zm/xwppj89s0k57t95jrmswzl9h0000gn/T/kalku/kimun
+# Set it here only to override that, and remember this file is shared:
+# a path from one machine means nothing on another.
+
+[run]
+# One worker while a kalku has a single build path to give.
+workers = 1
+
+# A cast that runs longer than this is a `timeout`, not a slow test.
+timeout_floor_ms = 60000
+
+# A cast that holds more than this is ended as `crashed`. The suite needs
+# far less; the ceiling is for a wekufe that allocates without limit.
+memory_limit_mb = 4096

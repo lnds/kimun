@@ -185,3 +185,88 @@ fn json_carries_unsupported_languages() {
     assert_eq!(json["unsupported"][0]["language"], "TOML");
     assert_eq!(json["unsupported"][0]["files"], 2);
 }
+
+// ── render_report ────────────────────────────────────────────────────────────
+
+fn separator_line(width: usize) -> String {
+    "\u{2500}".repeat(width)
+}
+
+#[test]
+fn render_report_without_entries_says_so() {
+    let result = make_result(vec![], vec![]);
+    assert_eq!(
+        render_report(&[], &result),
+        "No source files found for dependency analysis.\n"
+    );
+}
+
+#[test]
+fn render_report_lays_out_the_table() {
+    let entries = vec![
+        make_entry("a.rs", "Rust", 12, 3, false),
+        make_entry("b", "Go", 0, 1, true),
+    ];
+    let result = make_result(entries.clone(), vec![]);
+    let sep = separator_line(72);
+    let expected = [
+        "Dependency Graph",
+        &sep,
+        " File    Language Fan-In Fan-Out Cycle",
+        &sep,
+        " a.rs        Rust     12       3    no",
+        " b             Go      0       1   yes",
+        &sep,
+        "No dependency cycles detected.",
+        "",
+    ]
+    .join("\n");
+    assert_eq!(render_report(&entries, &result), expected);
+}
+
+#[test]
+fn render_report_separator_grows_with_the_longest_path() {
+    let path = format!("src/{}.rs", "x".repeat(50));
+    let entries = vec![make_entry(&path, "Rust", 0, 0, false)];
+    let result = make_result(entries.clone(), vec![]);
+    let report = render_report(&entries, &result);
+    let separator = report.lines().nth(1).unwrap();
+    // The path column, the fixed columns and one trailing column of margin.
+    assert_eq!(separator.chars().count(), path.len() + 35);
+}
+
+#[test]
+fn render_report_lists_cycles() {
+    let entries = vec![
+        make_entry("src/a.rs", "Rust", 1, 1, true),
+        make_entry("src/b.rs", "Rust", 1, 1, true),
+    ];
+    let cycle = vec![PathBuf::from("src/a.rs"), PathBuf::from("src/b.rs")];
+    let result = make_result(entries.clone(), vec![cycle]);
+    let report = render_report(&entries, &result);
+    let tail: Vec<&str> = report.lines().skip(7).collect();
+    assert_eq!(
+        tail,
+        vec![
+            "",
+            "Dependency cycles: 1",
+            "  Cycle 1 (2 files):",
+            "    src/a.rs",
+            "    src/b.rs",
+        ]
+    );
+    assert!(!report.contains("No dependency cycles detected."));
+}
+
+#[test]
+fn render_report_ends_with_the_unsupported_note() {
+    let entries = vec![make_entry("src/main.rs", "Rust", 0, 0, false)];
+    let mut result = make_result(entries.clone(), vec![]);
+    result.unsupported = unsupported(&[("TOML", 1)]);
+    let note = "Not analysed (unsupported language): TOML 1\n";
+    assert!(render_report(&entries, &result).ends_with(note));
+    assert_eq!(
+        render_report(&[], &result),
+        format!("No source files found for dependency analysis.\n{note}")
+    );
+}

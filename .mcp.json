@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "kalku": {
+      "type": "stdio",
+      "command": "kalku",
+      "args": [
+        "mcp"
+      ],
+      "env": {}
+    }
+  }
+}
