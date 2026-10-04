@@ -1,3 +1,16 @@
+## v0.26.1 (2026-10-04)
+
+### Fix
+
+- **deps**: read Kaikai imports and stop reporting unsupported languages as zero
+  - `km deps` now reads Kaikai imports (`import a.b.c`, `import a.b as x`, `import a.b.{f, g}`), so `.kai` files report real fan-in, fan-out and cycles instead of zeros. An `import` inside a comment, a string or a `#[doc("""...""")]` block is ignored.
+  - `import a.b.c` resolves to `a/b/c.kai` under each ancestor directory of the importing file, nearest first. A directory with a `kai.toml` is a package: importing it depends on the `.kai` files directly inside it. An import that resolves to no analysed file is external.
+  - Files in a language `km deps` does not support are left out of the graph instead of being listed with zero dependencies. The table footer, an `unsupported` array in the JSON and `unsupported:N` in the `short` format say how many were skipped. The JSON `files` array and the `short` format's `files:N` no longer count them.
+
+### Refactor
+
+- **deps**: move Kaikai extraction and resolution into their own module
+
 ## v0.26.0 (2026-09-24)
 
 ### Feat
