@@ -1,0 +1,30 @@
+#!/bin/sh
+# kalku-summon-contract: 1
+# Summons the Rust kalku for this project. Written by `kalku init`.
+#
+# stdout carries the kalku protocol. Nothing is built here: cargo runs
+# inside `prepare`, with its output on stderr.
+set -eu
+
+# Every summoning is handed the reni first. This kalku is told where the
+# reni is through `hello`, so the argument is taken off here rather than
+# passed on.
+: "${1:?this script is summoned by kalku, which passes the reni as the first argument}"
+reni=$1
+shift
+
+# The reni is a copy of the project without `.git`, and part of the suite
+# reads this repository's own history. Give the copy a clone of it: those
+# tests can read, and nothing a wekufe does reaches the real repository.
+project=$(cd "$(dirname "$0")/.." && pwd)
+if [ ! -e "$reni/.git" ] && git -C "$project" rev-parse --git-dir >/dev/null 2>&1; then
+    mkdir -p "$reni"
+    scratch=$(mktemp -d)
+    git clone --quiet --no-checkout "$project" "$scratch/clone" >&2
+    git --git-dir="$scratch/clone/.git" read-tree HEAD >&2
+    mv "$scratch/clone/.git" "$reni/.git"
+    rm -rf "$scratch"
+fi
+
+
+exec kalku-rust "$@"

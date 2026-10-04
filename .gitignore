@@ -2,3 +2,4 @@
 *.pdf
 *.epub
 .envrc
+.kalku/runs.ndjson
