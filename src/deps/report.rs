@@ -5,7 +5,7 @@
 /// separately after the main table.
 use crate::report_helpers;
 
-use super::analyzer::{DepEntry, DepResult, JsonDepResult};
+use super::analyzer::{DepEntry, DepResult, JsonDepResult, UnsupportedLanguage};
 
 const COL_LANG: usize = 10;
 const COL_FAN_IN: usize = 6;
@@ -18,6 +18,7 @@ const FIXED_WIDTH: usize = 7 + COL_LANG + COL_FAN_IN + COL_FAN_OUT + COL_CYCLE;
 pub fn print_report(entries: &[DepEntry], result: &DepResult) {
     if entries.is_empty() {
         println!("No source files found for dependency analysis.");
+        print_unsupported(result);
         return;
     }
 
@@ -64,6 +65,29 @@ pub fn print_report(entries: &[DepEntry], result: &DepResult) {
             }
         }
     }
+    print_unsupported(result);
+}
+
+/// Print the languages whose files were left out, so that their absence from
+/// the table is not read as "no dependencies".
+fn print_unsupported(result: &DepResult) {
+    if let Some(note) = unsupported_note(&result.unsupported) {
+        println!("{note}");
+    }
+}
+
+fn unsupported_note(unsupported: &[UnsupportedLanguage]) -> Option<String> {
+    if unsupported.is_empty() {
+        return None;
+    }
+    let languages: Vec<String> = unsupported
+        .iter()
+        .map(|u| format!("{} {}", u.language, u.files))
+        .collect();
+    Some(format!(
+        "Not analysed (unsupported language): {}",
+        languages.join(", ")
+    ))
 }
 
 /// Serialize dependency analysis as pretty-printed JSON to stdout.
@@ -75,11 +99,12 @@ pub fn print_json(result: &DepResult) -> Result<(), Box<dyn std::error::Error>> 
 /// Print dependency analysis as a single compact line.
 pub fn print_short(result: &DepResult) {
     println!(
-        "deps files:{} cycles:{} max_fan_out:{} max_fan_in:{}",
+        "deps files:{} cycles:{} max_fan_out:{} max_fan_in:{} unsupported:{}",
         result.entries.len(),
         result.cycles.len(),
         result.entries.iter().map(|e| e.fan_out).max().unwrap_or(0),
         result.entries.iter().map(|e| e.fan_in).max().unwrap_or(0),
+        result.unsupported.iter().map(|u| u.files).sum::<usize>(),
     );
 }
 

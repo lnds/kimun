@@ -3,8 +3,20 @@
 /// Each extractor returns raw import strings that the resolver will map to
 /// project-relative file paths. Only potentially-internal references are
 /// returned: relative imports (JS/TS/Python) and module declarations (Rust).
-/// Go imports are returned verbatim for the resolver to filter by module path.
+/// Go and Kaikai imports are returned verbatim for the resolver to filter:
+/// by module path (Go) or by what exists in the project (Kaikai).
 use std::path::Path;
+
+use super::kaikai;
+
+/// Whether imports can be extracted and resolved for this language.
+/// Files in any other language have no measured dependencies.
+pub fn is_supported(language: &str) -> bool {
+    matches!(
+        language,
+        "Rust" | "Python" | "JavaScript" | "TypeScript" | "JSX" | "TSX" | "Go" | "Kaikai"
+    )
+}
 
 /// Extract raw import references from a source file.
 /// Returns strings that the resolver will attempt to map to project files.
@@ -14,6 +26,7 @@ pub fn extract_imports(path: &Path, language: &str, source: &str) -> Vec<String>
         "Python" => extract_python(source),
         "JavaScript" | "TypeScript" | "JSX" | "TSX" => extract_js(source),
         "Go" => extract_go(source),
+        "Kaikai" => kaikai::extract(source),
         _ => vec![],
     }
 }
@@ -199,5 +212,21 @@ import (
                 "github.com/user/project/internal/bar",
             ]
         );
+    }
+
+    #[test]
+    fn kaikai_is_extracted_through_the_dispatcher() {
+        let result = extract_imports(&PathBuf::from("app/main.kai"), "Kaikai", "import app.b\n");
+        assert_eq!(result, vec!["app.b"]);
+    }
+
+    #[test]
+    fn supported_languages() {
+        for lang in ["Rust", "Python", "TypeScript", "TSX", "Go", "Kaikai"] {
+            assert!(is_supported(lang), "{lang} should be supported");
+        }
+        for lang in ["Bash", "TOML", "Java"] {
+            assert!(!is_supported(lang), "{lang} should not be supported");
+        }
     }
 }

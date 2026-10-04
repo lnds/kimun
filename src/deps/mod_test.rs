@@ -164,3 +164,132 @@ fn run_terse_format() {
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     run(&cfg, OutputMode::Terse, false, "default", 20).unwrap();
 }
+
+// ── Kaikai ───────────────────────────────────────────────────────────────────
+
+fn write(root: &std::path::Path, rel: &str, content: &str) {
+    let path = root.join(rel);
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(path, content).unwrap();
+}
+
+/// (fan_in, fan_out, in_cycle) of the entry at `rel`.
+fn metrics(result: &DepResult, rel: &str) -> (usize, usize, bool) {
+    let entry = result
+        .entries
+        .iter()
+        .find(|e| e.path == std::path::Path::new(rel))
+        .unwrap_or_else(|| panic!("no entry for {rel}"));
+    (entry.fan_in, entry.fan_out, entry.in_cycle)
+}
+
+#[test]
+fn kaikai_imports_build_the_graph() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        "app/main.kai",
+        "import app.util.text\nimport app.b as b\n\n\
+         fn main() : Unit / Stdout = Stdout.print(text.shout(b.name()))\n",
+    );
+    write(
+        dir.path(),
+        "app/b.kai",
+        "import app.util.text.{shout}\nimport app.main\n\n\
+         pub fn name() : String = shout(\"b\")\n",
+    );
+    write(
+        dir.path(),
+        "app/util/text.kai",
+        "pub fn shout(s: String) : String = s\n",
+    );
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = analyze(&cfg);
+
+    assert_eq!(metrics(&result, "app/main.kai"), (1, 2, true));
+    assert_eq!(metrics(&result, "app/b.kai"), (1, 2, true));
+    assert_eq!(metrics(&result, "app/util/text.kai"), (2, 0, false));
+    assert_eq!(
+        result.cycles,
+        vec![vec![
+            PathBuf::from("app/b.kai"),
+            PathBuf::from("app/main.kai")
+        ]]
+    );
+    assert!(result.unsupported.is_empty());
+}
+
+#[test]
+fn kaikai_external_and_commented_imports_add_no_edges() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        "main.kai",
+        "import core.list\n# import helper\n\
+         #[doc(\"\"\"\nimport helper\n\"\"\")]\npub fn main() : Unit = ()\n",
+    );
+    write(dir.path(), "helper.kai", "pub fn help() : Unit = ()\n");
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = analyze(&cfg);
+
+    assert_eq!(metrics(&result, "main.kai"), (0, 0, false));
+    assert_eq!(metrics(&result, "helper.kai"), (0, 0, false));
+}
+
+#[test]
+fn kaikai_package_directory_import() {
+    let dir = tempfile::tempdir().unwrap();
+    write(dir.path(), "consumer/main.kai", "import mid\n");
+    write(dir.path(), "mid/kai.toml", "name = \"mid\"\n");
+    write(dir.path(), "mid/mid.kai", "pub fn m() : Unit = ()\n");
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = analyze(&cfg);
+
+    assert_eq!(metrics(&result, "consumer/main.kai"), (0, 1, false));
+    assert_eq!(metrics(&result, "mid/mid.kai"), (1, 0, false));
+}
+
+// ── unsupported languages ────────────────────────────────────────────────────
+
+#[test]
+fn unsupported_languages_are_left_out_of_the_graph() {
+    let dir = tempfile::tempdir().unwrap();
+    write(dir.path(), "lib.rs", "mod foo;\n");
+    write(dir.path(), "foo.rs", "pub fn f() {}\n");
+    write(dir.path(), "build.sh", "echo hi\n");
+    write(dir.path(), "deploy.sh", "echo bye\n");
+    write(dir.path(), "Main.java", "class Main {}\n");
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = analyze(&cfg);
+
+    let analysed: Vec<&str> = result.entries.iter().map(|e| e.language.as_str()).collect();
+    assert_eq!(analysed, vec!["Rust", "Rust"]);
+    assert_eq!(
+        result.unsupported,
+        vec![
+            UnsupportedLanguage {
+                language: "Bourne Shell".to_string(),
+                files: 2,
+            },
+            UnsupportedLanguage {
+                language: "Java".to_string(),
+                files: 1,
+            },
+        ]
+    );
+}
+
+#[test]
+fn run_on_unsupported_languages_only() {
+    let dir = tempfile::tempdir().unwrap();
+    write(dir.path(), "build.sh", "echo hi\n");
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    for mode in [OutputMode::Table, OutputMode::Json, OutputMode::Short] {
+        run(&cfg, mode, false, "default", 20).unwrap();
+    }
+}
