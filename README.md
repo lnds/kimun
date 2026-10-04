@@ -640,7 +640,16 @@ Analyzes internal module dependencies by parsing import/use/require statements. 
 km deps [path]
 ```
 
-Supports Rust (`mod X;`), Python (relative `from .X import`), JavaScript/TypeScript (relative `import`/`require`), and Go (imports matching the module path from `go.mod`). External dependencies (crates, npm packages) are ignored.
+Supports Rust (`mod X;`), Python (relative `from .X import`), JavaScript/TypeScript (relative `import`/`require`), Go (imports matching the module path from `go.mod`), and Kaikai (`import a.b.c`, including the `as` and `.{…}` forms). External dependencies (crates, npm packages, the Kaikai stdlib) are ignored.
+
+Files in any other language are left out of the graph instead of being listed with zero dependencies. The table footer, the `unsupported` array of the JSON output and the `unsupported:N` field of the short format say how many files were skipped, so "not measured" is never shown as "no dependencies".
+
+Kaikai notes:
+
+- `import a.b.c` names `a/b/c.kai` relative to a package root, not to the importing file. Each ancestor directory of the importing file is tried, nearest first, so run `km deps` on a directory that contains the package root.
+- When no such file exists, `import a` can name a package directory `a/` that carries a `kai.toml`; the import then depends on every `.kai` file directly inside it.
+- An import that resolves to no analysed file is external and adds no edge.
+- The files of one Kaikai package merge, so a module can use a name declared in another file of its package without importing it. The import graph is therefore a lower bound on the real dependencies.
 
 | Flag | Description |
 |------|-------------|

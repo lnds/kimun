@@ -19,7 +19,11 @@ fn make_entry(
 }
 
 fn make_result(entries: Vec<DepEntry>, cycles: Vec<Vec<PathBuf>>) -> DepResult {
-    DepResult { entries, cycles }
+    DepResult {
+        entries,
+        cycles,
+        unsupported: vec![],
+    }
 }
 
 // ── print_report ────────────────────────────────────────────────────────────
@@ -135,4 +139,49 @@ fn print_json_with_cycles() {
     let cycle = vec![PathBuf::from("src/a.rs"), PathBuf::from("src/b.rs")];
     let result = make_result(entries, vec![cycle]);
     print_json(&result).unwrap();
+}
+
+// ── unsupported languages ────────────────────────────────────────────────────
+
+fn unsupported(items: &[(&str, usize)]) -> Vec<UnsupportedLanguage> {
+    items
+        .iter()
+        .map(|(language, files)| UnsupportedLanguage {
+            language: language.to_string(),
+            files: *files,
+        })
+        .collect()
+}
+
+#[test]
+fn unsupported_note_is_absent_when_everything_was_analysed() {
+    assert_eq!(unsupported_note(&[]), None);
+}
+
+#[test]
+fn unsupported_note_lists_languages_and_file_counts() {
+    let note = unsupported_note(&unsupported(&[("Bourne Shell", 3), ("TOML", 1)]));
+    assert_eq!(
+        note.as_deref(),
+        Some("Not analysed (unsupported language): Bourne Shell 3, TOML 1")
+    );
+}
+
+#[test]
+fn print_report_with_unsupported_languages() {
+    let entries = vec![make_entry("src/main.rs", "Rust", 0, 0, false)];
+    let mut result = make_result(entries.clone(), vec![]);
+    result.unsupported = unsupported(&[("TOML", 1)]);
+    print_report(&entries, &result);
+    print_report(&[], &result);
+    print_short(&result);
+}
+
+#[test]
+fn json_carries_unsupported_languages() {
+    let mut result = make_result(vec![], vec![]);
+    result.unsupported = unsupported(&[("TOML", 2)]);
+    let json = serde_json::to_value(JsonDepResult::from(&result)).unwrap();
+    assert_eq!(json["unsupported"][0]["language"], "TOML");
+    assert_eq!(json["unsupported"][0]["files"], 2);
 }

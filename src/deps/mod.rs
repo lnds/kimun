@@ -16,8 +16,29 @@ use std::path::{Path, PathBuf};
 
 use crate::walk::{self, WalkConfig};
 
-use analyzer::{DepEntry, DepResult, build_graph, resolve_import};
-use extractor::extract_imports;
+use analyzer::{DepEntry, DepResult, UnsupportedLanguage, build_graph, resolve_import};
+use extractor::{extract_imports, is_supported};
+
+/// Count the skipped files per language, largest group first.
+fn count_unsupported(skipped: &[(PathBuf, String)]) -> Vec<UnsupportedLanguage> {
+    let mut counts: HashMap<&str, usize> = HashMap::new();
+    for (_, language) in skipped {
+        *counts.entry(language).or_default() += 1;
+    }
+    let mut unsupported: Vec<UnsupportedLanguage> = counts
+        .into_iter()
+        .map(|(language, files)| UnsupportedLanguage {
+            language: language.to_string(),
+            files,
+        })
+        .collect();
+    unsupported.sort_by(|a, b| {
+        b.files
+            .cmp(&a.files)
+            .then_with(|| a.language.cmp(&b.language))
+    });
+    unsupported
+}
 
 /// Try to read the Go module name from `go.mod` in the project root.
 fn detect_go_module(root: &Path) -> Option<String> {
@@ -30,28 +51,30 @@ fn detect_go_module(root: &Path) -> Option<String> {
     None
 }
 
-/// Run dependency graph analysis: walk files, extract imports, build graph, output.
-pub fn run(
-    cfg: &WalkConfig<'_>,
-    output: crate::cli::OutputMode,
-    cycles_only: bool,
-    sort_by: &str,
-    top: usize,
-) -> Result<(), Box<dyn Error>> {
+/// Walk files, extract and resolve their imports, and build the dependency graph.
+fn analyze(cfg: &WalkConfig<'_>) -> DepResult {
     let go_module = detect_go_module(cfg.path);
 
-    // Collect all source files with their language
-    let all_files: Vec<(PathBuf, String)> =
+    // Collect all source files with their language. A file whose language has
+    // no import extractor stays out of the graph: listing it with zero
+    // dependencies would pass an unmeasured file off as a measured one.
+    let (all_files, skipped): (Vec<_>, Vec<_>) =
         walk::source_files(cfg.path, cfg.exclude_tests(), cfg.filter)
             .into_iter()
             .map(|(p, spec)| {
                 let rel = p.strip_prefix(cfg.path).unwrap_or(&p).to_path_buf();
                 (rel, spec.name.to_string())
             })
-            .collect();
+            .partition(|(_, language)| is_supported(language));
+    let unsupported = count_unsupported(&skipped);
 
-    // Build a set of known project-relative paths for fast lookup during resolution
-    let file_set: HashSet<PathBuf> = all_files.iter().map(|(p, _)| p.clone()).collect();
+    // Build a set of known project-relative paths for fast lookup during resolution.
+    // Skipped files stay in it: resolvers look for manifests such as `kai.toml`.
+    let file_set: HashSet<PathBuf> = all_files
+        .iter()
+        .chain(&skipped)
+        .map(|(p, _)| p.clone())
+        .collect();
 
     // For each file, read content and extract + resolve imports
     let mut edges: HashMap<PathBuf, Vec<PathBuf>> = HashMap::new();
@@ -69,7 +92,7 @@ pub fn run(
         let raw_imports = extract_imports(rel_path, language, &source);
         let resolved: Vec<PathBuf> = raw_imports
             .iter()
-            .filter_map(|imp| {
+            .flat_map(|imp| {
                 resolve_import(rel_path, imp, language, &file_set, go_module.as_deref())
             })
             .collect();
@@ -88,6 +111,19 @@ pub fn run(
     }
 
     let mut result = build_graph(&all_files, &edges);
+    result.unsupported = unsupported;
+    result
+}
+
+/// Run dependency graph analysis: walk files, extract imports, build graph, output.
+pub fn run(
+    cfg: &WalkConfig<'_>,
+    output: crate::cli::OutputMode,
+    cycles_only: bool,
+    sort_by: &str,
+    top: usize,
+) -> Result<(), Box<dyn Error>> {
+    let mut result = analyze(cfg);
 
     // Apply sort
     match sort_by {
@@ -115,6 +151,7 @@ pub fn run(
             let filtered = DepResult {
                 entries: entries.iter().map(|e| (*e).clone()).collect(),
                 cycles: result.cycles.clone(),
+                unsupported: result.unsupported.clone(),
             };
             report::print_json(&filtered)
         }

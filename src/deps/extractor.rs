@@ -3,8 +3,22 @@
 /// Each extractor returns raw import strings that the resolver will map to
 /// project-relative file paths. Only potentially-internal references are
 /// returned: relative imports (JS/TS/Python) and module declarations (Rust).
-/// Go imports are returned verbatim for the resolver to filter by module path.
+/// Go and Kaikai imports are returned verbatim for the resolver to filter:
+/// by module path (Go) or by what exists in the project (Kaikai).
 use std::path::Path;
+
+use crate::loc::counter::{LineKind, classify_reader};
+use crate::loc::language::languages;
+use crate::string_mask::multi_line_string_mask;
+
+/// Whether imports can be extracted and resolved for this language.
+/// Files in any other language have no measured dependencies.
+pub fn is_supported(language: &str) -> bool {
+    matches!(
+        language,
+        "Rust" | "Python" | "JavaScript" | "TypeScript" | "JSX" | "TSX" | "Go" | "Kaikai"
+    )
+}
 
 /// Extract raw import references from a source file.
 /// Returns strings that the resolver will attempt to map to project files.
@@ -14,6 +28,7 @@ pub fn extract_imports(path: &Path, language: &str, source: &str) -> Vec<String>
         "Python" => extract_python(source),
         "JavaScript" | "TypeScript" | "JSX" | "TSX" => extract_js(source),
         "Go" => extract_go(source),
+        "Kaikai" => extract_kaikai(source),
         _ => vec![],
     }
 }
@@ -143,6 +158,47 @@ fn extract_quoted(s: &str) -> Option<String> {
     Some(before[start2..].to_string())
 }
 
+/// Kaikai: extract the dotted module path of each `import` line
+/// (`import a.b.c`, `import a.b as x`, `import a.b.{f, g}`).
+///
+/// The line classifier and the multi-line string mask are reused so that an
+/// `import` written inside a `#[doc(...)]` block or a triple-quoted string is
+/// not taken for a real one.
+fn extract_kaikai(source: &str) -> Vec<String> {
+    let Some(spec) = languages().iter().find(|s| s.name == "Kaikai") else {
+        return vec![];
+    };
+    let normalized = source.replace("\r\n", "\n");
+    let lines: Vec<String> = normalized.lines().map(String::from).collect();
+    let kinds = classify_reader(normalized.as_bytes(), spec);
+    let in_string = multi_line_string_mask(&lines, spec);
+
+    lines
+        .iter()
+        .zip(kinds)
+        .zip(in_string)
+        .filter(|((_, kind), masked)| *kind == LineKind::Code && !masked)
+        .filter_map(|((line, _), _)| kaikai_import_path(line))
+        .map(str::to_string)
+        .collect()
+}
+
+/// The module path of a Kaikai `import` line, without its alias or its
+/// selective list: `import a.b.{f, g}` → `a.b`.
+fn kaikai_import_path(line: &str) -> Option<&str> {
+    let rest = line.trim_start().strip_prefix("import")?;
+    if !rest.starts_with(char::is_whitespace) {
+        return None;
+    }
+    let rest = rest.trim_start();
+    let end = rest
+        .find(|c: char| !(c.is_alphanumeric() || c == '_' || c == '.'))
+        .unwrap_or(rest.len());
+    // The selective form leaves the dot that precedes `{`.
+    let path = rest[..end].trim_end_matches('.');
+    (!path.is_empty() && path.split('.').all(|seg| !seg.is_empty())).then_some(path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -199,5 +255,97 @@ import (
                 "github.com/user/project/internal/bar",
             ]
         );
+    }
+
+    #[test]
+    fn kaikai_import_forms() {
+        let src = "\
+import compiler.ast
+import loop
+import core.list as list
+import mathlib.{add, mul}
+import app.util.text.{shout}
+
+fn main() : Unit / Stdout = Stdout.print(\"hi\")
+";
+        assert_eq!(
+            extract_kaikai(src),
+            vec![
+                "compiler.ast",
+                "loop",
+                "core.list",
+                "mathlib",
+                "app.util.text"
+            ]
+        );
+    }
+
+    #[test]
+    fn kaikai_import_with_trailing_comment() {
+        assert_eq!(
+            extract_kaikai("import compiler.ast # the tree\n"),
+            vec!["compiler.ast"]
+        );
+    }
+
+    #[test]
+    fn kaikai_import_in_comment_is_skipped() {
+        let src = "# import compiler.ast\n  # import compiler.lexer\nimport compiler.parser\n";
+        assert_eq!(extract_kaikai(src), vec!["compiler.parser"]);
+    }
+
+    #[test]
+    fn kaikai_import_in_doc_block_is_skipped() {
+        let src = "\
+import compiler.ast
+
+#[doc(\"\"\"
+Usage:
+
+import compiler.parser
+\"\"\")]
+pub fn parse() : Unit = ()
+";
+        assert_eq!(extract_kaikai(src), vec!["compiler.ast"]);
+    }
+
+    #[test]
+    fn kaikai_import_in_multi_line_string_is_skipped() {
+        let src = "\
+import compiler.ast
+
+fn sample() : String = \"\"\"
+import compiler.parser
+\"\"\"
+";
+        assert_eq!(extract_kaikai(src), vec!["compiler.ast"]);
+    }
+
+    #[test]
+    fn kaikai_import_inside_single_line_string_is_skipped() {
+        let src = "let s = \"import compiler.ast\"\n";
+        assert!(extract_kaikai(src).is_empty());
+    }
+
+    #[test]
+    fn kaikai_names_starting_with_import_are_not_imports() {
+        let src = "importer.run()\nimport_all(xs)\nimport ?\n";
+        assert!(extract_kaikai(src).is_empty());
+    }
+
+    #[test]
+    fn kaikai_is_extracted_through_the_dispatcher() {
+        let result = extract_imports(&PathBuf::from("app/main.kai"), "Kaikai", "import app.b\n");
+        assert_eq!(result, vec!["app.b"]);
+    }
+
+    #[test]
+    fn supported_languages() {
+        for lang in ["Rust", "Python", "TypeScript", "TSX", "Go", "Kaikai"] {
+            assert!(is_supported(lang), "{lang} should be supported");
+        }
+        for lang in ["Bash", "TOML", "Java"] {
+            assert!(!is_supported(lang), "{lang} should not be supported");
+        }
     }
 }

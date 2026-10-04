@@ -3,7 +3,7 @@
 /// Builds a directed graph of internal file dependencies, computes per-file
 /// fan-in (importers) and fan-out (imports), and detects cycles using
 /// Tarjan's strongly-connected components (SCC) algorithm.
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
@@ -21,11 +21,20 @@ pub struct DepEntry {
     pub in_cycle: bool,
 }
 
+/// Files left out of the graph because imports are not extracted for their language.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct UnsupportedLanguage {
+    pub language: String,
+    pub files: usize,
+}
+
 /// Full dependency analysis result.
 pub struct DepResult {
     pub entries: Vec<DepEntry>,
     /// Each inner Vec is a set of files forming a cycle (SCC size > 1).
     pub cycles: Vec<Vec<PathBuf>>,
+    /// Languages found in the project whose files were not analysed.
+    pub unsupported: Vec<UnsupportedLanguage>,
 }
 
 /// Build the dependency graph from raw edges and compute metrics.
@@ -96,7 +105,11 @@ pub fn build_graph(
         })
         .collect();
 
-    DepResult { entries, cycles }
+    DepResult {
+        entries,
+        cycles,
+        unsupported: Vec::new(),
+    }
 }
 
 /// Tarjan's strongly-connected components algorithm (iterative to avoid stack overflow).
@@ -181,6 +194,7 @@ pub struct JsonDepResult {
     pub files: Vec<JsonDepEntry>,
     pub cycles: Vec<Vec<String>>,
     pub cycle_count: usize,
+    pub unsupported: Vec<UnsupportedLanguage>,
 }
 
 impl From<&DepResult> for JsonDepResult {
@@ -203,34 +217,77 @@ impl From<&DepResult> for JsonDepResult {
                 .map(|c| c.iter().map(|p| p.display().to_string()).collect())
                 .collect(),
             cycle_count: r.cycles.len(),
+            unsupported: r.unsupported.clone(),
         }
     }
 }
 
-/// Resolve a raw import string to a project-relative path, given the importer's location.
-/// Returns `None` if the import cannot be resolved to a known project file.
+/// Resolve a raw import string to the project-relative files it names, given the
+/// importer's location. Empty if the import names no known project file.
+/// Only a Kaikai package import can name more than one file.
 pub fn resolve_import(
     importer: &Path,  // project-relative path of the importing file
     import_str: &str, // raw import string from extractor
     language: &str,
-    file_set: &std::collections::HashSet<PathBuf>,
+    file_set: &HashSet<PathBuf>,
     go_module: Option<&str>,
-) -> Option<PathBuf> {
+) -> Vec<PathBuf> {
     let dir = importer.parent().unwrap_or(Path::new(""));
-    match language {
+    let single = match language {
         "Rust" => resolve_rust(dir, import_str, file_set),
         "Python" => resolve_python(dir, import_str, file_set),
         "JavaScript" | "TypeScript" | "JSX" | "TSX" => resolve_js(dir, import_str, file_set),
         "Go" => resolve_go(import_str, go_module, file_set),
+        "Kaikai" => return resolve_kaikai(importer, import_str, file_set),
         _ => None,
-    }
+    };
+    single.into_iter().collect()
 }
 
-fn resolve_rust(
-    dir: &Path,
-    name: &str,
-    file_set: &std::collections::HashSet<PathBuf>,
-) -> Option<PathBuf> {
+/// Kaikai: `import a.b.c` names `a/b/c.kai` under a package root, not under
+/// the importing file's directory. The source does not say where that root
+/// is, so every ancestor directory of the importer is tried, nearest first.
+///
+/// When no ancestor holds that file, the import may name a package directory
+/// `a/b/c/` instead; its files merge into one module, so the import resolves
+/// to all the `.kai` files directly inside it. Only a directory with a
+/// `kai.toml` manifest counts: a plain directory that happens to share its
+/// name with an external module (`import loop` next to `loop/`) is not one.
+fn resolve_kaikai(importer: &Path, module: &str, file_set: &HashSet<PathBuf>) -> Vec<PathBuf> {
+    let dir = importer.parent().unwrap_or(Path::new(""));
+    let rel = module.replace('.', "/");
+
+    for root in dir.ancestors() {
+        let as_file = root.join(format!("{rel}.kai"));
+        if file_set.contains(&as_file) {
+            return vec![as_file];
+        }
+    }
+
+    for root in dir.ancestors() {
+        let package = root.join(&rel);
+        if !file_set.contains(&package.join("kai.toml")) {
+            continue;
+        }
+        let mut members: Vec<PathBuf> = file_set
+            .iter()
+            .filter(|p| {
+                p.parent() == Some(package.as_path())
+                    && p.extension().is_some_and(|e| e == "kai")
+                    && p.as_path() != importer
+            })
+            .cloned()
+            .collect();
+        if !members.is_empty() {
+            members.sort();
+            return members;
+        }
+    }
+
+    Vec::new()
+}
+
+fn resolve_rust(dir: &Path, name: &str, file_set: &HashSet<PathBuf>) -> Option<PathBuf> {
     // `mod foo;` → foo.rs or foo/mod.rs relative to current directory
     let as_file = dir.join(format!("{name}.rs"));
     if file_set.contains(&as_file) {
@@ -244,11 +301,7 @@ fn resolve_rust(
     None
 }
 
-fn resolve_python(
-    dir: &Path,
-    import_str: &str,
-    file_set: &std::collections::HashSet<PathBuf>,
-) -> Option<PathBuf> {
+fn resolve_python(dir: &Path, import_str: &str, file_set: &HashSet<PathBuf>) -> Option<PathBuf> {
     // Count leading dots for relative level
     let dots = import_str.chars().take_while(|c| *c == '.').count();
     let module = &import_str[dots..]; // module name after dots
@@ -276,11 +329,7 @@ fn resolve_python(
     None
 }
 
-fn resolve_js(
-    dir: &Path,
-    import_str: &str,
-    file_set: &std::collections::HashSet<PathBuf>,
-) -> Option<PathBuf> {
+fn resolve_js(dir: &Path, import_str: &str, file_set: &HashSet<PathBuf>) -> Option<PathBuf> {
     let base = dir.join(import_str);
     // If already has an extension, try directly
     if base.extension().is_some() {
@@ -309,7 +358,7 @@ fn resolve_js(
 fn resolve_go(
     import_str: &str,
     go_module: Option<&str>,
-    file_set: &std::collections::HashSet<PathBuf>,
+    file_set: &HashSet<PathBuf>,
 ) -> Option<PathBuf> {
     let module = go_module?;
     let rel = import_str.strip_prefix(module)?.trim_start_matches('/');
@@ -426,23 +475,23 @@ mod tests {
 
     #[test]
     fn resolve_rust_file() {
-        let mut file_set = std::collections::HashSet::new();
+        let mut file_set = HashSet::new();
         file_set.insert(PathBuf::from("src/foo.rs"));
         let result = resolve_import(Path::new("src/main.rs"), "foo", "Rust", &file_set, None);
-        assert_eq!(result, Some(PathBuf::from("src/foo.rs")));
+        assert_eq!(result, vec![PathBuf::from("src/foo.rs")]);
     }
 
     #[test]
     fn resolve_rust_mod_dir() {
-        let mut file_set = std::collections::HashSet::new();
+        let mut file_set = HashSet::new();
         file_set.insert(PathBuf::from("src/bar/mod.rs"));
         let result = resolve_import(Path::new("src/main.rs"), "bar", "Rust", &file_set, None);
-        assert_eq!(result, Some(PathBuf::from("src/bar/mod.rs")));
+        assert_eq!(result, vec![PathBuf::from("src/bar/mod.rs")]);
     }
 
     #[test]
     fn resolve_js_relative() {
-        let mut file_set = std::collections::HashSet::new();
+        let mut file_set = HashSet::new();
         file_set.insert(PathBuf::from("src/utils.ts"));
         let result = resolve_import(
             Path::new("src/components/App.tsx"),
@@ -451,7 +500,7 @@ mod tests {
             &file_set,
             None,
         );
-        assert_eq!(result, Some(PathBuf::from("src/utils.ts")));
+        assert_eq!(result, vec![PathBuf::from("src/utils.ts")]);
     }
 
     #[test]
@@ -464,7 +513,7 @@ mod tests {
 
     #[test]
     fn resolve_python_relative_as_file() {
-        let mut file_set = std::collections::HashSet::new();
+        let mut file_set = HashSet::new();
         file_set.insert(PathBuf::from("src/utils.py"));
         let result = resolve_import(
             Path::new("src/main.py"),
@@ -473,12 +522,12 @@ mod tests {
             &file_set,
             None,
         );
-        assert_eq!(result, Some(PathBuf::from("src/utils.py")));
+        assert_eq!(result, vec![PathBuf::from("src/utils.py")]);
     }
 
     #[test]
     fn resolve_python_relative_as_package() {
-        let mut file_set = std::collections::HashSet::new();
+        let mut file_set = HashSet::new();
         file_set.insert(PathBuf::from("src/utils/__init__.py"));
         let result = resolve_import(
             Path::new("src/main.py"),
@@ -487,12 +536,12 @@ mod tests {
             &file_set,
             None,
         );
-        assert_eq!(result, Some(PathBuf::from("src/utils/__init__.py")));
+        assert_eq!(result, vec![PathBuf::from("src/utils/__init__.py")]);
     }
 
     #[test]
     fn resolve_python_double_dot_goes_up() {
-        let mut file_set = std::collections::HashSet::new();
+        let mut file_set = HashSet::new();
         file_set.insert(PathBuf::from("common.py"));
         // From src/sub/main.py, ..common → src/common.py? No, two dots goes up two levels
         // importer: src/sub/main.py → dir = src/sub
@@ -506,12 +555,12 @@ mod tests {
             &file_set,
             None,
         );
-        assert_eq!(result, Some(PathBuf::from("src/common.py")));
+        assert_eq!(result, vec![PathBuf::from("src/common.py")]);
     }
 
     #[test]
     fn resolve_python_dotted_module_path() {
-        let mut file_set = std::collections::HashSet::new();
+        let mut file_set = HashSet::new();
         file_set.insert(PathBuf::from("src/foo/bar.py"));
         let result = resolve_import(
             Path::new("src/main.py"),
@@ -520,20 +569,20 @@ mod tests {
             &file_set,
             None,
         );
-        assert_eq!(result, Some(PathBuf::from("src/foo/bar.py")));
+        assert_eq!(result, vec![PathBuf::from("src/foo/bar.py")]);
     }
 
     #[test]
     fn resolve_python_module_only_dots_returns_none() {
         // Single dot with no module name → skip
-        let file_set = std::collections::HashSet::new();
+        let file_set = HashSet::new();
         let result = resolve_import(Path::new("src/main.py"), ".", "Python", &file_set, None);
-        assert!(result.is_none());
+        assert!(result.is_empty());
     }
 
     #[test]
     fn resolve_python_not_found_returns_none() {
-        let file_set = std::collections::HashSet::new();
+        let file_set = HashSet::new();
         let result = resolve_import(
             Path::new("src/main.py"),
             ".missing",
@@ -541,14 +590,14 @@ mod tests {
             &file_set,
             None,
         );
-        assert!(result.is_none());
+        assert!(result.is_empty());
     }
 
     // ── JavaScript/TypeScript resolution ──────────────────────────────────
 
     #[test]
     fn resolve_js_direct_extension() {
-        let mut file_set = std::collections::HashSet::new();
+        let mut file_set = HashSet::new();
         file_set.insert(PathBuf::from("src/utils.js"));
         let result = resolve_import(
             Path::new("src/app.js"),
@@ -557,12 +606,12 @@ mod tests {
             &file_set,
             None,
         );
-        assert_eq!(result, Some(PathBuf::from("src/utils.js")));
+        assert_eq!(result, vec![PathBuf::from("src/utils.js")]);
     }
 
     #[test]
     fn resolve_js_without_extension_ts() {
-        let mut file_set = std::collections::HashSet::new();
+        let mut file_set = HashSet::new();
         file_set.insert(PathBuf::from("src/utils.ts"));
         let result = resolve_import(
             Path::new("src/app.ts"),
@@ -571,12 +620,12 @@ mod tests {
             &file_set,
             None,
         );
-        assert_eq!(result, Some(PathBuf::from("src/utils.ts")));
+        assert_eq!(result, vec![PathBuf::from("src/utils.ts")]);
     }
 
     #[test]
     fn resolve_js_index_file() {
-        let mut file_set = std::collections::HashSet::new();
+        let mut file_set = HashSet::new();
         file_set.insert(PathBuf::from("src/components/index.tsx"));
         let result = resolve_import(
             Path::new("src/app.tsx"),
@@ -585,20 +634,20 @@ mod tests {
             &file_set,
             None,
         );
-        assert_eq!(result, Some(PathBuf::from("src/components/index.tsx")));
+        assert_eq!(result, vec![PathBuf::from("src/components/index.tsx")]);
     }
 
     #[test]
     fn resolve_js_jsx_extension() {
-        let mut file_set = std::collections::HashSet::new();
+        let mut file_set = HashSet::new();
         file_set.insert(PathBuf::from("src/Button.jsx"));
         let result = resolve_import(Path::new("src/App.jsx"), "./Button", "JSX", &file_set, None);
-        assert_eq!(result, Some(PathBuf::from("src/Button.jsx")));
+        assert_eq!(result, vec![PathBuf::from("src/Button.jsx")]);
     }
 
     #[test]
     fn resolve_js_not_found_returns_none() {
-        let file_set = std::collections::HashSet::new();
+        let file_set = HashSet::new();
         let result = resolve_import(
             Path::new("src/app.ts"),
             "./missing",
@@ -606,13 +655,13 @@ mod tests {
             &file_set,
             None,
         );
-        assert!(result.is_none());
+        assert!(result.is_empty());
     }
 
     #[test]
     fn resolve_js_direct_extension_not_found_returns_none() {
         // Has extension but file doesn't exist in file_set
-        let file_set = std::collections::HashSet::new();
+        let file_set = HashSet::new();
         let result = resolve_import(
             Path::new("src/app.ts"),
             "./nonexistent.ts",
@@ -620,14 +669,14 @@ mod tests {
             &file_set,
             None,
         );
-        assert!(result.is_none());
+        assert!(result.is_empty());
     }
 
     // ── Go resolution ──────────────────────────────────────────────────────
 
     #[test]
     fn resolve_go_with_module() {
-        let mut file_set = std::collections::HashSet::new();
+        let mut file_set = HashSet::new();
         file_set.insert(PathBuf::from("pkg/foo/main.go"));
         let result = resolve_import(
             Path::new("main.go"),
@@ -636,12 +685,12 @@ mod tests {
             &file_set,
             Some("github.com/user/proj"),
         );
-        assert_eq!(result, Some(PathBuf::from("pkg/foo/main.go")));
+        assert_eq!(result, vec![PathBuf::from("pkg/foo/main.go")]);
     }
 
     #[test]
     fn resolve_go_no_module_returns_none() {
-        let file_set = std::collections::HashSet::new();
+        let file_set = HashSet::new();
         let result = resolve_import(
             Path::new("main.go"),
             "github.com/user/proj/pkg/foo",
@@ -649,13 +698,13 @@ mod tests {
             &file_set,
             None, // no go_module
         );
-        assert!(result.is_none());
+        assert!(result.is_empty());
     }
 
     #[test]
     fn resolve_go_external_package_returns_none() {
         // Import doesn't start with module prefix
-        let file_set = std::collections::HashSet::new();
+        let file_set = HashSet::new();
         let result = resolve_import(
             Path::new("main.go"),
             "fmt",
@@ -663,13 +712,13 @@ mod tests {
             &file_set,
             Some("github.com/user/proj"),
         );
-        assert!(result.is_none());
+        assert!(result.is_empty());
     }
 
     #[test]
     fn resolve_go_root_module_path_returns_none() {
         // Strip prefix leaves empty string
-        let file_set = std::collections::HashSet::new();
+        let file_set = HashSet::new();
         let result = resolve_import(
             Path::new("main.go"),
             "github.com/user/proj",
@@ -677,14 +726,103 @@ mod tests {
             &file_set,
             Some("github.com/user/proj"),
         );
-        assert!(result.is_none());
+        assert!(result.is_empty());
     }
 
     #[test]
     fn resolve_unknown_language_returns_none() {
-        let file_set = std::collections::HashSet::new();
+        let file_set = HashSet::new();
         let result = resolve_import(Path::new("main.sh"), "utils", "Bash", &file_set, None);
-        assert!(result.is_none());
+        assert!(result.is_empty());
+    }
+
+    // ── Kaikai resolution ──────────────────────────────────────────────────
+
+    fn kai_files(items: &[&str]) -> HashSet<PathBuf> {
+        items.iter().map(PathBuf::from).collect()
+    }
+
+    fn resolve_kai(importer: &str, module: &str, file_set: &HashSet<PathBuf>) -> Vec<PathBuf> {
+        resolve_import(Path::new(importer), module, "Kaikai", file_set, None)
+    }
+
+    #[test]
+    fn resolve_kaikai_dotted_path_is_relative_to_the_package_root() {
+        // A sibling is reached through the root (`stage2/`), not through the
+        // importing file's own directory.
+        let file_set = kai_files(&["stage2/compiler/infer.kai", "stage2/compiler/ast.kai"]);
+        let result = resolve_kai("stage2/compiler/infer.kai", "compiler.ast", &file_set);
+        assert_eq!(result, vec![PathBuf::from("stage2/compiler/ast.kai")]);
+    }
+
+    #[test]
+    fn resolve_kaikai_root_is_the_analysed_directory() {
+        let file_set = kai_files(&["app/main.kai", "app/util/text.kai"]);
+        let result = resolve_kai("app/main.kai", "app.util.text", &file_set);
+        assert_eq!(result, vec![PathBuf::from("app/util/text.kai")]);
+    }
+
+    #[test]
+    fn resolve_kaikai_single_segment_sibling() {
+        let file_set = kai_files(&["pkg/main.kai", "pkg/shapes.kai"]);
+        let result = resolve_kai("pkg/main.kai", "shapes", &file_set);
+        assert_eq!(result, vec![PathBuf::from("pkg/shapes.kai")]);
+    }
+
+    #[test]
+    fn resolve_kaikai_nearest_root_wins() {
+        let file_set = kai_files(&["a/main.kai", "a/util.kai", "util.kai"]);
+        let result = resolve_kai("a/main.kai", "util", &file_set);
+        assert_eq!(result, vec![PathBuf::from("a/util.kai")]);
+    }
+
+    #[test]
+    fn resolve_kaikai_external_import_resolves_to_nothing() {
+        let file_set = kai_files(&["stage2/compiler/infer.kai", "stage2/compiler/ast.kai"]);
+        assert!(resolve_kai("stage2/compiler/infer.kai", "core.list", &file_set).is_empty());
+        assert!(resolve_kai("stage2/compiler/infer.kai", "loop", &file_set).is_empty());
+    }
+
+    #[test]
+    fn resolve_kaikai_package_directory() {
+        let file_set = kai_files(&[
+            "consumer/main.kai",
+            "mid/kai.toml",
+            "mid/mid.kai",
+            "mid/helpers.kai",
+            "mid/notes.md",
+            "mid/internal/deep.kai",
+        ]);
+        let result = resolve_kai("consumer/main.kai", "mid", &file_set);
+        assert_eq!(
+            result,
+            vec![
+                PathBuf::from("mid/helpers.kai"),
+                PathBuf::from("mid/mid.kai")
+            ]
+        );
+    }
+
+    #[test]
+    fn resolve_kaikai_file_wins_over_package_directory() {
+        let file_set = kai_files(&["main.kai", "mid.kai", "mid/kai.toml", "mid/mid.kai"]);
+        let result = resolve_kai("main.kai", "mid", &file_set);
+        assert_eq!(result, vec![PathBuf::from("mid.kai")]);
+    }
+
+    #[test]
+    fn resolve_kaikai_directory_without_manifest_is_not_a_package() {
+        // `import loop` names an external module; the files that merely live
+        // in a directory called `loop/` do not depend on each other.
+        let file_set = kai_files(&["sugars/loop/while.kai", "sugars/loop/until.kai"]);
+        assert!(resolve_kai("sugars/loop/while.kai", "loop", &file_set).is_empty());
+    }
+
+    #[test]
+    fn resolve_kaikai_package_import_skips_the_importer() {
+        let file_set = kai_files(&["notes/kai.toml", "notes/main.kai", "notes/store.kai"]);
+        let result = resolve_kai("notes/main.kai", "notes", &file_set);
+        assert_eq!(result, vec![PathBuf::from("notes/store.kai")]);
     }
 
     // ── normalize_path ─────────────────────────────────────────────────────
