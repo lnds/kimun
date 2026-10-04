@@ -78,6 +78,18 @@ fn names_starting_with_import_are_not_imports() {
     assert!(extract(src).is_empty());
 }
 
+#[test]
+fn import_with_an_empty_segment_is_not_an_import() {
+    let src = "import a..b\nimport .a\nimport ..\n";
+    assert!(extract(src).is_empty());
+}
+
+#[test]
+fn crlf_line_endings_keep_one_import_per_line() {
+    let src = "import a.b\r\nimport c\r\n\r\nfn main() : Unit = ()\r\n";
+    assert_eq!(extract(src), vec!["a.b", "c"]);
+}
+
 // ── resolution ───────────────────────────────────────────────────────────────
 
 fn kai_files(items: &[&str]) -> HashSet<PathBuf> {

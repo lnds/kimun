@@ -47,7 +47,8 @@ fn import_path(line: &str) -> Option<&str> {
         .unwrap_or(rest.len());
     // The selective form leaves the dot that precedes `{`.
     let path = rest[..end].trim_end_matches('.');
-    (!path.is_empty() && path.split('.').all(|seg| !seg.is_empty())).then_some(path)
+    // An empty path splits into a single empty segment, so this rejects it too.
+    path.split('.').all(|seg| !seg.is_empty()).then_some(path)
 }
 
 /// Resolve a module path to the project files it names.

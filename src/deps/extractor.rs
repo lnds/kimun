@@ -215,6 +215,86 @@ import (
     }
 
     #[test]
+    fn rust_mod_without_semicolon_is_skipped() {
+        assert!(extract_rust(&PathBuf::from("src/lib.rs"), "mod foo\n").is_empty());
+    }
+
+    #[test]
+    fn rust_pub_super_mod_is_extracted() {
+        let result = extract_rust(&PathBuf::from("src/lib.rs"), "pub(super) mod helpers;\n");
+        assert_eq!(result, vec!["helpers"]);
+    }
+
+    #[test]
+    fn rust_mod_name_may_contain_underscores() {
+        let result = extract_rust(&PathBuf::from("src/lib.rs"), "mod string_mask;\n");
+        assert_eq!(result, vec!["string_mask"]);
+    }
+
+    #[test]
+    fn rust_mod_with_invalid_name_is_skipped() {
+        let src = "mod foo-bar;\nmod ;\n";
+        assert!(extract_rust(&PathBuf::from("src/lib.rs"), src).is_empty());
+    }
+
+    #[test]
+    fn js_comment_lines_are_skipped() {
+        let src = "// import a from './line';\n/* import b from './block'; */\n * import c from './doc';\n";
+        assert!(extract_js(src).is_empty());
+    }
+
+    #[test]
+    fn js_imports_without_semicolons() {
+        let src = "import external from 'lodash'\nimport bar from './bar'\n";
+        assert_eq!(extract_js(src), vec!["./bar"]);
+    }
+
+    #[test]
+    fn js_relative_string_after_a_bare_one_on_the_same_line() {
+        let src = "export { a } from 'pkg'; export { b } from './local';\n";
+        assert_eq!(extract_js(src), vec!["./local"]);
+    }
+
+    #[test]
+    fn go_single_line_imports() {
+        let src = "package main\n\nimport \"fmt\"\nimport bar \"github.com/user/project/bar\"\n";
+        assert_eq!(extract_go(src), vec!["fmt", "github.com/user/project/bar"]);
+    }
+
+    #[test]
+    fn go_strings_outside_imports_are_not_imports() {
+        let src = "package main\nconst name = \"before\"\nimport (\n\t\"fmt\"\n\n\t\"os\"\n)\nvar after = \"after\"\n";
+        assert_eq!(extract_go(src), vec!["fmt", "os"]);
+    }
+
+    #[test]
+    fn dispatcher_routes_each_language_to_its_extractor() {
+        let cases = [
+            ("src/lib.rs", "Rust", "mod foo;\n", "foo"),
+            ("pkg/a.py", "Python", "from .foo import bar\n", ".foo"),
+            (
+                "src/a.js",
+                "JavaScript",
+                "import a from './foo';\n",
+                "./foo",
+            ),
+            (
+                "src/a.ts",
+                "TypeScript",
+                "import a from './foo';\n",
+                "./foo",
+            ),
+            ("src/a.jsx", "JSX", "import a from './foo';\n", "./foo"),
+            ("src/a.tsx", "TSX", "import a from './foo';\n", "./foo"),
+            ("main.go", "Go", "import \"fmt\"\n", "fmt"),
+        ];
+        for (path, language, source, expected) in cases {
+            let result = extract_imports(&PathBuf::from(path), language, source);
+            assert_eq!(result, vec![expected], "{language}");
+        }
+    }
+
+    #[test]
     fn kaikai_is_extracted_through_the_dispatcher() {
         let result = extract_imports(&PathBuf::from("app/main.kai"), "Kaikai", "import app.b\n");
         assert_eq!(result, vec!["app.b"]);
