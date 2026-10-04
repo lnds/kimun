@@ -8,6 +8,8 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
+use super::kaikai;
+
 /// A single file's dependency metrics.
 #[derive(Clone)]
 pub struct DepEntry {
@@ -238,53 +240,10 @@ pub fn resolve_import(
         "Python" => resolve_python(dir, import_str, file_set),
         "JavaScript" | "TypeScript" | "JSX" | "TSX" => resolve_js(dir, import_str, file_set),
         "Go" => resolve_go(import_str, go_module, file_set),
-        "Kaikai" => return resolve_kaikai(importer, import_str, file_set),
+        "Kaikai" => return kaikai::resolve(importer, import_str, file_set),
         _ => None,
     };
     single.into_iter().collect()
-}
-
-/// Kaikai: `import a.b.c` names `a/b/c.kai` under a package root, not under
-/// the importing file's directory. The source does not say where that root
-/// is, so every ancestor directory of the importer is tried, nearest first.
-///
-/// When no ancestor holds that file, the import may name a package directory
-/// `a/b/c/` instead; its files merge into one module, so the import resolves
-/// to all the `.kai` files directly inside it. Only a directory with a
-/// `kai.toml` manifest counts: a plain directory that happens to share its
-/// name with an external module (`import loop` next to `loop/`) is not one.
-fn resolve_kaikai(importer: &Path, module: &str, file_set: &HashSet<PathBuf>) -> Vec<PathBuf> {
-    let dir = importer.parent().unwrap_or(Path::new(""));
-    let rel = module.replace('.', "/");
-
-    for root in dir.ancestors() {
-        let as_file = root.join(format!("{rel}.kai"));
-        if file_set.contains(&as_file) {
-            return vec![as_file];
-        }
-    }
-
-    for root in dir.ancestors() {
-        let package = root.join(&rel);
-        if !file_set.contains(&package.join("kai.toml")) {
-            continue;
-        }
-        let mut members: Vec<PathBuf> = file_set
-            .iter()
-            .filter(|p| {
-                p.parent() == Some(package.as_path())
-                    && p.extension().is_some_and(|e| e == "kai")
-                    && p.as_path() != importer
-            })
-            .cloned()
-            .collect();
-        if !members.is_empty() {
-            members.sort();
-            return members;
-        }
-    }
-
-    Vec::new()
 }
 
 fn resolve_rust(dir: &Path, name: &str, file_set: &HashSet<PathBuf>) -> Option<PathBuf> {
@@ -736,93 +695,18 @@ mod tests {
         assert!(result.is_empty());
     }
 
-    // ── Kaikai resolution ──────────────────────────────────────────────────
-
-    fn kai_files(items: &[&str]) -> HashSet<PathBuf> {
-        items.iter().map(PathBuf::from).collect()
-    }
-
-    fn resolve_kai(importer: &str, module: &str, file_set: &HashSet<PathBuf>) -> Vec<PathBuf> {
-        resolve_import(Path::new(importer), module, "Kaikai", file_set, None)
-    }
-
     #[test]
-    fn resolve_kaikai_dotted_path_is_relative_to_the_package_root() {
-        // A sibling is reached through the root (`stage2/`), not through the
-        // importing file's own directory.
-        let file_set = kai_files(&["stage2/compiler/infer.kai", "stage2/compiler/ast.kai"]);
-        let result = resolve_kai("stage2/compiler/infer.kai", "compiler.ast", &file_set);
-        assert_eq!(result, vec![PathBuf::from("stage2/compiler/ast.kai")]);
-    }
-
-    #[test]
-    fn resolve_kaikai_root_is_the_analysed_directory() {
-        let file_set = kai_files(&["app/main.kai", "app/util/text.kai"]);
-        let result = resolve_kai("app/main.kai", "app.util.text", &file_set);
-        assert_eq!(result, vec![PathBuf::from("app/util/text.kai")]);
-    }
-
-    #[test]
-    fn resolve_kaikai_single_segment_sibling() {
-        let file_set = kai_files(&["pkg/main.kai", "pkg/shapes.kai"]);
-        let result = resolve_kai("pkg/main.kai", "shapes", &file_set);
-        assert_eq!(result, vec![PathBuf::from("pkg/shapes.kai")]);
-    }
-
-    #[test]
-    fn resolve_kaikai_nearest_root_wins() {
-        let file_set = kai_files(&["a/main.kai", "a/util.kai", "util.kai"]);
-        let result = resolve_kai("a/main.kai", "util", &file_set);
-        assert_eq!(result, vec![PathBuf::from("a/util.kai")]);
-    }
-
-    #[test]
-    fn resolve_kaikai_external_import_resolves_to_nothing() {
-        let file_set = kai_files(&["stage2/compiler/infer.kai", "stage2/compiler/ast.kai"]);
-        assert!(resolve_kai("stage2/compiler/infer.kai", "core.list", &file_set).is_empty());
-        assert!(resolve_kai("stage2/compiler/infer.kai", "loop", &file_set).is_empty());
-    }
-
-    #[test]
-    fn resolve_kaikai_package_directory() {
-        let file_set = kai_files(&[
-            "consumer/main.kai",
-            "mid/kai.toml",
-            "mid/mid.kai",
-            "mid/helpers.kai",
-            "mid/notes.md",
-            "mid/internal/deep.kai",
-        ]);
-        let result = resolve_kai("consumer/main.kai", "mid", &file_set);
-        assert_eq!(
-            result,
-            vec![
-                PathBuf::from("mid/helpers.kai"),
-                PathBuf::from("mid/mid.kai")
-            ]
+    fn resolve_kaikai_through_the_dispatcher() {
+        let mut file_set = HashSet::new();
+        file_set.insert(PathBuf::from("app/b.kai"));
+        let result = resolve_import(
+            Path::new("app/main.kai"),
+            "app.b",
+            "Kaikai",
+            &file_set,
+            None,
         );
-    }
-
-    #[test]
-    fn resolve_kaikai_file_wins_over_package_directory() {
-        let file_set = kai_files(&["main.kai", "mid.kai", "mid/kai.toml", "mid/mid.kai"]);
-        let result = resolve_kai("main.kai", "mid", &file_set);
-        assert_eq!(result, vec![PathBuf::from("mid.kai")]);
-    }
-
-    #[test]
-    fn resolve_kaikai_directory_without_manifest_is_not_a_package() {
-        // `import loop` names an external module; the files that merely live
-        // in a directory called `loop/` do not depend on each other.
-        let file_set = kai_files(&["sugars/loop/while.kai", "sugars/loop/until.kai"]);
-        assert!(resolve_kai("sugars/loop/while.kai", "loop", &file_set).is_empty());
-    }
-
-    #[test]
-    fn resolve_kaikai_package_import_skips_the_importer() {
-        let file_set = kai_files(&["notes/kai.toml", "notes/main.kai", "notes/store.kai"]);
-        let result = resolve_kai("notes/main.kai", "notes", &file_set);
-        assert_eq!(result, vec![PathBuf::from("notes/store.kai")]);
+        assert_eq!(result, vec![PathBuf::from("app/b.kai")]);
     }
 
     // ── normalize_path ─────────────────────────────────────────────────────

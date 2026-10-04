@@ -7,6 +7,7 @@
 
 mod analyzer;
 mod extractor;
+mod kaikai;
 mod report;
 
 use std::cmp::Reverse;
