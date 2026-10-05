@@ -196,6 +196,34 @@ pub fn parse_since(s: &str) -> Result<i64, Box<dyn Error>> {
     Ok(ts as i64)
 }
 
+/// Whether a file is machine-generated (lock files, minified assets,
+/// protobuf output). Such files say nothing about who wrote or changed the code.
+pub fn is_generated(path: &Path) -> bool {
+    let file_name = match path.file_name().and_then(|n| n.to_str()) {
+        Some(n) => n,
+        None => return false,
+    };
+
+    matches!(
+        file_name,
+        "Cargo.lock"
+            | "package-lock.json"
+            | "yarn.lock"
+            | "pnpm-lock.yaml"
+            | "Gemfile.lock"
+            | "poetry.lock"
+            | "composer.lock"
+            | "Pipfile.lock"
+            | "mix.lock"
+            | "go.sum"
+    ) || file_name.ends_with(".min.js")
+        || file_name.ends_with(".min.css")
+        || file_name.ends_with(".bundle.js")
+        || file_name.ends_with(".pb.go")
+        || file_name.ends_with("_pb2.py")
+        || file_name.contains(".generated.")
+}
+
 #[cfg(test)]
 #[path = "util_test.rs"]
 mod tests;

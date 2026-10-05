@@ -14,7 +14,11 @@ use std::fs;
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 
-use git2::{BlameOptions, Delta, DiffFindOptions, DiffOptions, ObjectType, Repository, Sort, Tree};
+use git2::{BlameOptions, Delta, DiffOptions, ObjectType, Repository, Sort, Tree};
+
+mod changeset;
+
+pub use changeset::{ChangeKind, CoChangeHistory, FileDiffStat};
 
 /// Wrapper around a `git2::Repository` with its resolved root path.
 pub struct GitRepo {
@@ -83,10 +87,20 @@ impl GitRepo {
     fn walk_commits(
         &self,
         since: Option<i64>,
-        mut f: impl FnMut(&git2::Commit) -> Result<ControlFlow<()>, Box<dyn Error>>,
+        f: impl FnMut(&git2::Commit) -> Result<ControlFlow<()>, Box<dyn Error>>,
     ) -> Result<(), Box<dyn Error>> {
         let mut revwalk = self.repo.revwalk()?;
         revwalk.push_head()?;
+        self.walk(revwalk, since, f)
+    }
+
+    /// Like [`Self::walk_commits`], over the commits `revwalk` was seeded with.
+    fn walk(
+        &self,
+        mut revwalk: git2::Revwalk<'_>,
+        since: Option<i64>,
+        mut f: impl FnMut(&git2::Commit) -> Result<ControlFlow<()>, Box<dyn Error>>,
+    ) -> Result<(), Box<dyn Error>> {
         revwalk.set_sorting(Sort::TIME)?;
 
         for oid in revwalk {
@@ -374,14 +388,7 @@ impl GitRepo {
         refspec: &str,
     ) -> Result<Vec<FileChange>, Box<dyn Error>> {
         let tree = self.ref_tree(refspec)?;
-        let mut opts = DiffOptions::new();
-        opts.include_untracked(true).recurse_untracked_dirs(true);
-        let mut diff = self
-            .repo
-            .diff_tree_to_workdir_with_index(Some(&tree), Some(&mut opts))?;
-        let mut find = DiffFindOptions::new();
-        find.renames(true).for_untracked(true);
-        diff.find_similar(Some(&mut find))?;
+        let diff = self.workdir_diff(&tree, false)?;
 
         let mut changes = Vec::new();
         for delta in diff.deltas() {

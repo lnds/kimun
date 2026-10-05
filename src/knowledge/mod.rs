@@ -10,10 +10,9 @@ mod report;
 
 use std::cmp::Reverse;
 use std::error::Error;
-use std::path::Path;
 
 use crate::git::GitRepo;
-use crate::util::parse_since;
+use crate::util::{is_generated, parse_since};
 use crate::walk::{self, WalkConfig};
 
 use crate::cli::OutputMode;
@@ -24,33 +23,6 @@ use report::{
     print_json, print_report, print_short, print_summary_json, print_summary_report,
     print_summary_short, print_summary_terse, print_terse,
 };
-
-/// Check if a file is machine-generated (lock files, minified assets,
-/// protobuf output) and should be excluded from ownership analysis.
-fn is_generated(path: &Path) -> bool {
-    let file_name = match path.file_name().and_then(|n| n.to_str()) {
-        Some(n) => n,
-        None => return false,
-    };
-
-    matches!(
-        file_name,
-        "Cargo.lock"
-            | "package-lock.json"
-            | "yarn.lock"
-            | "pnpm-lock.yaml"
-            | "Gemfile.lock"
-            | "poetry.lock"
-            | "composer.lock"
-            | "Pipfile.lock"
-            | "go.sum"
-    ) || file_name.ends_with(".min.js")
-        || file_name.ends_with(".min.css")
-        || file_name.ends_with(".bundle.js")
-        || file_name.ends_with(".pb.go")
-        || file_name.ends_with("_pb2.py")
-        || file_name.contains(".generated.")
-}
 
 /// Options for knowledge map analysis.
 pub struct KnowledgeOptions<'a> {

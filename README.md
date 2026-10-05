@@ -9,7 +9,7 @@ A fast command-line tool for code analysis, written in Rust. Run `km score` on a
 Beyond the aggregate score, Kimün provides 17 specialized commands:
 
 - **Static metrics** — lines of code by language ([cloc](https://github.com/AlDanial/cloc)-compatible), duplicate detection (Rule of Three), Halstead complexity, cyclomatic complexity, cognitive complexity (SonarSource), indentation complexity, two Maintainability Index variants (Visual Studio and verifysoft), code smell detection, and a comprehensive multi-metric report.
-- **Git-based analysis** — hotspot detection (change frequency × complexity, Thornhill method), code churn (pure change frequency), code ownership / knowledge maps via `git blame`, temporal coupling between files that change together, per-author ownership summary, and file age classification (Active / Stale / Frozen).
+- **Git-based analysis** — hotspot detection (change frequency × complexity, Thornhill method), code churn (pure change frequency), code ownership / knowledge maps via `git blame`, temporal coupling between files that change together, impact of a diff (diffusion and missing co-changes), per-author ownership summary, and file age classification (Active / Stale / Frozen).
 - **AI-powered analysis** — optional integration with Claude to run all tools and produce a narrative report.
 
 ## Installation
@@ -557,6 +557,84 @@ Strong coupling (>= 0.5) suggests hidden dependencies — consider extracting sh
 
 **Note:** File renames are not tracked across git history. Renamed files appear as separate entries.
 
+### `km impact` -- Impact of a diff
+
+Measures how far a change reaches, for a PR or for uncommitted work. Works from git alone, so it applies to any language.
+
+```bash
+km impact --since-ref origin/main [path]
+```
+
+The diff runs from the merge base with `--since-ref` to the working tree, so it covers committed, uncommitted and untracked changes, and deletions. It is always the diff of the whole repository: `path` only locates the repository and does not narrow the analysis. Generated files (lock files, minified assets) are left out of every measure.
+
+#### Diffusion
+
+How spread the change is. Kamei et al. found diffusion among the strongest predictors of a defect-inducing change.
+
+| Measure | Meaning |
+|---------|---------|
+| Files changed | Files added, modified, renamed or deleted |
+| Directories | Distinct directories holding a changed file |
+| Subsystems | Distinct top-level directories (files at the root form one more) |
+| Lines added / deleted | Binary files count no lines |
+| Entropy | Shannon entropy of the modified lines over the files, divided by its maximum: `0` when one file holds every modified line, `1` when all the files hold the same amount |
+
+#### Logical radius
+
+Files that usually change with the files of the diff and are **not** in it — a change that may have been forgotten. It catches coupling the code does not declare: tests, configuration, migrations.
+
+```
+Confidence = shared_commits / commits of the changed file
+```
+
+A file is reported when some changed file reaches `--min-confidence` with at least `--min-shared` shared commits. Confidence is directional, unlike the strength of `km tc`: a file that changed three times, always with one that changed a hundred times, has strength 1.0 but is needed in 3% of the changes to the other.
+
+- History ends at the merge base: the commits of the diff are never evidence for themselves.
+- Commits touching more than `--max-changeset` files are ignored, and the report says how many: a reformat or a rename across the project relates its files to each other by accident.
+- A changed file with no history (new, or outside `--since`) predicts nothing. It is listed apart, so its silence is not read as "no impact".
+- Files that no longer exist are not reported.
+- Test files are always part of the analysis: a test that usually changes with the code is a change worth expecting.
+
+Options:
+
+| Flag | Description |
+|------|-------------|
+| `--since-ref REF` | Git ref to diff against (required), e.g. `origin/main`, `HEAD` |
+| `--since DURATION` | Only consider history since this time (e.g. `6m`, `1y`, `30d`) |
+| `--min-confidence F` | Minimum confidence to report a missing file (default: `0.5`) |
+| `--min-shared N` | Minimum shared commits to report a missing file (default: `3`) |
+| `--max-changeset N` | Ignore commits touching more than N files as evidence (default: `30`) |
+| `--top N` | Show only the top N missing files (default: 20) |
+| `--format {table,json,short,terse}` | Output format (default: table) |
+
+Example output:
+
+```
+Change Impact — diff against main
+──────────────────────────────────────────────────────────────────────────────
+Diffusion
+  Files changed           5
+  Directories             3
+  Subsystems              2
+  Lines added           120
+  Lines deleted          30
+  Entropy              0.82  (0 = one file holds the change, 1 = evenly spread)
+
+Logical radius — files that usually change with this diff and are not in it
+──────────────────────────────────────────────────────────────────────────────
+ Missing file      Confidence   Shared  Changes with
+──────────────────────────────────────────────────────────────────────────────
+ src/tc/report.rs        0.80     8/10  src/tc/mod.rs (+1 more)
+ README.md               0.50     6/12  src/cli.rs
+──────────────────────────────────────────────────────────────────────────────
+No history before the diff (new or never committed): src/impact/mod.rs
+Generated files ignored: 1
+```
+
+`Shared` reads as shared commits over the commits of the changed file. `(+1 more)` means another changed file predicts the same missing file; `--format json` lists every one. `--format terse` prints the number of missing files.
+
+**Note:** File renames are not tracked across git history. A file renamed in the diff itself keeps the history of its old path.
+
 ### `km churn` -- Code churn analysis
 
 Measures pure change frequency per file from git history (commit count only, no complexity weight). Identifies the most frequently modified files — high churn without a corresponding quality improvement is a maintenance signal.
@@ -1022,6 +1100,8 @@ The metrics and methodologies implemented in Kimün are based on the following s
 - **Paul Oman & Jack Hagemeister**, "Metrics for Assessing a Software System's Maintainability", *Proceedings of the International Conference on Software Maintenance (ICSM)*, 1992. Original Maintainability Index formula combining Halstead Volume, cyclomatic complexity, and lines of code.
 - **Microsoft**, [Code Metrics — Maintainability Index range and meaning](https://learn.microsoft.com/en-us/visualstudio/code-quality/code-metrics-maintainability-index-range-and-meaning). Visual Studio variant: normalized to 0–100 scale, no comment-weight term.
 - **Verifysoft**, [Maintainability Index](https://www.verifysoft.com/en_maintainability.html). Extended MI formula with a comment-weight component (MIcw) that rewards well-commented code.
+- **Yasutaka Kamei et al.**, "A Large-Scale Empirical Study of Just-in-Time Quality Assurance" (IEEE TSE 39(6), 2013). Basis for the diffusion measures of `km impact`.
+- **Thomas Zimmermann, Andreas Zeller, Peter Weissgerber, Stephan Diehl**, "Mining Version Histories to Guide Software Changes" (IEEE TSE 31(6), 2005). Basis for the logical radius of `km impact`.
 
 ## License
 

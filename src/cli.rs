@@ -436,6 +436,42 @@ pub enum Commands {
         min_strength: Option<f64>,
     },
 
+    /// Measure the impact of a diff: how spread it is and which files usually change with it
+    #[command(long_about = cli_help::IMPACT)]
+    Impact {
+        /// Where to look for the repository (default: current directory).
+        /// The whole repository is measured, not only this directory.
+        path: Option<PathBuf>,
+
+        /// Output format: table (default), json, short, or terse
+        #[arg(long, value_enum, default_value_t)]
+        format: OutputMode,
+
+        /// Measure the diff between this git ref and the working tree (e.g. origin/main)
+        #[arg(long, value_name = "REF")]
+        since_ref: String,
+
+        /// Only consider history since this time (e.g. 6m, 1y, 30d)
+        #[arg(long)]
+        since: Option<String>,
+
+        /// Minimum share of a changed file's commits that also changed the missing file
+        #[arg(long, default_value = "0.5")]
+        min_confidence: f64,
+
+        /// Minimum commits a changed file and a missing file must share
+        #[arg(long, default_value = "3")]
+        min_shared: usize,
+
+        /// Ignore commits touching more than N files as evidence of co-change
+        #[arg(long, default_value = "30", value_name = "N")]
+        max_changeset: usize,
+
+        /// Show only the top N missing files (default: 20)
+        #[arg(long, default_value = "20")]
+        top: usize,
+    },
+
     /// Detect common code smells per file
     #[command(long_about = cli_help::SMELLS)]
     Smells {
