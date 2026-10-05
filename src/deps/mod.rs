@@ -7,6 +7,7 @@
 
 mod analyzer;
 mod elixir;
+mod elixir_functions;
 mod extractor;
 pub mod graph;
 mod kaikai;

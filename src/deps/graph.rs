@@ -26,16 +26,29 @@ pub struct Use {
     pub calls: Vec<String>,
 }
 
+/// Why a change to a file cannot be narrowed to functions, so that every
+/// use of the file has to count.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Unnarrowed {
+    /// Functions are not told for the language of the file.
+    Language,
+    /// The lines the change touches are not known.
+    NoLines,
+    /// The change touches this line, which may concern every function.
+    Outside(usize),
+}
+
 impl Source {
     /// The public functions of this file a change to `lines` affects, by
-    /// name. `None` when the language does not tell, or when the change
-    /// touches code outside every function: then any user of the file may
-    /// be affected.
-    pub fn changed_functions(&self, lines: &[usize]) -> Option<BTreeSet<String>> {
-        if !is_elixir(&self.language) || lines.is_empty() {
-            return None;
+    /// name, or why they cannot be told.
+    pub fn changed_functions(&self, lines: &[usize]) -> Result<BTreeSet<String>, Unnarrowed> {
+        if !is_elixir(&self.language) {
+            return Err(Unnarrowed::Language);
         }
-        elixir::changed_functions(&self.text, lines)
+        if lines.is_empty() {
+            return Err(Unnarrowed::NoLines);
+        }
+        super::elixir_functions::changed_functions(&self.text, lines).map_err(Unnarrowed::Outside)
     }
 }
 

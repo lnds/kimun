@@ -7,7 +7,7 @@
 //! at run time (`apply/3`, configuration), those a macro generates, nor the
 //! alias a Phoenix router gives its `scope`.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 
 /// A use of a module, and of one of its functions when it is a call.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -26,7 +26,7 @@ pub struct ElixirFile {
     pub refs: Vec<Reference>,
 }
 
-fn is_ident(c: char) -> bool {
+pub(super) fn is_ident(c: char) -> bool {
     c.is_ascii_alphanumeric() || c == '_'
 }
 
@@ -116,7 +116,7 @@ fn literal_end(chars: &[char], i: usize) -> usize {
 
 /// The source with comments and literals blanked out. Line breaks and
 /// columns are kept, so indentation still tells how deep a line is.
-fn code_only(source: &str) -> String {
+pub(super) fn code_only(source: &str) -> String {
     let chars: Vec<char> = source.chars().collect();
     let mut out = String::with_capacity(source.len());
     let mut i = 0;
@@ -218,7 +218,7 @@ fn modules_of(code: &str) -> (Vec<String>, String) {
 /// Short names the file gives to modules: `alias Foo.Bar` makes `Bar`
 /// stand for `Foo.Bar`. They are taken as holding for the whole file.
 #[derive(Default)]
-struct Aliases(HashMap<String, String>);
+pub(super) struct Aliases(HashMap<String, String>);
 
 impl Aliases {
     /// A name as written, with its first segment replaced when it is an alias.
@@ -272,7 +272,7 @@ impl Aliases {
     /// Every alias declared in `code`, in order, so that one may build on
     /// another, and the code without those statements. Naming a module to
     /// shorten it is not using it: what uses it is the code that follows.
-    fn of(code: &str) -> (Self, String) {
+    pub(super) fn of(code: &str) -> (Self, String) {
         let mut aliases = Self::default();
         let mut rest = code.to_string();
         for (at, _) in code.match_indices("alias") {
@@ -359,176 +359,6 @@ pub fn parse(source: &str) -> ElixirFile {
         refs: references(&used, &aliases),
         defines,
     }
-}
-
-/// Keywords that define something callable, and whether it is public.
-const DEFINITIONS: [(&str, bool); 7] = [
-    ("def ", true),
-    ("defp ", false),
-    ("defmacro ", true),
-    ("defmacrop ", false),
-    ("defdelegate ", true),
-    ("defguard ", true),
-    ("defguardp ", false),
-];
-
-/// One clause of a function, and the lines it spans, from 1.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Function {
-    pub name: String,
-    pub public: bool,
-    /// First line: the attributes right above the definition are part of it.
-    pub first_line: usize,
-    pub last_line: usize,
-}
-
-fn indent_of(line: &str) -> usize {
-    line.len() - line.trim_start().len()
-}
-
-/// The name and visibility a line defines, when it opens a definition.
-fn definition(line: &str) -> Option<(&str, bool)> {
-    let content = line.trim_start();
-    DEFINITIONS.iter().find_map(|&(keyword, public)| {
-        let name = ident_of(content.strip_prefix(keyword)?.trim_start());
-        (!name.is_empty()).then_some((name, public))
-    })
-}
-
-/// The function name at the start of `text`, with its `?` or `!`.
-fn ident_of(text: &str) -> &str {
-    let end = text
-        .find(|c| !is_ident(c) && c != '?' && c != '!')
-        .unwrap_or(text.len());
-    &text[..end]
-}
-
-/// The last line of the definition opened at `start`: the one before the
-/// next line indented no deeper, or that line when it is its `end`.
-fn last_line_of(lines: &[&str], start: usize) -> usize {
-    let indent = indent_of(lines[start]);
-    let next = (start + 1..lines.len())
-        .find(|&i| !lines[i].trim().is_empty() && indent_of(lines[i]) <= indent);
-    match next {
-        Some(i) if lines[i].trim() == "end" => i,
-        // Blank lines after it separate it from what follows.
-        Some(i) => (start..i)
-            .rev()
-            .find(|&j| !lines[j].trim().is_empty())
-            .unwrap_or(start),
-        None => lines.len() - 1,
-    }
-}
-
-/// Attributes that describe the function below them. Any other attribute is
-/// the module's, and a change to it may concern every function.
-const FUNCTION_ATTRIBUTES: [&str; 6] = [
-    "@doc",
-    "@spec",
-    "@impl",
-    "@deprecated",
-    "@dialyzer",
-    "@decorate",
-];
-
-/// The first line of the definition at `start`, counting the attributes
-/// that describe it right above. The text of a `@doc` is blank by now, so
-/// blank lines between them are part of it; those above the first are not.
-fn first_line_of(lines: &[&str], start: usize) -> usize {
-    let indent = indent_of(lines[start]);
-    let describes = |line: &str| {
-        let content = line.trim();
-        indent_of(line) == indent && FUNCTION_ATTRIBUTES.iter().any(|a| content.starts_with(a))
-    };
-    let mut first = start;
-    let mut above = start;
-    while above > 0 && (lines[above - 1].trim().is_empty() || describes(lines[above - 1])) {
-        above -= 1;
-        if describes(lines[above]) {
-            first = above;
-        }
-    }
-    first
-}
-
-/// The functions of a file, clause by clause, in order.
-pub fn functions(source: &str) -> Vec<Function> {
-    let code = code_only(source);
-    let lines: Vec<&str> = code.lines().collect();
-    (0..lines.len())
-        .filter_map(|i| {
-            let (name, public) = definition(lines[i])?;
-            Some(Function {
-                name: name.to_string(),
-                public,
-                first_line: first_line_of(&lines, i) + 1,
-                last_line: last_line_of(&lines, i) + 1,
-            })
-        })
-        .collect()
-}
-
-/// Whether `body` calls the local function `name`: `name(`, or `&name/`.
-fn calls_local(body: &str, name: &str) -> bool {
-    body.match_indices(name).any(|(at, _)| {
-        let before = body[..at].chars().next_back().unwrap_or(' ');
-        let after = body[at + name.len()..].chars().next().unwrap_or(' ');
-        !is_ident(before) && before != '.' && before != ':' && matches!(after, '(' | '/')
-    })
-}
-
-/// The public functions a change to `lines` affects: the ones it touches,
-/// and those that reach a touched private function through local calls.
-///
-/// `None` when the change touches code outside every function (an `alias`,
-/// a `use`, a module attribute, a struct): then nothing tells which callers
-/// are affected, and all of them may be.
-pub fn changed_functions(source: &str, lines: &[usize]) -> Option<BTreeSet<String>> {
-    let code = code_only(source);
-    let text: Vec<&str> = code.lines().collect();
-    let functions = functions(source);
-    let holder = |line: usize| {
-        functions
-            .iter()
-            .find(|f| (f.first_line..=f.last_line).contains(&line))
-    };
-
-    let mut changed: BTreeSet<&str> = BTreeSet::new();
-    for &line in lines {
-        let is_code = text
-            .get(line.wrapping_sub(1))
-            .is_some_and(|l| !l.trim().is_empty());
-        match holder(line) {
-            Some(function) => {
-                changed.insert(&function.name);
-            }
-            None if is_code => return None,
-            None => {}
-        }
-    }
-
-    // A function that calls a changed one behaves differently too.
-    let body = |f: &Function| text[f.first_line - 1..f.last_line].join("\n");
-    loop {
-        let callers: Vec<&str> = functions
-            .iter()
-            .filter(|f| !changed.contains(f.name.as_str()))
-            .filter(|f| changed.iter().any(|name| calls_local(&body(f), name)))
-            .map(|f| f.name.as_str())
-            .collect();
-        if callers.is_empty() {
-            break;
-        }
-        changed.extend(callers);
-    }
-
-    Some(
-        functions
-            .iter()
-            .filter(|f| f.public && changed.contains(f.name.as_str()))
-            .map(|f| f.name.clone())
-            .collect(),
-    )
 }
 
 #[cfg(test)]

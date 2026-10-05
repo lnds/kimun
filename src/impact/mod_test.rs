@@ -475,12 +475,20 @@ fn projects_reached_by_the_diff() {
         .map(|r| r.project.as_str())
         .collect();
     assert_eq!(reached, ["apps/api"]);
-    assert_eq!(impact.projects.outside, [PathBuf::from("README.md")]);
-    // README.md belongs to no project, so no project can be left out.
+    // Documentation reaches nothing: it does not make the reach unknown.
+    assert!(impact.projects.outside.is_empty());
+    assert_eq!(impact.projects.inert, [PathBuf::from("README.md")]);
+    assert_eq!(impact.projects.affected(), ["apps/api", "libs/core"]);
+
+    // A file that is not documentation and belongs to no project does.
+    write(&repo, "Makefile", "all:\n");
+    let impact = analyze(dir.path(), &opts("HEAD")).unwrap();
+    assert_eq!(impact.projects.outside, [PathBuf::from("Makefile")]);
     assert_eq!(
         impact.projects.affected(),
         ["apps/api", "apps/site", "libs/core"]
     );
+    fs::remove_file(dir.path().join("Makefile")).unwrap();
 
     // The repository is found from a directory inside it, and measured whole.
     let from_inside = analyze(&dir.path().join("apps/site"), &opts("HEAD")).unwrap();
@@ -732,4 +740,85 @@ mod command_line {
         assert!(err.contains("--since-ref"), "{err}");
         assert!(parse(&["--pr", "abc"]).is_err());
     }
+}
+
+/// Two crates, `api` depending on `core`, with documentation inside each.
+fn two_crates(repo: &Repository) {
+    commit(
+        repo,
+        &[
+            ("libs/core/Cargo.toml", "[package]\nname = \"core\"\n"),
+            ("libs/core/README.md", "core\n"),
+            ("libs/core/src/lib.rs", "pub fn f() {}\n"),
+            (
+                "apps/api/Cargo.toml",
+                "[package]\nname = \"api\"\n\n[dependencies]\ncore = { path = \"../../libs/core\" }\n",
+            ),
+            ("scripts/release.sh", "echo release\n"),
+        ],
+        &[],
+    );
+}
+
+#[test]
+fn documentation_inside_a_project_does_not_change_it() {
+    let (dir, repo) = create_test_repo();
+    two_crates(&repo);
+    write(&repo, "libs/core/README.md", "core, explained\n");
+
+    let impact = analyze(dir.path(), &opts("HEAD")).unwrap();
+
+    assert!(impact.projects.changed.is_empty());
+    assert!(impact.projects.reached.is_empty());
+    assert_eq!(
+        impact.projects.inert,
+        [PathBuf::from("libs/core/README.md")]
+    );
+    assert!(impact.projects.affected().is_empty());
+    // It is still part of the change.
+    assert_eq!(impact.diffusion.files, 1);
+}
+
+#[test]
+fn the_configuration_declares_what_else_is_inert() {
+    let (dir, repo) = create_test_repo();
+    two_crates(&repo);
+    write(&repo, "scripts/release.sh", "echo released\n");
+
+    // By default a script outside every project has unknown reach.
+    let impact = analyze(dir.path(), &opts("HEAD")).unwrap();
+    assert_eq!(
+        impact.projects.outside,
+        [PathBuf::from("scripts/release.sh")]
+    );
+    assert_eq!(impact.projects.affected(), ["apps/api", "libs/core"]);
+
+    write(
+        &repo,
+        ".kimun.toml",
+        "[impact]\ninert = [\"scripts/**\", \".kimun.toml\"]\n",
+    );
+    let impact = analyze(dir.path(), &opts("HEAD")).unwrap();
+    assert!(impact.projects.outside.is_empty());
+    assert_eq!(
+        impact.projects.inert,
+        [
+            PathBuf::from(".kimun.toml"),
+            PathBuf::from("scripts/release.sh")
+        ]
+    );
+    assert!(impact.projects.affected().is_empty());
+}
+
+#[test]
+fn an_invalid_inert_pattern_stops_the_analysis() {
+    let (dir, repo) = create_test_repo();
+    two_crates(&repo);
+    write(&repo, ".kimun.toml", "[impact]\ninert = [\"a/[\"]\n");
+
+    let err = analyze(dir.path(), &opts("HEAD"))
+        .err()
+        .unwrap()
+        .to_string();
+    assert!(err.contains("[impact] inert"), "{err}");
 }

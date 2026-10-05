@@ -9,6 +9,7 @@
 
 mod cargo;
 mod discover;
+mod gomod;
 mod mix;
 mod npm;
 mod radius;
@@ -22,6 +23,7 @@ pub enum Ecosystem {
     Cargo,
     Npm,
     Mix,
+    Go,
 }
 
 /// What a dependency is needed for, strongest first.
@@ -97,6 +99,8 @@ fn reader(file_name: &str) -> Option<(Ecosystem, Reader)> {
         "package.json" => Some((Ecosystem::Npm, npm::read)),
         "pnpm-workspace.yaml" => Some((Ecosystem::Npm, pnpm_workspace)),
         "mix.exs" => Some((Ecosystem::Mix, mix::read)),
+        "go.mod" => Some((Ecosystem::Go, gomod::read)),
+        "go.work" => Some((Ecosystem::Go, gomod::read_work)),
         _ => None,
     }
 }

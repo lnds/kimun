@@ -19,6 +19,8 @@ const WORKSPACE_FILES: &[&str] = &[
     "bun.lockb",
     "mix.exs",
     "mix.lock",
+    "go.work",
+    "go.work.sum",
 ];
 
 impl ProjectGraph {

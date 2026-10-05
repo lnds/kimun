@@ -185,12 +185,15 @@ fn changed_functions_are_told_only_for_elixir() {
             .collect::<Vec<_>>(),
         ["f"]
     );
-    // No line known, or a line outside every function: cannot be narrowed.
-    assert_eq!(elixir.changed_functions(&[]), None);
-    assert_eq!(elixir.changed_functions(&[1]), None);
+    // No line known, or a line that may concern every function.
+    assert_eq!(elixir.changed_functions(&[]), Err(Unnarrowed::NoLines));
+    assert_eq!(elixir.changed_functions(&[1]), Err(Unnarrowed::Outside(1)));
 
     let typescript = source("src/a.ts", "export function f() { return 1 }\n");
-    assert_eq!(typescript.changed_functions(&[1]), None);
+    assert_eq!(
+        typescript.changed_functions(&[1]),
+        Err(Unnarrowed::Language)
+    );
 }
 
 #[test]

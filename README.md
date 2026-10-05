@@ -618,6 +618,7 @@ A **project** is a directory with a manifest. A project **depends** on another w
 | Rust | `Cargo.toml` | `path` dependencies, `workspace = true` resolved through `[workspace.dependencies]`, in `[dependencies]`, `[dev-dependencies]`, `[build-dependencies]` and their `[target.*]` forms |
 | JavaScript / TypeScript | `package.json` | any dependency whose name is another package of the repository (npm, yarn and pnpm workspaces), plus `file:` and `link:` |
 | Elixir | `mix.exs` | `path:` dependencies and `in_umbrella: true` |
+| Go | `go.mod`, `go.work` | required modules that are another module of the repository, and `replace` with a directory |
 
 ```
 Blast radius — projects reached through their manifests
@@ -634,8 +635,16 @@ Changed files outside every project (reach unknown): Makefile
 ```
 
 - **Scope**: a `dev` dependency (dev or test only) reaches the dependent, whose tests use the changed project, and stops there: the changed project is not part of what the dependent ships, so the dependents of the dependent are not reached. `build` and `optional` dependencies carry on like runtime ones.
-- **Workspace roots**: a `Cargo.toml` with `[workspace]`, a `package.json` with `workspaces` (or next to a `pnpm-workspace.yaml`), an umbrella `mix.exs` with `apps_path`. A change to the manifest or the lock file at such a root (`Cargo.lock`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `bun.lock`, `mix.lock`) reaches every project under it at distance 1, with scope `workspace`, and carries on from them. A workspace root is a project itself only when it declares one (`[package]` in Cargo, `app:` in mix); a `package.json` at a workspace root never is.
-- **Files outside every project** (CI workflows, shared configuration, a root README) are listed apart. Their reach is unknown, not zero.
+- **Workspace roots**: a `Cargo.toml` with `[workspace]`, a `package.json` with `workspaces` (or next to a `pnpm-workspace.yaml`), an umbrella `mix.exs` with `apps_path`, a `go.work`. A change to the manifest or the lock file at such a root (`Cargo.lock`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `bun.lock`, `mix.lock`) reaches every project under it at distance 1, with scope `workspace`, and carries on from them. A workspace root is a project itself only when it declares one (`[package]` in Cargo, `app:` in mix); a `package.json` at a workspace root never is.
+- **Inert files** reach nothing: a change to documentation (`.md`, `.mdx`, `.rst`, `.adoc`, `.txt`) breaks no build and no test. It does not count as a change to its project, nor as a file of unknown reach. `.kimun.toml` can declare more:
+
+  ```toml
+  [impact]
+  inert = ["scripts/**", "notebooks/**"]   # globs, relative to the repository
+  ```
+
+- **Files outside every project** (CI workflows, shared configuration) are listed apart. Their reach is unknown, not zero.
+
 - **`--affected`** prints the projects whose builds and tests the diff calls for, one per line, and nothing else: the changed and the reached ones. If any changed file is outside every project, it prints **all** projects and says why on stderr — skipping a test suite is worse than running one too many. It reads only the diff and the manifests, not the history.
 - A repository with a single project gets a line saying this level does not apply, rather than "0 reached".
 - `node_modules`, `deps`, `_build`, `target`, `vendor` and `testdata` are never searched for manifests, nor is a `fixtures` directory inside a test directory. An end-to-end suite with its own manifest (`test/e2e/package.json`) is a project.
@@ -677,7 +686,7 @@ No test in the change exercises a file that uses what changed.
 How it is measured:
 
 - The dependency graph of `km deps` is read backwards from the changed source files.
-- In Elixir the change is **narrowed to functions**: the lines the diff touches tell which functions changed, and a change to a private function is carried to the public ones that reach it through local calls. A file that uses the module is then one of three: it **calls** a function that changed, it **refers** to the module without calling it (a struct, an `import`, a `use`), or it only calls functions the change leaves alone, and is not listed. When the diff touches code outside every function (an `alias`, a module attribute, a `defstruct`), nothing can be narrowed and every use counts.
+- In Elixir the change is **narrowed to functions**: the lines the diff touches tell which functions changed, and a change to a private function is carried to the public ones that reach it through local calls. A file that uses the module is then one of three: it **calls** a function that changed, it **refers** to the module without calling it (a struct, an `import`, a `use`), or it only calls functions the change leaves alone, and is not listed. Each changed file is narrowed on its own. Outside the functions, a touched `alias` or `require` changes none (it only names what the touched functions use), and a touched module attribute changes the functions that read it. A `use`, an `import`, a `defstruct`, or an attribute no function reads may concern every function: that file is not narrowed, every use of it counts, and the report says which line it was. A new file is never narrowed.
 - The **radius** starts at the files the change concerns and follows who uses them, file by file. Files that only pass through a dependent the change leaves alone are not counted. The **upper bound** is what the radius would be if every use of a changed file counted, whatever the function: in a codebase where everything goes through a few contexts it is most of the project, which is why the radius is the number to read.
 - **Tests** is the number of test files that protect the dependent: those that refer to it, and those at the same place in the source and test layout (`lib/a/b.ex` and `test/a/b_test.exs`), which is how a controller test protects a controller it never names. Test support (`test/support/`), configuration and scripts are not tests: a factory refers to everything and would make everything look protected.
 - A file that calls what changed and has no test is **unprotected**: the change can break it without any test noticing. That is the warning.
@@ -773,7 +782,8 @@ km impact --since-ref origin/main --format json
 | Field | Meaning |
 |-------|---------|
 | `source` | The change measured: `diff against main`, `PR #12`, `patch from stdin` |
-| `structural.functions` | Public functions the change affects; `null` when it touches code outside functions and cannot be narrowed |
+| `structural.functions` | Public functions the change affects, over the files that tell them; `null` when none could be narrowed |
+| `structural.narrowing[]` | Per changed file: `functions`, or `null` with the `reason` every use of it counts |
 | `structural.direct[]` | Every file that uses a changed file: `file`, `exposure` (`calls`, `refers`, `elsewhere`), `calls`, `tests`, `tests_in_diff` |
 | `structural.unprotected[]` | Files that call what changed and that no test protects — where an integration test is missing |
 | `structural.unknown_without_tests[]` | Files that use the changed module without a call that tells, and have no test |
@@ -785,6 +795,7 @@ km impact --since-ref origin/main --format json
 | `projects.changed[]`, `projects.reached[]` | Projects holding a changed file, and those reached, each with `origin`, `distance`, `via`, `scope` |
 | `projects.affected[]` | Projects whose builds and tests the change calls for (what `--affected` prints) |
 | `projects.outside[]` | Changed files that belong to no project: their reach is unknown |
+| `projects.inert[]` | Changed files that reach nothing: documentation, and what `.kimun.toml` declares inert |
 | `diffusion` | Files, directories, subsystems, lines and entropy of the change |
 | `logical_radius.missing[]` | Files that usually change with the change and are not in it, with every trigger |
 
@@ -1165,6 +1176,9 @@ min_strength = 0.5  # only show pairs with coupling strength >= this value
 
 [hotspots]
 complexity = "cogcom"  # complexity metric: indent (default), cycom, or cogcom
+
+[impact]
+inert = ["scripts/**"]  # changed files that reach nothing, besides documentation
 ```
 
 All sections and fields are optional — omit any you don't need. A fully documented template is available at [`.kimun.toml.example`](.kimun.toml.example).

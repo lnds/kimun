@@ -28,6 +28,9 @@
 ///
 /// [hotspots]
 /// complexity = "indent"  # complexity metric: indent, cycom, cogcom (default: indent)
+///
+/// [impact]
+/// inert = ["scripts/**"]  # changed files that reach nothing, besides documentation
 /// ```
 use serde::Deserialize;
 
@@ -45,6 +48,8 @@ pub struct KimunConfig {
     pub tc: TcConfig,
     #[serde(default)]
     pub hotspots: HotspotsConfig,
+    #[serde(default)]
+    pub impact: ImpactConfig,
 }
 
 /// Threshold overrides for `km smells`.
@@ -165,6 +170,15 @@ impl TcConfig {
     }
 }
 
+/// Configuration for `km impact`.
+#[derive(Debug, Default, Deserialize)]
+pub struct ImpactConfig {
+    /// Globs, relative to the repository, of changed files that reach
+    /// nothing, besides documentation.
+    #[serde(default)]
+    pub inert: Vec<String>,
+}
+
 /// Configuration for `km hotspots`.
 #[derive(Debug, Default, Deserialize)]
 pub struct HotspotsConfig {
@@ -187,6 +201,15 @@ impl KimunConfig {
     /// Returns default config if no file is found or it cannot be parsed.
     pub fn load() -> Self {
         Self::try_load().unwrap_or_default()
+    }
+
+    /// The configuration of the repository at `root`; defaults when it has
+    /// none or it cannot be read.
+    pub fn load_from(root: &std::path::Path) -> Self {
+        std::fs::read_to_string(root.join(".kimun.toml"))
+            .ok()
+            .and_then(|content| toml::from_str(&content).ok())
+            .unwrap_or_default()
     }
 
     fn try_load() -> Option<Self> {

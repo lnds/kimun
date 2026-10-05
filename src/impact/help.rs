@@ -35,10 +35,11 @@ like any other patch.
 
 Blast radius -- projects reached through their manifests:
   A project is a directory with a manifest (Cargo.toml, package.json,
-  mix.exs). The projects that depend on a changed one, directly or through
+  mix.exs, go.mod). The projects that depend on a changed one, directly or through
   others, are reached. A dev or test dependency reaches the dependent and
   stops there. The manifest or lock file of a workspace root reaches every
-  project under it. Other changed files outside every project are listed
+  project under it. Documentation, and the paths `[impact] inert` of
+  .kimun.toml lists, reach nothing. Other changed files outside every project are listed
   apart: their reach is unknown. In a repository with a single project this
   level does not apply.
 
