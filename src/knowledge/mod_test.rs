@@ -30,6 +30,7 @@ fn opts<'a>(
 fn test_is_generated() {
     assert!(is_generated(StdPath::new("Cargo.lock")));
     assert!(is_generated(StdPath::new("package-lock.json")));
+    assert!(is_generated(StdPath::new("mix.lock")));
     assert!(is_generated(StdPath::new("app.min.js")));
     assert!(is_generated(StdPath::new("main.bundle.js")));
     assert!(is_generated(StdPath::new("proto.pb.go")));

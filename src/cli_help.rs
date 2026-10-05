@@ -163,6 +163,43 @@ Examples:
   km knowledge --format short           # compact: files + critical count
   km knowledge --format terse           # critical file count only";
 
+/// Impact of a diff: diffusion of the change and missing co-changes.
+pub const IMPACT: &str = "\
+Measure the impact of a diff from git alone, in any language.
+
+The diff runs from the merge base with --since-ref to the working tree, so it
+covers committed, uncommitted and untracked changes. It is the diff of the
+whole repository: PATH only locates it. Generated files (lock files, minified
+assets) are ignored.
+
+Diffusion -- how spread the change is (Kamei et al., 2013):
+  files, directories and subsystems (top-level directories) touched,
+  lines added and deleted, and entropy: 0 when one file holds every
+  modified line, 1 when all the files hold the same amount.
+
+Logical radius -- files that usually change with the diff and are not in it
+(Zimmermann et al., 2005):
+  confidence = shared_commits / commits of the changed file
+  A file is reported when a changed file reaches --min-confidence (0.5) with
+  at least --min-shared (3) shared commits. History ends at the merge base:
+  the commits of the diff are never evidence for themselves. Commits touching
+  more than --max-changeset (30) files are ignored: a reformat or a rename
+  across the project relates its files to each other by accident.
+
+A changed file with no history (new, or outside --since) predicts nothing
+and is listed apart. Test files are part of the analysis: a test that usually
+changes with the code is a change worth expecting.
+
+Requires a git repository. File renames are not tracked across history.
+
+Examples:
+  km impact --since-ref origin/main          # impact of the branch
+  km impact --since-ref HEAD                 # impact of uncommitted work
+  km impact --since-ref main --since 1y      # history of the last year only
+  km impact --since-ref main --min-confidence 0.8
+  km impact --since-ref main --max-changeset 50
+  km impact --since-ref main --format json   # machine-readable output";
+
 /// Temporal coupling: files that change together in git commits.
 /// Reveals hidden dependencies between modules.
 pub const TC: &str = "\

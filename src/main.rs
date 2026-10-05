@@ -39,6 +39,8 @@ mod git;
 mod hal;
 /// Hotspot analysis: change frequency × complexity.
 mod hotspots;
+/// Impact of a diff: diffusion and files that usually change with it.
+mod impact;
 /// Indentation complexity (stddev and max depth).
 mod indent;
 /// Interactive wizard: analyze current project state and write `.kimun.toml`.
@@ -469,6 +471,29 @@ fn main() {
             min_degree,
             min_strength,
         } => dispatch_tc(common, top, sort_by, since, min_degree, min_strength),
+        Commands::Impact {
+            path,
+            format,
+            since_ref,
+            since,
+            min_confidence,
+            min_shared,
+            max_changeset,
+            top,
+        } => run_command(path, |t| {
+            impact::run(
+                t,
+                &impact::ImpactOptions {
+                    output: format,
+                    since_ref: &since_ref,
+                    since: since.as_deref(),
+                    min_confidence,
+                    min_shared,
+                    max_changeset,
+                    top,
+                },
+            )
+        }),
         Commands::Smells {
             common,
             top,

@@ -277,3 +277,112 @@ fn changes_since_in_workdir_rejects_unknown_ref() {
     let git_repo = GitRepo::open(dir.path()).unwrap();
     assert!(git_repo.changes_since_in_workdir("no-such-ref").is_err());
 }
+
+#[test]
+fn diff_stats_classify_each_kind_of_change() {
+    let (dir, repo) = create_test_repo();
+    make_commit(
+        &repo,
+        &[
+            ("modified.rs", "one\ntwo\n"),
+            ("deleted.rs", "one\ntwo\nthree\n"),
+            ("old_name.rs", "a\nb\nc\nd\ne\n"),
+        ],
+        "base",
+    );
+    fs::write(dir.path().join("modified.rs"), "one\nTWO\nthree\n").unwrap();
+    fs::remove_file(dir.path().join("deleted.rs")).unwrap();
+    fs::rename(
+        dir.path().join("old_name.rs"),
+        dir.path().join("new_name.rs"),
+    )
+    .unwrap();
+    fs::write(dir.path().join("untracked.rs"), "x\ny\n").unwrap();
+    fs::write(dir.path().join("image.bin"), [0u8, 159, 146, 150, 0, 1]).unwrap();
+
+    let git_repo = GitRepo::open(dir.path()).unwrap();
+    let mut stats = git_repo.diff_stats_since("HEAD").unwrap();
+    stats.sort_by(|a, b| a.path.cmp(&b.path));
+    let summary: Vec<(&str, ChangeKind, Option<&str>, usize, usize)> = stats
+        .iter()
+        .map(|s| {
+            (
+                s.path.to_str().unwrap(),
+                s.kind,
+                s.old_path.as_deref().and_then(Path::to_str),
+                s.added,
+                s.deleted,
+            )
+        })
+        .collect();
+
+    assert_eq!(
+        summary,
+        [
+            ("deleted.rs", ChangeKind::Deleted, Some("deleted.rs"), 0, 3),
+            ("image.bin", ChangeKind::Added, None, 0, 0),
+            (
+                "modified.rs",
+                ChangeKind::Modified,
+                Some("modified.rs"),
+                2,
+                1
+            ),
+            (
+                "new_name.rs",
+                ChangeKind::Renamed,
+                Some("old_name.rs"),
+                0,
+                0
+            ),
+            ("untracked.rs", ChangeKind::Added, None, 2, 0),
+        ]
+    );
+}
+
+#[test]
+fn co_change_history_counts_only_the_targets() {
+    let (dir, repo) = create_test_repo();
+    make_commit(&repo, &[("a.rs", "1"), ("b.rs", "1")], "both");
+    make_commit(&repo, &[("a.rs", "2"), ("b.rs", "2"), ("c.rs", "2")], "all");
+    make_commit(&repo, &[("a.rs", "3")], "alone");
+    make_commit(&repo, &[("b.rs", "4"), ("c.rs", "4")], "others");
+
+    let git_repo = GitRepo::open(dir.path()).unwrap();
+    let targets: HashSet<PathBuf> = [PathBuf::from("a.rs")].into();
+    let history = git_repo
+        .co_change_history("HEAD", None, &targets, 30)
+        .unwrap();
+
+    // The commit that touches a.rs alone counts towards its total.
+    assert_eq!(history.commits, HashMap::from([(PathBuf::from("a.rs"), 3)]));
+    assert_eq!(
+        history.shared[Path::new("a.rs")],
+        HashMap::from([(PathBuf::from("b.rs"), 2), (PathBuf::from("c.rs"), 1)])
+    );
+}
+
+#[test]
+fn co_change_history_stops_at_the_ref() {
+    let (dir, repo) = create_test_repo();
+    let base = make_commit(&repo, &[("a.rs", "1"), ("b.rs", "1")], "base");
+    make_commit(&repo, &[("a.rs", "2"), ("b.rs", "2")], "after");
+
+    let git_repo = GitRepo::open(dir.path()).unwrap();
+    let targets: HashSet<PathBuf> = [PathBuf::from("a.rs")].into();
+    let history = git_repo
+        .co_change_history(&base.to_string(), None, &targets, 30)
+        .unwrap();
+
+    assert_eq!(history.commits[Path::new("a.rs")], 1);
+    assert_eq!(history.shared[Path::new("a.rs")][Path::new("b.rs")], 1);
+}
+
+#[test]
+fn diff_stats_fail_on_an_unknown_ref() {
+    let (dir, repo) = create_test_repo();
+    make_commit(&repo, &[("a.rs", "1")], "base");
+    let git_repo = GitRepo::open(dir.path()).unwrap();
+    let err = git_repo.diff_stats_since("nope").err().unwrap();
+    assert!(err.to_string().contains("cannot resolve ref 'nope'"));
+}
