@@ -7,17 +7,20 @@
 
 mod analyzer;
 mod help;
+mod inert;
 mod pr;
 mod projects;
 mod report;
 mod source;
 mod structural;
+mod structural_report;
 
 use std::collections::HashSet;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
 use crate::cli::OutputMode;
+use crate::config::KimunConfig;
 use crate::git::{ChangeKind, FileDiffStat, GitRepo};
 use crate::projects::ProjectGraph;
 use crate::util::{is_generated, parse_since};
@@ -26,6 +29,7 @@ use analyzer::{
     Diffusion, MissingCoChange, Target, Thresholds, compute_diffusion, missing_co_changes,
 };
 pub use help::HELP;
+use inert::Inert;
 use projects::ProjectRadius;
 use source::Change;
 pub use source::DiffSource;
@@ -117,12 +121,21 @@ fn open_repo(path: &Path) -> Result<GitRepo, Box<dyn Error>> {
 /// The reach of the diff over the projects of the repository. A file counts
 /// under both of its paths when it was renamed, and a lock file counts too:
 /// it changes what its project is built from.
-fn project_radius(graph: &ProjectGraph, change: &Change) -> ProjectRadius {
-    let files = change
+fn project_radius(graph: &ProjectGraph, change: &Change, inert: &Inert) -> ProjectRadius {
+    let (still, moving): (Vec<&Path>, Vec<&Path>) = change
         .diff
         .iter()
-        .flat_map(|c| std::iter::once(c.path.as_path()).chain(c.old_path.as_deref()));
-    projects::compute(graph, files)
+        .flat_map(|c| std::iter::once(c.path.as_path()).chain(c.old_path.as_deref()))
+        .partition(|path| inert.matches(path));
+    let mut radius = projects::compute(graph, moving.into_iter());
+    let still: std::collections::BTreeSet<&Path> = still.into_iter().collect();
+    radius.inert = still.into_iter().map(Path::to_path_buf).collect();
+    radius
+}
+
+/// What the repository declares inert, on top of documentation.
+fn inert_of(git_repo: &GitRepo) -> Result<Inert, Box<dyn Error>> {
+    Inert::new(&KimunConfig::load_from(git_repo.root()).impact.inert)
 }
 
 /// The source files that use what the change touches. Only the projects the
@@ -168,7 +181,7 @@ fn analyze(path: &Path, opts: &ImpactOptions) -> Result<Impact, Box<dyn Error>> 
 
     let change = Change::resolve(&git_repo, &opts.source)?;
     let graph = change.graph(&git_repo)?;
-    let projects = project_radius(&graph, &change);
+    let projects = project_radius(&graph, &change, &inert_of(&git_repo)?);
     let structural = structural_radius(&git_repo, &change, &graph, &projects)?;
     let (generated, changes): (Vec<_>, Vec<_>) = change
         .diff
@@ -228,7 +241,7 @@ fn analyze(path: &Path, opts: &ImpactOptions) -> Result<Impact, Box<dyn Error>> 
 fn print_affected(path: &Path, source: &DiffSource) -> Result<(), Box<dyn Error>> {
     let git_repo = open_repo(path)?;
     let change = Change::resolve(&git_repo, source)?;
-    let radius = project_radius(&change.graph(&git_repo)?, &change);
+    let radius = project_radius(&change.graph(&git_repo)?, &change, &inert_of(&git_repo)?);
     if !radius.outside.is_empty() {
         eprintln!(
             "note: {} changed file(s) belong to no project, so every project is listed",

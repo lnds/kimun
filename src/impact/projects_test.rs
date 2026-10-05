@@ -199,7 +199,7 @@ fn render_says_when_the_level_does_not_apply() {
     let lines = render(&radius_of(&none, &["main.py"]));
     assert_eq!(
         lines[2],
-        " No project manifests found (Cargo.toml, package.json, mix.exs)."
+        " No project manifests found (Cargo.toml, package.json, mix.exs, go.mod)."
     );
     assert_eq!(lines[1].chars().count(), 78);
 }

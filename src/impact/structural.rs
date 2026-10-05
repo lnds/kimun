@@ -11,8 +11,8 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-use crate::deps::graph::{FileGraph, Related, Source};
-use crate::git::FileDiffStat;
+use crate::deps::graph::{FileGraph, Related, Source, Unnarrowed};
+use crate::git::{ChangeKind, FileDiffStat};
 use crate::loc::language::detect;
 use crate::walk::{TEST_DIRS, is_test_file};
 
@@ -131,6 +131,26 @@ pub struct Dependent {
     pub tests_in_diff: usize,
 }
 
+/// What a change comes to in one changed file: the public functions it
+/// affects, or why they cannot be told and every use of the file counts.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Narrowing {
+    pub file: PathBuf,
+    pub functions: Option<Vec<String>>,
+    /// Why not, when `functions` is `None`.
+    pub reason: Option<String>,
+}
+
+/// Why the change to `source` cannot be narrowed, in words.
+fn reason(stat: &FileDiffStat, why: Unnarrowed) -> String {
+    match (stat.kind, why) {
+        (ChangeKind::Added, _) => "new file".to_string(),
+        (_, Unnarrowed::Language) => "its language does not tell functions".to_string(),
+        (_, Unnarrowed::NoLines) => "no changed line is known".to_string(),
+        (_, Unnarrowed::Outside(line)) => format!("line {line} is outside every function"),
+    }
+}
+
 /// A changed file, and where the change touches it.
 pub type Changed<'a> = &'a FileDiffStat;
 
@@ -139,9 +159,11 @@ pub type Changed<'a> = &'a FileDiffStat;
 pub struct Structural {
     /// Changed source files the radius starts from.
     pub origins: Vec<PathBuf>,
-    /// Public functions the change affects, when every origin tells them.
-    /// `None` when some change could not be narrowed to functions.
+    /// Public functions the change affects, over the origins that tell
+    /// them. `None` when no origin could be narrowed to functions.
     pub functions: Option<Vec<String>>,
+    /// What the change comes to in each origin.
+    pub narrowing: Vec<Narrowing>,
     /// Source files measured: the ones a file can be reached among.
     pub source_files: usize,
     /// Files that use an origin directly, most exposed first.
@@ -339,7 +361,7 @@ pub fn compute(
     let stat_of: HashMap<&Path, Changed> = changed.iter().map(|c| (c.path.as_path(), *c)).collect();
     let in_diff = |file: usize| stat_of.contains_key(graph.files[file].as_path());
     // Each origin with the functions the change affects in it, if known.
-    let origins: BTreeMap<usize, Option<BTreeSet<String>>> = (0..graph.files.len())
+    let origins: BTreeMap<usize, Result<BTreeSet<String>, Unnarrowed>> = (0..graph.files.len())
         .filter(|&f| roles[f] == Role::Source && in_diff(f))
         .map(|f| {
             let lines = stat_of[graph.files[f].as_path()].lines_in(&sources[f].text);
@@ -356,7 +378,7 @@ pub fn compute(
             let Some(changed) = origins.get(&used.to) else {
                 continue;
             };
-            let (how, telling) = exposure_of(&used.calls, changed.as_ref());
+            let (how, telling) = exposure_of(&used.calls, changed.as_ref().ok());
             exposure = exposure.min(how);
             calls.extend(telling.iter().map(|c| short_call(c)));
         }
@@ -379,30 +401,44 @@ pub fn compute(
         (a.exposure, a.tests > 0, &a.file).cmp(&(b.exposure, b.tests > 0, &b.file))
     });
 
-    let functions: Option<BTreeSet<String>> = origins
-        .values()
-        .cloned()
-        .try_fold(BTreeSet::new(), |mut all, f| {
-            all.extend(f?);
-            Some(all)
+    let mut narrowing: Vec<Narrowing> = origins
+        .iter()
+        .map(|(&file, told)| {
+            let path = &graph.files[file];
+            Narrowing {
+                file: path.clone(),
+                functions: told.as_ref().ok().map(|f| f.iter().cloned().collect()),
+                reason: told
+                    .as_ref()
+                    .err()
+                    .map(|&why| reason(stat_of[path.as_path()], why)),
+            }
         })
-        .filter(|_| !origins.is_empty());
+        .collect();
+    narrowing.sort_by(|a, b| a.file.cmp(&b.file));
+    let narrowed: Vec<&Vec<String>> = narrowing
+        .iter()
+        .filter_map(|n| n.functions.as_ref())
+        .collect();
+    let functions: Option<Vec<String>> = (!narrowed.is_empty()).then(|| {
+        let all: BTreeSet<&String> = narrowed.into_iter().flatten().collect();
+        all.into_iter().cloned().collect()
+    });
 
-    // With the functions known, the radius goes through the files the
-    // change concerns; a file that calls elsewhere carries it no further.
+    // The radius goes through the files the change concerns; a file that
+    // only calls functions it leaves alone carries it no further. Where an
+    // origin could not be narrowed, every file that uses it is concerned.
     let exposed: Vec<usize> = direct
         .iter()
         .filter(|(_, d)| d.exposure != Exposure::Elsewhere)
         .map(|(file, _)| *file)
         .collect();
-    let through = match functions {
-        Some(_) => reverse.levels_through(&starts, &exposed),
-        None => levels.clone(),
-    };
+    let through = reverse.levels_through(&starts, &exposed);
 
     Structural {
-        origins: starts.iter().map(|&f| graph.files[f].clone()).collect(),
-        functions: functions.map(|f| f.into_iter().collect()),
+        origins: narrowing.iter().map(|n| n.file.clone()).collect(),
+        functions,
+        narrowing,
         source_files: roles.iter().filter(|r| **r == Role::Source).count(),
         direct: direct.into_iter().map(|(_, d)| d).collect(),
         by_distance: through.iter().map(Vec::len).collect(),
@@ -413,297 +449,6 @@ pub fn compute(
         upper_bound: levels.iter().map(Vec::len).sum(),
         unavailable: unavailable(&changed.iter().map(|c| c.path.as_path()).collect::<Vec<_>>()),
         ambiguous: graph.ambiguous,
-    }
-}
-
-const TITLE: &str = "Structural radius — source files that use what changed";
-
-fn names(paths: impl Iterator<Item = impl AsRef<Path>>, limit: usize) -> String {
-    let all: Vec<String> = paths.map(|p| p.as_ref().display().to_string()).collect();
-    let shown = all[..all.len().min(limit)].join(", ");
-    match all.len().saturating_sub(limit) {
-        0 => shown,
-        more => format!("{shown} and {more} more"),
-    }
-}
-
-/// The exposed dependents, most exposed first, each with what exposes it.
-fn dependent_lines(radius: &Structural, top: usize) -> Vec<String> {
-    let exposed: Vec<&Dependent> = radius.exposed().collect();
-    let mut lines = vec![" Tests  Dependent".to_string()];
-    for dependent in exposed.iter().take(top) {
-        let tests = match dependent.tests {
-            0 => "none".to_string(),
-            n => n.to_string(),
-        };
-        lines.push(format!(" {tests:>5}  {}", dependent.file.display()));
-        if dependent.exposure == Exposure::Refers {
-            lines.push("            refers to the module without calling it".to_string());
-        } else if !dependent.calls.is_empty() {
-            lines.push(format!(
-                "            calls {}",
-                names(dependent.calls.iter(), 3)
-            ));
-        }
-    }
-    if exposed.len() > top {
-        lines.push(format!(" {} files ({top} shown).", exposed.len()));
-    }
-    lines
-}
-
-/// How far the change reaches when every use of a changed file counts.
-fn reach_line(radius: &Structural) -> String {
-    let near: Vec<String> = radius
-        .by_distance
-        .iter()
-        .take(3)
-        .enumerate()
-        .map(|(i, files)| format!("{} at distance {}", files, i + 1))
-        .collect();
-    let further: usize = radius.by_distance.iter().skip(3).sum();
-    match further {
-        0 => near.join(", "),
-        _ => format!(
-            "{}, {further} further (up to distance {})",
-            near.join(", "),
-            radius.by_distance.len()
-        ),
-    }
-}
-
-/// The lines that sum the radius up, above the list of dependents.
-fn summary(radius: &Structural) -> Vec<String> {
-    let total = radius.source_files.max(1) as f64;
-    // A share too small to round to 1% is still not zero.
-    let share = |files: usize| match 100.0 * files as f64 / total {
-        pct if pct > 0.0 && pct < 0.5 => "<1%".to_string(),
-        pct => format!("{pct:.0}%"),
-    };
-    let reached = radius.reached();
-    let changed = format!(" Changed: {}", names(radius.origins.iter(), 5));
-    let unprotected = radius.unprotected().count();
-    let Some(functions) = &radius.functions else {
-        return vec![
-            format!(
-                " {reached} of {} source files reached ({}), {} direct, {unprotected} of them with no test",
-                radius.source_files,
-                share(reached),
-                radius.direct.len()
-            ),
-            changed,
-            " The change touches code outside functions: every use of the file counts.".to_string(),
-            format!(" Reach: {}", reach_line(radius)),
-        ];
-    };
-    let calling = radius
-        .direct
-        .iter()
-        .filter(|d| d.exposure == Exposure::Calls)
-        .count();
-    let radius_line = match reached {
-        0 => format!(" Radius: 0 of {} source files", radius.source_files),
-        _ => format!(
-            " Radius: {reached} of {} source files ({}): {}",
-            radius.source_files,
-            share(reached),
-            reach_line(radius)
-        ),
-    };
-    vec![
-        format!(
-            " {}, {unprotected} of them with no test",
-            match calling {
-                1 => "1 file calls what changed".to_string(),
-                n => format!("{n} files call what changed"),
-            }
-        ),
-        changed,
-        format!(" Functions: {}", names(functions.iter(), 8)),
-        radius_line,
-        format!(
-            " Upper bound, whatever the function: {} files ({})",
-            radius.upper_bound,
-            share(radius.upper_bound)
-        ),
-    ]
-}
-
-/// What the radius comes to.
-fn body(radius: &Structural, top: usize) -> Vec<String> {
-    if radius.origins.is_empty() {
-        return vec![
-            " No changed source file in a language with a reliable graph".to_string(),
-            " (Elixir, JavaScript/TypeScript, Kaikai).".to_string(),
-        ];
-    }
-    if radius.direct.is_empty() {
-        return vec![
-            format!(" 0 of {} source files reached.", radius.source_files),
-            format!(" Changed: {}", names(radius.origins.iter(), 5)),
-            " No source file measured uses what changed.".to_string(),
-        ];
-    }
-    let mut lines = summary(radius);
-    if radius.exposed().next().is_none() {
-        lines.push(" No other file calls the functions that changed.".to_string());
-        return lines;
-    }
-    lines.push(String::new());
-    lines.extend(dependent_lines(radius, top));
-    lines
-}
-
-/// The warnings the radius is measured for.
-fn warnings(radius: &Structural) -> Vec<String> {
-    let mut lines = Vec::new();
-    let unprotected: Vec<&Path> = radius.unprotected().map(|d| d.file.as_path()).collect();
-    if !unprotected.is_empty() {
-        lines.push(format!(
-            "No test refers to {} of the files that call what changed; an integration test is probably missing:",
-            unprotected.len()
-        ));
-        lines.extend(
-            unprotected
-                .iter()
-                .take(5)
-                .map(|p| format!("  {}", p.display())),
-        );
-        if unprotected.len() > 5 {
-            lines.push(format!("  and {} more", unprotected.len() - 5));
-        }
-    }
-    let exercised = radius.exposed().any(|d| d.tests_in_diff > 0);
-    if radius.exposed().next().is_some() && !exercised {
-        lines.push("No test in the change exercises a file that uses what changed.".to_string());
-    }
-    let unknown = radius
-        .direct
-        .iter()
-        .filter(|d| d.exposure == Exposure::Refers && d.tests == 0)
-        .count();
-    if unknown > 0 {
-        lines.push(format!(
-            "{unknown} more with no test use the module without a call that tells whether the change concerns them."
-        ));
-    }
-    lines.extend(radius.unavailable.iter().map(|(language, files)| {
-        format!(
-            "Not measured for {language} ({files} changed): its graph does not reflect usage yet."
-        )
-    }));
-    if radius.ambiguous > 0 {
-        lines.push(format!(
-            "Module references left out for naming more than one file: {}",
-            radius.ambiguous
-        ));
-    }
-    lines
-}
-
-/// The structural block of the report.
-pub fn render(radius: &Structural, top: usize) -> Vec<String> {
-    let sep = crate::report_helpers::separator(78);
-    let mut lines = vec![TITLE.to_string(), sep.clone()];
-    lines.extend(body(radius, top));
-    lines.push(sep);
-    lines.extend(warnings(radius));
-    lines
-}
-
-#[derive(Serialize)]
-struct JsonUnavailable<'a> {
-    language: &'a str,
-    files: usize,
-}
-
-/// The radius as a number: the files the change concerns, over those measured.
-#[derive(Serialize)]
-struct JsonRadius {
-    files: usize,
-    source_files: usize,
-    /// `files / source_files`, from 0 to 1.
-    share: f64,
-}
-
-#[derive(Serialize)]
-struct JsonReach<'a> {
-    distance: usize,
-    files: &'a [PathBuf],
-}
-
-/// The structural block of the JSON report.
-#[derive(Serialize)]
-pub struct JsonStructural<'a> {
-    source_files: usize,
-    origins: Vec<String>,
-    /// Public functions the change affects; null when it cannot be narrowed.
-    functions: Option<&'a [String]>,
-    radius: JsonRadius,
-    reached: usize,
-    by_distance: &'a [usize],
-    /// The files of the radius, distance by distance.
-    reach: Vec<JsonReach<'a>>,
-    /// Files reached if every use of a changed file counted.
-    upper_bound: usize,
-    direct: &'a [Dependent],
-    /// Files that call what changed and that no test protects.
-    unprotected: Vec<String>,
-    /// Files that use the changed module without a call that tells whether
-    /// the change concerns them, and that no test protects.
-    unknown_without_tests: Vec<String>,
-    /// Whether a test that is part of the change protects a file that uses
-    /// what changed.
-    change_tests_a_dependent: bool,
-    unavailable: Vec<JsonUnavailable<'a>>,
-    ambiguous: usize,
-}
-
-impl<'a> From<&'a Structural> for JsonStructural<'a> {
-    fn from(radius: &'a Structural) -> Self {
-        let text = |p: &PathBuf| p.display().to_string();
-        let reached = radius.reached();
-        let share = reached as f64 / radius.source_files.max(1) as f64;
-        Self {
-            source_files: radius.source_files,
-            origins: radius.origins.iter().map(text).collect(),
-            functions: radius.functions.as_deref(),
-            radius: JsonRadius {
-                files: reached,
-                source_files: radius.source_files,
-                share: (share * 10_000.0).round() / 10_000.0,
-            },
-            reached,
-            by_distance: &radius.by_distance,
-            reach: radius
-                .reached_files
-                .iter()
-                .enumerate()
-                .map(|(i, files)| JsonReach {
-                    distance: i + 1,
-                    files,
-                })
-                .collect(),
-            upper_bound: radius.upper_bound,
-            direct: &radius.direct,
-            unprotected: radius.unprotected().map(|d| text(&d.file)).collect(),
-            unknown_without_tests: radius
-                .direct
-                .iter()
-                .filter(|d| d.exposure == Exposure::Refers && d.tests == 0)
-                .map(|d| text(&d.file))
-                .collect(),
-            change_tests_a_dependent: radius.exposed().any(|d| d.tests_in_diff > 0),
-            unavailable: radius
-                .unavailable
-                .iter()
-                .map(|(language, files)| JsonUnavailable {
-                    language,
-                    files: *files,
-                })
-                .collect(),
-            ambiguous: radius.ambiguous,
-        }
     }
 }
 

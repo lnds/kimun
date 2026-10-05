@@ -74,3 +74,10 @@ min_degree = 3  # default: 3
 # - cycom:             cyclomatic complexity
 # - cogcom:            cognitive complexity (SonarSource method)
 complexity = "indent"  # default: indent
+
+[impact]
+# Changed files that reach nothing, as globs relative to the repository.
+# Documentation (.md, .mdx, .rst, .adoc, .txt) is always inert. A file listed
+# here does not count as a change to its project, and outside every project
+# it does not make the reach of the change unknown.
+# inert = ["scripts/**", "notebooks/**"]

@@ -1,5 +1,6 @@
 use super::*;
 use crate::git::ChangeKind;
+use crate::impact::structural_report::{JsonStructural, reach_line, render, summary};
 
 const INVOICES: &str = "\
 defmodule Billing.Invoices do
@@ -296,7 +297,7 @@ fn render_when_the_change_cannot_be_narrowed() {
         [
             " 4 of 6 source files reached (67%), 3 direct, 1 of them with no test",
             " Changed: lib/billing/invoices.ex",
-            " The change touches code outside functions: every use of the file counts.",
+            " Every use counts: lib/billing/invoices.ex (line 4 is outside every function)",
             " Reach: 3 at distance 1, 1 at distance 2",
         ]
     );
@@ -504,4 +505,99 @@ fn a_share_below_one_percent_is_not_shown_as_zero() {
         lines[4],
         " Upper bound, whatever the function: 465 files (75%)"
     );
+}
+
+#[test]
+fn each_changed_file_is_narrowed_on_its_own() {
+    // One file changes inside a function; another is new, and a third
+    // changes its struct. Only the first can be narrowed.
+    let report_user = (
+        "lib/billing/digest.ex",
+        "defmodule Billing.Digest do\n  def run, do: Billing.Report.run()\nend\n",
+    );
+    let mut added = change("lib/billing/mailer.ex", &[1, 2, 3]);
+    added.kind = ChangeKind::Added;
+    let changes = [
+        change(
+            "lib/billing/invoices.ex",
+            &[line_of("record(invoice, user, :approved)")],
+        ),
+        added,
+        change("lib/billing/report.ex", &[1]),
+    ];
+    let radius = radius(project(&[report_user]), &changes);
+
+    assert_eq!(
+        radius.functions.as_deref(),
+        Some(&["approve".to_string()][..])
+    );
+    let narrowing: Vec<(&str, Option<Vec<&str>>, Option<&str>)> = radius
+        .narrowing
+        .iter()
+        .map(|n| {
+            (
+                n.file.file_name().unwrap().to_str().unwrap(),
+                n.functions
+                    .as_ref()
+                    .map(|f| f.iter().map(String::as_str).collect()),
+                n.reason.as_deref(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        narrowing,
+        [
+            ("invoices.ex", Some(vec!["approve"]), None),
+            ("mailer.ex", None, Some("new file")),
+            ("report.ex", None, Some("line 1 is outside every function")),
+        ]
+    );
+
+    // The invoices change still reaches only who calls approve; the report
+    // could not be narrowed, so its user counts whatever it calls.
+    let direct = direct(&radius);
+    assert!(direct.contains(&(
+        "invoice_controller.ex",
+        Exposure::Calls,
+        0,
+        vec!["Invoices.approve"]
+    )));
+    assert!(direct.contains(&("digest.ex", Exposure::Calls, 0, vec!["Report.run"])));
+
+    let lines = render(&radius, 20);
+    assert_eq!(lines[4], " Functions: approve");
+    assert_eq!(
+        lines[5],
+        " Every use counts for: lib/billing/mailer.ex (new file), lib/billing/report.ex (line 1 is outside every function)"
+    );
+    assert!(lines[6].starts_with(" Radius: "), "{}", lines[6]);
+
+    let json = serde_json::to_value(JsonStructural::from(&radius)).unwrap();
+    assert_eq!(
+        json["narrowing"][0],
+        serde_json::json!({"file": "lib/billing/invoices.ex", "functions": ["approve"], "reason": null})
+    );
+    assert_eq!(json["narrowing"][1]["reason"], "new file");
+}
+
+#[test]
+fn a_language_without_functions_says_so() {
+    let sources = vec![
+        (
+            PathBuf::from("src/app.ts"),
+            "import { helper } from './util';\nhelper();\n".to_string(),
+        ),
+        (
+            PathBuf::from("src/util.ts"),
+            "export const helper = () => 1;\n".to_string(),
+        ),
+    ];
+    let radius = radius(sources, &[change("src/util.ts", &[1])]);
+
+    assert_eq!(radius.functions, None);
+    assert_eq!(
+        radius.narrowing[0].reason.as_deref(),
+        Some("its language does not tell functions")
+    );
+    assert_eq!(direct(&radius), [("app.ts", Exposure::Calls, 0, vec![])]);
 }

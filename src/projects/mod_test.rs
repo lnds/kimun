@@ -631,3 +631,58 @@ fn sample_projects_of_test_suites_are_not_projects() {
         [edge("test/e2e", "packages/fixtures", Scope::Runtime)]
     );
 }
+
+#[test]
+fn go_modules_are_linked_by_requirement_and_by_replacement() {
+    let graph = discover(&[
+        ("go.work", "go 1.22\n\nuse (\n\t./cli\n\t./libs/core\n)\n"),
+        (
+            "libs/core/go.mod",
+            "module example.com/acme/libs/core\n\ngo 1.22\n",
+        ),
+        ("libs/log/go.mod", "module example.com/acme/libs/log\n"),
+        (
+            "cli/go.mod",
+            "module example.com/acme/cli\n\nrequire (\n\texample.com/acme/libs/core v0.0.0\n\tgithub.com/spf13/cobra v1.8.0\n)\n",
+        ),
+        (
+            "tools/gen/go.mod",
+            "module example.com/acme/tools/gen\n\nrequire example.com/elsewhere/log v1.0.0\n\nreplace example.com/elsewhere/log => ../../libs/log\n",
+        ),
+    ]);
+
+    assert_eq!(roots(&graph), ["cli", "libs/core", "libs/log", "tools/gen"]);
+    assert_eq!(
+        edges(&graph),
+        [
+            edge("cli", "libs/core", Scope::Runtime),
+            edge("tools/gen", "libs/log", Scope::Runtime),
+        ]
+    );
+    // The work file makes its directory a workspace root, and governs it.
+    assert_eq!(graph.workspaces, [PathBuf::from("")]);
+    assert_eq!(
+        graph.workspace_of(Path::new("go.work")),
+        Some(Path::new(""))
+    );
+    assert_eq!(
+        graph.workspace_of(Path::new("go.work.sum")),
+        Some(Path::new(""))
+    );
+    assert!(graph.unread.is_empty());
+}
+
+#[test]
+fn a_go_file_belongs_to_its_module() {
+    let graph = discover(&[
+        ("ops/go.mod", "module example.com/acme/ops\n"),
+        ("apps/web/mix.exs", &mix("web", "")),
+    ]);
+    let owner = |file: &str| {
+        graph
+            .owner(Path::new(file))
+            .map(|i| graph.projects[i].display_root())
+    };
+    assert_eq!(owner("ops/cmd/main.go").as_deref(), Some("ops"));
+    assert_eq!(owner("ops/go.sum").as_deref(), Some("ops"));
+}

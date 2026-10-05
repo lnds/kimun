@@ -40,6 +40,9 @@ pub struct ProjectRadius {
     pub outside: Vec<PathBuf>,
     /// Manifests with local dependencies that could not be read.
     pub unread: Vec<(PathBuf, usize)>,
+    /// Changed files that reach nothing: documentation, and what the
+    /// configuration declares inert.
+    pub inert: Vec<PathBuf>,
 }
 
 impl ProjectRadius {
@@ -174,6 +177,7 @@ pub fn compute<'a>(
         reached,
         outside: landing.outside.into_iter().collect(),
         unread: graph.unread.clone(),
+        inert: Vec::new(),
     }
 }
 
@@ -233,7 +237,7 @@ fn body(radius: &ProjectRadius) -> Vec<String> {
     let one_line = |line: String| vec![line];
     if total == 0 {
         return one_line(
-            " No project manifests found (Cargo.toml, package.json, mix.exs).".to_string(),
+            " No project manifests found (Cargo.toml, package.json, mix.exs, go.mod).".to_string(),
         );
     }
     if total == 1 {
@@ -277,6 +281,12 @@ fn notes(radius: &ProjectRadius) -> Vec<String> {
         notes.push(format!(
             "Changed files outside every project (reach unknown): {}",
             files.join(", ")
+        ));
+    }
+    if !radius.inert.is_empty() {
+        notes.push(format!(
+            "Changed files that reach nothing (documentation, or configured as inert): {}",
+            radius.inert.len()
         ));
     }
     if !radius.unread.is_empty() {
@@ -335,6 +345,7 @@ pub struct JsonProjects {
     direct: usize,
     affected: Vec<String>,
     outside: Vec<String>,
+    inert: Vec<String>,
     unread: Vec<JsonUnread>,
 }
 
@@ -362,6 +373,11 @@ impl From<&ProjectRadius> for JsonProjects {
             affected: radius.affected().into_iter().map(str::to_string).collect(),
             outside: radius
                 .outside
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect(),
+            inert: radius
+                .inert
                 .iter()
                 .map(|p| p.display().to_string())
                 .collect(),
