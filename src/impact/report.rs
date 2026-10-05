@@ -22,7 +22,7 @@ pub fn print_report(impact: &Impact, top: usize) {
 /// and the notes.
 fn render_report(impact: &Impact, top: usize) -> String {
     if impact.diffusion.files == 0 {
-        let mut lines = vec![format!("No changes against '{}'.", impact.since_ref)];
+        let mut lines = vec![format!("No changes: {}.", impact.source)];
         lines.extend(generated_note(impact));
         return lines.join("\n") + "\n";
     }
@@ -38,10 +38,7 @@ fn render_report(impact: &Impact, top: usize) -> String {
     let width = (path_width + COL_CONFIDENCE + COL_SHARED + with_width + 7).max(MIN_WIDTH);
     let sep = report_helpers::separator(width);
 
-    let mut lines = vec![
-        format!("Change Impact — diff against {}", impact.since_ref),
-        String::new(),
-    ];
+    let mut lines = vec![format!("Change Impact — {}", impact.source), String::new()];
     lines.extend(projects::render(&impact.projects));
     lines.push(String::new());
     lines.extend(diffusion_lines(impact));
@@ -207,7 +204,7 @@ struct JsonLogicalRadius {
 
 #[derive(Serialize)]
 struct JsonImpact {
-    since_ref: String,
+    source: String,
     projects: JsonProjects,
     diffusion: JsonDiffusion,
     logical_radius: JsonLogicalRadius,
@@ -217,7 +214,7 @@ struct JsonImpact {
 fn to_json(impact: &Impact, top: usize) -> JsonImpact {
     let d = &impact.diffusion;
     JsonImpact {
-        since_ref: impact.since_ref.clone(),
+        source: impact.source.clone(),
         projects: JsonProjects::from(&impact.projects),
         diffusion: JsonDiffusion {
             files: d.files,

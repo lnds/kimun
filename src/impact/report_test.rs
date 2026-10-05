@@ -21,7 +21,7 @@ fn missing(path: &str, triggers: Vec<Trigger>) -> MissingCoChange {
 
 fn sample() -> Impact {
     Impact {
-        since_ref: "main".to_string(),
+        source: "diff against main".to_string(),
         projects: ProjectRadius {
             all: vec![".".to_string()],
             changed: vec![".".to_string()],
@@ -161,7 +161,10 @@ fn report_without_missing_files_states_the_thresholds() {
 
 #[test]
 fn report_of_an_empty_diff() {
-    assert_eq!(render_report(&empty(), 20), "No changes against 'main'.\n");
+    assert_eq!(
+        render_report(&empty(), 20),
+        "No changes: diff against main.\n"
+    );
 }
 
 #[test]
@@ -172,7 +175,7 @@ fn report_of_a_diff_with_only_generated_files() {
     };
     assert_eq!(
         render_report(&impact, 20),
-        "No changes against 'main'.\nGenerated files ignored: 2\n"
+        "No changes: diff against main.\nGenerated files ignored: 2\n"
     );
 }
 
@@ -188,7 +191,7 @@ fn short_line() {
 #[test]
 fn json_carries_every_trigger_and_rounds() {
     let json = serde_json::to_value(to_json(&sample(), 20)).unwrap();
-    assert_eq!(json["since_ref"], "main");
+    assert_eq!(json["source"], "diff against main");
     assert_eq!(json["diffusion"]["files"], 5);
     assert_eq!(json["diffusion"]["entropy"], 0.82);
     assert_eq!(json["generated_skipped"], 1);

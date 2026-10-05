@@ -562,10 +562,34 @@ Strong coupling (>= 0.5) suggests hidden dependencies — consider extracting sh
 Measures how far a change reaches, for a PR or for uncommitted work: the projects of the repository it reaches, how spread it is, and which files usually change with it and were left out.
 
 ```bash
-km impact --since-ref origin/main [path]
+km impact --since-ref origin/main [path]         # the branch you are on
+km impact --since-ref main --until-ref feature   # a branch, without checking it out
+git diff main... | km impact --diff -               # a patch
+km impact --pr 123                               # a GitHub pull request
 ```
 
-The diff runs from the merge base with `--since-ref` to the working tree, so it covers committed, uncommitted and untracked changes, and deletions. It is always the diff of the whole repository: `path` only locates the repository and does not narrow the analysis. Generated files (lock files, minified assets) are left out of every measure.
+#### What is measured
+
+| Source | The change | History ends at | Manifests and files read from |
+|--------|------------|-----------------|-------------------------------|
+| `--since-ref REF` | From where `REF` and `HEAD` diverged to the working tree: committed, uncommitted and untracked changes, and deletions | That merge base | The working tree |
+| `--since-ref A --until-ref B` | What `B` brings since it diverged from `A`, whatever is checked out | That merge base | The tree of `B` |
+| `--diff FILE` | A patch in git format, from a file or from stdin (`-`) | `HEAD`, or where `--since-ref` and `HEAD` diverged when given | The working tree |
+| `--pr NUMBER` | A GitHub pull request | As the mode it resolves to | As the mode it resolves to |
+
+It is always the change over the whole repository: `path` only locates the repository and does not narrow the analysis. Generated files (lock files, minified assets) are left out of every measure.
+
+**`--pr` requires the [GitHub CLI](https://cli.github.com) (`gh`) installed and authenticated.** kimun runs it as a program; it links no GitHub client and stores no token.
+
+- When the repository has the commits of the pull request, it is measured from them, as between two refs. A pull request merged by squash or rebase, whose head was never fetched, is measured from its base up to the commit that merged it.
+- Otherwise (a pull request from a fork, or one not fetched) its patch is taken from `gh pr diff` and measured like any other patch, with a note on stderr. `git fetch origin pull/NUMBER/head` makes its commits available.
+
+A patch (`--diff`, or a pull request without local commits) is measured against the working tree, where it is not applied:
+
+- it must be in git format with the `a/` and `b/` prefixes, as `git diff`, `git format-patch` and `gh pr diff` print it, without colors;
+- for a branch use `git diff main...` (three dots): `git diff main` compares against the tip of `main`, and shows what `main` gained since as if the branch had undone it. To include uncommitted work, `--since-ref main` is the direct way;
+- a project the patch creates is not known, so its files have unknown reach, and `--affected` lists every project;
+- if the patch is already applied in `HEAD`, pass `--since-ref` so that its own commits are not counted as history.
 
 #### Blast radius: projects
 
@@ -639,7 +663,10 @@ Options:
 
 | Flag | Description |
 |------|-------------|
-| `--since-ref REF` | Git ref to diff against (required), e.g. `origin/main`, `HEAD` |
+| `--since-ref REF` | Git ref to diff against, e.g. `origin/main`, `HEAD`. Required unless `--diff` or `--pr` is given |
+| `--until-ref REF` | Measure up to this ref instead of the working tree (needs `--since-ref`) |
+| `--diff FILE` | Measure a patch in git format; `-` reads stdin |
+| `--pr NUMBER` | Measure a GitHub pull request; requires `gh` installed and authenticated |
 | `--since DURATION` | Only consider history since this time (e.g. `6m`, `1y`, `30d`) |
 | `--min-confidence F` | Minimum confidence to report a missing file (default: `0.5`) |
 | `--min-shared N` | Minimum shared commits to report a missing file (default: `3`) |

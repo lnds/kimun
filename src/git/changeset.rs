@@ -20,6 +20,7 @@ pub enum ChangeKind {
 }
 
 /// A changed file with its line counts. Paths are repo-relative.
+#[derive(Debug, Clone, PartialEq)]
 pub struct FileDiffStat {
     /// Current path, or the last known one for a deleted file.
     pub path: PathBuf,
@@ -79,6 +80,32 @@ fn line_counts(diff: &Diff, idx: usize) -> Result<(usize, usize), Box<dyn Error>
     Ok((added, deleted))
 }
 
+/// The changed files of a diff, with their line counts.
+fn stats_of(diff: &Diff) -> Result<Vec<FileDiffStat>, Box<dyn Error>> {
+    let mut stats = Vec::new();
+    for (idx, delta) in diff.deltas().enumerate() {
+        let Some((kind, path, old_path)) = classify(&delta) else {
+            continue;
+        };
+        let (added, deleted) = line_counts(diff, idx)?;
+        stats.push(FileDiffStat {
+            path,
+            old_path,
+            kind,
+            added,
+            deleted,
+        });
+    }
+    Ok(stats)
+}
+
+/// The changed files of a patch in git format, as `git diff` and
+/// `gh pr diff` print it.
+pub fn patch_stats(patch: &[u8]) -> Result<Vec<FileDiffStat>, Box<dyn Error>> {
+    let diff = Diff::from_buffer(patch).map_err(|e| format!("cannot read the patch: {e}"))?;
+    stats_of(&diff)
+}
+
 impl GitRepo {
     /// Diff `tree` against the working tree, with renames detected. Untracked
     /// files are included; their lines only when `untracked_content` is set.
@@ -100,20 +127,22 @@ impl GitRepo {
         Ok(diff)
     }
 
-    /// The commit where HEAD and `refspec` diverged. It is `refspec` itself
-    /// when HEAD descends from it.
-    fn merge_base(&self, refspec: &str) -> Result<git2::Commit<'_>, Box<dyn Error>> {
-        let target = self
+    fn commit_of(&self, refspec: &str) -> Result<git2::Commit<'_>, Box<dyn Error>> {
+        Ok(self
             .repo
             .revparse_single(refspec)
             .map_err(|e| format!("cannot resolve ref '{refspec}': {e}"))?
             .peel_to_commit()
-            .map_err(|e| format!("'{refspec}' is not a commit: {e}"))?;
-        let head = self.repo.head()?.peel_to_commit()?;
+            .map_err(|e| format!("'{refspec}' is not a commit: {e}"))?)
+    }
+
+    /// The commit where `a` and `b` diverged. It is `a` itself when `b`
+    /// descends from it.
+    fn merge_base(&self, a: &str, b: &str) -> Result<git2::Commit<'_>, Box<dyn Error>> {
         let base = self
             .repo
-            .merge_base(target.id(), head.id())
-            .map_err(|e| format!("no common ancestor between HEAD and '{refspec}': {e}"))?;
+            .merge_base(self.commit_of(a)?.id(), self.commit_of(b)?.id())
+            .map_err(|e| format!("no common ancestor between '{a}' and '{b}': {e}"))?;
         Ok(self.repo.find_commit(base)?)
     }
 
@@ -121,45 +150,65 @@ impl GitRepo {
     /// tree, with lines added and deleted. Covers uncommitted and untracked
     /// changes, and deletions. A binary file counts no lines.
     pub fn diff_stats_since(&self, refspec: &str) -> Result<Vec<FileDiffStat>, Box<dyn Error>> {
-        let tree = self.merge_base(refspec)?.tree()?;
-        let diff = self.workdir_diff(&tree, true)?;
+        let tree = self.merge_base(refspec, "HEAD")?.tree()?;
+        stats_of(&self.workdir_diff(&tree, true)?)
+    }
 
-        let mut stats = Vec::new();
-        for (idx, delta) in diff.deltas().enumerate() {
-            let Some((kind, path, old_path)) = classify(&delta) else {
-                continue;
-            };
-            let (added, deleted) = line_counts(&diff, idx)?;
-            stats.push(FileDiffStat {
-                path,
-                old_path,
-                kind,
-                added,
-                deleted,
-            });
-        }
-        Ok(stats)
+    /// Files that differ between the merge base of `since` and `until` and
+    /// the tree of `until`: what `until` brings, whatever is checked out.
+    pub fn diff_stats_between(
+        &self,
+        since: &str,
+        until: &str,
+    ) -> Result<Vec<FileDiffStat>, Box<dyn Error>> {
+        let base = self.merge_base(since, until)?.tree()?;
+        let tip = self.commit_of(until)?.tree()?;
+        let mut diff = self.repo.diff_tree_to_tree(Some(&base), Some(&tip), None)?;
+        diff.find_similar(Some(DiffFindOptions::new().renames(true)))?;
+        stats_of(&diff)
+    }
+
+    /// Whether `refspec` names a commit of this repository.
+    pub fn has_commit(&self, refspec: &str) -> bool {
+        self.commit_of(refspec).is_ok()
+    }
+
+    /// Whether `ancestor` is in the history of `descendant`, and not the
+    /// same commit.
+    pub fn is_ancestor(&self, ancestor: &str, descendant: &str) -> bool {
+        let (Ok(ancestor), Ok(descendant)) = (self.commit_of(ancestor), self.commit_of(descendant))
+        else {
+            return false;
+        };
+        self.repo
+            .graph_descendant_of(descendant.id(), ancestor.id())
+            .unwrap_or(false)
     }
 
     /// Commit counts of `targets` and the files that changed with each of
-    /// them, over the history up to the merge base with `refspec`. The commits
-    /// made after it are the change under analysis and are left out.
+    /// them, over the history that precedes a change. With `since`, the
+    /// history ends where `since` and `until` diverged: the commits made
+    /// after it are the change under analysis. Without it, it ends at `until`.
     ///
     /// A commit touching more than `max_files` files is skipped altogether: a
     /// sweeping change (a reformat, a rename across the project) relates its
     /// files to each other by accident.
     pub fn co_change_history(
         &self,
-        refspec: &str,
-        since: Option<i64>,
+        (since, until): (Option<&str>, &str),
+        since_ts: Option<i64>,
         targets: &HashSet<PathBuf>,
         max_files: usize,
     ) -> Result<CoChangeHistory, Box<dyn Error>> {
+        let end = match since {
+            Some(since) => self.merge_base(since, until)?,
+            None => self.commit_of(until)?,
+        };
         let mut revwalk = self.repo.revwalk()?;
-        revwalk.push(self.merge_base(refspec)?.id())?;
+        revwalk.push(end.id())?;
         let mut history = CoChangeHistory::default();
 
-        self.walk(revwalk, since, |commit| {
+        self.walk(revwalk, since_ts, |commit| {
             let paths = self.changed_files(commit)?;
             if paths.len() <= max_files {
                 history.record(&paths, targets);

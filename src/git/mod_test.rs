@@ -351,7 +351,7 @@ fn co_change_history_counts_only_the_targets() {
     let git_repo = GitRepo::open(dir.path()).unwrap();
     let targets: HashSet<PathBuf> = [PathBuf::from("a.rs")].into();
     let history = git_repo
-        .co_change_history("HEAD", None, &targets, 30)
+        .co_change_history((None, "HEAD"), None, &targets, 30)
         .unwrap();
 
     // The commit that touches a.rs alone counts towards its total.
@@ -371,7 +371,7 @@ fn co_change_history_stops_at_the_ref() {
     let git_repo = GitRepo::open(dir.path()).unwrap();
     let targets: HashSet<PathBuf> = [PathBuf::from("a.rs")].into();
     let history = git_repo
-        .co_change_history(&base.to_string(), None, &targets, 30)
+        .co_change_history((Some(&base.to_string()), "HEAD"), None, &targets, 30)
         .unwrap();
 
     assert_eq!(history.commits[Path::new("a.rs")], 1);
@@ -430,4 +430,214 @@ fn renames_are_detected_whatever_the_git_configuration() {
     assert_eq!(stats.len(), 1);
     assert_eq!(stats[0].kind, ChangeKind::Renamed);
     assert_eq!(stats[0].old_path.as_deref(), Some(Path::new("old_name.rs")));
+}
+
+const PATCH_OF_EVERY_KIND: &str = "\
+diff --git a/modified.rs b/modified.rs
+index 1111111..2222222 100644
+--- a/modified.rs
++++ b/modified.rs
+@@ -1,2 +1,3 @@
+ one
+-two
++TWO
++three
+diff --git a/added.rs b/added.rs
+new file mode 100644
+index 0000000..3333333
+--- /dev/null
++++ b/added.rs
+@@ -0,0 +1,2 @@
++x
++y
+diff --git a/deleted.rs b/deleted.rs
+deleted file mode 100644
+index 4444444..0000000
+--- a/deleted.rs
++++ /dev/null
+@@ -1,3 +0,0 @@
+-a
+-b
+-c
+diff --git a/old_name.rs b/new_name.rs
+similarity index 100%
+rename from old_name.rs
+rename to new_name.rs
+diff --git a/logo.png b/logo.png
+index 5555555..6666666 100644
+Binary files a/logo.png and b/logo.png differ
+";
+
+#[test]
+fn patch_stats_classify_each_kind_of_change() {
+    let mut stats = patch_stats(PATCH_OF_EVERY_KIND.as_bytes()).unwrap();
+    stats.sort_by(|a, b| a.path.cmp(&b.path));
+    let summary: Vec<(&str, ChangeKind, Option<&str>, usize, usize)> = stats
+        .iter()
+        .map(|s| {
+            (
+                s.path.to_str().unwrap(),
+                s.kind,
+                s.old_path.as_deref().and_then(Path::to_str),
+                s.added,
+                s.deleted,
+            )
+        })
+        .collect();
+
+    assert_eq!(
+        summary,
+        [
+            ("added.rs", ChangeKind::Added, None, 2, 0),
+            ("deleted.rs", ChangeKind::Deleted, Some("deleted.rs"), 0, 3),
+            ("logo.png", ChangeKind::Modified, Some("logo.png"), 0, 0),
+            (
+                "modified.rs",
+                ChangeKind::Modified,
+                Some("modified.rs"),
+                2,
+                1
+            ),
+            (
+                "new_name.rs",
+                ChangeKind::Renamed,
+                Some("old_name.rs"),
+                0,
+                0
+            ),
+        ]
+    );
+}
+
+#[test]
+fn patch_stats_reject_what_is_not_a_patch() {
+    let err = patch_stats(b"hello\n").err().unwrap().to_string();
+    assert!(err.contains("cannot read the patch"), "{err}");
+    assert!(patch_stats(b"").unwrap().is_empty());
+}
+
+#[test]
+fn diff_stats_between_two_commits() {
+    let (dir, repo) = create_test_repo();
+    let base = make_commit(
+        &repo,
+        &[("kept.rs", "one\ntwo\n"), ("moved.rs", "a\nb\nc\nd\ne\n")],
+        "base",
+    );
+    // Move a file and edit another in the next commit.
+    fs::rename(dir.path().join("moved.rs"), dir.path().join("renamed.rs")).unwrap();
+    let mut index = repo.index().unwrap();
+    index.remove_path(Path::new("moved.rs")).unwrap();
+    index.write().unwrap();
+    let tip = make_commit(
+        &repo,
+        &[("kept.rs", "one\nTWO\n"), ("renamed.rs", "a\nb\nc\nd\ne\n")],
+        "tip",
+    );
+    // What is in the working tree afterwards does not count.
+    fs::write(dir.path().join("kept.rs"), "scratch\n").unwrap();
+
+    let git_repo = GitRepo::open(dir.path()).unwrap();
+    let mut stats = git_repo
+        .diff_stats_between(&base.to_string(), &tip.to_string())
+        .unwrap();
+    stats.sort_by(|a, b| a.path.cmp(&b.path));
+
+    assert_eq!(stats.len(), 2);
+    assert_eq!(stats[0].path, PathBuf::from("kept.rs"));
+    assert_eq!((stats[0].added, stats[0].deleted), (1, 1));
+    assert_eq!(stats[1].kind, ChangeKind::Renamed);
+    assert_eq!(stats[1].old_path.as_deref(), Some(Path::new("moved.rs")));
+
+    // Nothing separates a commit from itself.
+    let same = git_repo
+        .diff_stats_between(&tip.to_string(), &tip.to_string())
+        .unwrap();
+    assert!(same.is_empty());
+}
+
+#[test]
+fn commits_and_their_ancestry() {
+    let (dir, repo) = create_test_repo();
+    let first = make_commit(&repo, &[("a.rs", "1")], "first").to_string();
+    let second = make_commit(&repo, &[("a.rs", "2")], "second").to_string();
+    let git_repo = GitRepo::open(dir.path()).unwrap();
+
+    assert!(git_repo.has_commit(&second));
+    assert!(git_repo.has_commit("HEAD"));
+    assert!(!git_repo.has_commit("0123456789012345678901234567890123456789"));
+    assert!(!git_repo.has_commit("no-such-ref"));
+
+    assert!(git_repo.is_ancestor(&first, &second));
+    assert!(!git_repo.is_ancestor(&second, &first));
+    assert!(!git_repo.is_ancestor(&first, &first));
+    assert!(!git_repo.is_ancestor("no-such-ref", &second));
+    assert!(!git_repo.is_ancestor(&first, "no-such-ref"));
+}
+
+#[test]
+fn files_of_a_tree_are_read_without_checking_it_out() {
+    let (dir, repo) = create_test_repo();
+    let commit = make_commit(
+        &repo,
+        &[
+            ("Cargo.toml", "root manifest"),
+            ("src/main.rs", "fn main() {}"),
+            ("crates/a/Cargo.toml", "a manifest"),
+            ("target/pkg/Cargo.toml", "built"),
+            ("crates/a/target/Cargo.toml", "built too"),
+        ],
+        "tree",
+    );
+    // The working tree moves on; the tree of the commit does not.
+    fs::write(dir.path().join("Cargo.toml"), "edited").unwrap();
+    fs::remove_file(dir.path().join("crates/a/Cargo.toml")).unwrap();
+
+    let git_repo = GitRepo::open(dir.path()).unwrap();
+    let is_target = |p: &Path| p.file_name().is_some_and(|n| n == "target");
+    let is_manifest = |p: &Path| p.file_name().is_some_and(|n| n == "Cargo.toml");
+    let mut files = git_repo
+        .files_at(&commit.to_string(), is_target, is_manifest)
+        .unwrap();
+    files.sort();
+
+    assert_eq!(
+        files,
+        [
+            (PathBuf::from("Cargo.toml"), "root manifest".to_string()),
+            (
+                PathBuf::from("crates/a/Cargo.toml"),
+                "a manifest".to_string()
+            ),
+        ]
+    );
+
+    let at = |path: &str| git_repo.has_file_at(&commit.to_string(), Path::new(path));
+    assert!(at("crates/a/Cargo.toml"));
+    assert!(at("src/main.rs"));
+    assert!(!at("src"));
+    assert!(!at("missing.rs"));
+    assert!(!git_repo.has_file_at("no-such-ref", Path::new("Cargo.toml")));
+    assert!(
+        git_repo
+            .files_at("no-such-ref", is_target, is_manifest)
+            .is_err()
+    );
+}
+
+#[test]
+fn files_of_a_tree_leave_out_what_is_not_text() {
+    let (dir, repo) = create_test_repo();
+    let path = dir.path().join("data.bin");
+    fs::write(&path, [0u8, 159, 146, 150]).unwrap();
+    let mut index = repo.index().unwrap();
+    index.add_path(Path::new("data.bin")).unwrap();
+    index.write().unwrap();
+    let commit = make_commit(&repo, &[("notes.txt", "text")], "mixed");
+
+    let git_repo = GitRepo::open(dir.path()).unwrap();
+    let files = git_repo
+        .files_at(&commit.to_string(), |_| false, |_| true)
+        .unwrap();
+    assert_eq!(files, [(PathBuf::from("notes.txt"), "text".to_string())]);
 }

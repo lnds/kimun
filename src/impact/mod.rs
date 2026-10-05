@@ -6,8 +6,11 @@
 //! consulted ends at that merge base: the change is never evidence for itself.
 
 mod analyzer;
+mod help;
+mod pr;
 mod projects;
 mod report;
+mod source;
 
 use std::collections::HashSet;
 use std::error::Error;
@@ -15,20 +18,24 @@ use std::path::{Path, PathBuf};
 
 use crate::cli::OutputMode;
 use crate::git::{ChangeKind, FileDiffStat, GitRepo};
-use crate::projects::ProjectGraph;
 use crate::util::{is_generated, parse_since};
 
 use analyzer::{
     Diffusion, MissingCoChange, Target, Thresholds, compute_diffusion, missing_co_changes,
 };
+pub use help::HELP;
 use projects::ProjectRadius;
+use source::Change;
+pub use source::DiffSource;
 
 /// Options for impact analysis.
-pub struct ImpactOptions<'a> {
+#[derive(Debug, Clone)]
+pub struct ImpactOptions {
     pub output: OutputMode,
-    pub since_ref: &'a str,
+    /// The change to measure.
+    pub source: DiffSource,
     /// Bound on the history consulted (e.g. `6m`).
-    pub since: Option<&'a str>,
+    pub since: Option<String>,
     pub min_confidence: f64,
     pub min_shared: usize,
     /// Commits touching more files than this are not evidence of co-change.
@@ -38,9 +45,37 @@ pub struct ImpactOptions<'a> {
     pub affected: bool,
 }
 
-/// Impact of the diff against a ref.
+/// The options the command line asks for. A pull request comes first, then
+/// a patch, then the refs: the parser already refuses the mixes that make
+/// no sense.
+pub fn options(args: &crate::cli::ImpactArgs) -> ImpactOptions {
+    let source = match (args.pr, &args.diff, &args.since_ref) {
+        (Some(number), _, _) => DiffSource::PullRequest(number),
+        (None, Some(file), base) => DiffSource::Patch {
+            file: file.clone(),
+            base: base.clone(),
+        },
+        (None, None, since) => DiffSource::Refs {
+            since: since.clone().unwrap_or_else(|| "HEAD".to_string()),
+            until: args.until_ref.clone(),
+        },
+    };
+    ImpactOptions {
+        output: args.format,
+        source,
+        since: args.since.clone(),
+        min_confidence: args.min_confidence,
+        min_shared: args.min_shared,
+        max_changeset: args.max_changeset,
+        top: args.top,
+        affected: args.affected,
+    }
+}
+
+/// Impact of a change.
 pub struct Impact {
-    pub since_ref: String,
+    /// How the change is named: `diff against main`, `PR #12`.
+    pub source: String,
     /// Projects of the repository reached by the diff.
     pub projects: ProjectRadius,
     pub diffusion: Diffusion,
@@ -77,16 +112,17 @@ fn open_repo(path: &Path) -> Result<GitRepo, Box<dyn Error>> {
 /// The reach of the diff over the projects of the repository. A file counts
 /// under both of its paths when it was renamed, and a lock file counts too:
 /// it changes what its project is built from.
-fn project_radius(git_repo: &GitRepo, diff: &[FileDiffStat]) -> ProjectRadius {
-    let graph = ProjectGraph::discover(git_repo.root());
-    let files = diff
+fn project_radius(git_repo: &GitRepo, change: &Change) -> Result<ProjectRadius, Box<dyn Error>> {
+    let graph = change.graph(git_repo)?;
+    let files = change
+        .diff
         .iter()
         .flat_map(|c| std::iter::once(c.path.as_path()).chain(c.old_path.as_deref()));
-    projects::compute(&graph, files)
+    Ok(projects::compute(&graph, files))
 }
 
-/// Compute the impact of the diff between `opts.since_ref` and the working tree.
-fn analyze(path: &Path, opts: &ImpactOptions<'_>) -> Result<Impact, Box<dyn Error>> {
+/// Compute the impact of the change `opts.source` names.
+fn analyze(path: &Path, opts: &ImpactOptions) -> Result<Impact, Box<dyn Error>> {
     if !(opts.min_confidence > 0.0 && opts.min_confidence <= 1.0) {
         return Err("--min-confidence must be greater than 0 and at most 1".into());
     }
@@ -98,17 +134,19 @@ fn analyze(path: &Path, opts: &ImpactOptions<'_>) -> Result<Impact, Box<dyn Erro
     }
 
     let git_repo = open_repo(path)?;
-    let since_ts = opts.since.map(parse_since).transpose()?;
+    let since_ts = opts.since.as_deref().map(parse_since).transpose()?;
 
-    let diff = git_repo.diff_stats_since(opts.since_ref)?;
-    let projects = project_radius(&git_repo, &diff);
-    let (generated, changes): (Vec<_>, Vec<_>) =
-        diff.into_iter().partition(|c| is_generated(&c.path));
+    let change = Change::resolve(&git_repo, &opts.source)?;
+    let projects = project_radius(&git_repo, &change)?;
+    let (generated, changes): (Vec<_>, Vec<_>) = change
+        .diff
+        .iter()
+        .cloned()
+        .partition(|c| is_generated(&c.path));
 
     let targets = history_targets(&changes);
     let history_paths: HashSet<PathBuf> = targets.iter().map(|t| t.history_path.clone()).collect();
-    let history =
-        git_repo.co_change_history(opts.since_ref, since_ts, &history_paths, opts.max_changeset)?;
+    let history = change.history(&git_repo, since_ts, &history_paths, opts.max_changeset)?;
 
     // A file already in the diff is not missing, under either of its names.
     let in_diff: HashSet<&Path> = changes
@@ -122,7 +160,7 @@ fn analyze(path: &Path, opts: &ImpactOptions<'_>) -> Result<Impact, Box<dyn Erro
     let missing = missing_co_changes(
         &history,
         &targets,
-        |p| !in_diff.contains(p) && !is_generated(p) && git_repo.has_file(p),
+        |p| !in_diff.contains(p) && !is_generated(p) && change.has_file(&git_repo, p),
         thresholds,
     );
 
@@ -139,7 +177,7 @@ fn analyze(path: &Path, opts: &ImpactOptions<'_>) -> Result<Impact, Box<dyn Erro
     without_history.sort();
 
     Ok(Impact {
-        since_ref: opts.since_ref.to_string(),
+        source: change.label.clone(),
         projects,
         diffusion: compute_diffusion(&changes),
         thresholds,
@@ -154,9 +192,9 @@ fn analyze(path: &Path, opts: &ImpactOptions<'_>) -> Result<Impact, Box<dyn Erro
 /// Print the projects the diff calls to build and test, one per line. Only
 /// the diff and the manifests are read: this is the path CI takes on every
 /// push, and the history is of no use to it.
-fn print_affected(path: &Path, since_ref: &str) -> Result<(), Box<dyn Error>> {
+fn print_affected(path: &Path, source: &DiffSource) -> Result<(), Box<dyn Error>> {
     let git_repo = open_repo(path)?;
-    let radius = project_radius(&git_repo, &git_repo.diff_stats_since(since_ref)?);
+    let radius = project_radius(&git_repo, &Change::resolve(&git_repo, source)?)?;
     if !radius.outside.is_empty() {
         eprintln!(
             "note: {} changed file(s) belong to no project, so every project is listed",
@@ -170,9 +208,9 @@ fn print_affected(path: &Path, since_ref: &str) -> Result<(), Box<dyn Error>> {
 }
 
 /// Run impact analysis and print it in the requested format.
-pub fn run(path: &Path, opts: &ImpactOptions<'_>) -> Result<(), Box<dyn Error>> {
+pub fn run(path: &Path, opts: &ImpactOptions) -> Result<(), Box<dyn Error>> {
     if opts.affected {
-        return print_affected(path, opts.since_ref);
+        return print_affected(path, &opts.source);
     }
     let impact = analyze(path, opts)?;
 

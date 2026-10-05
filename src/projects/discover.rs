@@ -26,9 +26,9 @@ const SKIPPED_DIRS: &[&str] = &[
 /// with its own manifest is a project that depends on what it exercises.
 const FIXTURE_DIRS: &[&str] = &["fixtures", "__fixtures__"];
 
-/// Whether the walk from `root` should stay out of `path`.
-fn is_skipped(root: &Path, path: &Path) -> bool {
-    let path = path.strip_prefix(root).unwrap_or(path);
+/// Whether a search for manifests should stay out of the directory `path`,
+/// given relative to the repository.
+pub fn is_skipped(path: &Path) -> bool {
     let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
         return false;
     };
@@ -64,35 +64,43 @@ fn normalize(path: &Path) -> Option<PathBuf> {
     Some(parts.iter().collect())
 }
 
-/// Read the manifest at `path`, if its name is one a reader knows.
-fn read_manifest(root: &Path, path: &Path) -> Option<Found> {
+/// Whether a file is a manifest some reader knows, by its name.
+pub fn is_manifest(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|n| n.to_str())
+        .is_some_and(|name| reader(name).is_some())
+}
+
+/// What the manifest at `path`, relative to the repository, declares.
+fn read_manifest(path: &Path, source: &str) -> Option<Found> {
     let (ecosystem, read) = reader(path.file_name()?.to_str()?)?;
-    let source = std::fs::read_to_string(path).ok()?;
-    let path = path.strip_prefix(root).unwrap_or(path);
     Some(Found {
         dir: path.parent().unwrap_or(Path::new("")).to_path_buf(),
         path: path.to_path_buf(),
         ecosystem,
-        manifest: read(&source),
+        manifest: read(source),
     })
 }
 
-/// Every manifest under `root`, read, outside the skipped directories.
-fn find_manifests(root: &Path) -> Vec<Found> {
+/// Every manifest under `root` on disk, outside the skipped directories,
+/// with its path relative to `root` and its text.
+fn manifests_on_disk(root: &Path) -> Vec<(PathBuf, String)> {
+    let relative = |path: &Path| path.strip_prefix(root).unwrap_or(path).to_path_buf();
     let walk = WalkBuilder::new(root)
         .hidden(false)
         .filter_entry({
             let root = root.to_path_buf();
-            move |entry| !is_skipped(&root, entry.path())
+            move |entry| !is_skipped(entry.path().strip_prefix(&root).unwrap_or(entry.path()))
         })
         .build();
 
-    let mut found: Vec<Found> = walk
-        .flatten()
-        .filter_map(|entry| read_manifest(root, entry.path()))
-        .collect();
-    found.sort_by(|a, b| a.path.cmp(&b.path));
-    found
+    walk.flatten()
+        .filter(|entry| is_manifest(entry.path()))
+        .filter_map(|entry| {
+            let text = std::fs::read_to_string(entry.path()).ok()?;
+            Some((relative(entry.path()), text))
+        })
+        .collect()
 }
 
 /// The name of a directory, for a package that gives itself none.
@@ -216,7 +224,17 @@ impl Resolver {
 impl ProjectGraph {
     /// Read the manifests under `root` and build the graph of its projects.
     pub fn discover(root: &Path) -> Self {
-        let found = find_manifests(root);
+        Self::from_manifests(manifests_on_disk(root))
+    }
+
+    /// Build the graph from manifests given as their path, relative to the
+    /// repository, and their text. A file no reader knows is ignored.
+    pub fn from_manifests(manifests: Vec<(PathBuf, String)>) -> Self {
+        let mut found: Vec<Found> = manifests
+            .iter()
+            .filter_map(|(path, text)| read_manifest(path, text))
+            .collect();
+        found.sort_by(|a, b| a.path.cmp(&b.path));
         let mut resolver = Resolver::default();
         // Workspace roots first: whether a manifest is a project depends on them.
         for f in &found {
