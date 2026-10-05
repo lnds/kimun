@@ -1,3 +1,13 @@
+## v0.26.2 (2026-10-04)
+
+### Fix
+
+- **deps**: read `pub(in path) mod` declarations in Rust files
+
+### Refactor
+
+- **deps**: take sorting, selection and table rendering out of the printing path
+
 ## v0.26.1 (2026-10-04)
 
 ### Fix
