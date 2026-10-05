@@ -60,6 +60,7 @@ fn opts(since_ref: &str) -> ImpactOptions<'_> {
         min_shared: 3,
         max_changeset: 30,
         top: 20,
+        affected: false,
     }
 }
 
@@ -437,4 +438,78 @@ fn full_confidence_is_a_valid_threshold() {
         .map(|t| t.path.as_path())
         .collect();
     assert_eq!(triggers, [Path::new("b.rs")]);
+}
+
+#[test]
+fn projects_reached_by_the_diff() {
+    let (dir, repo) = create_test_repo();
+    commit(
+        &repo,
+        &[
+            ("libs/core/Cargo.toml", "[package]\nname = \"core\"\n"),
+            ("libs/core/src/lib.rs", "pub fn f() {}\n"),
+            (
+                "apps/api/Cargo.toml",
+                "[package]\nname = \"api\"\n\n[dependencies]\ncore = { path = \"../../libs/core\" }\n",
+            ),
+            ("apps/api/src/main.rs", "fn main() {}\n"),
+            ("apps/site/Cargo.toml", "[package]\nname = \"site\"\n"),
+            ("README.md", "readme\n"),
+        ],
+        &[],
+    );
+    write(&repo, "libs/core/src/lib.rs", "pub fn f() -> u8 { 1 }\n");
+    write(&repo, "README.md", "changed\n");
+
+    let impact = analyze(dir.path(), &opts("HEAD")).unwrap();
+
+    assert_eq!(impact.projects.total(), 3);
+    assert_eq!(impact.projects.changed, ["libs/core"]);
+    let reached: Vec<&str> = impact
+        .projects
+        .reached
+        .iter()
+        .map(|r| r.project.as_str())
+        .collect();
+    assert_eq!(reached, ["apps/api"]);
+    assert_eq!(impact.projects.outside, [PathBuf::from("README.md")]);
+    // README.md belongs to no project, so no project can be left out.
+    assert_eq!(
+        impact.projects.affected(),
+        ["apps/api", "apps/site", "libs/core"]
+    );
+
+    // The repository is found from a directory inside it, and measured whole.
+    let from_inside = analyze(&dir.path().join("apps/site"), &opts("HEAD")).unwrap();
+    assert_eq!(from_inside.projects.changed, ["libs/core"]);
+    assert_eq!(from_inside.projects.reached.len(), 1);
+
+    let o = ImpactOptions {
+        affected: true,
+        ..opts("HEAD")
+    };
+    run(dir.path(), &o).unwrap();
+}
+
+#[test]
+fn a_renamed_file_changes_the_project_it_left() {
+    let (dir, repo) = create_test_repo();
+    commit(
+        &repo,
+        &[
+            ("a/Cargo.toml", "[package]\nname = \"a\"\n"),
+            ("a/src/moved.rs", "one\ntwo\nthree\nfour\nfive\n"),
+            ("b/Cargo.toml", "[package]\nname = \"b\"\n"),
+        ],
+        &[],
+    );
+    fs::create_dir_all(dir.path().join("b/src")).unwrap();
+    fs::rename(
+        dir.path().join("a/src/moved.rs"),
+        dir.path().join("b/src/moved.rs"),
+    )
+    .unwrap();
+
+    let impact = analyze(dir.path(), &opts("HEAD")).unwrap();
+    assert_eq!(impact.projects.changed, ["a", "b"]);
 }

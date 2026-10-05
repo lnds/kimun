@@ -172,6 +172,11 @@ impl GitRepo {
         Ok(history)
     }
 
+    /// The working tree directory.
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
     /// Whether `rel_path` is a file in the working tree.
     pub fn has_file(&self, rel_path: &Path) -> bool {
         self.root.join(rel_path).is_file()

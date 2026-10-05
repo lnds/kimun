@@ -165,14 +165,29 @@ Examples:
 
 /// Impact of a diff: diffusion of the change and missing co-changes.
 pub const IMPACT: &str = "\
-Measure the impact of a diff from git alone, in any language.
+Measure the impact of a diff: the projects it reaches, how spread it is, and
+which files usually change with it.
 
 The diff runs from the merge base with --since-ref to the working tree, so it
 covers committed, uncommitted and untracked changes. It is the diff of the
 whole repository: PATH only locates it. Generated files (lock files, minified
 assets) are ignored.
 
+Blast radius -- projects reached through their manifests:
+  A project is a directory with a manifest (Cargo.toml, package.json,
+  mix.exs). The projects that depend on a changed one, directly or through
+  others, are reached. A dev or test dependency reaches the dependent and
+  stops there. The manifest or lock file of a workspace root reaches every
+  project under it. Other changed files outside every project are listed
+  apart: their reach is unknown. In a repository with a single project this
+  level does not apply.
+
+  --affected prints the projects to build and test, one per line: changed
+  and reached. If a changed file is outside every project, all projects are
+  printed. It reads the diff and the manifests only, not the history.
+
 Diffusion -- how spread the change is (Kamei et al., 2013):
+
   files, directories and subsystems (top-level directories) touched,
   lines added and deleted, and entropy: 0 when one file holds every
   modified line, 1 when all the files hold the same amount.
@@ -198,6 +213,7 @@ Examples:
   km impact --since-ref main --since 1y      # history of the last year only
   km impact --since-ref main --min-confidence 0.8
   km impact --since-ref main --max-changeset 50
+  km impact --since-ref origin/main --affected   # projects to build and test
   km impact --since-ref main --format json   # machine-readable output";
 
 /// Temporal coupling: files that change together in git commits.
