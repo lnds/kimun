@@ -20,6 +20,7 @@ mod changeset;
 
 pub use changeset::{ChangeKind, CoChangeHistory, FileDiffStat, patch_stats};
 
+mod touched;
 mod tree;
 
 /// Wrapper around a `git2::Repository` with its resolved root path.

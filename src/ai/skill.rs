@@ -22,80 +22,93 @@ You have access to the `km` CLI tool for comprehensive code analysis. Use it to 
 
 ## Available Commands
 
-Run these via the Bash tool. Always use `--json` for machine-readable output.
+Run these via the Bash tool. Always use `--format json` for machine-readable output.
 
 ### Lines of Code
 ```bash
-km loc [PATH] --json
+km loc [PATH] --format json
 ```
 Language breakdown: files, blank lines, comment lines, code lines.
 
 ### Code Health Score
 ```bash
-km score [PATH] --json
-km score [PATH] --json --model legacy
+km score [PATH] --format json
+km score [PATH] --format json --model legacy
 ```
 Overall grade (A++ to F--). Default model (cogcom): 5 dimensions — cognitive complexity, duplication, indentation, Halstead effort, file size. Legacy model (--model legacy): 6 dimensions — MI, cyclomatic complexity, duplication, indentation, Halstead effort, file size.
 
 ### Score Diff (requires git)
 ```bash
-km score diff [PATH] --json --git-ref HEAD~1
+km score diff [PATH] --format json --git-ref HEAD~1
 ```
 Compare current code health score against a git ref. Shows per-dimension deltas.
 
 ### Cognitive Complexity
 ```bash
-km cogcom [PATH] --json --top 20
+km cogcom [PATH] --format json --top 20
 ```
 SonarSource method (2017). Measures how difficult code is to understand, penalizing deep nesting.
 
 ### Cyclomatic Complexity
 ```bash
-km cycom [PATH] --json --top 20
+km cycom [PATH] --format json --top 20
 ```
 Per-file and per-function complexity. High values indicate hard-to-test code.
 
 ### Maintainability Index
 ```bash
-km miv [PATH] --json --top 20
+km miv [PATH] --format json --top 20
 ```
 Verifysoft variant (with comment weight). Values below 65 are hard to maintain.
 
 ### Halstead Complexity
 ```bash
-km hal [PATH] --json --top 20 --sort-by effort
+km hal [PATH] --format json --top 20 --sort-by effort
 ```
 Effort, volume, and estimated bugs per file.
 
 ### Indentation Complexity
 ```bash
-km indent [PATH] --json
+km indent [PATH] --format json
 ```
 Indentation depth stddev — high values suggest deeply nested code.
 
 ### Duplicate Code
 ```bash
-km dups [PATH] --json --report
+km dups [PATH] --format json --report
 ```
 Duplicate blocks across the project.
 
 ### Hotspots (requires git)
 ```bash
-km hotspots [PATH] --json --top 20
+km hotspots [PATH] --format json --top 20
 ```
 Files that change frequently AND have high complexity — top refactoring targets.
 
 ### Code Ownership (requires git)
 ```bash
-km knowledge [PATH] --json --top 20
+km knowledge [PATH] --format json --top 20
 ```
 Bus factor risk per file via git blame analysis.
 
 ### Temporal Coupling (requires git)
 ```bash
-km tc [PATH] --json --top 20
+km tc [PATH] --format json --top 20
 ```
 Files that change together in commits — hidden dependencies.
+
+### Blast Radius of a Change (requires git)
+```bash
+km impact [PATH] --format json --since-ref origin/main
+km impact [PATH] --format json --pr 123
+```
+How far a change reaches before it is merged. `--since-ref` measures the current branch against a ref; `--pr` measures a GitHub pull request and needs the `gh` CLI. Read it in this order:
+- `structural.direct`: source files that use what changed. `exposure` is `calls` (it calls a function that changed), `refers` (it uses the module without a call that tells) or `elsewhere` (it only calls functions the change leaves alone). `tests` is how many test files protect it.
+- `structural.unprotected`: files that call what changed and that no test protects. Each one is a place the change can break unnoticed: recommend an integration test there.
+- `structural.radius`: files the change concerns, directly and through them, over the source files measured. `structural.upper_bound` is the same when every use of a changed file counts whatever the function; quote the radius, not the bound.
+- `structural.functions`: the public functions the change affects, or `null` when it touches code outside functions and cannot be narrowed.
+- `projects.reached` and `projects.affected`: projects of a monorepo that depend on the changed ones; `affected` is the list whose tests should run.
+- `logical_radius.missing`: files that usually change together with the changed ones and are not in the change.
 
 ## Analysis Workflow
 
@@ -106,6 +119,7 @@ Files that change together in commits — hidden dependencies.
 5. Check `km dups` for code duplication opportunities
 6. Optionally run `km knowledge` and `km tc` for team/architecture insights
 7. Use `km score diff --git-ref HEAD~N` to track score changes over time
+8. To review a branch or a pull request, run `km impact` and report the unprotected files first
 
 ## Output Format
 

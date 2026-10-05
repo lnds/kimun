@@ -84,9 +84,14 @@ fn execute_tool_unknown_returns_error() {
 }
 
 #[test]
-fn tool_definitions_has_11_tools() {
+fn tool_definitions_has_12_tools() {
     let defs = tool_definitions();
-    assert_eq!(defs.len(), 11);
+    assert_eq!(defs.len(), 12);
+    let impact = defs.iter().find(|d| d["name"] == "km_impact").unwrap();
+    let props = impact["input_schema"]["properties"].as_object().unwrap();
+    for name in ["path", "since_ref", "until_ref", "pr", "top"] {
+        assert!(props.contains_key(name), "km_impact lacks {name}");
+    }
 }
 
 #[test]

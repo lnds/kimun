@@ -15,7 +15,7 @@ mod radius;
 
 use std::path::PathBuf;
 
-pub use discover::{is_manifest, is_skipped};
+pub use discover::{files_on_disk, is_manifest, is_skipped};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Ecosystem {

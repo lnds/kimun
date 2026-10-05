@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use git2::{Delta, Diff, DiffDelta, DiffFindOptions, DiffOptions, Patch, Tree};
 
 use super::GitRepo;
+use super::touched::Touched;
 
 /// How a file differs between a ref and the working tree.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -29,6 +30,32 @@ pub struct FileDiffStat {
     pub kind: ChangeKind,
     pub added: usize,
     pub deleted: usize,
+    /// Lines of the file, as it is after the change, that the change
+    /// touches: the ones it adds, and where it deletes. From 1, sorted.
+    pub lines: Vec<usize>,
+    /// The same, in the file as it was before the change.
+    pub old_lines: Vec<usize>,
+    /// A few of the lines the change adds, with their number: enough to
+    /// tell whether a given text already holds the change.
+    pub probe: Vec<(usize, String)>,
+}
+
+impl FileDiffStat {
+    /// The lines the change touches in `text`, which is the file either
+    /// after the change or before it. A patch need not be applied where it
+    /// is measured; the lines it adds tell which of the two `text` is.
+    pub fn lines_in(&self, text: &str) -> &[usize] {
+        let lines: Vec<&str> = text.lines().collect();
+        let applied = self
+            .probe
+            .iter()
+            .all(|(number, added)| lines.get(number - 1).is_some_and(|l| l.trim_end() == added));
+        if applied {
+            &self.lines
+        } else {
+            &self.old_lines
+        }
+    }
 }
 
 /// How often some files changed, and what changed along with them.
@@ -71,13 +98,14 @@ fn classify(delta: &DiffDelta) -> Option<(ChangeKind, PathBuf, Option<PathBuf>)>
     Some((kind, path?, old_path))
 }
 
-/// Lines added and deleted by the delta at `idx`. A binary file has no patch.
-fn line_counts(diff: &Diff, idx: usize) -> Result<(usize, usize), Box<dyn Error>> {
+/// Lines added and deleted by the delta at `idx`, and where. A binary file
+/// has no patch.
+fn line_counts(diff: &Diff, idx: usize) -> Result<(usize, usize, Touched), Box<dyn Error>> {
     let Some(patch) = Patch::from_diff(diff, idx)? else {
-        return Ok((0, 0));
+        return Ok((0, 0, Touched::default()));
     };
     let (_, added, deleted) = patch.line_stats()?;
-    Ok((added, deleted))
+    Ok((added, deleted, Touched::of(&patch)?))
 }
 
 /// The changed files of a diff, with their line counts.
@@ -87,13 +115,16 @@ fn stats_of(diff: &Diff) -> Result<Vec<FileDiffStat>, Box<dyn Error>> {
         let Some((kind, path, old_path)) = classify(&delta) else {
             continue;
         };
-        let (added, deleted) = line_counts(diff, idx)?;
+        let (added, deleted, touched) = line_counts(diff, idx)?;
         stats.push(FileDiffStat {
             path,
             old_path,
             kind,
             added,
             deleted,
+            lines: touched.new,
+            old_lines: touched.old,
+            probe: touched.probe,
         });
     }
     Ok(stats)

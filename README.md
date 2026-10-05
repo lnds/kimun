@@ -559,7 +559,23 @@ Strong coupling (>= 0.5) suggests hidden dependencies — consider extracting sh
 
 ### `km impact` -- Impact of a diff
 
-Measures how far a change reaches, for a PR or for uncommitted work: the projects of the repository it reaches, how spread it is, and which files usually change with it and were left out.
+Measures how far a change reaches, for a PR or for uncommitted work, before it is merged.
+
+#### What the blast radius is
+
+The **blast radius** of a change is the part of the system that can behave differently because of it, beyond the files it edits. A change to a function is not only that function: it is every piece of code that calls it, and what calls those. If the function's own tests pass and something that uses it breaks in production, the break was inside the radius and outside the tests.
+
+`km impact` measures it at two levels, and reports what guards it:
+
+| Level | The radius is | Read from |
+|-------|---------------|-----------|
+| Projects | The projects of the repository that depend on the changed ones, directly or through others | Manifests |
+| Source files | The files that call the functions that changed, and the files that use those | The dependency graph of the code |
+
+At each level the radius is a count over a total: `3 of 6 projects`, `2 of 618 source files`. It answers **how much of the system to worry about**. Next to it comes **what is unprotected**: the files inside the radius that no test exercises. A wide radius fully covered by tests is a change to make with care; one file in the radius with no test is where it will break without warning, and the report names it.
+
+Two more measures describe the change itself rather than its reach: how spread it is (**diffusion**), and which files usually change with it and were left out (**logical radius**).
+
 
 ```bash
 km impact --since-ref origin/main [path]         # the branch you are on
@@ -607,6 +623,7 @@ A **project** is a directory with a manifest. A project **depends** on another w
 Blast radius — projects reached through their manifests
 ──────────────────────────────────────────────────────────────────────────────
  3 of 6 projects reached (50%), 2 direct
+ Changed: libs/core
 
  Changed    Reaches         Distance  Scope  Via
  libs/core  apps/invoicing         1
@@ -629,6 +646,45 @@ Limits:
 - Coupling across ecosystems is not visible: a web client and the service whose API it calls have no manifest dependency between them.
 - A project nested in another (`assets/package.json` inside a Phoenix application) has no dependency to or from the one that contains it unless a manifest declares one.
 - The graph is read from the working tree. The files of a project the diff deletes or moves away belong to no project any more: their reach is unknown, and the manifests still naming it are reported as not read.
+
+#### Blast radius: source files
+
+Inside the projects the change affects: which source files use what changed, and which of them no test exercises. This is the question "the tests of the module I changed pass; who else calls it?".
+
+The first line is the answer in short: how many files call what changed, and how many of them have no test. `Radius` is the count of files the change concerns, directly and through them. `Upper bound` is what it would be without knowing which functions changed.
+
+```
+Structural radius — source files that use what changed
+──────────────────────────────────────────────────────────────────────────────
+ 1 file calls what changed, 1 of them with no test
+ Changed: lib/billing/invoices.ex
+ Functions: approve
+ Radius: 2 of 6 source files (33%): 2 at distance 1
+ Upper bound, whatever the function: 4 files (67%)
+
+ Tests  Dependent
+  none  lib/billing_web/controllers/invoice_controller.ex
+            calls Invoices.approve
+  none  lib/billing/export.ex
+            refers to the module without calling it
+──────────────────────────────────────────────────────────────────────────────
+No test refers to 1 of the files that call what changed; an integration test is probably missing:
+  lib/billing_web/controllers/invoice_controller.ex
+No test in the change exercises a file that uses what changed.
+1 more with no test use the module without a call that tells whether the change concerns them.
+```
+
+How it is measured:
+
+- The dependency graph of `km deps` is read backwards from the changed source files.
+- In Elixir the change is **narrowed to functions**: the lines the diff touches tell which functions changed, and a change to a private function is carried to the public ones that reach it through local calls. A file that uses the module is then one of three: it **calls** a function that changed, it **refers** to the module without calling it (a struct, an `import`, a `use`), or it only calls functions the change leaves alone, and is not listed. When the diff touches code outside every function (an `alias`, a module attribute, a `defstruct`), nothing can be narrowed and every use counts.
+- The **radius** starts at the files the change concerns and follows who uses them, file by file. Files that only pass through a dependent the change leaves alone are not counted. The **upper bound** is what the radius would be if every use of a changed file counted, whatever the function: in a codebase where everything goes through a few contexts it is most of the project, which is why the radius is the number to read.
+- **Tests** is the number of test files that protect the dependent: those that refer to it, and those at the same place in the source and test layout (`lib/a/b.ex` and `test/a/b_test.exs`), which is how a controller test protects a controller it never names. Test support (`test/support/`), configuration and scripts are not tests: a factory refers to everything and would make everything look protected.
+- A file that calls what changed and has no test is **unprotected**: the change can break it without any test noticing. That is the warning.
+
+It is measured for the languages whose graph reflects usage: Elixir, JavaScript/TypeScript and Kaikai. For Rust, Python and Go the block says it is not available rather than report a radius drawn on declarations. Only the projects the change affects are read; the whole repository when the reach over projects is unknown.
+
+Limits: a test at the same place may not exercise the call that changed, and one that refers to a file may mock what it calls — the count says a test exists, not that it covers. Function names are compared without arity. Modules named at run time (`apply/3`, configuration), generated by macros, or aliased by a Phoenix router `scope` are not seen.
 
 #### Diffusion
 
@@ -704,7 +760,38 @@ No history before the diff (new or never committed): src/impact/mod.rs
 Generated files ignored: 1
 ```
 
-`Shared` reads as shared commits over the commits of the changed file. `(+1 more)` means another changed file predicts the same missing file; `--format json` lists every one. `--format terse` prints the number of missing files.
+When the rows are too wide for a table (long paths), each missing file is listed on a line of its own with its evidence below.
+
+#### JSON output, for tools and LLMs
+
+`--format json` carries everything the table shows, and the lists the table cuts short. An agent reviewing a change can read it in this order:
+
+```bash
+km impact --since-ref origin/main --format json
+```
+
+| Field | Meaning |
+|-------|---------|
+| `source` | The change measured: `diff against main`, `PR #12`, `patch from stdin` |
+| `structural.functions` | Public functions the change affects; `null` when it touches code outside functions and cannot be narrowed |
+| `structural.direct[]` | Every file that uses a changed file: `file`, `exposure` (`calls`, `refers`, `elsewhere`), `calls`, `tests`, `tests_in_diff` |
+| `structural.unprotected[]` | Files that call what changed and that no test protects — where an integration test is missing |
+| `structural.unknown_without_tests[]` | Files that use the changed module without a call that tells, and have no test |
+| `structural.change_tests_a_dependent` | Whether a test in the change protects a file that uses what changed |
+| `structural.radius` | `files`, `source_files` and `share` (0 to 1): the radius as a number |
+| `structural.reach[]` | The files of the radius, by `distance` |
+| `structural.upper_bound` | Files reached if every use of a changed file counted, whatever the function |
+| `structural.unavailable[]` | Languages of changed files the source level is not measured for |
+| `projects.changed[]`, `projects.reached[]` | Projects holding a changed file, and those reached, each with `origin`, `distance`, `via`, `scope` |
+| `projects.affected[]` | Projects whose builds and tests the change calls for (what `--affected` prints) |
+| `projects.outside[]` | Changed files that belong to no project: their reach is unknown |
+| `diffusion` | Files, directories, subsystems, lines and entropy of the change |
+| `logical_radius.missing[]` | Files that usually change with the change and are not in it, with every trigger |
+
+`km ai` exposes the command to an LLM as the tool `km_impact`, and the skill installed by `km ai skill` documents it.
+
+`Shared` reads as shared commits over the commits of the changed file.
+ `(+1 more)` means another changed file predicts the same missing file; `--format json` lists every one. `--format terse` prints the number of missing files.
 
 **Note:** File renames are not tracked across git history. A file renamed in the diff itself keeps the history of its old path.
 
@@ -791,9 +878,17 @@ Analyzes internal module dependencies by parsing import/use/require statements. 
 km deps [path]
 ```
 
-Supports Rust (`mod X;`, with any visibility qualifier: `pub`, `pub(crate)`, `pub(in path)`), Python (relative `from .X import`), JavaScript/TypeScript (relative `import`/`require`), Go (imports matching the module path from `go.mod`), and Kaikai (`import a.b.c`, including the `as` and `.{…}` forms). External dependencies (crates, npm packages, the Kaikai stdlib) are ignored.
+Supports Elixir (every module referred to in the code, with `alias` undone; see the notes below), Rust (`mod X;`, with any visibility qualifier: `pub`, `pub(crate)`, `pub(in path)`), Python (relative `from .X import`), JavaScript/TypeScript (relative `import`/`require`), Go (imports matching the module path from `go.mod`), and Kaikai (`import a.b.c`, including the `as` and `.{…}` forms). External dependencies (crates, npm packages, the Kaikai stdlib) are ignored.
 
 Files in any other language are left out of the graph instead of being listed with zero dependencies. The table footer, the `unsupported` array of the JSON output and the `unsupported:N` field of the short format say how many files were skipped, so "not measured" is never shown as "no dependencies".
+
+Elixir notes:
+
+- Dependencies are between modules, and most need no import, so every module name in the code counts as a reference: calls, structs, `use`, `import`, `require`, `@behaviour`, `defimpl`. Comments, strings, heredocs and sigils are set aside first, so a doctest is not a dependency.
+- `alias` is undone, including `as:`, grouped and multi-line forms, and `__MODULE__`. The statement itself is not a use.
+- Nested `defmodule`s are named after the module that contains them, told by indentation as `mix format` leaves it.
+- A module defined in several files (projects made from one template) resolves to the file nearest the one referring to it.
+- Not seen: modules named at run time (`apply/3`, configuration), those generated by macros, and the alias a Phoenix router gives its `scope`.
 
 Kaikai notes:
 

@@ -7,9 +7,12 @@ use serde::Serialize;
 use super::Impact;
 use super::analyzer::{MissingCoChange, Trigger};
 use super::projects::{self, JsonProjects};
+use super::structural::{self, JsonStructural};
 use crate::report_helpers;
 
 const MIN_WIDTH: usize = 78;
+/// Beyond this the table of missing files gives way to stacked rows.
+const MAX_WIDTH: usize = 100;
 const COL_CONFIDENCE: usize = 10;
 const COL_SHARED: usize = 7;
 
@@ -28,18 +31,22 @@ fn render_report(impact: &Impact, top: usize) -> String {
     }
 
     let shown = &impact.missing[..impact.missing.len().min(top)];
-    let path_width = report_helpers::max_path_width(shown.iter().map(|m| m.path.as_path()), 12);
-    let with_width = shown
-        .iter()
-        .map(|m| report_helpers::display_width(&changes_with(m)))
-        .max()
-        .unwrap_or(0)
-        .max(12);
-    let width = (path_width + COL_CONFIDENCE + COL_SHARED + with_width + 7).max(MIN_WIDTH);
+    let (width, rows) = match shown {
+        [] => (
+            MIN_WIDTH,
+            vec![format!(
+                " No missing co-changes (confidence >= {:.2}, shared commits >= {}).",
+                impact.thresholds.min_confidence, impact.thresholds.min_shared
+            )],
+        ),
+        _ => missing_rows(shown),
+    };
     let sep = report_helpers::separator(width);
 
     let mut lines = vec![format!("Change Impact — {}", impact.source), String::new()];
     lines.extend(projects::render(&impact.projects));
+    lines.push(String::new());
+    lines.extend(structural::render(&impact.structural, top));
     lines.push(String::new());
     lines.extend(diffusion_lines(impact));
     lines.push(String::new());
@@ -47,30 +54,7 @@ fn render_report(impact: &Impact, top: usize) -> String {
         "Logical radius — files that usually change with this diff and are not in it".to_string(),
     );
     lines.push(sep.clone());
-    if shown.is_empty() {
-        lines.push(format!(
-            " No missing co-changes (confidence >= {:.2}, shared commits >= {}).",
-            impact.thresholds.min_confidence, impact.thresholds.min_shared
-        ));
-    } else {
-        lines.push(row(
-            path_width,
-            [&"Missing file", &"Confidence", &"Shared", &"Changes with"],
-        ));
-        lines.push(sep.clone());
-        lines.extend(shown.iter().map(|m| {
-            let best = m.best();
-            row(
-                path_width,
-                [
-                    &m.path.display(),
-                    &format!("{:.2}", best.confidence),
-                    &format!("{}/{}", best.shared_commits, best.commits),
-                    &changes_with(m),
-                ],
-            )
-        }));
-    }
+    lines.extend(rows);
     lines.push(sep);
     if impact.missing.len() > shown.len() {
         lines.push(format!(
@@ -83,6 +67,57 @@ fn render_report(impact: &Impact, top: usize) -> String {
     lines.extend(skipped_note(impact));
     lines.extend(generated_note(impact));
     lines.join("\n") + "\n"
+}
+
+/// The rows that list the missing files, and the width they span: a table
+/// when it fits in `MAX_WIDTH`, and otherwise each file on a line of its own
+/// with its evidence below, so that long paths are not cut.
+fn missing_rows(shown: &[MissingCoChange]) -> (usize, Vec<String>) {
+    let path_width = report_helpers::max_path_width(shown.iter().map(|m| m.path.as_path()), 12);
+    let with_width = shown
+        .iter()
+        .map(|m| report_helpers::display_width(&changes_with(m)))
+        .max()
+        .unwrap_or(0)
+        .max(12);
+    let width = (path_width + COL_CONFIDENCE + COL_SHARED + with_width + 7).max(MIN_WIDTH);
+    let evidence = |m: &MissingCoChange| {
+        let best = m.best();
+        (
+            format!("{:.2}", best.confidence),
+            format!("{}/{}", best.shared_commits, best.commits),
+        )
+    };
+
+    if width > MAX_WIDTH {
+        let rows = shown.iter().flat_map(|m| {
+            let (confidence, shared) = evidence(m);
+            [
+                format!(" {}", m.path.display()),
+                format!(
+                    "     confidence {confidence}, shared {shared} with {}",
+                    changes_with(m)
+                ),
+            ]
+        });
+        return (MIN_WIDTH, rows.collect());
+    }
+
+    let mut rows = vec![
+        row(
+            path_width,
+            [&"Missing file", &"Confidence", &"Shared", &"Changes with"],
+        ),
+        report_helpers::separator(width),
+    ];
+    rows.extend(shown.iter().map(|m| {
+        let (confidence, shared) = evidence(m);
+        row(
+            path_width,
+            [&m.path.display(), &confidence, &shared, &changes_with(m)],
+        )
+    }));
+    (width, rows)
 }
 
 /// One row of the logical radius table.
@@ -203,19 +238,21 @@ struct JsonLogicalRadius {
 }
 
 #[derive(Serialize)]
-struct JsonImpact {
+struct JsonImpact<'a> {
     source: String,
     projects: JsonProjects,
+    structural: JsonStructural<'a>,
     diffusion: JsonDiffusion,
     logical_radius: JsonLogicalRadius,
     generated_skipped: usize,
 }
 
-fn to_json(impact: &Impact, top: usize) -> JsonImpact {
+fn to_json(impact: &Impact, top: usize) -> JsonImpact<'_> {
     let d = &impact.diffusion;
     JsonImpact {
         source: impact.source.clone(),
         projects: JsonProjects::from(&impact.projects),
+        structural: JsonStructural::from(&impact.structural),
         diffusion: JsonDiffusion {
             files: d.files,
             directories: d.directories,
@@ -261,9 +298,12 @@ fn render_short(impact: &Impact) -> String {
     let d = &impact.diffusion;
     let max_confidence = impact.missing.first().map_or(0.0, |m| m.best().confidence);
     format!(
-        "impact projects_reached:{}/{} files:{} dirs:{} subsystems:{} added:{} deleted:{} entropy:{:.2} missing:{} max_confidence:{:.2}",
+        "impact projects_reached:{}/{} structural:{}/{} unprotected:{} files:{} dirs:{} subsystems:{} added:{} deleted:{} entropy:{:.2} missing:{} max_confidence:{:.2}",
         impact.projects.reached.len(),
         impact.projects.total(),
+        impact.structural.reached(),
+        impact.structural.source_files,
+        impact.structural.unprotected().count(),
         d.files,
         d.directories,
         d.subsystems,

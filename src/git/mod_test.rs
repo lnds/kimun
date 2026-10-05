@@ -641,3 +641,85 @@ fn files_of_a_tree_leave_out_what_is_not_text() {
         .unwrap();
     assert_eq!(files, [(PathBuf::from("notes.txt"), "text".to_string())]);
 }
+
+#[test]
+fn diff_stats_tell_which_lines_a_change_touches() {
+    let (dir, repo) = create_test_repo();
+    let before: String = (1..=10).map(|n| format!("line {n}\n")).collect();
+    make_commit(&repo, &[("a.txt", &before)], "base");
+    // Edit line 2, delete lines 5 and 6, append two lines.
+    let after = "line 1\nLINE 2\nline 3\nline 4\nline 7\nline 8\nline 9\nline 10\nnew 11\nnew 12\n";
+    fs::write(dir.path().join("a.txt"), after).unwrap();
+    fs::write(dir.path().join("b.txt"), "x\ny\n").unwrap();
+
+    let git_repo = GitRepo::open(dir.path()).unwrap();
+    let stats = git_repo.diff_stats_since("HEAD").unwrap();
+    let lines = |path: &str| {
+        &stats
+            .iter()
+            .find(|s| s.path == Path::new(path))
+            .unwrap()
+            .lines
+    };
+
+    // Line 5 is the one that now stands where two were deleted.
+    assert_eq!(lines("a.txt"), &[2, 5, 9, 10]);
+    assert_eq!(lines("b.txt"), &[1, 2]);
+}
+
+#[test]
+fn patch_stats_tell_which_lines_a_patch_touches() {
+    let stats = patch_stats(PATCH_OF_EVERY_KIND.as_bytes()).unwrap();
+    let lines = |path: &str| {
+        &stats
+            .iter()
+            .find(|s| s.path == Path::new(path))
+            .unwrap()
+            .lines
+    };
+    assert_eq!(lines("modified.rs"), &[2, 3]);
+    assert_eq!(lines("added.rs"), &[1, 2]);
+    assert_eq!(lines("deleted.rs"), &[1]);
+    assert!(lines("new_name.rs").is_empty());
+    assert!(lines("logo.png").is_empty());
+}
+
+#[test]
+fn the_lines_of_a_change_follow_the_text_they_are_looked_up_in() {
+    let (dir, repo) = create_test_repo();
+    let before = "one\ntwo\nthree\nfour\nfive\n";
+    make_commit(&repo, &[("a.txt", before)], "base");
+    // Insert two lines after the first one.
+    let after = "one\nnew a\nnew b\ntwo\nthree\nfour\nfive\n";
+    fs::write(dir.path().join("a.txt"), after).unwrap();
+
+    let git_repo = GitRepo::open(dir.path()).unwrap();
+    let stat = &git_repo.diff_stats_since("HEAD").unwrap()[0];
+
+    assert_eq!(stat.lines, [2, 3]);
+    assert_eq!(stat.old_lines, [2]);
+    assert_eq!(
+        stat.probe,
+        [(2, "new a".to_string()), (3, "new b".to_string())]
+    );
+    // The text after the change holds the added lines where the change says.
+    assert_eq!(stat.lines_in(after), [2, 3]);
+    // The text before it does not: the change touches it where it inserts.
+    assert_eq!(stat.lines_in(before), [2]);
+    assert_eq!(stat.lines_in(""), [2]);
+}
+
+#[test]
+fn a_change_that_only_deletes_has_nothing_to_probe() {
+    let (dir, repo) = create_test_repo();
+    make_commit(&repo, &[("a.txt", "one\ntwo\nthree\n")], "base");
+    fs::write(dir.path().join("a.txt"), "one\nthree\n").unwrap();
+
+    let git_repo = GitRepo::open(dir.path()).unwrap();
+    let stat = &git_repo.diff_stats_since("HEAD").unwrap()[0];
+
+    assert!(stat.probe.is_empty());
+    assert_eq!(stat.old_lines, [2]);
+    // With nothing to tell the texts apart, the lines after the change are used.
+    assert_eq!(stat.lines_in("one\ntwo\nthree\n"), [2]);
+}

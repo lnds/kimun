@@ -1,7 +1,7 @@
 //! Tool executor for AI-powered analysis.
 //!
 //! Maps tool call names (e.g. `"km_loc"`) to `km` subprocess invocations.
-//! Each tool runs `km <subcmd> --json <path>` and returns the stdout output.
+//! Each tool runs `km <subcmd> --format json <path>` and returns the stdout output.
 //! Named parameters from the AI input (like `top`, `since`, `min_lines`)
 //! are converted to `--flag value` CLI arguments.
 
@@ -9,7 +9,7 @@ use serde_json::Value;
 use std::path::Path;
 use std::process::Command;
 
-/// Execute a `km` subcommand by name, passing `--json` and any extra arguments
+/// Execute a `km` subcommand by name, asking for JSON and passing any extra arguments
 /// extracted from the AI tool input. Returns the JSON output or an error message.
 pub fn execute_tool(tool_name: &str, input: &Value, project_path: &Path) -> String {
     let km_binary = std::env::current_exe().unwrap_or_else(|_| "km".into());
@@ -32,11 +32,19 @@ pub fn execute_tool(tool_name: &str, input: &Value, project_path: &Path) -> Stri
             build_args(input, &["top", "since"], project_path),
         ),
         "km_tc" => ("tc", build_args(input, &["top", "since"], project_path)),
+        "km_impact" => (
+            "impact",
+            build_args(
+                input,
+                &["since_ref", "until_ref", "pr", "top"],
+                project_path,
+            ),
+        ),
         _ => return format!("Unknown tool: {tool_name}"),
     };
 
     let mut cmd = Command::new(&km_binary);
-    cmd.arg(subcmd).arg("--json");
+    cmd.arg(subcmd).args(["--format", "json"]);
     for arg in &args {
         cmd.arg(arg);
     }

@@ -218,6 +218,15 @@ fn table(rows: &[ReachRow]) -> Vec<String> {
         .collect()
 }
 
+/// The changed projects, or what else the reach starts from when no
+/// project changed: a workspace root.
+fn changed_or_workspace(radius: &ProjectRadius) -> String {
+    if radius.changed.is_empty() {
+        return "no project (the workspace root)".to_string();
+    }
+    radius.changed.join(", ")
+}
+
 /// What the radius comes to, in one or more lines.
 fn body(radius: &ProjectRadius) -> Vec<String> {
     let total = radius.total();
@@ -249,6 +258,7 @@ fn body(radius: &ProjectRadius) -> Vec<String> {
             radius.reached.len(),
             radius.direct()
         ),
+        format!(" Changed: {}", changed_or_workspace(radius)),
         String::new(),
     ];
     lines.extend(table(&radius.reached));

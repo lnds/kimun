@@ -138,6 +138,18 @@ impl Change {
         }
     }
 
+    /// The text files `wanted` picks, as they are after the change.
+    pub fn sources(
+        &self,
+        repo: &GitRepo,
+        wanted: impl Fn(&Path) -> bool,
+    ) -> Result<Vec<(PathBuf, String)>, Box<dyn Error>> {
+        match &self.after {
+            None => Ok(projects::files_on_disk(repo.root(), wanted)),
+            Some(after) => repo.files_at(after, projects::is_skipped, wanted),
+        }
+    }
+
     /// Whether `path` is a file after the change.
     pub fn has_file(&self, repo: &GitRepo, path: &Path) -> bool {
         match &self.after {

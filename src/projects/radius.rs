@@ -34,6 +34,15 @@ impl ProjectGraph {
             .map(PathBuf::as_path)
     }
 
+    /// Whether the project owning `from` is the one owning `to`, or declares
+    /// a dependency on it.
+    pub fn may_use(&self, from: &Path, to: &Path) -> bool {
+        match (self.owner(from), self.owner(to)) {
+            (Some(a), Some(b)) => a == b || self.edges.iter().any(|e| e.from == a && e.to == b),
+            _ => false,
+        }
+    }
+
     /// The projects under a workspace root.
     pub fn members(&self, workspace: &Path) -> impl Iterator<Item = usize> + '_ {
         let workspace = workspace.to_path_buf();

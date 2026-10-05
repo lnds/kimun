@@ -6,7 +6,9 @@
 //! imports), and detects dependency cycles using Tarjan's SCC algorithm.
 
 mod analyzer;
+mod elixir;
 mod extractor;
+pub mod graph;
 mod kaikai;
 mod report;
 
@@ -17,8 +19,9 @@ use std::path::{Path, PathBuf};
 
 use crate::walk::{self, WalkConfig};
 
-use analyzer::{DepEntry, DepResult, UnsupportedLanguage, build_graph, resolve_import};
-use extractor::{extract_imports, is_supported};
+use analyzer::{DepEntry, DepResult, UnsupportedLanguage, build_graph};
+pub use extractor::is_supported;
+use graph::{FileGraph, Source};
 
 /// Count the skipped files per language, largest group first.
 fn count_unsupported(skipped: &[(PathBuf, String)]) -> Vec<UnsupportedLanguage> {
@@ -77,39 +80,17 @@ fn analyze(cfg: &WalkConfig<'_>) -> DepResult {
         .map(|(p, _)| p.clone())
         .collect();
 
-    // For each file, read content and extract + resolve imports
-    let mut edges: HashMap<PathBuf, Vec<PathBuf>> = HashMap::new();
-
-    for (rel_path, language) in &all_files {
-        let abs_path = cfg.path.join(rel_path);
-        let source = match std::fs::read_to_string(&abs_path) {
-            Ok(s) => s,
-            Err(_) => {
-                edges.entry(rel_path.clone()).or_default();
-                continue;
-            }
-        };
-
-        let raw_imports = extract_imports(rel_path, language, &source);
-        let resolved: Vec<PathBuf> = raw_imports
-            .iter()
-            .flat_map(|imp| {
-                resolve_import(rel_path, imp, language, &file_set, go_module.as_deref())
-            })
-            .collect();
-
-        // Dedup (same file can be imported multiple times)
-        let mut deduped = resolved;
-        deduped.sort();
-        deduped.dedup();
-
-        edges.insert(rel_path.clone(), deduped);
-    }
-
-    // Ensure every file has an entry (even with no imports)
-    for (path, _) in &all_files {
-        edges.entry(path.clone()).or_default();
-    }
+    // A file that cannot be read stays in the graph, with nothing to say.
+    let sources: Vec<Source> = all_files
+        .iter()
+        .map(|(rel_path, language)| Source {
+            path: rel_path.clone(),
+            language: language.clone(),
+            text: std::fs::read_to_string(cfg.path.join(rel_path)).unwrap_or_default(),
+        })
+        .collect();
+    // One directory is analysed, with no manifests to tell projects apart.
+    let edges = FileGraph::build(&sources, &file_set, go_module.as_deref(), &|_, _| false).edges();
 
     let mut result = build_graph(&all_files, &edges);
     result.unsupported = unsupported;
