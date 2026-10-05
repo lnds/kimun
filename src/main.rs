@@ -473,31 +473,10 @@ fn main() {
             min_degree,
             min_strength,
         } => dispatch_tc(common, top, sort_by, since, min_degree, min_strength),
-        Commands::Impact {
-            path,
-            format,
-            since_ref,
-            since,
-            min_confidence,
-            min_shared,
-            max_changeset,
-            affected,
-            top,
-        } => run_command(path, |t| {
-            impact::run(
-                t,
-                &impact::ImpactOptions {
-                    output: format,
-                    since_ref: &since_ref,
-                    since: since.as_deref(),
-                    min_confidence,
-                    min_shared,
-                    max_changeset,
-                    top,
-                    affected,
-                },
-            )
-        }),
+        Commands::Impact(args) => {
+            let options = impact::options(&args);
+            run_command(args.path, |t| impact::run(t, &options))
+        }
         Commands::Smells {
             common,
             top,

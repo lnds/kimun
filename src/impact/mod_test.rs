@@ -51,10 +51,13 @@ fn co_change(repo: &Repository, paths: &[&str], times: usize) {
     }
 }
 
-fn opts(since_ref: &str) -> ImpactOptions<'_> {
+fn opts(since_ref: &str) -> ImpactOptions {
     ImpactOptions {
         output: OutputMode::Table,
-        since_ref,
+        source: DiffSource::Refs {
+            since: since_ref.to_string(),
+            until: None,
+        },
         since: None,
         min_confidence: 0.5,
         min_shared: 3,
@@ -116,7 +119,7 @@ fn rejects_an_invalid_since() {
     let (dir, repo) = create_test_repo();
     commit(&repo, &[("a.rs", "a\n")], &[]);
     let o = ImpactOptions {
-        since: Some("soon"),
+        since: Some("soon".to_string()),
         ..opts("HEAD")
     };
     assert!(run(dir.path(), &o).is_err());
@@ -229,7 +232,7 @@ fn a_changed_file_outside_the_since_window_has_no_history() {
     write(&repo, "a.rs", "changed\n");
 
     let o = ImpactOptions {
-        since: Some("1d"),
+        since: Some("1d".to_string()),
         ..opts("HEAD")
     };
     let impact = analyze(dir.path(), &o).unwrap();
@@ -512,4 +515,221 @@ fn a_renamed_file_changes_the_project_it_left() {
 
     let impact = analyze(dir.path(), &opts("HEAD")).unwrap();
     assert_eq!(impact.projects.changed, ["a", "b"]);
+}
+
+#[test]
+fn between_two_refs_the_tree_of_the_second_decides_what_exists() {
+    let (dir, repo) = create_test_repo();
+    co_change(&repo, &["a.rs", "kept.rs", "dropped.rs"], 4);
+    let base = repo
+        .head()
+        .unwrap()
+        .peel_to_commit()
+        .unwrap()
+        .id()
+        .to_string();
+    // The change edits a.rs and deletes dropped.rs along the way... in a
+    // later commit that is not part of what is measured.
+    commit(&repo, &[("a.rs", "changed\n")], &[]);
+    let until = repo
+        .head()
+        .unwrap()
+        .peel_to_commit()
+        .unwrap()
+        .id()
+        .to_string();
+    commit(&repo, &[], &["kept.rs"]);
+
+    let o = ImpactOptions {
+        source: DiffSource::Refs {
+            since: base,
+            until: Some(until),
+        },
+        ..opts("HEAD")
+    };
+    let impact = analyze(dir.path(), &o).unwrap();
+
+    assert_eq!(impact.diffusion.files, 1);
+    // kept.rs is gone from the working tree, but it is in the measured tree.
+    assert_eq!(
+        missing_paths(&impact),
+        [Path::new("dropped.rs"), Path::new("kept.rs")]
+    );
+    assert!(impact.source.starts_with("diff "));
+    assert!(impact.source.contains("..."));
+}
+
+#[test]
+fn a_patch_reaches_projects_like_any_other_change() {
+    let (dir, repo) = create_test_repo();
+    commit(
+        &repo,
+        &[
+            ("libs/core/Cargo.toml", "[package]\nname = \"core\"\n"),
+            ("libs/core/src/lib.rs", "pub fn f() {}\n"),
+            (
+                "apps/api/Cargo.toml",
+                "[package]\nname = \"api\"\n\n[dependencies]\ncore = { path = \"../../libs/core\" }\n",
+            ),
+        ],
+        &[],
+    );
+    let patch = dir.path().join("change.patch");
+    fs::write(
+        &patch,
+        "diff --git a/libs/core/src/lib.rs b/libs/core/src/lib.rs\n\
+         index 1111111..2222222 100644\n\
+         --- a/libs/core/src/lib.rs\n\
+         +++ b/libs/core/src/lib.rs\n\
+         @@ -1 +1 @@\n\
+         -pub fn f() {}\n\
+         +pub fn f() -> u8 { 1 }\n",
+    )
+    .unwrap();
+
+    let o = ImpactOptions {
+        source: DiffSource::Patch {
+            file: patch,
+            base: None,
+        },
+        ..opts("HEAD")
+    };
+    let impact = analyze(dir.path(), &o).unwrap();
+
+    assert_eq!(impact.projects.changed, ["libs/core"]);
+    assert_eq!(impact.projects.affected(), ["apps/api", "libs/core"]);
+    assert_eq!(
+        (impact.diffusion.lines_added, impact.diffusion.lines_deleted),
+        (1, 1)
+    );
+
+    // The same source serves --affected.
+    let affected = ImpactOptions {
+        affected: true,
+        ..o
+    };
+    run(dir.path(), &affected).unwrap();
+}
+
+mod command_line {
+    use super::*;
+    use crate::cli::{Cli, Commands};
+    use clap::Parser;
+
+    fn parse(args: &[&str]) -> Result<ImpactOptions, String> {
+        let argv = ["km", "impact"].iter().chain(args).copied();
+        match Cli::try_parse_from(argv) {
+            Ok(Cli {
+                command: Commands::Impact(args),
+            }) => Ok(options(&args)),
+            Ok(_) => Err("not the impact command".to_string()),
+            Err(e) => Err(e.to_string()),
+        }
+    }
+
+    fn source(args: &[&str]) -> DiffSource {
+        parse(args).unwrap().source
+    }
+
+    #[test]
+    fn a_ref_alone_measures_up_to_the_working_tree() {
+        assert_eq!(
+            source(&["--since-ref", "main"]),
+            DiffSource::Refs {
+                since: "main".to_string(),
+                until: None
+            }
+        );
+    }
+
+    #[test]
+    fn two_refs_measure_between_them() {
+        assert_eq!(
+            source(&["--since-ref", "main", "--until-ref", "feature"]),
+            DiffSource::Refs {
+                since: "main".to_string(),
+                until: Some("feature".to_string())
+            }
+        );
+    }
+
+    #[test]
+    fn a_patch_with_or_without_a_base() {
+        assert_eq!(
+            source(&["--diff", "-"]),
+            DiffSource::Patch {
+                file: PathBuf::from("-"),
+                base: None
+            }
+        );
+        assert_eq!(
+            source(&["--diff", "change.patch", "--since-ref", "main"]),
+            DiffSource::Patch {
+                file: PathBuf::from("change.patch"),
+                base: Some("main".to_string())
+            }
+        );
+    }
+
+    #[test]
+    fn a_pull_request_by_number() {
+        assert_eq!(source(&["--pr", "75"]), DiffSource::PullRequest(75));
+    }
+
+    #[test]
+    fn the_other_options_are_carried_over() {
+        let o = parse(&[
+            "--since-ref",
+            "main",
+            "--since",
+            "6m",
+            "--min-confidence",
+            "0.8",
+            "--min-shared",
+            "5",
+            "--max-changeset",
+            "50",
+            "--top",
+            "7",
+            "--affected",
+            "--format",
+            "json",
+        ])
+        .unwrap();
+        assert_eq!(o.since.as_deref(), Some("6m"));
+        assert_eq!(o.min_confidence, 0.8);
+        assert_eq!((o.min_shared, o.max_changeset, o.top), (5, 50, 7));
+        assert!(o.affected);
+        assert_eq!(o.output, OutputMode::Json);
+    }
+
+    #[test]
+    fn a_change_must_be_named() {
+        let err = parse(&[]).unwrap_err();
+        assert!(err.contains("--since-ref"), "{err}");
+    }
+
+    #[test]
+    fn sources_that_do_not_mix_are_refused() {
+        for args in [
+            &["--pr", "1", "--since-ref", "main"][..],
+            &["--pr", "1", "--diff", "x.patch"],
+            &["--pr", "1", "--since-ref", "main", "--until-ref", "f"],
+            &[
+                "--diff",
+                "x.patch",
+                "--since-ref",
+                "main",
+                "--until-ref",
+                "f",
+            ],
+        ] {
+            let err = parse(args).unwrap_err();
+            assert!(err.contains("cannot be used with"), "{args:?}: {err}");
+        }
+        // Without a starting ref there is nothing for --until-ref to bound.
+        let err = parse(&["--until-ref", "feature"]).unwrap_err();
+        assert!(err.contains("--since-ref"), "{err}");
+        assert!(parse(&["--pr", "abc"]).is_err());
+    }
 }

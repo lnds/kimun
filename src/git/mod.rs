@@ -18,7 +18,9 @@ use git2::{BlameOptions, Delta, DiffOptions, ObjectType, Repository, Sort, Tree}
 
 mod changeset;
 
-pub use changeset::{ChangeKind, CoChangeHistory, FileDiffStat};
+pub use changeset::{ChangeKind, CoChangeHistory, FileDiffStat, patch_stats};
+
+mod tree;
 
 /// Wrapper around a `git2::Repository` with its resolved root path.
 pub struct GitRepo {
