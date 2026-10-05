@@ -140,12 +140,10 @@ pub fn missing_co_changes(
     let mut by_path: HashMap<&Path, Vec<Trigger>> = HashMap::new();
 
     for target in targets {
-        let commits = history
-            .commits
-            .get(&target.history_path)
-            .copied()
-            .unwrap_or(0);
-        let Some(shared) = history.shared.get(&target.history_path) else {
+        let (Some(&commits), Some(shared)) = (
+            history.commits.get(&target.history_path),
+            history.shared.get(&target.history_path),
+        ) else {
             continue;
         };
         for (other, &shared_commits) in shared {

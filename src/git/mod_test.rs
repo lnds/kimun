@@ -386,3 +386,48 @@ fn diff_stats_fail_on_an_unknown_ref() {
     let err = git_repo.diff_stats_since("nope").err().unwrap();
     assert!(err.to_string().contains("cannot resolve ref 'nope'"));
 }
+
+#[test]
+fn diff_stats_count_no_lines_for_a_modified_binary_file() {
+    let (dir, repo) = create_test_repo();
+    let path = dir.path().join("image.bin");
+    fs::write(&path, [0u8, 1, 2, 3, 0, 255]).unwrap();
+    let mut index = repo.index().unwrap();
+    index.add_path(Path::new("image.bin")).unwrap();
+    index.write().unwrap();
+    let tree = repo.find_tree(index.write_tree().unwrap()).unwrap();
+    let sig =
+        git2::Signature::new("Test", "test@test.com", &git2::Time::new(1_700_000_000, 0)).unwrap();
+    repo.commit(Some("HEAD"), &sig, &sig, "binary", &tree, &[])
+        .unwrap();
+    fs::write(&path, [0u8, 9, 9, 9, 0, 255, 7]).unwrap();
+
+    let git_repo = GitRepo::open(dir.path()).unwrap();
+    let stats = git_repo.diff_stats_since("HEAD").unwrap();
+
+    assert_eq!(stats.len(), 1);
+    assert_eq!(stats[0].kind, ChangeKind::Modified);
+    assert_eq!((stats[0].added, stats[0].deleted), (0, 0));
+}
+
+#[test]
+fn renames_are_detected_whatever_the_git_configuration() {
+    let (dir, repo) = create_test_repo();
+    repo.config()
+        .unwrap()
+        .set_bool("diff.renames", false)
+        .unwrap();
+    make_commit(&repo, &[("old_name.rs", "a\nb\nc\nd\ne\n")], "base");
+    fs::rename(
+        dir.path().join("old_name.rs"),
+        dir.path().join("new_name.rs"),
+    )
+    .unwrap();
+
+    let git_repo = GitRepo::open(dir.path()).unwrap();
+    let stats = git_repo.diff_stats_since("HEAD").unwrap();
+
+    assert_eq!(stats.len(), 1);
+    assert_eq!(stats[0].kind, ChangeKind::Renamed);
+    assert_eq!(stats[0].old_path.as_deref(), Some(Path::new("old_name.rs")));
+}
