@@ -6,6 +6,7 @@ use serde::Serialize;
 
 use super::Impact;
 use super::analyzer::{MissingCoChange, Trigger};
+use super::projects::{self, JsonProjects};
 use crate::report_helpers;
 
 const MIN_WIDTH: usize = 78;
@@ -17,7 +18,8 @@ pub fn print_report(impact: &Impact, top: usize) {
     print!("{}", render_report(impact, top));
 }
 
-/// Render the diffusion block, the logical radius table and the notes.
+/// Render the project block, the diffusion block, the logical radius table
+/// and the notes.
 fn render_report(impact: &Impact, top: usize) -> String {
     if impact.diffusion.files == 0 {
         let mut lines = vec![format!("No changes against '{}'.", impact.since_ref)];
@@ -38,8 +40,10 @@ fn render_report(impact: &Impact, top: usize) -> String {
 
     let mut lines = vec![
         format!("Change Impact — diff against {}", impact.since_ref),
-        sep.clone(),
+        String::new(),
     ];
+    lines.extend(projects::render(&impact.projects));
+    lines.push(String::new());
     lines.extend(diffusion_lines(impact));
     lines.push(String::new());
     lines.push(
@@ -204,6 +208,7 @@ struct JsonLogicalRadius {
 #[derive(Serialize)]
 struct JsonImpact {
     since_ref: String,
+    projects: JsonProjects,
     diffusion: JsonDiffusion,
     logical_radius: JsonLogicalRadius,
     generated_skipped: usize,
@@ -213,6 +218,7 @@ fn to_json(impact: &Impact, top: usize) -> JsonImpact {
     let d = &impact.diffusion;
     JsonImpact {
         since_ref: impact.since_ref.clone(),
+        projects: JsonProjects::from(&impact.projects),
         diffusion: JsonDiffusion {
             files: d.files,
             directories: d.directories,
@@ -258,7 +264,9 @@ fn render_short(impact: &Impact) -> String {
     let d = &impact.diffusion;
     let max_confidence = impact.missing.first().map_or(0.0, |m| m.best().confidence);
     format!(
-        "impact files:{} dirs:{} subsystems:{} added:{} deleted:{} entropy:{:.2} missing:{} max_confidence:{:.2}",
+        "impact projects_reached:{}/{} files:{} dirs:{} subsystems:{} added:{} deleted:{} entropy:{:.2} missing:{} max_confidence:{:.2}",
+        impact.projects.reached.len(),
+        impact.projects.total(),
         d.files,
         d.directories,
         d.subsystems,

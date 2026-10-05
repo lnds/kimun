@@ -53,6 +53,8 @@ mod loc;
 mod mi;
 /// Maintainability Index (verifysoft variant, with comment weight).
 mod miv;
+/// Projects of a repository and their dependencies, read from manifests.
+mod projects;
 /// Combined report (`km report`) aggregating all metrics.
 mod report;
 /// Shared report formatting utilities (separators, path widths, JSON output).
@@ -479,6 +481,7 @@ fn main() {
             min_confidence,
             min_shared,
             max_changeset,
+            affected,
             top,
         } => run_command(path, |t| {
             impact::run(
@@ -491,6 +494,7 @@ fn main() {
                     min_shared,
                     max_changeset,
                     top,
+                    affected,
                 },
             )
         }),

@@ -1,5 +1,6 @@
 use super::*;
 use crate::impact::analyzer::{Diffusion, Thresholds};
+use crate::impact::projects::ProjectRadius;
 use std::path::PathBuf;
 
 fn trigger(path: &str, shared: usize, commits: usize) -> Trigger {
@@ -21,6 +22,11 @@ fn missing(path: &str, triggers: Vec<Trigger>) -> MissingCoChange {
 fn sample() -> Impact {
     Impact {
         since_ref: "main".to_string(),
+        projects: ProjectRadius {
+            all: vec![".".to_string()],
+            changed: vec![".".to_string()],
+            ..ProjectRadius::default()
+        },
         diffusion: Diffusion {
             files: 5,
             directories: 3,
@@ -174,7 +180,7 @@ fn report_of_a_diff_with_only_generated_files() {
 fn short_line() {
     assert_eq!(
         render_short(&sample()),
-        "impact files:5 dirs:3 subsystems:2 added:120 deleted:30 entropy:0.82 missing:2 max_confidence:0.80"
+        "impact projects_reached:0/1 files:5 dirs:3 subsystems:2 added:120 deleted:30 entropy:0.82 missing:2 max_confidence:0.80"
     );
     assert!(render_short(&empty()).ends_with("missing:0 max_confidence:0.00"));
 }
@@ -241,7 +247,12 @@ fn report_layout_is_exact() {
     let sep = "─".repeat(78);
     let expected = [
         "Change Impact — diff against main",
+        "",
+        "Blast radius — projects reached through their manifests",
         sep.as_str(),
+        " Single project (.): no other project to reach; this level does not apply.",
+        sep.as_str(),
+        "",
         "Diffusion",
         "  Files changed           5",
         "  Directories             3",

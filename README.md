@@ -559,7 +559,7 @@ Strong coupling (>= 0.5) suggests hidden dependencies — consider extracting sh
 
 ### `km impact` -- Impact of a diff
 
-Measures how far a change reaches, for a PR or for uncommitted work. Works from git alone, so it applies to any language.
+Measures how far a change reaches, for a PR or for uncommitted work: the projects of the repository it reaches, how spread it is, and which files usually change with it and were left out.
 
 ```bash
 km impact --since-ref origin/main [path]
@@ -567,9 +567,49 @@ km impact --since-ref origin/main [path]
 
 The diff runs from the merge base with `--since-ref` to the working tree, so it covers committed, uncommitted and untracked changes, and deletions. It is always the diff of the whole repository: `path` only locates the repository and does not narrow the analysis. Generated files (lock files, minified assets) are left out of every measure.
 
+#### Blast radius: projects
+
+Which projects of the repository are reached by the diff. Meant for monorepos, where a change to a shared library reaches applications its author may not know.
+
+A **project** is a directory with a manifest. A project **depends** on another when its manifest names it as a local dependency; dependencies on registries or other repositories are ignored. A changed file belongs to the nearest project above it. The radius is every project that depends on a changed one, directly or through others.
+
+| Ecosystem | Manifest | Local dependencies read |
+|-----------|----------|-------------------------|
+| Rust | `Cargo.toml` | `path` dependencies, `workspace = true` resolved through `[workspace.dependencies]`, in `[dependencies]`, `[dev-dependencies]`, `[build-dependencies]` and their `[target.*]` forms |
+| JavaScript / TypeScript | `package.json` | any dependency whose name is another package of the repository (npm, yarn and pnpm workspaces), plus `file:` and `link:` |
+| Elixir | `mix.exs` | `path:` dependencies and `in_umbrella: true` |
+
+```
+Blast radius — projects reached through their manifests
+──────────────────────────────────────────────────────────────────────────────
+ 3 of 6 projects reached (50%), 2 direct
+
+ Changed    Reaches         Distance  Scope  Via
+ libs/core  apps/invoicing         1
+ libs/core  libs/ledger            1
+ libs/core  apps/payouts           2         libs/ledger
+──────────────────────────────────────────────────────────────────────────────
+Changed files outside every project (reach unknown): Makefile
+```
+
+- **Scope**: a `dev` dependency (dev or test only) reaches the dependent, whose tests use the changed project, and stops there: the changed project is not part of what the dependent ships, so the dependents of the dependent are not reached. `build` and `optional` dependencies carry on like runtime ones.
+- **Workspace roots**: a `Cargo.toml` with `[workspace]`, a `package.json` with `workspaces` (or next to a `pnpm-workspace.yaml`), an umbrella `mix.exs` with `apps_path`. A change to the manifest or the lock file at such a root (`Cargo.lock`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `bun.lock`, `mix.lock`) reaches every project under it at distance 1, with scope `workspace`, and carries on from them. A workspace root is a project itself only when it declares one (`[package]` in Cargo, `app:` in mix); a `package.json` at a workspace root never is.
+- **Files outside every project** (CI workflows, shared configuration, a root README) are listed apart. Their reach is unknown, not zero.
+- **`--affected`** prints the projects whose builds and tests the diff calls for, one per line, and nothing else: the changed and the reached ones. If any changed file is outside every project, it prints **all** projects and says why on stderr — skipping a test suite is worse than running one too many. It reads only the diff and the manifests, not the history.
+- A repository with a single project gets a line saying this level does not apply, rather than "0 reached".
+- `node_modules`, `deps`, `_build`, `target`, `vendor` and `testdata` are never searched for manifests, nor is a `fixtures` directory inside a test directory. An end-to-end suite with its own manifest (`test/e2e/package.json`) is a project.
+
+Limits:
+
+- `mix.exs` is code and is read as text. A dependency whose path is built at run time (`Path.expand(...)`, string interpolation, a generated list) cannot be attributed; the report names the manifest and how many it missed.
+- Coupling across ecosystems is not visible: a web client and the service whose API it calls have no manifest dependency between them.
+- A project nested in another (`assets/package.json` inside a Phoenix application) has no dependency to or from the one that contains it unless a manifest declares one.
+- The graph is read from the working tree. The files of a project the diff deletes or moves away belong to no project any more: their reach is unknown, and the manifests still naming it are reported as not read.
+
 #### Diffusion
 
-How spread the change is. Kamei et al. found diffusion among the strongest predictors of a defect-inducing change.
+How spread the change is.
+ Kamei et al. found diffusion among the strongest predictors of a defect-inducing change.
 
 | Measure | Meaning |
 |---------|---------|
@@ -604,6 +644,7 @@ Options:
 | `--min-confidence F` | Minimum confidence to report a missing file (default: `0.5`) |
 | `--min-shared N` | Minimum shared commits to report a missing file (default: `3`) |
 | `--max-changeset N` | Ignore commits touching more than N files as evidence (default: `30`) |
+| `--affected` | Print only the changed and reached projects, one per line |
 | `--top N` | Show only the top N missing files (default: 20) |
 | `--format {table,json,short,terse}` | Output format (default: table) |
 
@@ -611,7 +652,12 @@ Example output:
 
 ```
 Change Impact — diff against main
+
+Blast radius — projects reached through their manifests
 ──────────────────────────────────────────────────────────────────────────────
+ Single project (.): no other project to reach; this level does not apply.
+──────────────────────────────────────────────────────────────────────────────
+
 Diffusion
   Files changed           5
   Directories             3

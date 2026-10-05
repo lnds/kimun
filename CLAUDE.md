@@ -113,11 +113,23 @@ Temporal coupling analysis (Thornhill, files that change together). Invoked via 
 
 `GitRepo` wraps `git2::Repository`. `mod.rs` holds history walks, blame and tree extraction. `changeset.rs` holds what concerns the change set between a ref and the working tree: `workdir_diff` (shared with `changes_since_in_workdir`), `diff_stats_since`, `co_change_history`, and the merge base they start from.
 
+### Shared: `src/projects/`
+
+Projects of a repository and the dependencies between them, read from manifests. Independent of the ecosystem: each one contributes a reader that turns a manifest's text into a `Manifest` (name, raw dependencies, workspace table); discovery, resolution and reach are shared.
+
+- **`mod.rs`** — The model: `Project`, `Edge`, `Scope`, `Manifest`, `DepTarget`, and `reader`, which maps a manifest file name to its reader.
+- **`discover.rs`** — `ProjectGraph::discover` walks the repository (skipping `node_modules`, `deps`, `_build`, `target`, `vendor`), builds one `Project` per directory and resolves each `DepTarget` (`Path`, `Name` within the same ecosystem, `Workspace`). Workspace roots (`[workspace]`, `workspaces`, `pnpm-workspace.yaml`, `apps_path`) are registered before projects, because an npm manifest at one is not a project. Skips `testdata` and `fixtures` inside test directories.
+- **`radius.rs`** — `owner` gives the nearest project above a file; `workspace_of` tells when a file is the manifest or lock file of a workspace root, which governs every project under it. `radius` is a reverse BFS: non-dev edges first, then dev edges as terminal reaches, so a shorter dev path never hides a shipping one.
+- **`cargo.rs`** / **`npm.rs`** / **`mix.rs`** — Readers. `mix.rs` is lexical: strips comments, then picks out `{:name, ...}` tuples; a `path:` it cannot attribute is counted in `unread`.
+
+To add an ecosystem: write a reader `fn read(&str) -> Manifest`, add its file name to `reader` and a variant to `Ecosystem`.
+
 ### Module structure: `src/impact/`
 
-Impact of a diff: diffusion and logical radius. Invoked via `km impact --since-ref <REF>`. Git only, so it applies to any language.
+Impact of a diff: projects reached, diffusion and logical radius. Invoked via `km impact --since-ref <REF>`.
 
 - **`analyzer.rs`** — Pure functions. `compute_diffusion()` counts files, directories, subsystems (top-level directories), lines, and the normalized Shannon entropy of the modified lines. `missing_co_changes()` finds the files that usually change with the changed ones; confidence is directional (`shared / commits of the changed file`), unlike the symmetric strength of `tc`. Several changed files predicting the same file are merged as `Trigger`s, strongest first.
+- **`projects.rs`** — Blast radius at project level: maps the diff to projects of `crate::projects::ProjectGraph`, computes the reach, and renders its block of the report and of the JSON. A changed workspace root reaches its members at distance 1 with scope `workspace`. `affected()` is the list `--affected` prints: every project when a changed file belongs to none. `--affected` skips the history walk (`print_affected` in `mod.rs`).
 - **`report.rs`** — `render_report` builds the table as a `String` and `print_report` prints it, so tests assert on the text. JSON, short and terse formatters.
 - **`mod.rs`** — Orchestration: `GitRepo::diff_stats_since` for the diff (merge base with the ref → working tree, deletions included), `GitRepo::co_change_history` for the history, which ends at the merge base so the commits of the diff are never evidence, and skips commits touching more than `--max-changeset` files (sweeping changes relate files by accident). Drops generated files (`util::is_generated`), files already in the diff and files that no longer exist. New files and files outside `--since` go to `without_history`. Test files are always included.
 

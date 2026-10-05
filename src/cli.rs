@@ -467,6 +467,10 @@ pub enum Commands {
         #[arg(long, default_value = "30", value_name = "N")]
         max_changeset: usize,
 
+        /// Print only the projects the diff changes or reaches, one per line (for CI)
+        #[arg(long)]
+        affected: bool,
+
         /// Show only the top N missing files (default: 20)
         #[arg(long, default_value = "20")]
         top: usize,
