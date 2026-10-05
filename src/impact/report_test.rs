@@ -235,3 +235,102 @@ fn report_says_how_many_commits_were_ignored() {
     assert_eq!(json["logical_radius"]["max_changeset"], 30);
     assert_eq!(json["logical_radius"]["skipped_commits"], 4);
 }
+
+#[test]
+fn report_layout_is_exact() {
+    let sep = "─".repeat(78);
+    let expected = [
+        "Change Impact — diff against main",
+        sep.as_str(),
+        "Diffusion",
+        "  Files changed           5",
+        "  Directories             3",
+        "  Subsystems              2",
+        "  Lines added           120",
+        "  Lines deleted          30",
+        "  Entropy              0.82  (0 = one file holds the change, 1 = evenly spread)",
+        "",
+        "Logical radius — files that usually change with this diff and are not in it",
+        sep.as_str(),
+        " Missing file      Confidence   Shared  Changes with",
+        sep.as_str(),
+        " src/tc/report.rs        0.80     8/10  src/tc/mod.rs (+1 more)",
+        " README.md               0.50     6/12  src/cli.rs",
+        sep.as_str(),
+        "No history before the diff (new or never committed): src/impact/mod.rs",
+        "Generated files ignored: 1",
+        "",
+    ]
+    .join("\n");
+    assert_eq!(render_report(&sample(), 20), expected);
+}
+
+#[test]
+fn short_paths_keep_the_width_of_the_header() {
+    let impact = Impact {
+        missing: vec![missing("a.rs", vec![trigger("b.rs", 4, 5)])],
+        ..sample()
+    };
+    let out = render_report(&impact, 20);
+    assert!(
+        out.contains("\n Missing file  Confidence   Shared  Changes with\n"),
+        "{out}"
+    );
+    assert!(
+        out.contains("\n a.rs                0.80      4/5  b.rs\n"),
+        "{out}"
+    );
+}
+
+#[test]
+fn separator_spans_the_widest_row() {
+    let long = format!("src/{}.rs", "x".repeat(70));
+    let widths = |impact: &Impact| -> (usize, usize) {
+        let out = render_report(impact, 20);
+        let width = |prefix: &str| {
+            out.lines()
+                .filter(|l| l.starts_with(prefix))
+                .map(|l| l.chars().count())
+                .max()
+                .unwrap()
+        };
+        (width("─"), width(" "))
+    };
+
+    // The last column is as wide as its header.
+    let narrow_last = Impact {
+        missing: vec![missing(&long, vec![trigger("b.rs", 4, 5)])],
+        ..sample()
+    };
+    let (sep, row) = widths(&narrow_last);
+    assert_eq!(sep, row, "separator should end where the header row ends");
+
+    // The last column is as wide as its longest cell.
+    let wide_last = Impact {
+        missing: vec![missing(
+            &long,
+            vec![trigger("src/some/long/trigger.rs", 4, 5)],
+        )],
+        ..sample()
+    };
+    let (sep, row) = widths(&wide_last);
+    assert_eq!(sep, row, "separator should end where the widest row ends");
+}
+
+#[test]
+fn every_missing_file_shown_needs_no_count() {
+    // Exactly as many as `top`: nothing was cut.
+    let out = render_report(&sample(), 2);
+    assert!(!out.contains("shown"), "{out}");
+}
+
+#[test]
+fn a_single_ignored_commit_is_reported() {
+    let impact = Impact {
+        skipped_commits: 1,
+        ..sample()
+    };
+    assert!(
+        render_report(&impact, 20).contains("Commits ignored for touching more than 30 files: 1")
+    );
+}

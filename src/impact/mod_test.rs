@@ -413,3 +413,28 @@ fn rejects_a_zero_max_changeset() {
     let err = run(dir.path(), &o).unwrap_err();
     assert!(err.to_string().contains("--max-changeset"), "got: {err}");
 }
+
+#[test]
+fn full_confidence_is_a_valid_threshold() {
+    let (dir, repo) = create_test_repo();
+    co_change(&repo, &["a.rs", "always.rs"], 4);
+    commit(&repo, &[("a.rs", "alone\n")], &[]);
+    co_change(&repo, &["b.rs", "always.rs"], 3);
+    write(&repo, "a.rs", "changed\n");
+    write(&repo, "b.rs", "changed\n");
+
+    let o = ImpactOptions {
+        min_confidence: 1.0,
+        ..opts("HEAD")
+    };
+    let impact = analyze(dir.path(), &o).unwrap();
+
+    // always.rs followed b.rs in 3 of 3 commits and a.rs in 4 of 5.
+    assert_eq!(missing_paths(&impact), [Path::new("always.rs")]);
+    let triggers: Vec<&Path> = impact.missing[0]
+        .triggers
+        .iter()
+        .map(|t| t.path.as_path())
+        .collect();
+    assert_eq!(triggers, [Path::new("b.rs")]);
+}
