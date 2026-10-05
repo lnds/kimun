@@ -1,3 +1,15 @@
+## v0.27.0 (2026-10-05)
+
+### Feat
+
+- **impact**: measure a branch, a patch or a pull request
+- **impact**: blast radius at project level, from manifests
+- **impact**: add km impact with diffusion and co-change of a diff
+
+### Refactor
+
+- **git**: move the change set code to its own file
+
 ## v0.26.2 (2026-10-04)
 
 ### Fix
