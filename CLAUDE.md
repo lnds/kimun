@@ -109,6 +109,10 @@ Temporal coupling analysis (Thornhill, files that change together). Invoked via 
 - **`report.rs`** — Table and JSON output formatters.
 - **`mod.rs`** — Orchestration: opens git repo, calls `file_frequencies()` (filtered by `min_degree`), `co_changing_commits()`, `compute_coupling()`, sorts/filters results. Uses `util::parse_since` for `--since` flag. No filesystem walk needed — works entirely from git data.
 
+### Shared: `src/git/`
+
+`GitRepo` wraps `git2::Repository`. `mod.rs` holds history walks, blame and tree extraction. `changeset.rs` holds what concerns the change set between a ref and the working tree: `workdir_diff` (shared with `changes_since_in_workdir`), `diff_stats_since`, `co_change_history`, and the merge base they start from.
+
 ### Module structure: `src/impact/`
 
 Impact of a diff: diffusion and logical radius. Invoked via `km impact --since-ref <REF>`. Git only, so it applies to any language.
