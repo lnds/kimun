@@ -1,3 +1,9 @@
+## v0.28.0 (2026-10-05)
+
+### Feat
+
+- **impact**: blast radius at source level, with Elixir narrowed to functions
+
 ## v0.27.0 (2026-10-05)
 
 ### Feat
