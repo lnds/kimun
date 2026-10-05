@@ -11,6 +11,7 @@ mod pr;
 mod projects;
 mod report;
 mod source;
+mod structural;
 
 use std::collections::HashSet;
 use std::error::Error;
@@ -18,6 +19,7 @@ use std::path::{Path, PathBuf};
 
 use crate::cli::OutputMode;
 use crate::git::{ChangeKind, FileDiffStat, GitRepo};
+use crate::projects::ProjectGraph;
 use crate::util::{is_generated, parse_since};
 
 use analyzer::{
@@ -27,6 +29,7 @@ pub use help::HELP;
 use projects::ProjectRadius;
 use source::Change;
 pub use source::DiffSource;
+use structural::Structural;
 
 /// Options for impact analysis.
 #[derive(Debug, Clone)]
@@ -78,6 +81,8 @@ pub struct Impact {
     pub source: String,
     /// Projects of the repository reached by the diff.
     pub projects: ProjectRadius,
+    /// Source files that use what the diff changed.
+    pub structural: Structural,
     pub diffusion: Diffusion,
     pub thresholds: Thresholds,
     /// Files expected to change with the diff, strongest evidence first.
@@ -112,13 +117,38 @@ fn open_repo(path: &Path) -> Result<GitRepo, Box<dyn Error>> {
 /// The reach of the diff over the projects of the repository. A file counts
 /// under both of its paths when it was renamed, and a lock file counts too:
 /// it changes what its project is built from.
-fn project_radius(git_repo: &GitRepo, change: &Change) -> Result<ProjectRadius, Box<dyn Error>> {
-    let graph = change.graph(git_repo)?;
+fn project_radius(graph: &ProjectGraph, change: &Change) -> ProjectRadius {
     let files = change
         .diff
         .iter()
         .flat_map(|c| std::iter::once(c.path.as_path()).chain(c.old_path.as_deref()));
-    Ok(projects::compute(&graph, files))
+    projects::compute(graph, files)
+}
+
+/// The source files that use what the change touches. Only the projects the
+/// change affects are read: a file outside them cannot depend on it. When
+/// the reach over projects is unknown, the whole repository is.
+fn structural_radius(
+    git_repo: &GitRepo,
+    change: &Change,
+    graph: &ProjectGraph,
+    projects: &ProjectRadius,
+) -> Result<Structural, Box<dyn Error>> {
+    let scope: Vec<PathBuf> = match projects.changed.is_empty() || !projects.outside.is_empty() {
+        true => Vec::new(),
+        false => projects
+            .affected()
+            .into_iter()
+            .map(|root| PathBuf::from(root.trim_start_matches('.')))
+            .collect(),
+    };
+    let in_scope =
+        |path: &Path| scope.is_empty() || scope.iter().any(|root| path.starts_with(root));
+    let sources = change.sources(git_repo, |p| structural::is_reliable(p) && in_scope(p))?;
+    let changed: Vec<structural::Changed> = change.diff.iter().collect();
+    Ok(structural::compute(sources, &changed, &|from, to| {
+        graph.may_use(from, to)
+    }))
 }
 
 /// Compute the impact of the change `opts.source` names.
@@ -137,7 +167,9 @@ fn analyze(path: &Path, opts: &ImpactOptions) -> Result<Impact, Box<dyn Error>> 
     let since_ts = opts.since.as_deref().map(parse_since).transpose()?;
 
     let change = Change::resolve(&git_repo, &opts.source)?;
-    let projects = project_radius(&git_repo, &change)?;
+    let graph = change.graph(&git_repo)?;
+    let projects = project_radius(&graph, &change);
+    let structural = structural_radius(&git_repo, &change, &graph, &projects)?;
     let (generated, changes): (Vec<_>, Vec<_>) = change
         .diff
         .iter()
@@ -179,6 +211,7 @@ fn analyze(path: &Path, opts: &ImpactOptions) -> Result<Impact, Box<dyn Error>> 
     Ok(Impact {
         source: change.label.clone(),
         projects,
+        structural,
         diffusion: compute_diffusion(&changes),
         thresholds,
         missing,
@@ -194,7 +227,8 @@ fn analyze(path: &Path, opts: &ImpactOptions) -> Result<Impact, Box<dyn Error>> 
 /// push, and the history is of no use to it.
 fn print_affected(path: &Path, source: &DiffSource) -> Result<(), Box<dyn Error>> {
     let git_repo = open_repo(path)?;
-    let radius = project_radius(&git_repo, &Change::resolve(&git_repo, source)?)?;
+    let change = Change::resolve(&git_repo, source)?;
+    let radius = project_radius(&change.graph(&git_repo)?, &change);
     if !radius.outside.is_empty() {
         eprintln!(
             "note: {} changed file(s) belong to no project, so every project is listed",

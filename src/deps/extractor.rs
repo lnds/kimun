@@ -14,7 +14,16 @@ use super::kaikai;
 pub fn is_supported(language: &str) -> bool {
     matches!(
         language,
-        "Rust" | "Python" | "JavaScript" | "TypeScript" | "JSX" | "TSX" | "Go" | "Kaikai"
+        "Rust"
+            | "Python"
+            | "JavaScript"
+            | "TypeScript"
+            | "JSX"
+            | "TSX"
+            | "Go"
+            | "Kaikai"
+            | "Elixir"
+            | "Elixir Script"
     )
 }
 

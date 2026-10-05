@@ -1,0 +1,215 @@
+//! The dependency graph between files, built from sources given as text, so
+//! they can come from disk or from the tree of a commit.
+
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::path::{Path, PathBuf};
+
+use super::analyzer::resolve_import;
+use super::elixir::{self, ElixirFile};
+use super::extractor::extract_imports;
+
+/// A source file to place in the graph.
+pub struct Source {
+    /// Path relative to the root the graph is built for.
+    pub path: PathBuf,
+    /// Language name, as `LanguageSpec` gives it.
+    pub language: String,
+    pub text: String,
+}
+
+/// One file's use of another.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Use {
+    /// Index of the file used.
+    pub to: usize,
+    /// Functions called on it, as `Module.function`, when the language tells.
+    pub calls: Vec<String>,
+}
+
+impl Source {
+    /// The public functions of this file a change to `lines` affects, by
+    /// name. `None` when the language does not tell, or when the change
+    /// touches code outside every function: then any user of the file may
+    /// be affected.
+    pub fn changed_functions(&self, lines: &[usize]) -> Option<BTreeSet<String>> {
+        if !is_elixir(&self.language) || lines.is_empty() {
+            return None;
+        }
+        elixir::changed_functions(&self.text, lines)
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct FileGraph {
+    pub files: Vec<PathBuf>,
+    /// For each file, the files it uses.
+    pub uses: Vec<Vec<Use>>,
+    /// References left out because several files define the module named
+    /// and none is nearer than the others.
+    pub ambiguous: usize,
+}
+
+fn is_elixir(language: &str) -> bool {
+    matches!(language, "Elixir" | "Elixir Script")
+}
+
+/// How many leading directories two paths share.
+fn shared_depth(a: &Path, b: &Path) -> usize {
+    a.components()
+        .zip(b.components())
+        .take_while(|(x, y)| x == y)
+        .count()
+}
+
+/// Tells whether the file at the first path may use the one at the second
+/// by what their projects declare: same project, or a declared dependency.
+pub type Related<'a> = &'a dyn Fn(&Path, &Path) -> bool;
+
+/// Where each Elixir module is defined. Projects of one repository made
+/// from the same template may define modules of the same name.
+#[derive(Default)]
+struct ModuleIndex(HashMap<String, Vec<usize>>);
+
+impl ModuleIndex {
+    /// The file that defines `module` for a reference made from `from`.
+    ///
+    /// When several do, those the projects declare as usable come first:
+    /// the same project, or one it depends on. Among them, or among all
+    /// when nothing is declared, the one deepest in the same directories
+    /// wins. `Err` when that does not single one out.
+    fn resolve(
+        &self,
+        module: &str,
+        from: &Path,
+        files: &[PathBuf],
+        related: Related,
+    ) -> Result<Option<usize>, ()> {
+        let Some(candidates) = self.0.get(module) else {
+            return Ok(None);
+        };
+        // What the projects declare comes first: the same project, or one
+        // it depends on. Where nothing is declared, every definition counts.
+        let declared: Vec<usize> = candidates
+            .iter()
+            .copied()
+            .filter(|&c| related(from, &files[c]))
+            .collect();
+        let pool = if declared.is_empty() {
+            candidates
+        } else {
+            &declared
+        };
+
+        let depth = |&file: &usize| shared_depth(&files[file], from);
+        let nearest = pool.iter().map(depth).max().unwrap_or(0);
+        let mut at_nearest = pool.iter().filter(|c| depth(c) == nearest);
+        match (at_nearest.next(), at_nearest.next()) {
+            (Some(&only), None) => Ok(Some(only)),
+            _ => Err(()),
+        }
+    }
+}
+
+impl FileGraph {
+    /// Build the graph of `sources`. `known` holds the paths resolvers may
+    /// look up besides the sources themselves, such as manifests.
+    pub fn build(
+        sources: &[Source],
+        known: &HashSet<PathBuf>,
+        go_module: Option<&str>,
+        related: Related,
+    ) -> Self {
+        let files: Vec<PathBuf> = sources.iter().map(|s| s.path.clone()).collect();
+        let by_path: HashMap<&Path, usize> = sources
+            .iter()
+            .enumerate()
+            .map(|(i, s)| (s.path.as_path(), i))
+            .collect();
+
+        let parsed: Vec<Option<ElixirFile>> = sources
+            .iter()
+            .map(|s| is_elixir(&s.language).then(|| elixir::parse(&s.text)))
+            .collect();
+        let mut modules = ModuleIndex::default();
+        for (file, parsed) in parsed.iter().enumerate() {
+            for module in parsed.iter().flat_map(|p| &p.defines) {
+                modules.0.entry(module.clone()).or_default().push(file);
+            }
+        }
+
+        let mut graph = FileGraph {
+            files,
+            ..Self::default()
+        };
+        for (file, source) in sources.iter().enumerate() {
+            let uses = match &parsed[file] {
+                Some(parsed) => graph.elixir_uses(file, parsed, &modules, related),
+                None => extract_imports(&source.path, &source.language, &source.text)
+                    .iter()
+                    .flat_map(|import| {
+                        resolve_import(&source.path, import, &source.language, known, go_module)
+                    })
+                    .filter_map(|path| by_path.get(path.as_path()).copied())
+                    .map(|to| (to, BTreeSet::new()))
+                    .collect(),
+            };
+            graph.uses.push(
+                uses.into_iter()
+                    .filter(|(to, _)| *to != file)
+                    .map(|(to, calls)| Use {
+                        to,
+                        calls: calls.into_iter().collect(),
+                    })
+                    .collect(),
+            );
+        }
+        graph
+    }
+
+    /// The files an Elixir file uses, each with the functions it calls there.
+    fn elixir_uses(
+        &mut self,
+        file: usize,
+        parsed: &ElixirFile,
+        modules: &ModuleIndex,
+        related: Related,
+    ) -> BTreeMap<usize, BTreeSet<String>> {
+        let mut uses: BTreeMap<usize, BTreeSet<String>> = BTreeMap::new();
+        let mut ambiguous = BTreeSet::new();
+        for reference in &parsed.refs {
+            match modules.resolve(&reference.module, &self.files[file], &self.files, related) {
+                Ok(Some(to)) => {
+                    let calls = uses.entry(to).or_default();
+                    calls.extend(
+                        reference
+                            .function
+                            .iter()
+                            .map(|f| format!("{}.{f}", reference.module)),
+                    );
+                }
+                Ok(None) => {}
+                Err(()) => {
+                    ambiguous.insert(&reference.module);
+                }
+            }
+        }
+        self.ambiguous += ambiguous.len();
+        uses
+    }
+
+    /// The graph as the paths each file uses.
+    pub fn edges(&self) -> HashMap<PathBuf, Vec<PathBuf>> {
+        self.files
+            .iter()
+            .zip(&self.uses)
+            .map(|(file, uses)| {
+                let used = uses.iter().map(|u| self.files[u.to].clone()).collect();
+                (file.clone(), used)
+            })
+            .collect()
+    }
+}
+
+#[cfg(test)]
+#[path = "graph_test.rs"]
+mod tests;

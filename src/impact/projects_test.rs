@@ -137,6 +137,7 @@ fn render_lists_each_reach_with_its_path() {
         "Blast radius — projects reached through their manifests",
         sep.as_str(),
         " 3 of 6 projects reached (50%), 2 direct",
+        " Changed: libs/core, libs/helpers",
         "",
         " Changed    Reaches         Distance  Scope  Via",
         " libs/core  apps/invoicing         1",
@@ -155,11 +156,12 @@ fn render_marks_a_reach_through_a_dev_dependency() {
 
     let lines = render(&radius);
     assert_eq!(lines[2], " 1 of 6 projects reached (17%), 1 direct");
+    assert_eq!(lines[3], " Changed: libs/helpers");
     assert_eq!(
-        lines[4],
+        lines[5],
         " Changed       Reaches         Distance  Scope  Via"
     );
-    assert_eq!(lines[5], " libs/helpers  apps/invoicing         1  dev");
+    assert_eq!(lines[6], " libs/helpers  apps/invoicing         1  dev");
 }
 
 #[test]
@@ -294,7 +296,8 @@ fn a_lock_file_bump_reaches_every_member_of_the_workspace() {
 
     let lines = render(&radius);
     assert_eq!(lines[2], " 3 of 3 projects reached (100%), 3 direct");
-    assert_eq!(lines[5], " .        packages/tool         1  workspace");
+    assert_eq!(lines[3], " Changed: no project (the workspace root)");
+    assert_eq!(lines[6], " .        packages/tool         1  workspace");
 }
 
 #[test]

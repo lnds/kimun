@@ -1,6 +1,7 @@
 use super::*;
 use crate::impact::analyzer::{Diffusion, Thresholds};
 use crate::impact::projects::ProjectRadius;
+use crate::impact::structural::Structural;
 use std::path::PathBuf;
 
 fn trigger(path: &str, shared: usize, commits: usize) -> Trigger {
@@ -27,6 +28,7 @@ fn sample() -> Impact {
             changed: vec![".".to_string()],
             ..ProjectRadius::default()
         },
+        structural: Structural::default(),
         diffusion: Diffusion {
             files: 5,
             directories: 3,
@@ -183,7 +185,7 @@ fn report_of_a_diff_with_only_generated_files() {
 fn short_line() {
     assert_eq!(
         render_short(&sample()),
-        "impact projects_reached:0/1 files:5 dirs:3 subsystems:2 added:120 deleted:30 entropy:0.82 missing:2 max_confidence:0.80"
+        "impact projects_reached:0/1 structural:0/0 unprotected:0 files:5 dirs:3 subsystems:2 added:120 deleted:30 entropy:0.82 missing:2 max_confidence:0.80"
     );
     assert!(render_short(&empty()).ends_with("missing:0 max_confidence:0.00"));
 }
@@ -256,6 +258,12 @@ fn report_layout_is_exact() {
         " Single project (.): no other project to reach; this level does not apply.",
         sep.as_str(),
         "",
+        "Structural radius — source files that use what changed",
+        sep.as_str(),
+        " No changed source file in a language with a reliable graph",
+        " (Elixir, JavaScript/TypeScript, Kaikai).",
+        sep.as_str(),
+        "",
         "Diffusion",
         "  Files changed           5",
         "  Directories             3",
@@ -298,7 +306,7 @@ fn short_paths_keep_the_width_of_the_header() {
 
 #[test]
 fn separator_spans_the_widest_row() {
-    let long = format!("src/{}.rs", "x".repeat(70));
+    let long = format!("src/{}.rs", "x".repeat(45));
     let widths = |impact: &Impact| -> (usize, usize) {
         let out = render_report(impact, 20);
         let width = |prefix: &str| {
@@ -347,4 +355,56 @@ fn a_single_ignored_commit_is_reported() {
     assert!(
         render_report(&impact, 20).contains("Commits ignored for touching more than 30 files: 1")
     );
+}
+
+#[test]
+fn rows_too_wide_for_a_table_are_stacked() {
+    let missing_file = "backend/lib/backend_web/controllers/internal/purchase_order_json.ex";
+    let changed =
+        "backend/test/backend_web/controllers/internal/purchase_order_controller_test.exs";
+    let impact = Impact {
+        missing: vec![
+            missing(
+                missing_file,
+                vec![trigger(changed, 43, 81), trigger("backend/mix.exs", 3, 6)],
+            ),
+            missing("README.md", vec![trigger("src/cli.rs", 6, 12)]),
+        ],
+        ..sample()
+    };
+    let out = render_report(&impact, 20);
+    let sep = "─".repeat(78);
+
+    let expected = [
+        "Logical radius — files that usually change with this diff and are not in it".to_string(),
+        sep.clone(),
+        format!(" {missing_file}"),
+        format!("     confidence 0.53, shared 43/81 with {changed} (+1 more)"),
+        " README.md".to_string(),
+        "     confidence 0.50, shared 6/12 with src/cli.rs".to_string(),
+        sep,
+    ]
+    .join("\n");
+    assert!(out.contains(&expected), "{out}");
+    // No table header in this layout.
+    assert!(!out.contains("Missing file"), "{out}");
+}
+
+#[test]
+fn a_table_as_wide_as_the_limit_is_still_a_table() {
+    // 52 + 10 + 7 + 24 + 7 = 100 columns: at the limit, not beyond it.
+    let at_limit = |extra: usize| Impact {
+        missing: vec![missing(
+            &format!("src/{}.rs", "x".repeat(45 + extra)),
+            vec![trigger("src/some/long/trigger.rs", 4, 5)],
+        )],
+        ..sample()
+    };
+    let out = render_report(&at_limit(0), 20);
+    assert!(out.contains("Missing file"), "{out}");
+    assert!(out.contains(&"─".repeat(100)), "{out}");
+    assert!(!out.contains(&"─".repeat(101)), "{out}");
+
+    // One more column tips it over.
+    assert!(!render_report(&at_limit(1), 20).contains("Missing file"));
 }

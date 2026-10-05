@@ -2,8 +2,14 @@
 
 /// What the command measures, from which sources, and how to read it.
 pub const HELP: &str = "\
-Measure the impact of a diff: the projects it reaches, how spread it is, and
-which files usually change with it.
+Measure the blast radius of a change: the part of the system that can behave
+differently because of it, beyond the files it edits, and which part of that
+no test protects.
+
+The radius is measured at two levels, each as a count over a total: the
+projects of the repository that depend on the changed ones, and the source
+files that call the functions that changed. Two more measures describe the
+change itself: how spread it is, and which files usually change with it.
 
 The change to measure comes from one of four sources:
   --since-ref REF              from where REF and HEAD diverged to the working
@@ -40,7 +46,18 @@ Blast radius -- projects reached through their manifests:
   and reached. If a changed file is outside every project, all projects are
   printed. It reads the diff and the manifests only, not the history.
 
+Blast radius -- source files that use what changed:
+  Inside the projects the change affects, the dependency graph is read
+  backwards from the changed files. In Elixir the change is narrowed to the
+  functions it touches, and each file that uses the module either calls one
+  of them, refers to the module without calling it, or is left out. A file
+  that calls what changed and that no test protects is reported: an
+  integration test is probably missing. A test protects a file when it
+  refers to it or sits at the same place (lib/a/b.ex, test/a/b_test.exs).
+  Measured for Elixir, JavaScript/TypeScript and Kaikai.
+
 Diffusion -- how spread the change is (Kamei et al., 2013):
+
 
   files, directories and subsystems (top-level directories) touched,
   lines added and deleted, and entropy: 0 when one file holds every
@@ -71,4 +88,4 @@ Examples:
   km impact --since-ref main --until-ref feature # a branch, without checkout
   git diff main... | km impact --diff -             # a patch from stdin
   km impact --pr 123                             # a pull request (needs gh)
-  km impact --since-ref main --format json   # machine-readable output";
+  km impact --since-ref main --format json   # everything, for tools and LLMs";

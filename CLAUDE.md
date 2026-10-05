@@ -111,7 +111,7 @@ Temporal coupling analysis (Thornhill, files that change together). Invoked via 
 
 ### Shared: `src/git/`
 
-`GitRepo` wraps `git2::Repository`. `mod.rs` holds history walks, blame and tree extraction. `changeset.rs` holds what concerns a change set: `diff_stats_since` (ref → working tree), `diff_stats_between` (two refs), `patch_stats` (a patch in git format), all through one `stats_of`, plus `co_change_history` and the merge base they start from. `tree.rs` reads files from the tree of a commit without checking it out (`files_at`, `has_file_at`).
+`GitRepo` wraps `git2::Repository`. `mod.rs` holds history walks, blame and tree extraction. `changeset.rs` holds what concerns a change set: `diff_stats_since` (ref → working tree), `diff_stats_between` (two refs), `patch_stats` (a patch in git format), all through one `stats_of`, plus `co_change_history` and the merge base they start from. `FileDiffStat` carries the lines touched on both sides and a probe of added lines, so `lines_in` picks the side that matches a text: a patch need not be applied where it is measured. `tree.rs` reads files from the tree of a commit without checking it out (`files_at`, `has_file_at`).
 
 ### Shared: `src/projects/`
 
@@ -124,6 +124,10 @@ Projects of a repository and the dependencies between them, read from manifests.
 
 To add an ecosystem: write a reader `fn read(&str) -> Manifest`, add its file name to `reader` and a variant to `Ecosystem`.
 
+### Module structure: `src/ai/`
+
+`km ai`: tools and skill for LLMs. `executor.rs` maps a tool name to `km <subcommand> --format json`; `schema.rs` holds the tool schemas; `skill.rs` the installable skill text; `permissions.rs` the Claude Code permissions. A new command for LLMs is added in all four.
+
 ### Module structure: `src/impact/`
 
 Impact of a change: projects reached, diffusion and logical radius. Invoked via `km impact` with `--since-ref <REF>` (optionally `--until-ref`), `--diff <FILE>` or `--pr <NUMBER>` (needs `gh`).
@@ -132,6 +136,7 @@ Impact of a change: projects reached, diffusion and logical radius. Invoked via 
 - **`help.rs`** — The long help of the command, apart from `cli_help.rs`.
 - **`source.rs`** — `DiffSource` (what was asked: refs, a patch, a pull request) and `Change` (the source resolved against the repository). A `Change` answers the four things every source must: the files changed, where the preceding history ends, where manifests are read from (`graph`), and where a file is looked up (`has_file`). Between two refs the last two read the tree of the second ref, not the working tree.
 - **`pr.rs`** — Pull requests through the GitHub CLI, run as a program. `plan` is pure: given which commits are local it picks refs or the patch. The base GitHub reports stays the pre-merge commit, so base..head works when both are local; a squash or rebase merge whose head was never fetched is measured base..merge commit. Tests never call the real `gh`: the program name is a parameter, and a script stands in for it.
+- **`structural.rs`** — Blast radius at source level. Reads `deps::graph::FileGraph` backwards from the changed sources. `Role` separates sources, tests and the rest (test support, scripts). `Exposure` says whether a dependent calls a changed function, refers to the module, or calls elsewhere. Tests protect what they refer to and what sits at the same `place` in the layout. Only languages in `RELIABLE` are measured.
 - **`projects.rs`** — Blast radius at project level: maps the diff to projects of `crate::projects::ProjectGraph`, computes the reach, and renders its block of the report and of the JSON. A changed workspace root reaches its members at distance 1 with scope `workspace`. `affected()` is the list `--affected` prints: every project when a changed file belongs to none. `--affected` skips the history walk (`print_affected` in `mod.rs`).
 - **`report.rs`** — `render_report` builds the table as a `String` and `print_report` prints it, so tests assert on the text. JSON, short and terse formatters.
 - **`mod.rs`** — Orchestration: `GitRepo::diff_stats_since` for the diff (merge base with the ref → working tree, deletions included), `GitRepo::co_change_history` for the history, which ends at the merge base so the commits of the diff are never evidence, and skips commits touching more than `--max-changeset` files (sweeping changes relate files by accident). Drops generated files (`util::is_generated`), files already in the diff and files that no longer exist. New files and files outside `--since` go to `without_history`. Test files are always included.
@@ -148,6 +153,8 @@ Code churn — pure change frequency per source file. Invoked via `km churn`.
 
 Dependency graph (file-level coupling from imports, cycles via Tarjan SCC). Invoked via `km deps`.
 
+- **`elixir.rs`** — Elixir, where dependencies are between modules. `parse` blanks comments and literals (`code_only`), names nested modules by indentation, undoes `alias`, and returns every module referred to with the function called on it. `changed_functions` maps touched lines to the public functions affected, carrying a change to a private function to the public ones that call it; `None` when a line is outside every function.
+- **`graph.rs`** — `FileGraph::build` builds the file graph from `(path, language, text)` sources, so they can come from disk or from a commit's tree. Elixir references resolve through a module index (nearest file, then `Related`: what the projects declare); other languages go through `extract_imports` + `resolve_import`. `Use.calls` keeps the functions called.
 - **`extractor.rs`** — `extract_imports` dispatches by language name and returns raw import strings: Rust `mod X;` declarations (`strip_visibility` drops `pub`, `pub(crate)`, `pub(in path)` first), relative imports for Python and JS/TS, every quoted import path for Go. `is_supported` decides which languages enter the graph.
 - **`kaikai.rs`** — Kaikai extraction and resolution: `import a.b.c` names a file under a package root, found by trying each ancestor directory of the importer.
 - **`analyzer.rs`** — `resolve_import` maps a raw import to project files per language; `build_graph` computes fan-in, fan-out and cycles (`tarjan_scc`, iterative).

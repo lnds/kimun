@@ -82,9 +82,9 @@ fn read_manifest(path: &Path, source: &str) -> Option<Found> {
     })
 }
 
-/// Every manifest under `root` on disk, outside the skipped directories,
-/// with its path relative to `root` and its text.
-fn manifests_on_disk(root: &Path) -> Vec<(PathBuf, String)> {
+/// The text files under `root` on disk that `wanted` picks, outside the
+/// skipped directories, each with its path relative to `root`.
+pub fn files_on_disk(root: &Path, wanted: impl Fn(&Path) -> bool) -> Vec<(PathBuf, String)> {
     let relative = |path: &Path| path.strip_prefix(root).unwrap_or(path).to_path_buf();
     let walk = WalkBuilder::new(root)
         .hidden(false)
@@ -95,10 +95,11 @@ fn manifests_on_disk(root: &Path) -> Vec<(PathBuf, String)> {
         .build();
 
     walk.flatten()
-        .filter(|entry| is_manifest(entry.path()))
-        .filter_map(|entry| {
-            let text = std::fs::read_to_string(entry.path()).ok()?;
-            Some((relative(entry.path()), text))
+        .map(|entry| relative(entry.path()))
+        .filter(|path| wanted(path))
+        .filter_map(|path| {
+            let text = std::fs::read_to_string(root.join(&path)).ok()?;
+            Some((path, text))
         })
         .collect()
 }
@@ -224,7 +225,7 @@ impl Resolver {
 impl ProjectGraph {
     /// Read the manifests under `root` and build the graph of its projects.
     pub fn discover(root: &Path) -> Self {
-        Self::from_manifests(manifests_on_disk(root))
+        Self::from_manifests(files_on_disk(root, is_manifest))
     }
 
     /// Build the graph from manifests given as their path, relative to the

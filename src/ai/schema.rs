@@ -1,6 +1,6 @@
 //! Tool schema definitions for the AI analysis module.
 //!
-//! Defines the 11 `km` subcommands as Claude tool-use schemas in JSON Schema
+//! Defines the 12 `km` subcommands as Claude tool-use schemas in JSON Schema
 //! format. Each tool has a name, description, and an `input_schema` object
 //! with the shared `path` property plus any tool-specific parameters.
 //! Shared property builders (`path_prop`, `top_prop`, `since_prop`) avoid
@@ -42,7 +42,7 @@ fn tool(name: &str, desc: &str, extra_props: &[(&str, Value)]) -> Value {
     })
 }
 
-/// Return the list of all 11 `km` tool definitions for the AI provider,
+/// Return the list of all 12 `km` tool definitions for the AI provider,
 /// each with name, description, and input JSON schema.
 pub fn tool_definitions() -> Vec<Value> {
     vec![
@@ -114,6 +114,28 @@ pub fn tool_definitions() -> Vec<Value> {
                     json!({"type": "integer", "description": "Show only the top N file pairs (default: 20)"}),
                 ),
                 ("since", since_prop()),
+            ],
+        ),
+        tool(
+            "km_impact",
+            "Measure the blast radius of a change: which projects of the repository it reaches, which source files call the functions that changed, and which of those no test protects. Give either `since_ref` or `pr`. Requires git repository; `pr` requires the GitHub CLI.",
+            &[
+                (
+                    "since_ref",
+                    json!({"type": "string", "description": "Git ref the change is measured against, up to the working tree (e.g. origin/main, HEAD)"}),
+                ),
+                (
+                    "until_ref",
+                    json!({"type": "string", "description": "Measure up to this ref instead of the working tree; needs since_ref"}),
+                ),
+                (
+                    "pr",
+                    json!({"type": "integer", "description": "Number of a GitHub pull request to measure, instead of since_ref"}),
+                ),
+                (
+                    "top",
+                    json!({"type": "integer", "description": "Show only the top N missing co-change files (default: 20)"}),
+                ),
             ],
         ),
     ]
