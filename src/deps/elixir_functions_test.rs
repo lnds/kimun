@@ -1,38 +1,38 @@
 use super::*;
 
-const CONTEXT: &str = r#"defmodule Billing.Invoices do
+const CONTEXT: &str = r#"defmodule Booking.Insights do
   @moduledoc """
-  Invoices.
+  Insights.
   """
-  alias Billing.Repo
+  alias Booking.Repo
 
   @default_rate 19
 
   @doc """
-  Approve an invoice.
+  Arrange an insight.
   """
-  @spec approve(map(), map()) :: {:ok, map()}
-  def approve(invoice, user) do
-    invoice
+  @spec arrange(map(), map()) :: {:ok, map()}
+  def arrange(insight, user) do
+    insight
     |> check(user)
-    |> record(:approved)
+    |> record(:arranged)
   end
 
-  def reject(invoice, user), do: record(check(invoice, user), :rejected)
+  def revoke(insight, user), do: record(check(insight, user), :revoked)
 
-  def total(invoice), do: Enum.sum(invoice.lines) * rate()
+  def total(insight), do: Enum.sum(insight.lines) * rate()
 
-  def list, do: Repo.all(Billing.Invoice)
+  def list, do: Repo.all(Booking.Insight)
 
-  defp check(invoice, user) do
-    if allowed?(user), do: invoice, else: raise("no")
+  defp check(insight, user) do
+    if allowed?(user), do: insight, else: raise("no")
   end
 
   defp allowed?(%{role: :admin}), do: true
   defp allowed?(_), do: false
 
-  defp record(invoice, state) do
-    Repo.insert!(%{invoice | state: state})
+  defp record(insight, state) do
+    Repo.insert!(%{insight | state: state})
   end
 
   defp rate, do: @default_rate
@@ -63,10 +63,10 @@ fn functions_with_their_lines() {
 
     // The doc and the spec above a function are part of it.
     assert_eq!(
-        span("approve"),
-        (true, line_of("@doc"), line_of("|> record(:approved)") + 1)
+        span("arrange"),
+        (true, line_of("@doc"), line_of("|> record(:arranged)") + 1)
     );
-    assert_eq!(span("reject").2, line_of("def reject"));
+    assert_eq!(span("revoke").2, line_of("def revoke"));
     assert_eq!(
         span("check"),
         (false, line_of("defp check"), line_of("defp check") + 2)
@@ -77,33 +77,33 @@ fn functions_with_their_lines() {
     assert_eq!(
         names,
         [
-            "approve", "reject", "total", "list", "check", "allowed?", "allowed?", "record", "rate"
+            "arrange", "revoke", "total", "list", "check", "allowed?", "allowed?", "record", "rate"
         ]
     );
 }
 
 #[test]
 fn a_change_inside_a_public_function_affects_it_alone() {
-    assert_eq!(changed(&["|> check(user)"]).unwrap(), ["approve"]);
+    assert_eq!(changed(&["|> check(user)"]).unwrap(), ["arrange"]);
     assert_eq!(changed(&["def list"]).unwrap(), ["list"]);
     // Its documentation counts as part of it.
-    assert_eq!(changed(&["Approve an invoice."]).unwrap(), ["approve"]);
-    assert_eq!(changed(&["@spec approve"]).unwrap(), ["approve"]);
+    assert_eq!(changed(&["Arrange an insight."]).unwrap(), ["arrange"]);
+    assert_eq!(changed(&["@spec arrange"]).unwrap(), ["arrange"]);
 }
 
 #[test]
 fn a_change_to_a_private_function_affects_the_public_ones_that_reach_it() {
-    // record is called by approve and reject.
-    assert_eq!(changed(&["Repo.insert!"]).unwrap(), ["approve", "reject"]);
-    // allowed? is called by check, which approve and reject call.
-    assert_eq!(changed(&["role: :admin"]).unwrap(), ["approve", "reject"]);
+    // record is called by arrange and revoke.
+    assert_eq!(changed(&["Repo.insert!"]).unwrap(), ["arrange", "revoke"]);
+    // allowed? is called by check, which arrange and revoke call.
+    assert_eq!(changed(&["role: :admin"]).unwrap(), ["arrange", "revoke"]);
     assert_eq!(changed(&["defp rate"]).unwrap(), ["total"]);
 }
 
 #[test]
 fn a_change_that_may_concern_every_function_cannot_be_narrowed() {
     // The line is told, to say why.
-    assert_eq!(changed(&["defmodule Billing.Invoices"]), Err(1));
+    assert_eq!(changed(&["defmodule Booking.Insights"]), Err(1));
 
     let with_use = "defmodule A do\n  use GenServer\n  import Ecto.Query\n  defstruct [:id]\n\n  def f, do: 1\nend\n";
     assert_eq!(changed_functions(with_use, &[2]), Err(2));
@@ -118,11 +118,11 @@ fn naming_what_the_functions_use_changes_no_function() {
     // An alias or a require says nothing by itself: the functions that use
     // the new name are touched too, and those are what counts.
     assert_eq!(
-        changed(&["alias Billing.Repo"]).unwrap(),
+        changed(&["alias Booking.Repo"]).unwrap(),
         Vec::<String>::new()
     );
     assert_eq!(
-        changed(&["def list", "alias Billing.Repo"]).unwrap(),
+        changed(&["def list", "alias Booking.Repo"]).unwrap(),
         ["list"]
     );
 
@@ -157,7 +157,7 @@ fn a_module_attribute_changes_the_functions_that_read_it() {
 
 #[test]
 fn a_change_to_comments_or_the_module_doc_affects_nothing() {
-    assert_eq!(changed(&["Invoices."]).unwrap(), Vec::<String>::new());
+    assert_eq!(changed(&["Insights."]).unwrap(), Vec::<String>::new());
     assert_eq!(changed_functions(CONTEXT, &[]).unwrap().len(), 0);
     // A line past the end of the file is ignored.
     assert_eq!(changed_functions(CONTEXT, &[9_999]).unwrap().len(), 0);

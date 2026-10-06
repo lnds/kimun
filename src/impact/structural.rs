@@ -304,7 +304,7 @@ impl Reverse {
     }
 }
 
-/// `Tax.apply` for `Billing.Tax.apply`: the module's own name is enough
+/// `Tip.apply` for `Booking.Tip.apply`: the module's own name is enough
 /// next to the file it is in.
 fn short_call(call: &str) -> String {
     let mut parts: Vec<&str> = call.rsplitn(3, '.').collect();
@@ -313,7 +313,7 @@ fn short_call(call: &str) -> String {
     parts.join(".")
 }
 
-/// The function a call names: `apply` in `Billing.Tax.apply`.
+/// The function a call names: `apply` in `Booking.Tip.apply`.
 fn function_of(call: &str) -> &str {
     call.rsplit('.').next().unwrap_or(call)
 }
