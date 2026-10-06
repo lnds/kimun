@@ -1,3 +1,9 @@
+## v0.29.0 (2026-10-06)
+
+### Feat
+
+- **impact**: narrow each changed file on its own, and make --affected usable
+
 ## v0.28.0 (2026-10-05)
 
 ### Feat
