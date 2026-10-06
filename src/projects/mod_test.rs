@@ -165,9 +165,9 @@ fn mix_projects_linked_by_path_and_by_umbrella() {
         ("libs/core/mix.exs", &mix("core", "")),
         ("libs/helpers/mix.exs", &mix("helpers", "")),
         (
-            "apps/billing/mix.exs",
+            "apps/booking/mix.exs",
             &mix(
-                "billing",
+                "booking",
                 r#"{:core, path: "../../libs/core"}, {:helpers, path: "../../libs/helpers", only: :test}"#,
             ),
         ),
@@ -185,7 +185,7 @@ fn mix_projects_linked_by_path_and_by_umbrella() {
     assert_eq!(
         roots(&graph),
         [
-            "apps/billing",
+            "apps/booking",
             "libs/core",
             "libs/helpers",
             "umbrella/apps/store",
@@ -195,8 +195,8 @@ fn mix_projects_linked_by_path_and_by_umbrella() {
     assert_eq!(
         edges(&graph),
         [
-            edge("apps/billing", "libs/core", Scope::Runtime),
-            edge("apps/billing", "libs/helpers", Scope::Dev),
+            edge("apps/booking", "libs/core", Scope::Runtime),
+            edge("apps/booking", "libs/helpers", Scope::Dev),
             edge("umbrella/apps/web", "umbrella/apps/store", Scope::Runtime),
         ]
     );

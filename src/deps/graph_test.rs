@@ -45,34 +45,34 @@ fn uses<'a>(graph: &'a FileGraph, file: &str) -> Vec<(&'a str, Vec<&'a str>)> {
 fn elixir_references_resolve_to_the_files_that_define_the_modules() {
     let graph = build(&[
         source(
-            "lib/billing/invoices.ex",
-            "defmodule Billing.Invoices do\n  def total(i), do: Billing.Tax.apply(i) + Billing.Tax.flat()\nend\n",
+            "lib/booking/insights.ex",
+            "defmodule Booking.Insights do\n  def total(i), do: Booking.Tip.apply(i) + Booking.Tip.flat()\nend\n",
         ),
         source(
-            "lib/billing/tax.ex",
-            "defmodule Billing.Tax do\n  def apply(i), do: i\n  def flat, do: Enum.count([])\nend\n",
+            "lib/booking/tip.ex",
+            "defmodule Booking.Tip do\n  def apply(i), do: i\n  def flat, do: Enum.count([])\nend\n",
         ),
         source(
             "lib/web/page.ex",
-            "defmodule Web.Page do\n  alias Billing.Invoices\n  def show(%Billing.Tax{} = t), do: {t, Invoices.total(1)}\nend\n",
+            "defmodule Web.Page do\n  alias Booking.Insights\n  def show(%Booking.Tip{} = t), do: {t, Insights.total(1)}\nend\n",
         ),
     ]);
 
     assert_eq!(
-        uses(&graph, "lib/billing/invoices.ex"),
+        uses(&graph, "lib/booking/insights.ex"),
         [(
-            "lib/billing/tax.ex",
-            vec!["Billing.Tax.apply", "Billing.Tax.flat"]
+            "lib/booking/tip.ex",
+            vec!["Booking.Tip.apply", "Booking.Tip.flat"]
         )]
     );
     // A module of a library, and a file's own module, are no edges.
-    assert!(uses(&graph, "lib/billing/tax.ex").is_empty());
+    assert!(uses(&graph, "lib/booking/tip.ex").is_empty());
     assert_eq!(
         uses(&graph, "lib/web/page.ex"),
         [
-            ("lib/billing/invoices.ex", vec!["Billing.Invoices.total"]),
+            ("lib/booking/insights.ex", vec!["Booking.Insights.total"]),
             // A struct is a use with no call.
-            ("lib/billing/tax.ex", vec![]),
+            ("lib/booking/tip.ex", vec![]),
         ]
     );
     assert_eq!(graph.ambiguous, 0);

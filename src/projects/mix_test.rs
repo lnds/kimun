@@ -9,12 +9,12 @@ fn path(p: &str) -> DepTarget {
 }
 
 const MIX: &str = r#"
-defmodule Invoicing.MixProject do
+defmodule Inventory.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :invoicing,
+      app: :inventory,
       version: "0.1.0",
       elixirc_paths: elixirc_paths(Mix.env()),
       build_path: "_build",
@@ -25,7 +25,7 @@ defmodule Invoicing.MixProject do
   defp deps do
     [
       {:phoenix, "~> 1.7"},
-      {:billing_core, path: "../../libs/billing_core"},
+      {:booking_core, path: "../../libs/booking_core"},
       # {:old_lib, path: "../../libs/old_lib"},
       {:test_helpers, path: "../../libs/test_helpers", only: :test},
       {
@@ -47,11 +47,11 @@ end
 fn reads_the_app_name_and_its_path_dependencies() {
     let m = read(MIX);
 
-    assert_eq!(m.name.as_deref(), Some("invoicing"));
+    assert_eq!(m.name.as_deref(), Some("inventory"));
     assert_eq!(
         m.deps,
         [
-            dep(path("../../libs/billing_core"), Scope::Runtime),
+            dep(path("../../libs/booking_core"), Scope::Runtime),
             dep(path("../../libs/test_helpers"), Scope::Dev),
             dep(path("../../libs/tooling"), Scope::Dev),
             dep(path("../../libs/metrics"), Scope::Build),

@@ -627,9 +627,9 @@ Blast radius — projects reached through their manifests
  Changed: libs/core
 
  Changed    Reaches         Distance  Scope  Via
- libs/core  apps/invoicing         1
- libs/core  libs/ledger            1
- libs/core  apps/payouts           2         libs/ledger
+ libs/core  apps/inventory         1
+ libs/core  libs/locker            1
+ libs/core  apps/parcels           2         libs/locker
 ──────────────────────────────────────────────────────────────────────────────
 Changed files outside every project (reach unknown): Makefile
 ```
@@ -666,19 +666,19 @@ The first line is the answer in short: how many files call what changed, and how
 Structural radius — source files that use what changed
 ──────────────────────────────────────────────────────────────────────────────
  1 file calls what changed, 1 of them with no test
- Changed: lib/billing/invoices.ex
- Functions: approve
+ Changed: lib/booking/insights.ex
+ Functions: arrange
  Radius: 2 of 6 source files (33%): 2 at distance 1
  Upper bound, whatever the function: 4 files (67%)
 
  Tests  Dependent
-  none  lib/billing_web/controllers/invoice_controller.ex
-            calls Invoices.approve
-  none  lib/billing/export.ex
+  none  lib/booking_web/controllers/insight_controller.ex
+            calls Insights.arrange
+  none  lib/booking/export.ex
             refers to the module without calling it
 ──────────────────────────────────────────────────────────────────────────────
 No test refers to 1 of the files that call what changed; an integration test is probably missing:
-  lib/billing_web/controllers/invoice_controller.ex
+  lib/booking_web/controllers/insight_controller.ex
 No test in the change exercises a file that uses what changed.
 1 more with no test use the module without a call that tells whether the change concerns them.
 ```

@@ -1,7 +1,7 @@
 //! Elixir modules: what a file defines and what it refers to.
 //!
 //! Dependencies in Elixir are between modules, not files, and most need no
-//! import: `Billing.Invoice.total(x)` is enough. So every module name in the
+//! import: `Booking.Insight.total(x)` is enough. So every module name in the
 //! code is a reference, once comments and literals are set aside and
 //! `alias` is undone. The reading is lexical. It does not see modules named
 //! at run time (`apply/3`, configuration), those a macro generates, nor the

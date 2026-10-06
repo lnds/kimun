@@ -27,22 +27,22 @@ fn package(name: &str, deps: &[&str], dev: &[&str]) -> String {
     )
 }
 
-/// core ← ledger ← payouts, core ← invoicing, helpers ←(dev) invoicing.
+/// core ← locker ← parcels, core ← inventory, helpers ←(dev) inventory.
 fn monorepo() -> (tempfile::TempDir, ProjectGraph) {
     graph(&[
         ("libs/core/package.json", &package("core", &[], &[])),
         ("libs/helpers/package.json", &package("helpers", &[], &[])),
         (
-            "libs/ledger/package.json",
-            &package("ledger", &["core"], &[]),
+            "libs/locker/package.json",
+            &package("locker", &["core"], &[]),
         ),
         (
-            "apps/invoicing/package.json",
-            &package("invoicing", &["core"], &["helpers"]),
+            "apps/inventory/package.json",
+            &package("inventory", &["core"], &["helpers"]),
         ),
         (
-            "apps/payouts/package.json",
-            &package("payouts", &["ledger"], &[]),
+            "apps/parcels/package.json",
+            &package("parcels", &["locker"], &[]),
         ),
         ("apps/site/package.json", &package("site", &[], &[])),
     ])
@@ -81,15 +81,15 @@ fn reach_of_a_change_to_a_shared_library() {
     assert_eq!(
         radius.reached,
         [
-            row("apps/invoicing", "libs/core", 1, None, ""),
-            row("libs/ledger", "libs/core", 1, None, ""),
-            row("apps/payouts", "libs/core", 2, Some("libs/ledger"), ""),
+            row("apps/inventory", "libs/core", 1, None, ""),
+            row("libs/locker", "libs/core", 1, None, ""),
+            row("apps/parcels", "libs/core", 2, Some("libs/locker"), ""),
         ]
     );
     assert_eq!(radius.direct(), 2);
     assert_eq!(
         radius.affected(),
-        ["apps/invoicing", "apps/payouts", "libs/core", "libs/ledger"]
+        ["apps/inventory", "apps/parcels", "libs/core", "libs/locker"]
     );
     assert!(radius.outside.is_empty());
 }
@@ -140,9 +140,9 @@ fn render_lists_each_reach_with_its_path() {
         " Changed: libs/core, libs/helpers",
         "",
         " Changed    Reaches         Distance  Scope  Via",
-        " libs/core  apps/invoicing         1",
-        " libs/core  libs/ledger            1",
-        " libs/core  apps/payouts           2         libs/ledger",
+        " libs/core  apps/inventory         1",
+        " libs/core  libs/locker            1",
+        " libs/core  apps/parcels           2         libs/locker",
         sep.as_str(),
         "Changed files outside every project (reach unknown): Makefile",
     ];
@@ -161,16 +161,16 @@ fn render_marks_a_reach_through_a_dev_dependency() {
         lines[5],
         " Changed       Reaches         Distance  Scope  Via"
     );
-    assert_eq!(lines[6], " libs/helpers  apps/invoicing         1  dev");
+    assert_eq!(lines[6], " libs/helpers  apps/inventory         1  dev");
 }
 
 #[test]
 fn render_when_nothing_depends_on_the_change() {
     let (_dir, graph) = monorepo();
-    let radius = radius_of(&graph, &["apps/site/index.js", "apps/payouts/index.js"]);
+    let radius = radius_of(&graph, &["apps/site/index.js", "apps/parcels/index.js"]);
     assert_eq!(
         render(&radius)[2],
-        " 0 of 6 projects reached: nothing depends on apps/payouts, apps/site."
+        " 0 of 6 projects reached: nothing depends on apps/parcels, apps/site."
     );
 }
 
@@ -240,10 +240,10 @@ fn json_block() {
     assert_eq!(
         json["reached"][2],
         serde_json::json!({
-            "project": "apps/payouts",
+            "project": "apps/parcels",
             "origin": "libs/core",
             "distance": 2,
-            "via": "libs/ledger",
+            "via": "libs/locker",
             "scope": "runtime"
         })
     );

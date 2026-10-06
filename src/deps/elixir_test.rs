@@ -25,21 +25,21 @@ fn modules(source: &str) -> Vec<String> {
 fn a_module_and_the_calls_it_makes() {
     let file = parse(
         r#"
-defmodule Billing.Invoice do
-  def total(invoice) do
-    Billing.Tax.apply(invoice.amount) + Billing.Fees.fixed()
+defmodule Booking.Insight do
+  def total(insight) do
+    Booking.Tip.apply(insight.amount) + Booking.Fare.fixed()
   end
 end
 "#,
     );
 
-    assert_eq!(file.defines, ["Billing.Invoice"]);
+    assert_eq!(file.defines, ["Booking.Insight"]);
     assert_eq!(
         file.refs,
         [
-            call("Billing.Fees", "fixed"),
-            module("Billing.Invoice"),
-            call("Billing.Tax", "apply"),
+            call("Booking.Fare", "fixed"),
+            module("Booking.Insight"),
+            call("Booking.Tip", "apply"),
         ]
     );
 }
@@ -48,45 +48,45 @@ end
 fn aliases_are_expanded() {
     let file = parse(
         r#"
-defmodule Billing.Report do
-  alias Billing.Invoice
-  alias Billing.Tax, as: T
-  alias Billing.Ledger.Entry, warn: false
+defmodule Booking.Report do
+  alias Booking.Insight
+  alias Booking.Tip, as: T
+  alias Booking.Locker.Entry, warn: false
 
   def run(id) do
-    id |> Invoice.get!() |> T.apply()
+    id |> Insight.get!() |> T.apply()
     %Entry{}
   end
 end
 "#,
     );
 
-    assert!(file.refs.contains(&call("Billing.Invoice", "get!")));
-    assert!(file.refs.contains(&call("Billing.Tax", "apply")));
-    assert!(file.refs.contains(&module("Billing.Ledger.Entry")));
+    assert!(file.refs.contains(&call("Booking.Insight", "get!")));
+    assert!(file.refs.contains(&call("Booking.Tip", "apply")));
+    assert!(file.refs.contains(&module("Booking.Locker.Entry")));
     // The short names are not modules of their own.
-    assert!(!modules("alias Billing.Invoice\nInvoice.get(1)").contains(&"Invoice".to_string()));
+    assert!(!modules("alias Booking.Insight\nInsight.get(1)").contains(&"Insight".to_string()));
 }
 
 #[test]
 fn a_grouped_alias_may_span_lines() {
     let source = r#"
 defmodule Web.Controller do
-  alias Billing.{
-    Invoice,
-    Ledger.Entry,
-    Tax
+  alias Booking.{
+    Insight,
+    Locker.Entry,
+    Tip
   }
   alias Web.{View, Router}
 
-  def show, do: {Invoice.get(1), Entry.new(), Tax.rate(), View.render(), Router.path()}
+  def show, do: {Insight.get(1), Entry.new(), Tip.rate(), View.render(), Router.path()}
 end
 "#;
     let refs = parse(source).refs;
     for expected in [
-        call("Billing.Invoice", "get"),
-        call("Billing.Ledger.Entry", "new"),
-        call("Billing.Tax", "rate"),
+        call("Booking.Insight", "get"),
+        call("Booking.Locker.Entry", "new"),
+        call("Booking.Tip", "rate"),
         call("Web.View", "render"),
         call("Web.Router", "path"),
     ] {
@@ -96,9 +96,9 @@ end
 
 #[test]
 fn an_alias_may_build_on_another() {
-    let refs = parse("alias Billing.Ledger\nalias Ledger.Entry\nEntry.new()").refs;
+    let refs = parse("alias Booking.Locker\nalias Locker.Entry\nEntry.new()").refs;
     assert!(
-        refs.contains(&call("Billing.Ledger.Entry", "new")),
+        refs.contains(&call("Booking.Locker.Entry", "new")),
         "{refs:?}"
     );
 }
@@ -107,27 +107,27 @@ fn an_alias_may_build_on_another() {
 fn current_module_stands_for_its_name() {
     let file = parse(
         r#"
-defmodule Billing.Invoice do
+defmodule Booking.Insight do
   alias __MODULE__.Line
   alias __MODULE__, as: Self
 
-  def lines(%__MODULE__{} = invoice), do: Line.of(invoice) ++ Self.extra()
+  def lines(%__MODULE__{} = insight), do: Line.of(insight) ++ Self.extra()
 end
 "#,
     );
-    assert!(file.refs.contains(&call("Billing.Invoice.Line", "of")));
-    assert!(file.refs.contains(&call("Billing.Invoice", "extra")));
+    assert!(file.refs.contains(&call("Booking.Insight.Line", "of")));
+    assert!(file.refs.contains(&call("Booking.Insight", "extra")));
 }
 
 #[test]
 fn nested_modules_take_the_name_of_the_outer_one() {
     let file = parse(
         r#"
-defmodule Billing.Invoice do
+defmodule Booking.Insight do
   defmodule Line do
     defstruct [:amount]
 
-    defmodule Tax do
+    defmodule Tip do
       def of(_), do: __MODULE__
     end
 
@@ -140,7 +140,7 @@ defmodule Billing.Invoice do
   def me, do: __MODULE__
 end
 
-defprotocol Billing.Printable do
+defprotocol Booking.Printable do
   def print(data)
 end
 "#,
@@ -148,11 +148,11 @@ end
     assert_eq!(
         file.defines,
         [
-            "Billing.Invoice",
-            "Billing.Invoice.Line",
-            "Billing.Invoice.Line.Tax",
-            "Billing.Invoice.Note",
-            "Billing.Printable",
+            "Booking.Insight",
+            "Booking.Insight.Line",
+            "Booking.Insight.Line.Tip",
+            "Booking.Insight.Note",
+            "Booking.Printable",
         ]
     );
     // Each __MODULE__ is the module its line is in.
@@ -173,10 +173,10 @@ defmodule Web.Page do
   require Logger
   @behaviour Web.Renderable
 
-  def render(%Billing.Invoice{} = i), do: Enum.map(i.lines, &Billing.Line.format/1)
+  def render(%Booking.Insight{} = i), do: Enum.map(i.lines, &Booking.Line.format/1)
 end
 
-defimpl Billing.Printable, for: Billing.Invoice do
+defimpl Booking.Printable, for: Booking.Insight do
   def print(_), do: :ok
 end
 "#,
@@ -186,9 +186,9 @@ end
         "Web.Helpers",
         "Logger",
         "Web.Renderable",
-        "Billing.Invoice",
-        "Billing.Line",
-        "Billing.Printable",
+        "Booking.Insight",
+        "Booking.Line",
+        "Booking.Printable",
         "Enum",
     ] {
         assert!(
@@ -202,48 +202,48 @@ end
 fn comments_and_literals_hold_no_references() {
     let file = parse(
         r##"
-defmodule Billing.Docs do
+defmodule Booking.Docs do
   @moduledoc """
   Use it like this:
 
-      iex> Billing.Ghost.call()
+      iex> Booking.Ghost.call()
   """
 
-  # Billing.Commented.out()
+  # Booking.Commented.out()
   @doc ~S"""
-  See `Billing.Sigil.doc/0`.
+  See `Booking.Sigil.doc/0`.
   """
   def text do
-    a = "Billing.InString.x() and #{Billing.Interpolated.y("q")} too"
-    b = 'Billing.Charlist.z()'
-    c = ~s(Billing.Sigil.paren())
-    d = ~r/Billing\.Regex/
-    e = ~w[Billing.Words.A Billing.Words.B]
+    a = "Booking.InString.x() and #{Booking.Interpolated.y("q")} too"
+    b = 'Booking.Charlist.z()'
+    c = ~s(Booking.Sigil.paren())
+    d = ~r/Booking\.Regex/
+    e = ~w[Booking.Words.A Booking.Words.B]
     f = ?B
-    g = :"Billing.QuotedAtom"
-    {a, b, c, d, e, f, g, Billing.Real.call()}
+    g = :"Booking.QuotedAtom"
+    {a, b, c, d, e, f, g, Booking.Real.call()}
   end
 end
 "##,
     );
     assert_eq!(
         file.refs,
-        [module("Billing.Docs"), call("Billing.Real", "call")]
+        [module("Booking.Docs"), call("Booking.Real", "call")]
     );
 }
 
 #[test]
 fn a_question_mark_in_a_name_is_not_a_character_literal() {
     let refs = parse(
-        "if Billing.Invoice.paid?(i), do: Billing.Ledger.close!(i)\nx = ?\\n\nBilling.After.run()",
+        "if Booking.Insight.paid?(i), do: Booking.Locker.close!(i)\nx = ?\\n\nBooking.After.run()",
     )
     .refs;
     assert_eq!(
         refs,
         [
-            call("Billing.After", "run"),
-            call("Billing.Invoice", "paid?"),
-            call("Billing.Ledger", "close!"),
+            call("Booking.After", "run"),
+            call("Booking.Insight", "paid?"),
+            call("Booking.Locker", "close!"),
         ]
     );
 }
@@ -273,20 +273,20 @@ fn unterminated_literals_do_not_panic() {
 
 #[test]
 fn an_operator_that_looks_like_a_sigil_is_not_one() {
-    let refs = parse("x = a ~> Billing.Next.step()\ny = ~~~Billing.Bits.mask()").refs;
-    assert!(refs.contains(&call("Billing.Next", "step")), "{refs:?}");
-    assert!(refs.contains(&call("Billing.Bits", "mask")), "{refs:?}");
+    let refs = parse("x = a ~> Booking.Next.step()\ny = ~~~Booking.Bits.mask()").refs;
+    assert!(refs.contains(&call("Booking.Next", "step")), "{refs:?}");
+    assert!(refs.contains(&call("Booking.Bits", "mask")), "{refs:?}");
 }
 
 #[test]
 fn naming_a_module_in_an_alias_is_not_using_it() {
     // The base of a group and an alias nobody uses are no references.
     let names = modules(
-        "alias Billing.Ledger.{Entry, Account}\nalias Billing.Unused\nalias Billing.Tax, as: T\nEntry.new()\n",
+        "alias Booking.Locker.{Entry, Account}\nalias Booking.Unused\nalias Booking.Tip, as: T\nEntry.new()\n",
     );
-    assert_eq!(names, ["Billing.Ledger.Entry"]);
+    assert_eq!(names, ["Booking.Locker.Entry"]);
 
     // What follows the statement on later lines is still read.
-    let names = modules("alias Billing.{\n  Tax,\n  Fees\n}\n\nTax.rate() + Billing.Other.x()\n");
-    assert_eq!(names, ["Billing.Other", "Billing.Tax"]);
+    let names = modules("alias Booking.{\n  Tip,\n  Fare\n}\n\nTip.rate() + Booking.Other.x()\n");
+    assert_eq!(names, ["Booking.Other", "Booking.Tip"]);
 }
