@@ -204,16 +204,10 @@ impl GitRepo {
         self.commit_of(refspec).is_ok()
     }
 
-    /// Whether `ancestor` is in the history of `descendant`, and not the
-    /// same commit.
-    pub fn is_ancestor(&self, ancestor: &str, descendant: &str) -> bool {
-        let (Ok(ancestor), Ok(descendant)) = (self.commit_of(ancestor), self.commit_of(descendant))
-        else {
-            return false;
-        };
-        self.repo
-            .graph_descendant_of(descendant.id(), ancestor.id())
-            .unwrap_or(false)
+    /// The first parent of the commit at `refspec`, as a full id.
+    pub fn first_parent(&self, refspec: &str) -> Option<String> {
+        let parent = self.commit_of(refspec).ok()?.parent_id(0).ok()?;
+        Some(parent.to_string())
     }
 
     /// Commit counts of `targets` and the files that changed with each of

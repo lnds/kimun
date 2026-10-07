@@ -77,22 +77,35 @@ impl Change {
         })
     }
 
-    fn from_patch(label: String, patch: &[u8], base: Option<&str>) -> Result<Self, Box<dyn Error>> {
+    /// A patch, with the history that precedes it ending at `before` (or
+    /// where `before` and HEAD diverged) and the state after it in the tree
+    /// of `after`, or in the working tree when there is none.
+    fn from_patch(
+        label: String,
+        patch: &[u8],
+        history: (Option<String>, String),
+        after: Option<String>,
+    ) -> Result<Self, Box<dyn Error>> {
         Ok(Self {
             label,
             diff: patch_stats(patch)?,
-            history: (base.map(str::to_string), "HEAD".to_string()),
-            after: None,
+            history,
+            after,
         })
     }
 
-    /// A pull request, from its commits when the repository has them and
-    /// from its patch otherwise.
+    /// A pull request: from its commits when the repository has both ends,
+    /// and from its patch otherwise.
     fn from_pull_request(repo: &GitRepo, gh: &str, number: u64) -> Result<Self, Box<dyn Error>> {
         let label = format!("PR #{number}");
         let info = pr::info(gh, repo.root(), number)?;
-        match pr::plan(&info, |c| repo.has_commit(c), |a, d| repo.is_ancestor(a, d)) {
+        let head = || "HEAD".to_string();
+        match pr::plan(&info, |c| repo.has_commit(c), |c| repo.first_parent(c)) {
             pr::Plan::Refs { since, until } => Self::from_refs(repo, label, &since, Some(&until)),
+            pr::Plan::Merged { merge, before } => {
+                let patch = pr::patch(gh, repo.root(), number)?;
+                Self::from_patch(label, &patch, (None, before), Some(merge))
+            }
             pr::Plan::Patch { base } => {
                 eprintln!(
                     "note: the commits of PR #{number} are not in this repository, so its \
@@ -100,7 +113,7 @@ impl Change {
                      pull/{number}/head` to measure it against its own tree."
                 );
                 let patch = pr::patch(gh, repo.root(), number)?;
-                Self::from_patch(label, &patch, base.as_deref())
+                Self::from_patch(label, &patch, (base, head()), None)
             }
         }
     }
@@ -120,7 +133,8 @@ impl Change {
                     Some("-") => "patch from stdin".to_string(),
                     _ => format!("patch from {}", file.display()),
                 };
-                Self::from_patch(label, &read_patch(file)?, base.as_deref())
+                let history = (base.clone(), "HEAD".to_string());
+                Self::from_patch(label, &read_patch(file)?, history, None)
             }
             DiffSource::PullRequest(number) => Self::from_pull_request(repo, pr::GH, *number),
         }

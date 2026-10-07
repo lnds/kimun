@@ -597,7 +597,7 @@ It is always the change over the whole repository: `path` only locates the repos
 
 **`--pr` requires the [GitHub CLI](https://cli.github.com) (`gh`) installed and authenticated.** kimun runs it as a program; it links no GitHub client and stores no token.
 
-- When the repository has the commits of the pull request, it is measured from them, as between two refs. A pull request merged by squash or rebase, whose head was never fetched, is measured from its base up to the commit that merged it.
+- When the repository has the commits of the pull request, it is measured from them, as between two refs. A pull request merged by squash or rebase, whose head was never fetched, is measured from the patch GitHub serves, read against the tree of the commit that merged it. Its base and that commit are not compared: the base may be many merges behind, and everything merged in between would be counted.
 - Otherwise (a pull request from a fork, or one not fetched) its patch is taken from `gh pr diff` and measured like any other patch, with a note on stderr. `git fetch origin pull/NUMBER/head` makes its commits available.
 
 A patch (`--diff`, or a pull request without local commits) is measured against the working tree, where it is not applied:

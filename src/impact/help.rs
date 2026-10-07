@@ -29,9 +29,9 @@ creates is not known, and its files have unknown reach. With --diff,
 --since-ref only tells where the history consulted ends.
 
 A pull request is measured from its own commits when this repository has
-them, as between two refs; one merged by squash or rebase, up to the commit
-that merged it. Otherwise its patch is fetched with `gh pr diff` and measured
-like any other patch.
+them, as between two refs. One merged by squash or rebase is measured from
+its patch, fetched with `gh pr diff`, against the tree of the commit that
+merged it. Otherwise its patch is measured like any other patch.
 
 Blast radius -- projects reached through their manifests:
   A project is a directory with a manifest (Cargo.toml, package.json,
