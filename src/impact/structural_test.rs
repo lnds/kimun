@@ -1,7 +1,8 @@
 use super::*;
 use crate::git::ChangeKind;
 use crate::impact::protection::Protection;
-use crate::impact::structural_report::{JsonStructural, reach_line, render, summary};
+use crate::impact::structural_json::JsonStructural;
+use crate::impact::structural_report::{reach_line, render, summary};
 
 const INSIGHTS: &str = "\
 defmodule Booking.Insights do
@@ -408,7 +409,8 @@ fn json_block() {
             "protection": "none",
             "calls": ["Insights.arrange"],
             "tests": 0,
-            "tests_in_diff": 0
+            "tests_in_diff": 0,
+            "entry_point": false
         })
     );
     assert_eq!(json["direct"][2]["exposure"], "elsewhere");
@@ -476,6 +478,7 @@ fn a_share_below_one_percent_is_not_shown_as_zero() {
             calls: vec!["A.f".to_string()],
             tests: 1,
             tests_in_diff: 0,
+            entry_point: false,
         }],
         by_distance: vec![1, 1],
         upper_bound: 465,
@@ -705,4 +708,123 @@ fn render_tells_the_degrees_apart() {
         !direct_only.iter().any(|l| l.contains("named: a test")),
         "{direct_only:?}"
     );
+}
+
+/// A project whose web layer uses what it does by convention: a view its
+/// controller never names, a component only a template renders, a task.
+fn web() -> Vec<(PathBuf, String)> {
+    let files = [
+        (
+            "lib/shop/orders.ex",
+            "defmodule Shop.Orders do\n  def list, do: []\nend\n",
+        ),
+        (
+            "lib/shop_web/controllers/order_controller.ex",
+            "defmodule ShopWeb.OrderController do\n  def index(conn, _), do: conn\nend\n",
+        ),
+        (
+            "lib/shop_web/controllers/order_json.ex",
+            "defmodule ShopWeb.OrderJSON do\n  def index(_), do: Shop.Orders.list()\nend\n",
+        ),
+        (
+            "test/shop_web/controllers/order_controller_test.exs",
+            "defmodule ShopWeb.OrderControllerTest do\n  test \"lists\", %{conn: conn} do\n    get(conn, \"/orders\")\n  end\nend\n",
+        ),
+        (
+            "lib/shop_web/components/badge.ex",
+            "defmodule ShopWeb.Components.Badge do\n  def count(_), do: Shop.Orders.list()\nend\n",
+        ),
+        (
+            "lib/shop_web/live/summary_live.ex",
+            "defmodule ShopWeb.SummaryLive do\n  alias ShopWeb.Components.Badge\nend\n",
+        ),
+        (
+            "lib/shop_web/live/summary_live.html.heex",
+            "<h1>Summary</h1>\n<Badge.count orders={@orders} />\n",
+        ),
+        (
+            "test/shop_web/live/summary_live_test.exs",
+            "defmodule ShopWeb.SummaryLiveTest do\n  test \"sums\", %{conn: conn} do\n    live(conn, \"/summary\")\n  end\nend\n",
+        ),
+        (
+            "lib/mix/tasks/orders.export.ex",
+            "defmodule Mix.Tasks.Orders.Export do\n  def run(_), do: Shop.Orders.list()\nend\n",
+        ),
+    ];
+    files
+        .iter()
+        .map(|(path, text)| (PathBuf::from(path), text.to_string()))
+        .collect()
+}
+
+fn protection_of(radius: &Structural, name: &str) -> Protection {
+    let dependent = radius.direct.iter().find(|d| d.file.ends_with(name));
+    dependent
+        .unwrap_or_else(|| panic!("{name} is no dependent"))
+        .protection
+}
+
+#[test]
+fn the_test_of_a_controller_protects_the_view_it_renders() {
+    let radius = radius(web(), &[change("lib/shop/orders.ex", &[2])]);
+    assert_eq!(protection_of(&radius, "order_json.ex"), Protection::Users);
+}
+
+#[test]
+fn a_view_whose_controller_has_no_test_stays_unprotected() {
+    let untested: Vec<_> = web()
+        .into_iter()
+        .filter(|(path, _)| !path.ends_with("order_controller_test.exs"))
+        .collect();
+    let radius = radius(untested, &[change("lib/shop/orders.ex", &[2])]);
+    assert_eq!(protection_of(&radius, "order_json.ex"), Protection::None);
+}
+
+#[test]
+fn a_component_is_used_by_the_module_whose_template_renders_it() {
+    let radius = radius(web(), &[change("lib/shop/orders.ex", &[2])]);
+    assert_eq!(protection_of(&radius, "badge.ex"), Protection::Users);
+    // The template is no file of the graph.
+    assert_eq!(radius.source_files, 6);
+
+    let without: Vec<_> = web()
+        .into_iter()
+        .filter(|(path, _)| !path.ends_with("summary_live.html.heex"))
+        .collect();
+    let radius = radius_of(without);
+    assert_eq!(protection_of(&radius, "badge.ex"), Protection::None);
+}
+
+fn radius_of(sources: Vec<(PathBuf, String)>) -> Structural {
+    radius(sources, &[change("lib/shop/orders.ex", &[2])])
+}
+
+#[test]
+fn an_entry_point_with_no_test_is_told_apart() {
+    let mut radius = radius_of(web());
+    let unprotected =
+        |r: &Structural| -> Vec<PathBuf> { r.unprotected().map(|d| d.file.clone()).collect() };
+    let task = PathBuf::from("lib/mix/tasks/orders.export.ex");
+    assert_eq!(unprotected(&radius), [task.clone()]);
+
+    radius.mark_entry_points(|path| path.starts_with("lib/mix/tasks"));
+    assert!(unprotected(&radius).is_empty());
+    let entry: Vec<&PathBuf> = radius.untested_entry_points().map(|d| &d.file).collect();
+    assert_eq!(entry, [&task]);
+
+    let text = render(&radius, 10).join("\n");
+    assert!(
+        text.contains("Run rather than used, and with no test, 1: lib/mix/tasks/orders.export.ex"),
+        "{text}"
+    );
+    assert!(
+        !text.contains("an integration test is probably missing"),
+        "{text}"
+    );
+    let json = serde_json::to_value(JsonStructural::from(&radius)).unwrap();
+    assert_eq!(
+        json["untested_entry_points"][0],
+        "lib/mix/tasks/orders.export.ex"
+    );
+    assert_eq!(json["unprotected"].as_array().unwrap().len(), 0);
 }

@@ -11,6 +11,7 @@ fn source(path: &str, text: &str) -> Source {
         path: PathBuf::from(path),
         language: language.to_string(),
         text: text.to_string(),
+        templates: Vec::new(),
     }
 }
 

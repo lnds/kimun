@@ -31,6 +31,7 @@
 ///
 /// [impact]
 /// inert = ["scripts/**"]  # changed files that reach nothing, besides documentation
+/// entry_points = ["**/endpoint.ex"]  # files run rather than used, besides tasks and scripts
 /// ```
 use serde::Deserialize;
 
@@ -177,6 +178,10 @@ pub struct ImpactConfig {
     /// nothing, besides documentation.
     #[serde(default)]
     pub inert: Vec<String>,
+    /// Globs of files that are run rather than used, besides the
+    /// conventional task and script directories.
+    #[serde(default)]
+    pub entry_points: Vec<String>,
 }
 
 /// Configuration for `km hotspots`.

@@ -10,7 +10,9 @@ mod elixir;
 mod elixir_functions;
 mod extractor;
 pub mod graph;
+pub mod heex;
 mod kaikai;
+mod phoenix;
 mod report;
 
 use std::cmp::Reverse;
@@ -88,6 +90,7 @@ fn analyze(cfg: &WalkConfig<'_>) -> DepResult {
             path: rel_path.clone(),
             language: language.clone(),
             text: std::fs::read_to_string(cfg.path.join(rel_path)).unwrap_or_default(),
+            templates: Vec::new(),
         })
         .collect();
     // One directory is analysed, with no manifests to tell projects apart.

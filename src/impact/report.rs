@@ -7,7 +7,8 @@ use serde::Serialize;
 use super::Impact;
 use super::analyzer::{MissingCoChange, Trigger};
 use super::projects::{self, JsonProjects};
-use super::structural_report::{self as structural, JsonStructural};
+use super::structural_json::JsonStructural;
+use super::structural_report as structural;
 use crate::report_helpers;
 
 const MIN_WIDTH: usize = 78;

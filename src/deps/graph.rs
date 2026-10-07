@@ -15,6 +15,8 @@ pub struct Source {
     /// Language name, as `LanguageSpec` gives it.
     pub language: String,
     pub text: String,
+    /// Templates the file renders that are kept apart from it.
+    pub templates: Vec<String>,
 }
 
 /// One file's use of another.
@@ -141,7 +143,7 @@ impl FileGraph {
 
         let parsed: Vec<Option<ElixirFile>> = sources
             .iter()
-            .map(|s| is_elixir(&s.language).then(|| elixir::parse(&s.text)))
+            .map(|s| is_elixir(&s.language).then(|| elixir::parse_with(&s.text, &s.templates)))
             .collect();
         let mut modules = ModuleIndex::default();
         for (file, parsed) in parsed.iter().enumerate() {

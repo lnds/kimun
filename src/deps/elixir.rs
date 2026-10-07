@@ -9,6 +9,9 @@
 
 use std::collections::HashMap;
 
+use super::heex;
+use super::phoenix;
+
 /// A use of a module, and of one of its functions when it is a call.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Reference {
@@ -50,7 +53,7 @@ fn closing(chars: &[char], from: usize, closer: &[char], interpolates: bool) -> 
 }
 
 /// The index past the `}` that closes an interpolation opened before `from`.
-fn interpolation_end(chars: &[char], from: usize) -> usize {
+pub(super) fn interpolation_end(chars: &[char], from: usize) -> usize {
     let mut depth = 1usize;
     let mut i = from;
     while i < chars.len() {
@@ -100,7 +103,7 @@ fn sigil_end(chars: &[char], i: usize) -> usize {
 
 /// The index past the comment, string, sigil or character literal that
 /// starts at `i`, or `i` when none does.
-fn literal_end(chars: &[char], i: usize) -> usize {
+pub(super) fn literal_end(chars: &[char], i: usize) -> usize {
     let after_ident = i > 0 && is_ident(chars[i - 1]);
     match chars[i..] {
         ['#', ..] => i + chars[i..].iter().take_while(|&&c| c != '\n').count(),
@@ -351,14 +354,26 @@ fn references(code: &str, aliases: &Aliases) -> Vec<Reference> {
     refs
 }
 
-/// Read an Elixir source file.
+/// Read an Elixir source file that renders no template kept apart.
+#[cfg(test)]
 pub fn parse(source: &str) -> ElixirFile {
+    parse_with(source, &[])
+}
+
+/// Read an Elixir source file that renders `templates` kept in files of
+/// their own. What a template refers to, the file uses: those written in it
+/// as `~H` and those given, read with the aliases of the file.
+pub fn parse_with(source: &str, templates: &[String]) -> ElixirFile {
     let (defines, code) = modules_of(&code_only(source));
     let (aliases, used) = Aliases::of(&code);
-    ElixirFile {
-        refs: references(&used, &aliases),
-        defines,
+    let mut refs = references(&used, &aliases);
+    for template in heex::embedded(source).iter().chain(templates) {
+        refs.extend(references(&code_only(&heex::code(template)), &aliases));
     }
+    refs.extend(phoenix::views_of(&defines));
+    refs.sort();
+    refs.dedup();
+    ElixirFile { refs, defines }
 }
 
 #[cfg(test)]
