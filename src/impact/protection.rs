@@ -5,7 +5,7 @@
 //! protection comes in degrees, from a test that refers to the file down to
 //! the tests of what uses it.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
@@ -85,6 +85,15 @@ fn named_after(test: &[String], source: &[String]) -> bool {
     (test_name == name && beside) || after_directory
 }
 
+/// Leave out of `named` the tests at the place of a source file. Such a
+/// test is the test of that source: its name says nothing about another.
+fn drop_mirrors(named: &mut [Vec<usize>], places: &[Vec<String>], sources: &[usize]) {
+    let taken: HashSet<&Vec<String>> = sources.iter().map(|&f| &places[f]).collect();
+    for tests in named {
+        tests.retain(|&test| !taken.contains(&places[test]));
+    }
+}
+
 /// The tests of each file of a graph, by how they protect it.
 pub struct Tests {
     /// Test files that refer to each file, or sit at its place.
@@ -112,7 +121,8 @@ impl Tests {
         }
 
         let mut named = vec![Vec::new(); files.len()];
-        for source in (0..files.len()).filter(|&f| is_source(f)) {
+        let sources: Vec<usize> = (0..files.len()).filter(|&f| is_source(f)).collect();
+        for &source in &sources {
             let place = &places[source];
             // Its own name, and the name of the directory it is in.
             let candidates = place
@@ -131,6 +141,7 @@ impl Tests {
             referring[source].sort_unstable();
             referring[source].dedup();
         }
+        drop_mirrors(&mut named, &places, &sources);
         Self {
             direct: referring,
             named,

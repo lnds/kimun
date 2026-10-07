@@ -694,7 +694,7 @@ How it is measured:
   | `Tests` | Protection | When |
   |---------|------------|------|
   | a number | direct | That many test files refer to it, request a route it serves, or sit at the same place in the source and test layout (`lib/a/b.ex` and `test/a/b_test.exs`) |
-  | `named` | named | A test carries its name a directory apart (`live/page_live.ex` and `page_live_test.exs`), or the name of the directory it is in (`page_live/index.ex` and `page_live_test.exs`) |
+  | `named` | named | A test carries its name a directory apart (`live/page_live.ex` and `page_live_test.exs`), or the name of the directory it is in (`page_live/index.ex` and `page_live_test.exs`). A test at the place of a source file is the test of that file and names no other: `app_test.exs` beside `app.ex` says nothing of the files in `app/` |
   | `users` | users | It has no test of its own, but a file that uses it has one |
   | `none` | none | No test reaches it |
 
@@ -707,7 +707,7 @@ How it is measured:
   entry_points = ["**/endpoint.ex"]   # globs, relative to the repository
   ```
 
-- In Elixir, a test that requests a path protects the module that serves it. The routes are read from the Phoenix router of the project of the test, with the path and the alias of every `scope` around them; `:id` and a segment the test writes at run time (`#{order.id}`) match any one segment.
+- In Elixir, a test that requests a path protects the module that serves it. The routes are read from the Phoenix router of the project of the test, with the path and the alias of every `scope` around them; `:id` matches any one segment, and a segment the test writes at run time (`#{order.id}`) matches only a parameter of the route: a request for one order does not protect `/orders/new`.
 - In Elixir, what a framework relates by convention counts as a use. A Phoenix controller uses the views named after it (`PageController` and `PageJSON`, `PageHTML`, `PageView`), so the test of the controller protects them. A module uses the components its templates render, whether written in it as `~H` or kept in a `.html.heex` file beside it (`page/index.ex` and `page/index.html.heex`) or in a directory named after it (`page_html.ex` and `page_html/home.html.heex`).
 
 

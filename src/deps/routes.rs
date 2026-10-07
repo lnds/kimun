@@ -161,8 +161,10 @@ fn segments(path: &str) -> Vec<&str> {
 }
 
 /// Whether a request for `request` is one the route at `route` serves:
-/// segment by segment, a parameter of the route or a segment the request
-/// writes at run time standing for any one.
+/// segment by segment, a parameter of the route standing for any one. A
+/// segment the request writes at run time is taken for a parameter: it
+/// matches no fixed segment, or a request for one order would count as a
+/// request for every page under `/orders`.
 pub fn serves(route: &str, request: &str) -> bool {
     let (route, request) = (segments(route), segments(request));
     let glob = route.iter().position(|s| s.starts_with('*'));
@@ -175,7 +177,7 @@ pub fn serves(route: &str, request: &str) -> bool {
         && route[..fixed]
             .iter()
             .zip(&request)
-            .all(|(r, q)| r.starts_with(':') || q.contains(ANY) || r == q)
+            .all(|(r, q)| r.starts_with(':') || r == q)
 }
 
 #[cfg(test)]

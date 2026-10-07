@@ -89,11 +89,12 @@ fn a_route_serves_the_requests_that_match_it_segment_by_segment() {
     assert!(serves("/orders", "/orders/?page=2"));
     assert!(serves("/orders/:id", "/orders/42"));
     assert!(serves("/orders/:id", "/orders/:_"));
-    assert!(serves("/orders/new", "/orders/:_"));
     assert!(serves("/", "/"));
     assert!(serves("/files/*path", "/files/a/b"));
 
     assert!(!serves("/orders", "/orders/42"));
+    assert!(!serves("/orders/new", "/orders/:_"));
+    assert!(!serves("/orders", "/:_"));
     assert!(!serves("/orders/:id", "/orders"));
     assert!(!serves("/orders/:id", "/users/42"));
     assert!(!serves("/", "/orders"));
