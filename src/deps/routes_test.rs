@@ -100,3 +100,9 @@ fn a_route_serves_the_requests_that_match_it_segment_by_segment() {
     assert!(!serves("/", "/orders"));
     assert!(!serves("/files/*path", "/other/a"));
 }
+
+#[test]
+fn a_request_is_read_from_a_line_with_text_beyond_ascii() {
+    let test = "assert html =~ \"Sesión\" and get(conn, \"/orders\")\nrevisión(conn)\n";
+    assert_eq!(requests(test), ["/orders"]);
+}

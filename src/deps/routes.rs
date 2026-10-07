@@ -138,8 +138,10 @@ pub fn requests(source: &str) -> Vec<String> {
     let mut paths = Vec::new();
     for line in source.lines() {
         for (at, _) in line.match_indices('(') {
-            let before = &line[..at];
-            let name = &before[before.rfind(|c| !is_ident(c)).map_or(0, |i| i + 1)..];
+            let name = line[..at]
+                .rsplit(|c| !is_ident(c))
+                .next()
+                .unwrap_or_default();
             if !REQUESTS.contains(&name) {
                 continue;
             }
