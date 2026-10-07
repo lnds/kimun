@@ -144,3 +144,24 @@ fn protection_orders_from_strongest_to_none() {
     assert!(Protection::Named < Protection::Users);
     assert!(Protection::Users < Protection::None);
 }
+
+#[test]
+fn a_test_at_the_place_of_a_source_names_no_other() {
+    let files = [
+        ("lib/app.ex", false),                                // 0: mirrored by 5
+        ("lib/app/orders.ex", false), // 1: in the directory 5 is named after
+        ("lib/app_web/live/page_live/index.ex", false), // 2: mirrored by 6
+        ("lib/app_web/live/page_live/edit/index.ex", false), // 3: same name as 6, a directory apart
+        ("lib/app_web/live/cart_live/index.ex", false), // 4: named by 7
+        ("test/app_test.exs", true),  // 5
+        ("test/app_web/live/page_live/index_test.exs", true), // 6
+        ("test/app_web/live/cart_live_test.exs", true), // 7
+    ];
+    let tests = tests_of(&files, &[]);
+
+    assert_eq!(tests.protection(0, &[]), Protection::Direct);
+    assert_eq!(tests.protection(1, &[]), Protection::None);
+    assert_eq!(tests.protection(2, &[]), Protection::Direct);
+    assert_eq!(tests.protection(3, &[]), Protection::None);
+    assert_eq!(tests.protection(4, &[]), Protection::Named);
+}
