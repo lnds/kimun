@@ -18,6 +18,7 @@ use crate::loc::language::detect;
 use crate::walk::{TEST_DIRS, is_test_file};
 
 use super::protection::{Protection, Tests};
+use super::routes;
 
 /// Languages whose graph reflects what uses what. For the others `deps`
 /// reads declarations that do not amount to usage, and a radius drawn on
@@ -102,6 +103,9 @@ pub struct Dependent {
     pub tests_in_diff: usize,
     /// Whether it is run rather than used: a command-line task, a script.
     pub entry_point: bool,
+    /// Whether a source file uses it.
+    #[serde(skip)]
+    pub used: bool,
 }
 
 /// What a change comes to in one changed file: the public functions it
@@ -189,10 +193,15 @@ impl Structural {
         self.untested().filter(|d| d.entry_point)
     }
 
-    /// Mark the dependents `is_entry_point` tells.
-    pub fn mark_entry_points(&mut self, is_entry_point: impl Fn(&Path) -> bool) {
-        for dependent in &mut self.direct {
-            dependent.entry_point = is_entry_point(&dependent.file);
+    /// Mark the entry points among the dependents: those `declared` so,
+    /// and those at a `conventional` place that no source file uses.
+    pub fn mark_entry_points(
+        &mut self,
+        conventional: impl Fn(&Path) -> bool,
+        declared: impl Fn(&Path) -> bool,
+    ) {
+        for d in &mut self.direct {
+            d.entry_point = declared(&d.file) || (!d.used && conventional(&d.file));
         }
     }
 }
@@ -219,9 +228,10 @@ struct Reverse {
 }
 
 impl Reverse {
-    fn of(graph: &FileGraph, roles: &[Role]) -> Self {
+    /// `referring` holds, for each file, the tests known to reach it by
+    /// other means than naming it.
+    fn of(graph: &FileGraph, roles: &[Role], mut referring: Vec<Vec<usize>>) -> Self {
         let mut sources = vec![Vec::new(); graph.files.len()];
-        let mut referring = vec![Vec::new(); graph.files.len()];
         for (file, uses) in graph.uses.iter().enumerate() {
             let into = match roles[file] {
                 Role::Source => &mut sources,
@@ -338,7 +348,8 @@ pub fn compute(
     let known: HashSet<PathBuf> = sources.iter().map(|s| s.path.clone()).collect();
     let graph = FileGraph::build(&sources, &known, None, related);
     let roles: Vec<Role> = graph.files.iter().map(|f| role(f)).collect();
-    let reverse = Reverse::of(&graph, &roles);
+    let requesting = routes::requesting(&sources, &graph, |f| roles[f] == Role::Test, related);
+    let reverse = Reverse::of(&graph, &roles, requesting);
 
     let stat_of: HashMap<&Path, Changed> = changed.iter().map(|c| (c.path.as_path(), *c)).collect();
     let in_diff = |file: usize| stat_of.contains_key(graph.files[file].as_path());
@@ -373,6 +384,7 @@ pub fn compute(
             tests: tests.len(),
             tests_in_diff: reverse.tests.own(file).filter(|&t| in_diff(t)).count(),
             entry_point: false,
+            used: !reverse.sources[file].is_empty(),
         }
     };
     let mut direct: Vec<(usize, Dependent)> = levels

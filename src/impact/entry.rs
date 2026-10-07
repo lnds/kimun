@@ -32,17 +32,23 @@ impl EntryPoints {
         })
     }
 
-    pub fn matches(&self, path: &Path) -> bool {
+    /// Whether `path` is where its ecosystem keeps what is run. A file
+    /// there that other code uses is not an entry point for that alone.
+    pub fn conventional(&self, path: &Path) -> bool {
         let dirs: Vec<&str> = path
             .parent()
             .into_iter()
             .flat_map(|dir| dir.components())
             .filter_map(|c| c.as_os_str().to_str())
             .collect();
-        let conventional = TASK_DIRS
+        TASK_DIRS
             .iter()
-            .any(|task| dirs.windows(task.len()).any(|window| window == *task));
-        conventional || self.configured.is_match(path)
+            .any(|task| dirs.windows(task.len()).any(|window| window == *task))
+    }
+
+    /// Whether the repository declares `path` an entry point.
+    pub fn configured(&self, path: &Path) -> bool {
+        self.configured.is_match(path)
     }
 }
 

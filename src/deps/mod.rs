@@ -14,6 +14,7 @@ pub mod heex;
 mod kaikai;
 mod phoenix;
 mod report;
+pub mod routes;
 
 use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};

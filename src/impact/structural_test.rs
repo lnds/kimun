@@ -479,6 +479,7 @@ fn a_share_below_one_percent_is_not_shown_as_zero() {
             tests: 1,
             tests_in_diff: 0,
             entry_point: false,
+            used: false,
         }],
         by_distance: vec![1, 1],
         upper_bound: 465,
@@ -807,7 +808,7 @@ fn an_entry_point_with_no_test_is_told_apart() {
     let task = PathBuf::from("lib/mix/tasks/orders.export.ex");
     assert_eq!(unprotected(&radius), [task.clone()]);
 
-    radius.mark_entry_points(|path| path.starts_with("lib/mix/tasks"));
+    radius.mark_entry_points(|path| path.starts_with("lib/mix/tasks"), |_| false);
     assert!(unprotected(&radius).is_empty());
     let entry: Vec<&PathBuf> = radius.untested_entry_points().map(|d| &d.file).collect();
     assert_eq!(entry, [&task]);
@@ -827,4 +828,94 @@ fn an_entry_point_with_no_test_is_told_apart() {
         "lib/mix/tasks/orders.export.ex"
     );
     assert_eq!(json["unprotected"].as_array().unwrap().len(), 0);
+}
+
+/// A project whose views are only tested through their routes, by tests
+/// that are neither at their place nor named after them.
+fn routed() -> Vec<(PathBuf, String)> {
+    let files = [
+        (
+            "lib/shop/orders.ex",
+            "defmodule Shop.Orders do\n  def list, do: []\nend\n",
+        ),
+        (
+            "lib/shop_web/router.ex",
+            "defmodule ShopWeb.Router do\n  use ShopWeb, :router\n\n  scope \"/\", ShopWeb do\n    live \"/orders\", OrdersLive.Index, :index\n    live \"/returns\", ReturnsLive.Index, :index\n  end\nend\n",
+        ),
+        (
+            "lib/shop_web/live/orders_live/index.ex",
+            "defmodule ShopWeb.OrdersLive.Index do\n  def mount, do: Shop.Orders.list()\nend\n",
+        ),
+        (
+            "lib/shop_web/live/returns_live/index.ex",
+            "defmodule ShopWeb.ReturnsLive.Index do\n  def mount, do: Shop.Orders.list()\nend\n",
+        ),
+        (
+            "test/shop_web/features/checkout_test.exs",
+            "defmodule ShopWeb.CheckoutTest do\n  test \"lists\", %{conn: conn} do\n    {:ok, _, _} = live(conn, ~p\"/orders\")\n  end\nend\n",
+        ),
+    ];
+    files
+        .iter()
+        .map(|(path, text)| (PathBuf::from(path), text.to_string()))
+        .collect()
+}
+
+#[test]
+fn a_test_that_requests_a_route_protects_the_view_that_serves_it() {
+    let radius = radius_of(routed());
+    assert_eq!(
+        protection_of(&radius, "orders_live/index.ex"),
+        Protection::Direct
+    );
+    // No test asks for the other route.
+    assert_eq!(
+        protection_of(&radius, "returns_live/index.ex"),
+        Protection::None
+    );
+    // The router names the views under an alias: it is no dependent.
+    assert_eq!(radius.direct.len(), 2);
+}
+
+#[test]
+fn a_test_asks_the_router_of_its_own_project() {
+    let other: Vec<(PathBuf, String)> = routed()
+        .into_iter()
+        .map(|(path, text)| match path.starts_with("test") {
+            true => (PathBuf::from("other").join(path), text),
+            false => (PathBuf::from("shop").join(path), text),
+        })
+        .chain([(
+            PathBuf::from("other/lib/other_web/router.ex"),
+            "defmodule OtherWeb.Router do\n  use OtherWeb, :router\n  live \"/orders\", OtherWeb.OrdersLive\nend\n".to_string(),
+        ), (
+            PathBuf::from("other/lib/other_web/orders_live.ex"),
+            "defmodule OtherWeb.OrdersLive do\nend\n".to_string(),
+        )])
+        .collect();
+    let radius = radius(other, &[change("shop/lib/shop/orders.ex", &[2])]);
+    assert_eq!(
+        protection_of(&radius, "orders_live/index.ex"),
+        Protection::None
+    );
+}
+
+#[test]
+fn a_file_at_a_conventional_place_that_is_used_is_no_entry_point() {
+    let mut sources = web();
+    sources.push((
+        PathBuf::from("lib/shop/nightly.ex"),
+        "defmodule Shop.Nightly do\n  def run, do: Mix.Tasks.Orders.Export.run([])\nend\n"
+            .to_string(),
+    ));
+    let mut radius = radius_of(sources);
+    let in_tasks = |path: &Path| path.starts_with("lib/mix/tasks");
+
+    radius.mark_entry_points(in_tasks, |_| false);
+    assert_eq!(radius.untested_entry_points().count(), 0);
+    assert_eq!(radius.unprotected().count(), 1);
+
+    // Declared in the configuration, it is one whoever uses it.
+    radius.mark_entry_points(|_| false, in_tasks);
+    assert_eq!(radius.untested_entry_points().count(), 1);
 }

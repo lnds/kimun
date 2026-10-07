@@ -8,31 +8,32 @@ fn entry_points(patterns: &[&str]) -> EntryPoints {
 #[test]
 fn command_line_tasks_are_entry_points_by_convention() {
     let entry = entry_points(&[]);
-    assert!(entry.matches(Path::new("shop/lib/mix/tasks/seed.ex")));
-    assert!(entry.matches(Path::new("shop/management/commands/seed.py")));
-    assert!(entry.matches(Path::new("scripts/seed.ts")));
-    assert!(entry.matches(Path::new("tools/bin/seed.js")));
+    assert!(entry.conventional(Path::new("shop/lib/mix/tasks/seed.ex")));
+    assert!(entry.conventional(Path::new("shop/management/commands/seed.py")));
+    assert!(entry.conventional(Path::new("scripts/seed.ts")));
+    assert!(entry.conventional(Path::new("tools/bin/seed.js")));
 }
 
 #[test]
 fn a_directory_that_only_shares_part_of_the_name_is_not_one() {
     let entry = entry_points(&[]);
-    assert!(!entry.matches(Path::new("shop/lib/shop/tasks/seed.ex")));
-    assert!(!entry.matches(Path::new("shop/lib/mix/seed.ex")));
-    assert!(!entry.matches(Path::new("shop/lib/shop/cart.ex")));
+    assert!(!entry.conventional(Path::new("shop/lib/shop/tasks/seed.ex")));
+    assert!(!entry.conventional(Path::new("shop/lib/mix/seed.ex")));
+    assert!(!entry.conventional(Path::new("shop/lib/shop/cart.ex")));
 }
 
 #[test]
 fn a_file_named_like_the_directory_is_not_one() {
-    assert!(!entry_points(&[]).matches(Path::new("shop/lib/scripts")));
+    assert!(!entry_points(&[]).conventional(Path::new("shop/lib/scripts")));
 }
 
 #[test]
-fn configured_globs_add_to_the_convention() {
+fn configured_globs_are_told_from_the_convention() {
     let entry = entry_points(&["**/endpoint.ex"]);
-    assert!(entry.matches(Path::new("shop/lib/shop_web/endpoint.ex")));
-    assert!(entry.matches(Path::new("scripts/seed.ts")));
-    assert!(!entry.matches(Path::new("shop/lib/shop_web/router.ex")));
+    assert!(entry.configured(Path::new("shop/lib/shop_web/endpoint.ex")));
+    assert!(!entry.conventional(Path::new("shop/lib/shop_web/endpoint.ex")));
+    assert!(!entry.configured(Path::new("scripts/seed.ts")));
+    assert!(!entry.configured(Path::new("shop/lib/shop_web/router.ex")));
 }
 
 #[test]
