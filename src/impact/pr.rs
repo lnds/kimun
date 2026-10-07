@@ -32,42 +32,44 @@ pub struct PrInfo {
 /// How the changes of a pull request can be obtained.
 #[derive(Debug, PartialEq)]
 pub enum Plan {
-    /// From two commits of this repository.
+    /// From two commits of this repository: its base and its head.
     Refs { since: String, until: String },
-    /// From the patch GitHub serves, with the history ending at `base` when
-    /// this repository has that commit.
+    /// From the patch GitHub serves, read against the tree of the commit
+    /// that merged it, with the history ending at the commit `before` it.
+    Merged { merge: String, before: String },
+    /// From the patch GitHub serves, read against the working tree, with
+    /// the history ending at `base` when this repository has that commit.
     Patch { base: Option<String> },
 }
 
 /// Choose how to measure a pull request, given which commits are local.
 ///
-/// The base GitHub reports is the commit the pull request was compared
-/// against, and stays so after a merge. With both ends local, that is all it
-/// takes. A merged pull request whose head was never fetched is measured up
-/// to the commit that merged it instead: under a squash or a rebase that
-/// commit, and those between it and the base, carry the whole change.
+/// With its base and its head here, the two are compared. Once merged by a
+/// squash or a rebase the head is usually gone, and nothing local delimits
+/// the change: the base GitHub reports may be many merges behind the commit
+/// that merged it, and comparing those two would count every pull request
+/// merged in between. The patch GitHub serves is the change exactly; it is
+/// read against the tree right after the merge, which holds it.
 pub fn plan(
     info: &PrInfo,
     is_local: impl Fn(&str) -> bool,
-    is_ancestor: impl Fn(&str, &str) -> bool,
+    first_parent: impl Fn(&str) -> Option<String>,
 ) -> Plan {
     let base = info.base_ref_oid.as_str();
-    if !is_local(base) {
-        return Plan::Patch { base: None };
+    if is_local(base) && is_local(&info.head_ref_oid) {
+        return Plan::Refs {
+            since: base.to_string(),
+            until: info.head_ref_oid.clone(),
+        };
     }
     let merged = info.merge_commit.as_ref().map(|c| c.oid.as_str());
-    let until = if is_local(&info.head_ref_oid) {
-        Some(info.head_ref_oid.as_str())
-    } else {
-        merged.filter(|merge| is_ancestor(base, merge))
-    };
-    match until {
-        Some(until) => Plan::Refs {
-            since: base.to_string(),
-            until: until.to_string(),
+    match merged.and_then(|merge| Some((merge, first_parent(merge)?))) {
+        Some((merge, before)) => Plan::Merged {
+            merge: merge.to_string(),
+            before,
         },
         None => Plan::Patch {
-            base: Some(base.to_string()),
+            base: is_local(base).then(|| base.to_string()),
         },
     }
 }

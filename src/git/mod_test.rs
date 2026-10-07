@@ -568,11 +568,9 @@ fn commits_and_their_ancestry() {
     assert!(!git_repo.has_commit("0123456789012345678901234567890123456789"));
     assert!(!git_repo.has_commit("no-such-ref"));
 
-    assert!(git_repo.is_ancestor(&first, &second));
-    assert!(!git_repo.is_ancestor(&second, &first));
-    assert!(!git_repo.is_ancestor(&first, &first));
-    assert!(!git_repo.is_ancestor("no-such-ref", &second));
-    assert!(!git_repo.is_ancestor(&first, "no-such-ref"));
+    assert_eq!(git_repo.first_parent(&second), Some(first.clone()));
+    assert_eq!(git_repo.first_parent(&first), None);
+    assert_eq!(git_repo.first_parent("no-such-ref"), None);
 }
 
 #[test]

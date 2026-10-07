@@ -15,23 +15,49 @@ fn refs(since: &str, until: &str) -> Plan {
     }
 }
 
+fn merged(merge: &str, before: &str) -> Plan {
+    Plan::Merged {
+        merge: merge.to_string(),
+        before: before.to_string(),
+    }
+}
+
+/// The first parent of `merge` is `parent`, and no other commit is known.
+fn parent_of_merge(commit: &str) -> Option<String> {
+    (commit == "merge").then(|| "parent".to_string())
+}
+
 #[test]
 fn with_both_ends_local_the_commits_are_measured() {
     // Open, or merged with a merge commit: the head is in the history.
     assert_eq!(
-        plan(&info_of(OPEN), |_| true, |_, _| false),
+        plan(&info_of(OPEN), |_| true, |_| None),
         refs("base", "head")
     );
     assert_eq!(
-        plan(&info_of(MERGED), |_| true, |_, _| true),
+        plan(&info_of(MERGED), |_| true, parent_of_merge),
         refs("base", "head")
     );
+}
+
+#[test]
+fn a_squashed_or_rebased_pull_request_is_measured_from_its_patch_at_the_merge() {
+    // The head never reached this repository; what merged it did. The base
+    // may be many merges behind, so the two are not compared.
+    let plan = plan(&info_of(MERGED), |c| c != "head", parent_of_merge);
+    assert_eq!(plan, merged("merge", "parent"));
+}
+
+#[test]
+fn the_merge_is_enough_without_the_base() {
+    let plan = plan(&info_of(MERGED), |c| c == "merge", parent_of_merge);
+    assert_eq!(plan, merged("merge", "parent"));
 }
 
 #[test]
 fn an_open_pull_request_without_its_head_is_measured_from_its_patch() {
     // From a fork, or not fetched: only the base is here.
-    let plan = plan(&info_of(OPEN), |c| c == "base", |_, _| true);
+    let plan = plan(&info_of(OPEN), |c| c == "base", |_| None);
     assert_eq!(
         plan,
         Plan::Patch {
@@ -41,34 +67,12 @@ fn an_open_pull_request_without_its_head_is_measured_from_its_patch() {
 }
 
 #[test]
-fn without_the_base_there_is_only_the_patch() {
+fn nothing_local_leaves_only_the_patch() {
+    // Not even the merge commit was fetched.
     for json in [OPEN, MERGED] {
-        let plan = plan(&info_of(json), |c| c != "base", |_, _| true);
+        let plan = plan(&info_of(json), |_| false, |_| None);
         assert_eq!(plan, Plan::Patch { base: None });
     }
-}
-
-#[test]
-fn a_squashed_or_rebased_pull_request_is_measured_up_to_its_merge_commit() {
-    // The head never reached this repository; what merged it did.
-    let plan = plan(
-        &info_of(MERGED),
-        |c| c != "head",
-        |ancestor, descendant| (ancestor, descendant) == ("base", "merge"),
-    );
-    assert_eq!(plan, refs("base", "merge"));
-}
-
-#[test]
-fn a_merge_commit_that_is_not_after_the_base_is_not_trusted() {
-    // Not fetched, or on a history that does not contain the base.
-    let plan = plan(&info_of(MERGED), |c| c != "head", |_, _| false);
-    assert_eq!(
-        plan,
-        Plan::Patch {
-            base: Some("base".to_string())
-        }
-    );
 }
 
 #[test]

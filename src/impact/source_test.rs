@@ -338,42 +338,66 @@ mod pull_requests {
         assert!(change.has_file(&git_repo, Path::new("pr.rs")));
     }
 
+    /// A head that was never fetched, as after a squash or a rebase.
+    const GONE: &str = "0123456789012345678901234567890123456789";
+
     #[test]
-    fn a_squash_merged_pull_request_is_measured_up_to_its_merge_commit() {
+    fn a_squash_merged_pull_request_is_its_patch_and_nothing_else() {
         let (dir, repo) = create_test_repo();
-        let base = commit(&repo, &[("a.rs", "a\n")], &[]);
-        // One commit on the base branch carries the whole change.
-        let merge = commit(&repo, &[("a.rs", "merged\n"), ("b.rs", "new\n")], &[]);
-        commit(&repo, &[("later.rs", "after the merge\n")], &[]);
+        // The base GitHub reports is behind: another pull request was
+        // merged between it and this one.
+        let base = commit(&repo, &[("src/a.rs", "one\ntwo\n")], &[]);
+        commit(&repo, &[("other_pr.rs", "someone else's\n")], &[]);
+        let merge = commit(
+            &repo,
+            &[("src/a.rs", "one\nTWO\nthree\n"), ("new.rs", "x\ny\n")],
+            &[],
+        );
+        commit(&repo, &[("later.rs", "after the merge\n")], &["new.rs"]);
         let tools = tempfile::tempdir().unwrap();
-        // The head was never fetched.
-        let head = "0123456789012345678901234567890123456789";
-        let gh = fake_gh(tools.path(), &view(&base, head, Some(&merge)), "unused");
+        let gh = fake_gh(tools.path(), &view(&base, GONE, Some(&merge)), PATCH);
         let git_repo = GitRepo::open(dir.path()).unwrap();
 
         let change = Change::from_pull_request(&git_repo, &gh, 7).unwrap();
 
-        assert_eq!(paths(&change), ["a.rs", "b.rs"]);
+        assert_eq!(change.label, "PR #7");
+        // What was merged in between is not part of it.
+        assert_eq!(paths(&change), ["new.rs", "src/a.rs"]);
+        // The state after it is the tree of the merge, whatever came later.
+        assert!(change.has_file(&git_repo, Path::new("new.rs")));
+        assert!(!change.has_file(&git_repo, Path::new("later.rs")));
+        // That tree holds the patch, so its lines are those after it.
+        let a = change
+            .diff
+            .iter()
+            .find(|c| c.path.ends_with("a.rs"))
+            .unwrap();
+        let merged_text = "one\nTWO\nthree\n";
+        assert_eq!(a.lines_in(merged_text), [2, 3]);
     }
 
     #[test]
-    fn a_rebase_merged_pull_request_keeps_every_commit_of_it() {
+    fn the_history_of_a_merged_pull_request_ends_before_its_merge() {
         let (dir, repo) = create_test_repo();
-        let base = commit(&repo, &[("a.rs", "a\n")], &[]);
-        // Three commits replayed on the base branch; the last one is what
-        // GitHub reports as the merge commit.
-        commit(&repo, &[("one.rs", "1\n")], &[]);
-        commit(&repo, &[("two.rs", "2\n")], &[]);
-        let merge = commit(&repo, &[("three.rs", "3\n")], &[]);
-        commit(&repo, &[("later.rs", "after the merge\n")], &[]);
+        co_change(&repo, 2);
+        let base = repo
+            .head()
+            .unwrap()
+            .peel_to_commit()
+            .unwrap()
+            .id()
+            .to_string();
+        co_change(&repo, 1);
+        let merge = commit(&repo, &[("a.rs", "merged\n"), ("b.rs", "merged\n")], &[]);
+        co_change(&repo, 3);
         let tools = tempfile::tempdir().unwrap();
-        let head = "0123456789012345678901234567890123456789";
-        let gh = fake_gh(tools.path(), &view(&base, head, Some(&merge)), "unused");
+        let gh = fake_gh(tools.path(), &view(&base, GONE, Some(&merge)), PATCH);
         let git_repo = GitRepo::open(dir.path()).unwrap();
 
         let change = Change::from_pull_request(&git_repo, &gh, 8).unwrap();
 
-        assert_eq!(paths(&change), ["one.rs", "three.rs", "two.rs"]);
+        // Three commits precede the merge; the merge and what follows do not count.
+        assert_eq!(shared_with_a(&change, &git_repo), 3);
     }
 
     #[test]
