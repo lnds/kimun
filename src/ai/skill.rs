@@ -103,8 +103,8 @@ km impact [PATH] --format json --since-ref origin/main
 km impact [PATH] --format json --pr 123
 ```
 How far a change reaches before it is merged. `--since-ref` measures the current branch against a ref; `--pr` measures a GitHub pull request and needs the `gh` CLI. Read it in this order:
-- `structural.direct`: source files that use what changed. `exposure` is `calls` (it calls a function that changed), `refers` (it uses the module without a call that tells) or `elsewhere` (it only calls functions the change leaves alone). `tests` is how many test files protect it.
-- `structural.unprotected`: files that call what changed and that no test protects. Each one is a place the change can break unnoticed: recommend an integration test there.
+- `structural.direct`: source files that use what changed. `exposure` is `calls` (it calls a function that changed), `refers` (it uses the module without a call that tells) or `elsewhere` (it only calls functions the change leaves alone). `protection` is `direct` (a test refers to it or mirrors its path), `named` (a test carries its name), `users` (only what uses it is tested) or `none`.
+- `structural.unprotected`: files that call what changed and that no test reaches. Each one is a place the change can break unnoticed: recommend an integration test there.
 - `structural.radius`: files the change concerns, directly and through them, over the source files measured. `structural.upper_bound` is the same when every use of a changed file counts whatever the function; quote the radius, not the bound.
 - `structural.functions`: the public functions the change affects, or `null` when it touches code outside functions and cannot be narrowed.
 - `projects.reached` and `projects.affected`: projects of a monorepo that depend on the changed ones; `affected` is the list whose tests should run.

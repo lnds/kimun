@@ -52,9 +52,10 @@ Blast radius -- source files that use what changed:
   backwards from the changed files. In Elixir the change is narrowed to the
   functions it touches, and each file that uses the module either calls one
   of them, refers to the module without calling it, or is left out. A file
-  that calls what changed and that no test protects is reported: an
+  that calls what changed and that no test reaches is reported: an
   integration test is probably missing. A test protects a file when it
-  refers to it or sits at the same place (lib/a/b.ex, test/a/b_test.exs).
+  refers to it or sits at the same place (lib/a/b.ex, test/a/b_test.exs);
+  less so when it only carries its name, or tests what uses it.
   Measured for Elixir, JavaScript/TypeScript and Kaikai.
 
 Diffusion -- how spread the change is (Kamei et al., 2013):
