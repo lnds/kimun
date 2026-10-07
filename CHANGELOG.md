@@ -1,3 +1,13 @@
+## v0.30.0 (2026-10-06)
+
+### Feat
+
+- **impact**: tell how a file is protected, not only whether a test names it
+
+### Fix
+
+- **impact**: measure a merged pull request from its patch, not from its base
+
 ## v0.29.0 (2026-10-06)
 
 ### Feat
