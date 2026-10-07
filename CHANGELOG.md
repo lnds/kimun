@@ -1,3 +1,13 @@
+## v0.31.0 (2026-10-07)
+
+### Feat
+
+- **impact**: a test that requests a route protects the module that serves it
+
+### Fix
+
+- **impact**: see what the web layer uses by convention, and tell entry points apart
+
 ## v0.30.1 (2026-10-07)
 
 ### Fix
