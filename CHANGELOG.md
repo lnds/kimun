@@ -1,3 +1,9 @@
+## v0.30.1 (2026-10-07)
+
+### Fix
+
+- **impact**: start the radius from the files that call what changed
+
 ## v0.30.0 (2026-10-06)
 
 ### Feat
