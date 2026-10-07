@@ -13,6 +13,7 @@ mod pr;
 mod projects;
 mod protection;
 mod report;
+mod routes;
 mod source;
 mod structural;
 mod structural_json;
@@ -168,7 +169,10 @@ fn structural_radius(
     let mut radius = structural::compute(sources, &changed, &|from, to| graph.may_use(from, to));
     let config = KimunConfig::load_from(git_repo.root()).impact;
     let entry = EntryPoints::new(&config.entry_points)?;
-    radius.mark_entry_points(|path| entry.matches(path));
+    radius.mark_entry_points(
+        |path| entry.conventional(path),
+        |path| entry.configured(path),
+    );
     Ok(radius)
 }
 

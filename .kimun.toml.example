@@ -83,7 +83,7 @@ complexity = "indent"  # default: indent
 # inert = ["scripts/**", "notebooks/**"]
 
 # Files that are run rather than used, as globs relative to the repository.
-# Tasks and scripts (mix/tasks/, management/commands/, bin/, scripts/) always
-# are. With no test they are listed apart instead of warned about as missing
+# Tasks and scripts (mix/tasks/, management/commands/, bin/, scripts/) that no
+# source file uses always are. With no test they are listed apart instead of warned about as missing
 # an integration test.
 # entry_points = ["**/endpoint.ex"]

@@ -62,6 +62,7 @@ pub struct FileGraph {
     /// References left out because several files define the module named
     /// and none is nearer than the others.
     pub ambiguous: usize,
+    modules: ModuleIndex,
 }
 
 fn is_elixir(language: &str) -> bool {
@@ -69,7 +70,7 @@ fn is_elixir(language: &str) -> bool {
 }
 
 /// How many leading directories two paths share.
-fn shared_depth(a: &Path, b: &Path) -> usize {
+pub fn shared_depth(a: &Path, b: &Path) -> usize {
     a.components()
         .zip(b.components())
         .take_while(|(x, y)| x == y)
@@ -82,7 +83,7 @@ pub type Related<'a> = &'a dyn Fn(&Path, &Path) -> bool;
 
 /// Where each Elixir module is defined. Projects of one repository made
 /// from the same template may define modules of the same name.
-#[derive(Default)]
+#[derive(Debug, Default)]
 struct ModuleIndex(HashMap<String, Vec<usize>>);
 
 impl ModuleIndex {
@@ -154,8 +155,10 @@ impl FileGraph {
 
         let mut graph = FileGraph {
             files,
+            modules,
             ..Self::default()
         };
+        let modules = std::mem::take(&mut graph.modules);
         for (file, source) in sources.iter().enumerate() {
             let uses = match &parsed[file] {
                 Some(parsed) => graph.elixir_uses(file, parsed, &modules, related),
@@ -178,7 +181,17 @@ impl FileGraph {
                     .collect(),
             );
         }
+        graph.modules = modules;
         graph
+    }
+
+    /// The file that defines the Elixir `module`, as a reference made from
+    /// the file `from` resolves it.
+    pub fn defining(&self, module: &str, from: usize, related: Related) -> Option<usize> {
+        let resolved = self
+            .modules
+            .resolve(module, &self.files[from], &self.files, related);
+        resolved.ok().flatten()
     }
 
     /// The files an Elixir file uses, each with the functions it calls there.

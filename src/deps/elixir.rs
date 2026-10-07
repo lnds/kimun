@@ -4,8 +4,9 @@
 //! import: `Booking.Insight.total(x)` is enough. So every module name in the
 //! code is a reference, once comments and literals are set aside and
 //! `alias` is undone. The reading is lexical. It does not see modules named
-//! at run time (`apply/3`, configuration), those a macro generates, nor the
-//! alias a Phoenix router gives its `scope`.
+//! at run time (`apply/3`, configuration) nor those a macro generates. The
+//! modules a Phoenix router names under the alias of a `scope` are read
+//! apart, in `routes`.
 
 use std::collections::HashMap;
 
@@ -141,7 +142,7 @@ pub(super) fn code_only(source: &str) -> String {
 }
 
 /// The dotted module name at the start of `text`: `Foo.Bar` in `Foo.Bar.baz(`.
-fn module_name(text: &str) -> &str {
+pub(super) fn module_name(text: &str) -> &str {
     if !text.starts_with(|c: char| c.is_ascii_uppercase()) {
         return "";
     }
