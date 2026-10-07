@@ -1,0 +1,51 @@
+//! Files that are run rather than used: command-line tasks and scripts.
+//!
+//! Nothing in the project uses them, so no test of something else passes
+//! through them, and few have a test of their own. Warning that an
+//! integration test is missing for each would bury the warnings that matter.
+
+use std::error::Error;
+use std::path::Path;
+
+use globset::GlobSet;
+
+/// Directories that hold what is run from the command line, by the
+/// convention of each ecosystem, as the directories that name them.
+const TASK_DIRS: &[&[&str]] = &[
+    &["mix", "tasks"],
+    &["management", "commands"],
+    &["bin"],
+    &["scripts"],
+];
+
+/// Tells the entry points among the files of a repository.
+pub struct EntryPoints {
+    configured: GlobSet,
+}
+
+impl EntryPoints {
+    /// The conventional ones, plus the paths matching `patterns`: globs
+    /// relative to the repository, as `[impact] entry_points` lists them.
+    pub fn new(patterns: &[String]) -> Result<Self, Box<dyn Error>> {
+        Ok(Self {
+            configured: super::inert::globs(patterns, "[impact] entry_points")?,
+        })
+    }
+
+    pub fn matches(&self, path: &Path) -> bool {
+        let dirs: Vec<&str> = path
+            .parent()
+            .into_iter()
+            .flat_map(|dir| dir.components())
+            .filter_map(|c| c.as_os_str().to_str())
+            .collect();
+        let conventional = TASK_DIRS
+            .iter()
+            .any(|task| dirs.windows(task.len()).any(|window| window == *task));
+        conventional || self.configured.is_match(path)
+    }
+}
+
+#[cfg(test)]
+#[path = "entry_test.rs"]
+mod tests;

@@ -6,6 +6,7 @@
 //! consulted ends at that merge base: the change is never evidence for itself.
 
 mod analyzer;
+mod entry;
 mod help;
 mod inert;
 mod pr;
@@ -14,6 +15,7 @@ mod protection;
 mod report;
 mod source;
 mod structural;
+mod structural_json;
 mod structural_report;
 
 use std::collections::HashSet;
@@ -22,6 +24,7 @@ use std::path::{Path, PathBuf};
 
 use crate::cli::OutputMode;
 use crate::config::KimunConfig;
+use crate::deps::heex;
 use crate::git::{ChangeKind, FileDiffStat, GitRepo};
 use crate::projects::ProjectGraph;
 use crate::util::{is_generated, parse_since};
@@ -29,6 +32,7 @@ use crate::util::{is_generated, parse_since};
 use analyzer::{
     Diffusion, MissingCoChange, Target, Thresholds, compute_diffusion, missing_co_changes,
 };
+use entry::EntryPoints;
 pub use help::HELP;
 use inert::Inert;
 use projects::ProjectRadius;
@@ -158,11 +162,14 @@ fn structural_radius(
     };
     let in_scope =
         |path: &Path| scope.is_empty() || scope.iter().any(|root| path.starts_with(root));
-    let sources = change.sources(git_repo, |p| structural::is_reliable(p) && in_scope(p))?;
+    let measured = |p: &Path| structural::is_reliable(p) || heex::is_template(p);
+    let sources = change.sources(git_repo, |p| measured(p) && in_scope(p))?;
     let changed: Vec<structural::Changed> = change.diff.iter().collect();
-    Ok(structural::compute(sources, &changed, &|from, to| {
-        graph.may_use(from, to)
-    }))
+    let mut radius = structural::compute(sources, &changed, &|from, to| graph.may_use(from, to));
+    let config = KimunConfig::load_from(git_repo.root()).impact;
+    let entry = EntryPoints::new(&config.entry_points)?;
+    radius.mark_entry_points(|path| entry.matches(path));
+    Ok(radius)
 }
 
 /// Compute the impact of the change `opts.source` names.

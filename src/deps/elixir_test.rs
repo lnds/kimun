@@ -290,3 +290,61 @@ fn naming_a_module_in_an_alias_is_not_using_it() {
     let names = modules("alias Booking.{\n  Tip,\n  Fare\n}\n\nTip.rate() + Booking.Other.x()\n");
     assert_eq!(names, ["Booking.Other", "Booking.Tip"]);
 }
+
+#[test]
+fn a_controller_uses_the_views_named_after_it() {
+    let source = "defmodule ShopWeb.OrderController do\n  def index(conn, _), do: conn\nend\n";
+    assert_eq!(
+        modules(source),
+        [
+            "ShopWeb.OrderController",
+            "ShopWeb.OrderHTML",
+            "ShopWeb.OrderJSON",
+            "ShopWeb.OrderView"
+        ]
+    );
+    assert_eq!(
+        modules("defmodule ShopWeb.Controller do\nend\n"),
+        ["ShopWeb.Controller"]
+    );
+}
+
+#[test]
+fn a_template_written_in_the_file_holds_references() {
+    let source = r#"
+defmodule ShopWeb.OrdersLive do
+  alias ShopWeb.Components.Badge
+
+  def render(assigns) do
+    ~H"""
+    <h1>Pending Orders</h1>
+    <Badge.status order={@order} />
+    <p>{Shop.Money.format(@total)}</p>
+    """
+  end
+end
+"#;
+    let refs = parse(source).refs;
+    assert_eq!(
+        refs,
+        [
+            call("Shop.Money", "format"),
+            call("ShopWeb.Components.Badge", "status"),
+            module("ShopWeb.OrdersLive"),
+        ]
+    );
+}
+
+#[test]
+fn a_template_kept_apart_is_read_with_the_aliases_of_the_file() {
+    let source = "defmodule ShopWeb.OrdersLive do\n  alias ShopWeb.Components.Badge\nend\n";
+    let template = "<h1>Orders</h1>\n<.live_component module={Badge} id=\"b\" />\n".to_string();
+    assert_eq!(parse(source).refs, [module("ShopWeb.OrdersLive")]);
+    assert_eq!(
+        parse_with(source, &[template]).refs,
+        [
+            module("ShopWeb.Components.Badge"),
+            module("ShopWeb.OrdersLive")
+        ]
+    );
+}

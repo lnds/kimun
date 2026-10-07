@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 
 use crate::deps::graph::{FileGraph, Related, Source, Unnarrowed};
+use crate::deps::heex;
 use crate::git::{ChangeKind, FileDiffStat};
 use crate::loc::language::detect;
 use crate::walk::{TEST_DIRS, is_test_file};
@@ -99,6 +100,8 @@ pub struct Dependent {
     pub tests: usize,
     /// How many of those tests are part of the change.
     pub tests_in_diff: usize,
+    /// Whether it is run rather than used: a command-line task, a script.
+    pub entry_point: bool,
 }
 
 /// What a change comes to in one changed file: the public functions it
@@ -167,12 +170,30 @@ impl Structural {
             .filter(|d| d.exposure != Exposure::Elsewhere)
     }
 
-    /// Dependents that call what changed and that no test reaches, not even
-    /// through the files that use them.
-    pub fn unprotected(&self) -> impl Iterator<Item = &Dependent> {
+    /// Dependents that call what changed and that no test reaches.
+    fn untested(&self) -> impl Iterator<Item = &Dependent> {
         self.direct
             .iter()
             .filter(|d| d.exposure == Exposure::Calls && d.protection == Protection::None)
+    }
+
+    /// Dependents that call what changed and that no test reaches, not even
+    /// through the files that use them. Entry points are told apart:
+    /// nothing uses them, so no test of something else could reach them.
+    pub fn unprotected(&self) -> impl Iterator<Item = &Dependent> {
+        self.untested().filter(|d| !d.entry_point)
+    }
+
+    /// Entry points that call what changed and have no test.
+    pub fn untested_entry_points(&self) -> impl Iterator<Item = &Dependent> {
+        self.untested().filter(|d| d.entry_point)
+    }
+
+    /// Mark the dependents `is_entry_point` tells.
+    pub fn mark_entry_points(&mut self, is_entry_point: impl Fn(&Path) -> bool) {
+        for dependent in &mut self.direct {
+            dependent.entry_point = is_entry_point(&dependent.file);
+        }
     }
 }
 
@@ -297,14 +318,20 @@ pub fn compute(
     changed: &[Changed<'_>],
     related: Related,
 ) -> Structural {
+    let (templates, sources): (Vec<_>, Vec<_>) = sources
+        .into_iter()
+        .partition(|(path, _)| heex::is_template(path));
+    let mut rendered = heex::by_owner(templates, &sources);
     let sources: Vec<Source> = sources
         .into_iter()
         .filter_map(|(path, text)| {
             let language = graphed_language(&path)?.to_string();
+            let templates = rendered.remove(&path).unwrap_or_default();
             Some(Source {
                 path,
                 language,
                 text,
+                templates,
             })
         })
         .collect();
@@ -345,6 +372,7 @@ pub fn compute(
             protection: reverse.tests.protection(file, &reverse.sources[file]),
             tests: tests.len(),
             tests_in_diff: reverse.tests.own(file).filter(|&t| in_diff(t)).count(),
+            entry_point: false,
         }
     };
     let mut direct: Vec<(usize, Dependent)> = levels

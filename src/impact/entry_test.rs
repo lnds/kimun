@@ -1,0 +1,42 @@
+use super::*;
+
+fn entry_points(patterns: &[&str]) -> EntryPoints {
+    let patterns: Vec<String> = patterns.iter().map(|p| p.to_string()).collect();
+    EntryPoints::new(&patterns).unwrap()
+}
+
+#[test]
+fn command_line_tasks_are_entry_points_by_convention() {
+    let entry = entry_points(&[]);
+    assert!(entry.matches(Path::new("shop/lib/mix/tasks/seed.ex")));
+    assert!(entry.matches(Path::new("shop/management/commands/seed.py")));
+    assert!(entry.matches(Path::new("scripts/seed.ts")));
+    assert!(entry.matches(Path::new("tools/bin/seed.js")));
+}
+
+#[test]
+fn a_directory_that_only_shares_part_of_the_name_is_not_one() {
+    let entry = entry_points(&[]);
+    assert!(!entry.matches(Path::new("shop/lib/shop/tasks/seed.ex")));
+    assert!(!entry.matches(Path::new("shop/lib/mix/seed.ex")));
+    assert!(!entry.matches(Path::new("shop/lib/shop/cart.ex")));
+}
+
+#[test]
+fn a_file_named_like_the_directory_is_not_one() {
+    assert!(!entry_points(&[]).matches(Path::new("shop/lib/scripts")));
+}
+
+#[test]
+fn configured_globs_add_to_the_convention() {
+    let entry = entry_points(&["**/endpoint.ex"]);
+    assert!(entry.matches(Path::new("shop/lib/shop_web/endpoint.ex")));
+    assert!(entry.matches(Path::new("scripts/seed.ts")));
+    assert!(!entry.matches(Path::new("shop/lib/shop_web/router.ex")));
+}
+
+#[test]
+fn an_invalid_glob_names_the_key() {
+    let error = EntryPoints::new(&["a{".to_string()]).err().unwrap();
+    assert!(error.to_string().contains("[impact] entry_points"));
+}
