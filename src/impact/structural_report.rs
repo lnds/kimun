@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
+use super::protection::Protection;
 use super::structural::{Dependent, Exposure, Narrowing, Structural};
 
 const TITLE: &str = "Structural radius — source files that use what changed";
@@ -17,28 +18,49 @@ fn names(paths: impl Iterator<Item = impl AsRef<Path>>, limit: usize) -> String 
     }
 }
 
-/// The exposed dependents, most exposed first, each with what exposes it.
-fn dependent_lines(radius: &Structural, top: usize) -> Vec<String> {
-    let exposed: Vec<&Dependent> = radius.exposed().collect();
-    let mut lines = vec![" Tests  Dependent".to_string()];
-    for dependent in exposed.iter().take(top) {
-        let tests = match dependent.tests {
-            0 => "none".to_string(),
-            n => n.to_string(),
-        };
-        lines.push(format!(" {tests:>5}  {}", dependent.file.display()));
-        if dependent.exposure == Exposure::Refers {
-            lines.push("            refers to the module without calling it".to_string());
-        } else if !dependent.calls.is_empty() {
-            lines.push(format!(
-                "            calls {}",
-                names(dependent.calls.iter(), 3)
-            ));
+impl Dependent {
+    /// What the `Tests` column says of it: how many tests it has of its
+    /// own, or the weaker protection it is left with.
+    fn tests_cell(&self) -> String {
+        match self.protection {
+            Protection::Direct => self.tests.to_string(),
+            Protection::Named => "named".to_string(),
+            Protection::Users => "users".to_string(),
+            Protection::None => "none".to_string(),
         }
     }
-    if exposed.len() > top {
-        lines.push(format!(" {} files ({top} shown).", exposed.len()));
+
+    /// What exposes it to the change, for the line under its path.
+    fn exposed_by(&self) -> Option<String> {
+        match self.exposure {
+            Exposure::Refers => Some("refers to the module without calling it".to_string()),
+            _ if self.calls.is_empty() => None,
+            _ => Some(format!("calls {}", names(self.calls.iter(), 3))),
+        }
     }
+
+    /// Its two lines of the table.
+    fn lines(&self) -> impl Iterator<Item = String> {
+        let path = format!(" {:>5}  {}", self.tests_cell(), self.file.display());
+        let why = self.exposed_by().map(|why| format!("            {why}"));
+        std::iter::once(path).chain(why)
+    }
+}
+
+/// The exposed dependents, least protected first, each with what exposes it.
+fn dependent_lines(radius: &Structural, top: usize) -> Vec<String> {
+    let exposed: Vec<&Dependent> = radius.exposed().collect();
+    let shown = &exposed[..exposed.len().min(top)];
+    let weaker = shown
+        .iter()
+        .any(|d| matches!(d.protection, Protection::Named | Protection::Users));
+
+    let mut lines = vec![" Tests  Dependent".to_string()];
+    lines.extend(shown.iter().flat_map(|d| d.lines()));
+    lines.extend((exposed.len() > top).then(|| format!(" {} files ({top} shown).", exposed.len())));
+    lines.extend(weaker.then(|| {
+        " named: a test carries its name; users: only what uses it is tested".to_string()
+    }));
     lines
 }
 
@@ -171,7 +193,7 @@ fn warnings(radius: &Structural) -> Vec<String> {
     let unprotected: Vec<&Path> = radius.unprotected().map(|d| d.file.as_path()).collect();
     if !unprotected.is_empty() {
         lines.push(format!(
-            "No test refers to {} of the files that call what changed; an integration test is probably missing:",
+            "No test reaches {} of the files that call what changed; an integration test is probably missing:",
             unprotected.len()
         ));
         lines.extend(
@@ -191,7 +213,7 @@ fn warnings(radius: &Structural) -> Vec<String> {
     let unknown = radius
         .direct
         .iter()
-        .filter(|d| d.exposure == Exposure::Refers && d.tests == 0)
+        .filter(|d| d.exposure == Exposure::Refers && d.protection == Protection::None)
         .count();
     if unknown > 0 {
         lines.push(format!(
@@ -304,7 +326,7 @@ impl<'a> From<&'a Structural> for JsonStructural<'a> {
             unknown_without_tests: radius
                 .direct
                 .iter()
-                .filter(|d| d.exposure == Exposure::Refers && d.tests == 0)
+                .filter(|d| d.exposure == Exposure::Refers && d.protection == Protection::None)
                 .map(|d| text(&d.file))
                 .collect(),
             change_tests_a_dependent: radius.exposed().any(|d| d.tests_in_diff > 0),

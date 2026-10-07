@@ -10,6 +10,7 @@ mod help;
 mod inert;
 mod pr;
 mod projects;
+mod protection;
 mod report;
 mod source;
 mod structural;

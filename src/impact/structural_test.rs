@@ -1,5 +1,6 @@
 use super::*;
 use crate::git::ChangeKind;
+use crate::impact::protection::Protection;
 use crate::impact::structural_report::{JsonStructural, reach_line, render, summary};
 
 const INSIGHTS: &str = "\
@@ -279,7 +280,7 @@ fn render_when_the_change_is_narrowed_to_functions() {
             "  none  lib/booking/export.ex",
             "            refers to the module without calling it",
             sep.as_str(),
-            "No test refers to 1 of the files that call what changed; an integration test is probably missing:",
+            "No test reaches 1 of the files that call what changed; an integration test is probably missing:",
             "  lib/booking_web/controllers/insight_controller.ex",
             "No test in the change exercises a file that uses what changed.",
             "1 more with no test use the module without a call that tells whether the change concerns them.",
@@ -347,28 +348,6 @@ fn a_long_reach_is_summed_beyond_the_third_distance() {
 }
 
 #[test]
-fn a_file_and_its_test_are_at_the_same_place() {
-    let same = |source: &str, test: &str| place(Path::new(source)) == place(Path::new(test));
-
-    assert!(same(
-        "lib/app_web/controllers/user_controller.ex",
-        "test/app_web/controllers/user_controller_test.exs"
-    ));
-    assert!(same("apps/a/lib/a/b.ex", "apps/a/test/a/b_test.exs"));
-    assert!(same("src/ui/button.ts", "src/ui/button.test.ts"));
-    assert!(same("src/ui/button.ts", "src/ui/__tests__/button.spec.ts"));
-    assert!(same("pkg/parser.py", "pkg/tests/test_parser.py"));
-    assert!(same("src/Parser.hs", "test/ParserSpec.hs"));
-    // Another project, another directory or another name is another place.
-    assert!(!same("apps/a/lib/a/b.ex", "apps/c/test/a/b_test.exs"));
-    assert!(!same(
-        "lib/app/users.ex",
-        "test/app/accounts/users_test.exs"
-    ));
-    assert!(!same("lib/app/user.ex", "test/app/users_test.exs"));
-}
-
-#[test]
 fn what_each_file_is_to_the_radius() {
     assert_eq!(role(Path::new("lib/app/user.ex")), Role::Source);
     assert_eq!(role(Path::new("lib/mix/tasks/seed.ex")), Role::Source);
@@ -427,6 +406,7 @@ fn json_block() {
         serde_json::json!({
             "file": "lib/booking_web/controllers/insight_controller.ex",
             "exposure": "calls",
+            "protection": "none",
             "calls": ["Insights.arrange"],
             "tests": 0,
             "tests_in_diff": 0
@@ -488,6 +468,7 @@ fn a_share_below_one_percent_is_not_shown_as_zero() {
         direct: vec![Dependent {
             file: PathBuf::from("lib/b.ex"),
             exposure: Exposure::Calls,
+            protection: Protection::Direct,
             calls: vec!["A.f".to_string()],
             tests: 1,
             tests_in_diff: 0,
@@ -600,4 +581,124 @@ fn a_language_without_functions_says_so() {
         Some("its language does not tell functions")
     );
     assert_eq!(direct(&radius), [("app.ts", Exposure::Calls, 0, vec![])]);
+}
+
+/// A context whose function changes, called by a live view, a helper the
+/// view uses, a task nobody tests, and a view tested through a namesake.
+fn views() -> Vec<(PathBuf, String)> {
+    let files = [
+        (
+            "lib/shop/orders.ex",
+            "defmodule Shop.Orders do\n  def list, do: []\nend\n",
+        ),
+        (
+            "lib/shop_web/live/orders_live/index.ex",
+            "defmodule ShopWeb.OrdersLive.Index do\n  def mount, do: {Shop.Orders.list(), ShopWeb.OrdersLive.Rows.build()}\nend\n",
+        ),
+        (
+            "lib/shop_web/live/orders_live/rows.ex",
+            "defmodule ShopWeb.OrdersLive.Rows do\n  def build, do: Shop.Orders.list()\nend\n",
+        ),
+        (
+            "lib/shop_web/live/summary_live.ex",
+            "defmodule ShopWeb.SummaryLive do\n  def mount, do: ShopWeb.Totals.sum()\nend\n",
+        ),
+        (
+            "lib/shop_web/totals.ex",
+            "defmodule ShopWeb.Totals do\n  def sum, do: Shop.Orders.list()\nend\n",
+        ),
+        (
+            "lib/mix/tasks/orders.export.ex",
+            "defmodule Mix.Tasks.Orders.Export do\n  def run(_), do: Shop.Orders.list()\nend\n",
+        ),
+        // Both views are tested through their routes: no module is named.
+        (
+            "test/shop_web/live/orders_live_test.exs",
+            "defmodule ShopWeb.OrdersLiveTest do\n  test \"lists\", %{conn: conn} do\n    live(conn, \"/orders\")\n  end\nend\n",
+        ),
+        (
+            "test/shop_web/summary_live_test.exs",
+            "defmodule ShopWeb.SummaryLiveTest do\n  test \"sums\", %{conn: conn} do\n    live(conn, \"/summary\")\n  end\nend\n",
+        ),
+    ];
+    files
+        .iter()
+        .map(|(path, text)| (PathBuf::from(path), text.to_string()))
+        .collect()
+}
+
+#[test]
+fn protection_comes_in_degrees() {
+    let radius = radius(views(), &[change("lib/shop/orders.ex", &[2])]);
+
+    let protection: Vec<(&str, Protection, usize)> = radius
+        .direct
+        .iter()
+        .map(|d| {
+            (
+                d.file.file_name().unwrap().to_str().unwrap(),
+                d.protection,
+                d.tests,
+            )
+        })
+        .collect();
+    assert_eq!(
+        protection,
+        [
+            // Least protected first.
+            ("orders.export.ex", Protection::None, 0),
+            ("totals.ex", Protection::Users, 0),
+            // Named after the directory the view is in.
+            ("index.ex", Protection::Named, 0),
+            ("rows.ex", Protection::Named, 0),
+        ]
+    );
+    // Only the task is reported: the rest is reached by some test.
+    let unprotected: Vec<&Path> = radius.unprotected().map(|d| d.file.as_path()).collect();
+    assert_eq!(unprotected, [Path::new("lib/mix/tasks/orders.export.ex")]);
+}
+
+#[test]
+fn render_tells_the_degrees_apart() {
+    let lines = render(&radius(views(), &[change("lib/shop/orders.ex", &[2])]), 20);
+    let table: Vec<&str> = lines
+        .iter()
+        .map(String::as_str)
+        .skip_while(|l| *l != " Tests  Dependent")
+        .take_while(|l| !l.starts_with('─'))
+        .collect();
+    assert_eq!(
+        table,
+        [
+            " Tests  Dependent",
+            "  none  lib/mix/tasks/orders.export.ex",
+            "            calls Orders.list",
+            " users  lib/shop_web/totals.ex",
+            "            calls Orders.list",
+            " named  lib/shop_web/live/orders_live/index.ex",
+            "            calls Orders.list",
+            " named  lib/shop_web/live/orders_live/rows.ex",
+            "            calls Orders.list",
+            " named: a test carries its name; users: only what uses it is tested",
+        ]
+    );
+    assert!(lines.contains(
+        &"No test reaches 1 of the files that call what changed; an integration test is probably missing:".to_string()
+    ));
+
+    // With direct tests only, there is nothing to explain.
+    let direct_only = render(
+        &radius(
+            project(&[CONTROLLER_TEST]),
+            &[change(
+                "lib/booking/insights.ex",
+                &[line_of("record(insight, user, :arranged)")],
+            )],
+        ),
+        20,
+    );
+    assert!(
+        !direct_only.iter().any(|l| l.contains("named: a test")),
+        "{direct_only:?}"
+    );
 }

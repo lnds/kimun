@@ -16,6 +16,8 @@ use crate::git::{ChangeKind, FileDiffStat};
 use crate::loc::language::detect;
 use crate::walk::{TEST_DIRS, is_test_file};
 
+use super::protection::{Protection, Tests};
+
 /// Languages whose graph reflects what uses what. For the others `deps`
 /// reads declarations that do not amount to usage, and a radius drawn on
 /// them would be made up.
@@ -69,40 +71,6 @@ fn role(path: &Path) -> Role {
     }
 }
 
-/// Directories that separate sources from their tests without being part
-/// of what a file is: `lib/a/b.ex` and `test/a/b_test.exs` are one place.
-const LAYOUT_DIRS: &[&str] = &["lib", "src", "test", "tests", "spec", "__tests__"];
-
-/// What marks a file name as a test, around the name of what it tests.
-const TEST_AFFIXES: &[&str] = &["_test", ".test", "_spec", ".spec", "Test", "Spec"];
-
-/// The place of a file in its project, whatever side of the source and test
-/// layout it is on: its directories without the layout ones, and its name
-/// without extension or test mark. A test mirrors a source when both are at
-/// the same place. That is how a test protects code it never names, as a
-/// controller test that only issues requests.
-fn place(path: &Path) -> Vec<String> {
-    let mut place: Vec<String> = path
-        .parent()
-        .into_iter()
-        .flat_map(|dir| dir.components())
-        .filter_map(|c| c.as_os_str().to_str())
-        .filter(|c| !LAYOUT_DIRS.contains(c))
-        .map(str::to_string)
-        .collect();
-    let stem = path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or_default();
-    let name = TEST_AFFIXES
-        .iter()
-        .find_map(|affix| stem.strip_suffix(affix))
-        .or_else(|| stem.strip_prefix("test_"))
-        .unwrap_or(stem);
-    place.push(name.to_string());
-    place
-}
-
 /// How a file that uses a changed one stands to the change.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -125,6 +93,8 @@ pub struct Dependent {
     /// The calls that expose it: to the functions that changed when those
     /// are known, to the changed files otherwise.
     pub calls: Vec<String>,
+    /// How tests protect it.
+    pub protection: Protection,
     /// Test files that refer to it, or that mirror its path.
     pub tests: usize,
     /// How many of those tests are part of the change.
@@ -197,11 +167,12 @@ impl Structural {
             .filter(|d| d.exposure != Exposure::Elsewhere)
     }
 
-    /// Dependents that call what changed and that no test refers to.
+    /// Dependents that call what changed and that no test reaches, not even
+    /// through the files that use them.
     pub fn unprotected(&self) -> impl Iterator<Item = &Dependent> {
         self.direct
             .iter()
-            .filter(|d| d.exposure == Exposure::Calls && d.tests == 0)
+            .filter(|d| d.exposure == Exposure::Calls && d.protection == Protection::None)
     }
 }
 
@@ -223,46 +194,30 @@ fn unavailable(changed: &[&Path]) -> Vec<(String, usize)> {
 /// use it.
 struct Reverse {
     sources: Vec<Vec<usize>>,
-    tests: Vec<Vec<usize>>,
+    tests: Tests,
 }
 
 impl Reverse {
     fn of(graph: &FileGraph, roles: &[Role]) -> Self {
-        let mut reverse = Self {
-            sources: vec![Vec::new(); graph.files.len()],
-            tests: vec![Vec::new(); graph.files.len()],
-        };
+        let mut sources = vec![Vec::new(); graph.files.len()];
+        let mut referring = vec![Vec::new(); graph.files.len()];
         for (file, uses) in graph.uses.iter().enumerate() {
             let into = match roles[file] {
-                Role::Source => &mut reverse.sources,
-                Role::Test => &mut reverse.tests,
+                Role::Source => &mut sources,
+                Role::Test => &mut referring,
                 Role::Other => continue,
             };
             for used in uses {
                 into[used.to].push(file);
             }
         }
-        reverse.add_mirrors(graph, roles);
-        reverse
-    }
-
-    /// Count as a test of each source the test files at the same place.
-    fn add_mirrors(&mut self, graph: &FileGraph, roles: &[Role]) {
-        let mut tests_at: HashMap<Vec<String>, Vec<usize>> = HashMap::new();
-        for (file, path) in graph.files.iter().enumerate() {
-            if roles[file] == Role::Test {
-                tests_at.entry(place(path)).or_default().push(file);
-            }
-        }
-        for (file, path) in graph.files.iter().enumerate() {
-            let mirrors = tests_at.get(&place(path)).into_iter().flatten();
-            if roles[file] == Role::Source {
-                let tests = &mut self.tests[file];
-                tests.extend(mirrors);
-                tests.sort_unstable();
-                tests.dedup();
-            }
-        }
+        let tests = Tests::of(
+            &graph.files,
+            referring,
+            |file| roles[file] == Role::Test,
+            |file| roles[file] == Role::Source,
+        );
+        Self { sources, tests }
     }
 
     /// The sources that use `frontier`, then those that use them, and so
@@ -382,13 +337,14 @@ pub fn compute(
             exposure = exposure.min(how);
             calls.extend(telling.iter().map(|c| short_call(c)));
         }
-        let tests = &reverse.tests[file];
+        let tests = reverse.tests.direct(file);
         Dependent {
             file: graph.files[file].clone(),
             exposure,
             calls: calls.into_iter().collect(),
+            protection: reverse.tests.protection(file, &reverse.sources[file]),
             tests: tests.len(),
-            tests_in_diff: tests.iter().filter(|&&t| in_diff(t)).count(),
+            tests_in_diff: reverse.tests.own(file).filter(|&t| in_diff(t)).count(),
         }
     };
     let mut direct: Vec<(usize, Dependent)> = levels
@@ -398,7 +354,12 @@ pub fn compute(
         .map(|file| (*file, dependent(file)))
         .collect();
     direct.sort_by(|(_, a), (_, b)| {
-        (a.exposure, a.tests > 0, &a.file).cmp(&(b.exposure, b.tests > 0, &b.file))
+        // Most exposed first, and among those the least protected.
+        (a.exposure, std::cmp::Reverse(a.protection), &a.file).cmp(&(
+            b.exposure,
+            std::cmp::Reverse(b.protection),
+            &b.file,
+        ))
     });
 
     let mut narrowing: Vec<Narrowing> = origins
