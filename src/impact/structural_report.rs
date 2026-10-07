@@ -94,72 +94,96 @@ fn unnarrowed(radius: &Structural) -> String {
     names(why.iter(), 3)
 }
 
+impl Structural {
+    /// `files` as a share of the source files measured. One too small to
+    /// round to 1% is still not zero.
+    fn share(&self, files: usize) -> String {
+        match 100.0 * files as f64 / self.source_files.max(1) as f64 {
+            pct if pct > 0.0 && pct < 0.5 => "<1%".to_string(),
+            pct => format!("{pct:.0}%"),
+        }
+    }
+
+    /// Direct dependents that stand to the change as `exposure` says.
+    fn count(&self, exposure: Exposure) -> usize {
+        self.direct
+            .iter()
+            .filter(|d| d.exposure == exposure)
+            .count()
+    }
+
+    fn changed_line(&self) -> String {
+        format!(" Changed: {}", names(self.origins.iter(), 5))
+    }
+
+    /// The summary when no changed file tells its functions: every use of
+    /// them counts, and the radius is all there is.
+    fn summary_of_every_use(&self) -> Vec<String> {
+        let reached = self.reached();
+        vec![
+            format!(
+                " {reached} of {} source files reached ({}), {} direct, {} of them with no test",
+                self.source_files,
+                self.share(reached),
+                self.direct.len(),
+                self.unprotected().count()
+            ),
+            self.changed_line(),
+            format!(" Every use counts: {}", unnarrowed(self)),
+            format!(" Reach: {}", reach_line(self)),
+        ]
+    }
+
+    /// The line that gives the radius as a number.
+    fn radius_line(&self) -> String {
+        match self.reached() {
+            0 => format!(" Radius: 0 of {} source files", self.source_files),
+            reached => format!(
+                " Radius: {reached} of {} source files ({}): {}",
+                self.source_files,
+                self.share(reached),
+                reach_line(self)
+            ),
+        }
+    }
+
+    /// The summary when the change is narrowed to `functions`.
+    fn summary_of_functions(&self, functions: &[String]) -> Vec<String> {
+        let calling = match self.count(Exposure::Calls) {
+            1 => "1 file calls what changed".to_string(),
+            n => format!("{n} files call what changed"),
+        };
+        let referring = self.count(Exposure::Refers);
+        let partly = self.narrowing.iter().any(|n| n.functions.is_none());
+
+        let mut lines = vec![
+            format!(
+                " {calling}, {} of them with no test",
+                self.unprotected().count()
+            ),
+            self.changed_line(),
+            format!(" Functions: {}", names(functions.iter(), 8)),
+        ];
+        lines.extend(partly.then(|| format!(" Every use counts for: {}", unnarrowed(self))));
+        lines.push(self.radius_line());
+        lines.extend((referring > 0).then(|| {
+            format!(" Not in the radius: {referring} that refer to the module without calling it")
+        }));
+        lines.push(format!(
+            " Upper bound, whatever the function: {} files ({})",
+            self.upper_bound,
+            self.share(self.upper_bound)
+        ));
+        lines
+    }
+}
+
 /// The lines that sum the radius up, above the list of dependents.
 pub(super) fn summary(radius: &Structural) -> Vec<String> {
-    let total = radius.source_files.max(1) as f64;
-    // A share too small to round to 1% is still not zero.
-    let share = |files: usize| match 100.0 * files as f64 / total {
-        pct if pct > 0.0 && pct < 0.5 => "<1%".to_string(),
-        pct => format!("{pct:.0}%"),
-    };
-    let reached = radius.reached();
-    let changed = format!(" Changed: {}", names(radius.origins.iter(), 5));
-    let unprotected = radius.unprotected().count();
-    let Some(functions) = &radius.functions else {
-        return vec![
-            format!(
-                " {reached} of {} source files reached ({}), {} direct, {unprotected} of them with no test",
-                radius.source_files,
-                share(reached),
-                radius.direct.len()
-            ),
-            changed,
-            format!(" Every use counts: {}", unnarrowed(radius)),
-            format!(" Reach: {}", reach_line(radius)),
-        ];
-    };
-    let calling = radius
-        .direct
-        .iter()
-        .filter(|d| d.exposure == Exposure::Calls)
-        .count();
-    let radius_line = match reached {
-        0 => format!(" Radius: 0 of {} source files", radius.source_files),
-        _ => format!(
-            " Radius: {reached} of {} source files ({}): {}",
-            radius.source_files,
-            share(reached),
-            reach_line(radius)
-        ),
-    };
-    vec![
-        format!(
-            " {}, {unprotected} of them with no test",
-            match calling {
-                1 => "1 file calls what changed".to_string(),
-                n => format!("{n} files call what changed"),
-            }
-        ),
-        changed,
-        format!(" Functions: {}", names(functions.iter(), 8)),
-    ]
-    .into_iter()
-    .chain(
-        radius
-            .narrowing
-            .iter()
-            .any(|n| n.functions.is_none())
-            .then(|| format!(" Every use counts for: {}", unnarrowed(radius))),
-    )
-    .chain([
-        radius_line,
-        format!(
-            " Upper bound, whatever the function: {} files ({})",
-            radius.upper_bound,
-            share(radius.upper_bound)
-        ),
-    ])
-    .collect()
+    match &radius.functions {
+        Some(functions) => radius.summary_of_functions(functions),
+        None => radius.summary_of_every_use(),
+    }
 }
 
 /// What the radius comes to.

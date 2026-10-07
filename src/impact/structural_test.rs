@@ -139,10 +139,11 @@ fn a_change_inside_a_function_exposes_those_who_call_it() {
     assert_eq!(radius.exposed().count(), 2);
     // Sources only: tests, support, configuration and mix.exs are not.
     assert_eq!(radius.source_files, 6);
-    // The radius goes through the two files the change concerns. The
-    // report calls elsewhere, so the mailer that uses it is not reached.
-    assert_eq!(radius.by_distance, [2]);
-    assert_eq!(radius.reached(), 2);
+    // The radius goes through the file that calls what changed. The export
+    // only names the struct, and the report calls elsewhere, so neither
+    // carries it on: the mailer that uses the report is not reached.
+    assert_eq!(radius.by_distance, [1]);
+    assert_eq!(radius.reached(), 1);
     // Whatever the function: three direct, then the mailer.
     assert_eq!(radius.upper_bound, 4);
 }
@@ -271,7 +272,8 @@ fn render_when_the_change_is_narrowed_to_functions() {
             " 1 file calls what changed, 1 of them with no test",
             " Changed: lib/booking/insights.ex",
             " Functions: arrange",
-            " Radius: 2 of 6 source files (33%): 2 at distance 1",
+            " Radius: 1 of 6 source files (17%): 1 at distance 1",
+            " Not in the radius: 1 that refer to the module without calling it",
             " Upper bound, whatever the function: 4 files (67%)",
             "",
             " Tests  Dependent",
@@ -379,21 +381,18 @@ fn json_block() {
         serde_json::json!(["lib/booking/insights.ex"])
     );
     assert_eq!(json["functions"], serde_json::json!(["arrange"]));
-    assert_eq!(json["reached"], 2);
-    assert_eq!(json["by_distance"], serde_json::json!([2]));
+    assert_eq!(json["reached"], 1);
+    assert_eq!(json["by_distance"], serde_json::json!([1]));
     assert_eq!(json["upper_bound"], 4);
     assert_eq!(
         json["radius"],
-        serde_json::json!({"files": 2, "source_files": 6, "share": 0.3333})
+        serde_json::json!({"files": 1, "source_files": 6, "share": 0.1667})
     );
     assert_eq!(
         json["reach"],
         serde_json::json!([{
             "distance": 1,
-            "files": [
-                "lib/booking_web/controllers/insight_controller.ex",
-                "lib/booking/export.ex"
-            ]
+            "files": ["lib/booking_web/controllers/insight_controller.ex"]
         }])
     );
     assert_eq!(
@@ -436,17 +435,22 @@ fn the_radius_carries_on_from_the_files_the_change_concerns() {
     )];
     let radius = radius(project(&[router]), &changes);
 
-    // Controller and export at distance 1, the router at 2; the mailer,
-    // behind a file that calls elsewhere, is only in the upper bound.
-    assert_eq!(radius.by_distance, [2, 1]);
+    // The controller at distance 1, the router at 2. The export, which
+    // only names the struct, and the mailer, behind a file that calls
+    // elsewhere, are only in the upper bound.
+    assert_eq!(radius.by_distance, [1, 1]);
     assert_eq!(radius.upper_bound, 5);
     let lines = render(&radius, 20);
     assert_eq!(
         lines[5],
-        " Radius: 3 of 7 source files (43%): 2 at distance 1, 1 at distance 2"
+        " Radius: 2 of 7 source files (29%): 1 at distance 1, 1 at distance 2"
     );
     assert_eq!(
         lines[6],
+        " Not in the radius: 1 that refer to the module without calling it"
+    );
+    assert_eq!(
+        lines[7],
         " Upper bound, whatever the function: 5 files (71%)"
     );
 }

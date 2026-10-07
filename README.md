@@ -660,7 +660,7 @@ Limits:
 
 Inside the projects the change affects: which source files use what changed, and which of them no test exercises. This is the question "the tests of the module I changed pass; who else calls it?".
 
-The first line is the answer in short: how many files call what changed, and how many of them have no test. `Radius` is the count of files the change concerns, directly and through them. `Upper bound` is what it would be without knowing which functions changed.
+The first line is the answer in short: how many files call what changed, and how many of them have no test. `Radius` is the count of files that call what changed, and of those that use them. `Upper bound` is what it would be without knowing which functions changed.
 
 ```
 Structural radius — source files that use what changed
@@ -668,7 +668,8 @@ Structural radius — source files that use what changed
  1 file calls what changed, 1 of them with no test
  Changed: lib/booking/insights.ex
  Functions: arrange
- Radius: 2 of 6 source files (33%): 2 at distance 1
+ Radius: 1 of 6 source files (17%): 1 at distance 1
+ Not in the radius: 1 that refer to the module without calling it
  Upper bound, whatever the function: 4 files (67%)
 
  Tests  Dependent
@@ -687,7 +688,7 @@ How it is measured:
 
 - The dependency graph of `km deps` is read backwards from the changed source files.
 - In Elixir the change is **narrowed to functions**: the lines the diff touches tell which functions changed, and a change to a private function is carried to the public ones that reach it through local calls. A file that uses the module is then one of three: it **calls** a function that changed, it **refers** to the module without calling it (a struct, an `import`, a `use`), or it only calls functions the change leaves alone, and is not listed. Each changed file is narrowed on its own. Outside the functions, a touched `alias` or `require` changes none (it only names what the touched functions use), and a touched module attribute changes the functions that read it. A `use`, an `import`, a `defstruct`, or an attribute no function reads may concern every function: that file is not narrowed, every use of it counts, and the report says which line it was. A new file is never narrowed.
-- The **radius** starts at the files the change concerns and follows who uses them, file by file. Files that only pass through a dependent the change leaves alone are not counted. The **upper bound** is what the radius would be if every use of a changed file counted, whatever the function: in a codebase where everything goes through a few contexts it is most of the project, which is why the radius is the number to read.
+- The **radius** starts at the files that call what changed and follows who uses them, file by file. A file that only refers to the module, without a call that tells, is listed but does not carry the radius on: a schema is named by half a project, and following all of that says nothing. Files that only pass through a dependent the change leaves alone are not counted either. Past the first step the radius is still by file, not by function, so it stays an estimate from above. The **upper bound** is what the radius would be if every use of a changed file counted, whatever the function: in a codebase where everything goes through a few contexts it is most of the project, which is why the radius is the number to read.
 - **Tests** says how the dependent is protected. A test rarely names everything it exercises — a controller or a live view is tested through its route, a helper through the views that use it — so protection comes in degrees:
 
   | `Tests` | Protection | When |

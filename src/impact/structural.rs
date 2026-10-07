@@ -138,9 +138,9 @@ pub struct Structural {
     pub source_files: usize,
     /// Files that use an origin directly, most exposed first.
     pub direct: Vec<Dependent>,
-    /// Files reached at each distance, starting at 1. When the functions
-    /// that changed are known, the reach starts at the files the change
-    /// concerns and leaves out what only passes through the others.
+    /// Files reached at each distance, starting at 1 with the files that
+    /// call what changed. What only passes through a file that calls
+    /// elsewhere, or that merely refers to the module, is left out.
     pub by_distance: Vec<usize>,
     /// The files behind `by_distance`, distance by distance.
     pub reached_files: Vec<Vec<PathBuf>>,
@@ -246,15 +246,15 @@ impl Reverse {
         self.levels_beyond(origins, origins.iter().copied().collect())
     }
 
-    /// The reach that starts at `exposed`, the files a change concerns at
-    /// distance 1, without going back to the `origins`.
-    fn levels_through(&self, origins: &[usize], exposed: &[usize]) -> Vec<Vec<usize>> {
-        if exposed.is_empty() {
+    /// The reach that starts at `calling`, the files that call what changed,
+    /// at distance 1, without going back to the `origins`.
+    fn levels_through(&self, origins: &[usize], calling: &[usize]) -> Vec<Vec<usize>> {
+        if calling.is_empty() {
             return Vec::new();
         }
-        let seen = origins.iter().chain(exposed).copied().collect();
-        let mut levels = vec![exposed.to_vec()];
-        levels.extend(self.levels_beyond(exposed, seen));
+        let seen = origins.iter().chain(calling).copied().collect();
+        let mut levels = vec![calling.to_vec()];
+        levels.extend(self.levels_beyond(calling, seen));
         levels
     }
 }
@@ -386,15 +386,17 @@ pub fn compute(
         all.into_iter().cloned().collect()
     });
 
-    // The radius goes through the files the change concerns; a file that
-    // only calls functions it leaves alone carries it no further. Where an
-    // origin could not be narrowed, every file that uses it is concerned.
-    let exposed: Vec<usize> = direct
+    // The radius goes through the files that call what changed. One that
+    // only calls functions the change leaves alone carries it no further,
+    // and neither does one that merely refers to the module: a schema is
+    // named by half a project, and following all of that says nothing.
+    // Where an origin could not be narrowed, every use of it is a call.
+    let calling: Vec<usize> = direct
         .iter()
-        .filter(|(_, d)| d.exposure != Exposure::Elsewhere)
+        .filter(|(_, d)| d.exposure == Exposure::Calls)
         .map(|(file, _)| *file)
         .collect();
-    let through = reverse.levels_through(&starts, &exposed);
+    let through = reverse.levels_through(&starts, &calling);
 
     Structural {
         origins: narrowing.iter().map(|n| n.file.clone()).collect(),
