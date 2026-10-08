@@ -55,6 +55,7 @@ Optional flags: `nested: true`, `sq: true` (single-quote strings), `tq: true` (t
 - The tool's output should match `cloc` as closely as possible — use `cloc` as the reference when validating changes.
 - Always run `cargo fmt` before `cargo clippy`. Then validate with `cargo clippy` (zero warnings required) and `cargo test` before considering a change complete.
 - When adding or modifying a feature (new command, new flag, changed behavior), update `README.md` to reflect the change before considering the work done.
+- `LEEME.md` is the Spanish edition of `README.md`, section by section. A change to one goes into the other.
 - Tests in `counter.rs` use `count_reader(Cursor::new(...))` to test the FSM without touching the filesystem.
 - Tests in `mod.rs` use `tempfile::tempdir()` for integration tests with real files.
 - Tests exist in all modules: `counter.rs`, `language.rs`, `report.rs`, `mod.rs`.
