@@ -1,6 +1,12 @@
 # Kimün (km)
 
+<p align="center">
+  <img src="assets/madu.png" alt="Madu, the mascot of Kimün" width="220">
+</p>
+
 > *Kimün* means "knowledge" or "wisdom" in Mapudungun, the language of the Mapuche people.
+>
+> The mascot is **Madu**, a pudú who is a *machi*: the one who holds the knowledge of her people. She is the sister of Kalku, the mascot of [kalku](https://github.com/lnds/kalku).
 
 A fast command-line tool for code analysis, written in Rust. Run `km score` on any project to get an overall health grade (A++ to F--) across five quality dimensions — cognitive complexity, duplication, indentation depth, Halstead effort, and file size — with a list of the files that need the most attention.
 
