@@ -18,6 +18,11 @@ use std::path::PathBuf;
 
 pub use discover::{files_on_disk, is_manifest, is_skipped};
 
+/// The name of the package a `Cargo.toml` declares, if it declares one.
+pub fn cargo_package(manifest: &str) -> Option<String> {
+    cargo::read(manifest).name
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Ecosystem {
     Cargo,

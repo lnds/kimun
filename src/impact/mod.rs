@@ -12,7 +12,9 @@ mod inert;
 mod pr;
 mod projects;
 mod protection;
+mod reading;
 mod report;
+mod role;
 mod routes;
 mod source;
 mod structural;
@@ -26,6 +28,7 @@ use std::path::{Path, PathBuf};
 use crate::cli::OutputMode;
 use crate::config::KimunConfig;
 use crate::deps::heex;
+use crate::deps::layout::is_cargo_manifest;
 use crate::git::{ChangeKind, FileDiffStat, GitRepo};
 use crate::projects::ProjectGraph;
 use crate::util::{is_generated, parse_since};
@@ -163,7 +166,8 @@ fn structural_radius(
     };
     let in_scope =
         |path: &Path| scope.is_empty() || scope.iter().any(|root| path.starts_with(root));
-    let measured = |p: &Path| structural::is_reliable(p) || heex::is_template(p);
+    let measured =
+        |p: &Path| structural::is_reliable(p) || heex::is_template(p) || is_cargo_manifest(p);
     let sources = change.sources(git_repo, |p| measured(p) && in_scope(p))?;
     let changed: Vec<structural::Changed> = change.diff.iter().collect();
     let mut radius = structural::compute(sources, &changed, &|from, to| graph.may_use(from, to));

@@ -2,11 +2,10 @@
 ///
 /// Each extractor returns raw import strings that the resolver will map to
 /// project-relative file paths. Only potentially-internal references are
-/// returned: relative imports (JS/TS/Python) and module declarations (Rust).
-/// Go and Kaikai imports are returned verbatim for the resolver to filter:
-/// by module path (Go) or by what exists in the project (Kaikai).
-use std::path::Path;
-
+/// returned: relative imports (JS/TS/Python). Go and Kaikai imports are
+/// returned verbatim for the resolver to filter: by module path (Go) or by
+/// what exists in the project (Kaikai). Elixir and Rust are read apart:
+/// their dependencies are names to resolve over the whole graph.
 use super::kaikai;
 
 /// Whether imports can be extracted and resolved for this language.
@@ -29,50 +28,13 @@ pub fn is_supported(language: &str) -> bool {
 
 /// Extract raw import references from a source file.
 /// Returns strings that the resolver will attempt to map to project files.
-pub fn extract_imports(path: &Path, language: &str, source: &str) -> Vec<String> {
+pub fn extract_imports(language: &str, source: &str) -> Vec<String> {
     match language {
-        "Rust" => extract_rust(path, source),
         "Python" => extract_python(source),
         "JavaScript" | "TypeScript" | "JSX" | "TSX" => extract_js(source),
         "Go" => extract_go(source),
         "Kaikai" => kaikai::extract(source),
         _ => vec![],
-    }
-}
-
-/// Rust: extract `mod foo;` declarations (external `mod foo {}` inline are skipped).
-/// The file path is used to compute the correct relative base for resolution.
-fn extract_rust(_path: &Path, source: &str) -> Vec<String> {
-    let mut imports = Vec::new();
-    for line in source.lines() {
-        let trimmed = line.trim();
-        // Skip inline modules (contain `{`) and non-semicolon-terminated lines.
-        if !trimmed.ends_with(';') || trimmed.contains('{') {
-            continue;
-        }
-        if let Some(rest) = strip_visibility(trimmed).strip_prefix("mod ") {
-            let name = rest.trim_end_matches(';').trim();
-            if !name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_') {
-                imports.push(name.to_string());
-            }
-        }
-    }
-    imports
-}
-
-/// Drop a leading visibility qualifier: `pub`, `pub(crate)`, `pub(in path)`.
-fn strip_visibility(decl: &str) -> &str {
-    let Some(rest) = decl.strip_prefix("pub") else {
-        return decl;
-    };
-    let rest = match rest.strip_prefix('(') {
-        Some(scoped) => scoped.split_once(')').map_or(rest, |(_, after)| after),
-        None => rest,
-    };
-    if rest.starts_with(char::is_whitespace) {
-        rest.trim_start()
-    } else {
-        decl
     }
 }
 

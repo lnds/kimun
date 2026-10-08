@@ -11,13 +11,12 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-use crate::deps::graph::{FileGraph, Related, Source, Unnarrowed};
-use crate::deps::heex;
+use crate::deps::graph::{FileGraph, Related, Unnarrowed};
 use crate::git::{ChangeKind, FileDiffStat};
-use crate::loc::language::detect;
-use crate::walk::{TEST_DIRS, is_test_file};
 
 use super::protection::{Protection, Tests};
+use super::reading::{self, graphed_language};
+use super::role::{self, Role, roles_of};
 use super::routes;
 
 /// Languages whose graph reflects what uses what. For the others `deps`
@@ -31,46 +30,12 @@ const RELIABLE: &[&str] = &[
     "JSX",
     "TSX",
     "Kaikai",
+    "Rust",
 ];
-
-/// The language of a file, when it has a graph.
-pub fn graphed_language(path: &Path) -> Option<&'static str> {
-    detect(path)
-        .map(|spec| spec.name)
-        .filter(|name| crate::deps::is_supported(name))
-}
 
 /// Whether the graph of the language of `path` can be trusted for a radius.
 pub fn is_reliable(path: &Path) -> bool {
     graphed_language(path).is_some_and(|language| RELIABLE.contains(&language))
-}
-
-/// What a file is to the radius.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Role {
-    /// Code that ships: it can change, and it can be reached.
-    Source,
-    /// A test: it protects the sources it refers to.
-    Test,
-    /// Test support, configuration and scripts. A factory or a case
-    /// template refers to every schema; counting it as a test would make
-    /// everything look protected.
-    Other,
-}
-
-fn role(path: &Path) -> Role {
-    let in_test_dir = path
-        .components()
-        .filter_map(|c| c.as_os_str().to_str())
-        .any(|c| TEST_DIRS.contains(&c));
-    let is_script = graphed_language(path) == Some("Elixir Script");
-    if is_test_file(path) {
-        Role::Test
-    } else if in_test_dir || is_script {
-        Role::Other
-    } else {
-        Role::Source
-    }
 }
 
 /// How a file that uses a changed one stands to the change.
@@ -242,6 +207,7 @@ impl Reverse {
                 into[used.to].push(file);
             }
         }
+        role::own_tests(graph, roles, &mut referring);
         let tests = Tests::of(
             &graph.files,
             referring,
@@ -328,26 +294,8 @@ pub fn compute(
     changed: &[Changed<'_>],
     related: Related,
 ) -> Structural {
-    let (templates, sources): (Vec<_>, Vec<_>) = sources
-        .into_iter()
-        .partition(|(path, _)| heex::is_template(path));
-    let mut rendered = heex::by_owner(templates, &sources);
-    let sources: Vec<Source> = sources
-        .into_iter()
-        .filter_map(|(path, text)| {
-            let language = graphed_language(&path)?.to_string();
-            let templates = rendered.remove(&path).unwrap_or_default();
-            Some(Source {
-                path,
-                language,
-                text,
-                templates,
-            })
-        })
-        .collect();
-    let known: HashSet<PathBuf> = sources.iter().map(|s| s.path.clone()).collect();
-    let graph = FileGraph::build(&sources, &known, None, related);
-    let roles: Vec<Role> = graph.files.iter().map(|f| role(f)).collect();
+    let (sources, graph) = reading::read(sources, related);
+    let roles = roles_of(&graph);
     let requesting = routes::requesting(&sources, &graph, |f| roles[f] == Role::Test, related);
     let reverse = Reverse::of(&graph, &roles, requesting);
 
