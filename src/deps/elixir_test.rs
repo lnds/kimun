@@ -214,7 +214,7 @@ defmodule Booking.Docs do
   See `Booking.Sigil.doc/0`.
   """
   def text do
-    a = "Booking.InString.x() and #{Booking.Interpolated.y("q")} too"
+    a = "Booking.InString.x() and \#{Booking.Escaped.y()} too"
     b = 'Booking.Charlist.z()'
     c = ~s(Booking.Sigil.paren())
     d = ~r/Booking\.Regex/
@@ -230,6 +230,44 @@ end
         file.refs,
         [module("Booking.Docs"), call("Booking.Real", "call")]
     );
+}
+
+#[test]
+fn the_code_a_string_interpolates_is_code() {
+    let file = parse(
+        r##"
+defmodule Booking.Labels do
+  def text(order) do
+    a = "Total: #{Booking.Orders.total(order, "x}")} of #{Booking.Cart.size(%{a: 1})}"
+    b = """
+    Due #{Booking.Dates.due(order)} # not a comment
+    """
+    c = ~s(#{Booking.Sigil.lower()})
+    d = ~S(#{Booking.Sigil.upper()})
+    e = "open #{Booking.Unclosed.x(
+    {a, b, c, d, e}
+  end
+end
+"##,
+    );
+    let names: Vec<&str> = file.refs.iter().map(|r| r.module.as_str()).collect();
+    assert_eq!(
+        names,
+        [
+            "Booking.Cart",
+            "Booking.Dates",
+            "Booking.Labels",
+            "Booking.Orders",
+            "Booking.Sigil",
+            "Booking.Unclosed"
+        ]
+    );
+    let sigil: Vec<_> = file
+        .refs
+        .iter()
+        .filter(|r| r.module == "Booking.Sigil")
+        .collect();
+    assert_eq!(sigil, [&call("Booking.Sigil", "lower")]);
 }
 
 #[test]

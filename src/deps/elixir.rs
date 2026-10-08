@@ -10,6 +10,8 @@
 
 use std::collections::HashMap;
 
+use super::elixir_literals::code_only;
+pub(super) use super::elixir_literals::{interpolation_end, literal_end};
 use super::heex;
 use super::phoenix;
 
@@ -32,113 +34,6 @@ pub struct ElixirFile {
 
 pub(super) fn is_ident(c: char) -> bool {
     c.is_ascii_alphanumeric() || c == '_'
-}
-
-/// The index past `closer`, looked for from `from`. A string that
-/// `interpolates` also honours escapes and skips `#{...}` whole, since the
-/// code inside may hold quotes of its own.
-fn closing(chars: &[char], from: usize, closer: &[char], interpolates: bool) -> usize {
-    let mut i = from;
-    while i < chars.len() {
-        if interpolates && chars[i] == '\\' {
-            i += 2;
-        } else if interpolates && chars[i..].starts_with(&['#', '{']) {
-            i = interpolation_end(chars, i + 2);
-        } else if chars[i..].starts_with(closer) {
-            return i + closer.len();
-        } else {
-            i += 1;
-        }
-    }
-    chars.len()
-}
-
-/// The index past the `}` that closes an interpolation opened before `from`.
-pub(super) fn interpolation_end(chars: &[char], from: usize) -> usize {
-    let mut depth = 1usize;
-    let mut i = from;
-    while i < chars.len() {
-        match chars[i] {
-            '"' => {
-                i = closing(chars, i + 1, &['"'], true);
-                continue;
-            }
-            '{' => depth += 1,
-            '}' if depth == 1 => return i + 1,
-            '}' => depth -= 1,
-            _ => {}
-        }
-        i += 1;
-    }
-    chars.len()
-}
-
-/// The index past the sigil that starts at `i` (`~r/.../`, `~S"""..."""`),
-/// or `i` when what follows `~` is not one.
-fn sigil_end(chars: &[char], i: usize) -> usize {
-    let name_end = i
-        + 1
-        + chars[i + 1..]
-            .iter()
-            .take_while(|c| c.is_ascii_alphabetic())
-            .count();
-    let Some(&open) = chars.get(name_end).filter(|_| name_end > i + 1) else {
-        return i;
-    };
-    // An uppercase sigil takes its content verbatim.
-    let interpolates = chars[i + 1].is_ascii_lowercase();
-    let heredoc = [open; 3];
-    if matches!(open, '"' | '\'') && chars[name_end..].starts_with(&heredoc) {
-        return closing(chars, name_end + 3, &heredoc, interpolates);
-    }
-    let close = match open {
-        '(' => ')',
-        '[' => ']',
-        '{' => '}',
-        '<' => '>',
-        '"' | '\'' | '/' | '|' => open,
-        _ => return i,
-    };
-    closing(chars, name_end + 1, &[close], interpolates)
-}
-
-/// The index past the comment, string, sigil or character literal that
-/// starts at `i`, or `i` when none does.
-pub(super) fn literal_end(chars: &[char], i: usize) -> usize {
-    let after_ident = i > 0 && is_ident(chars[i - 1]);
-    match chars[i..] {
-        ['#', ..] => i + chars[i..].iter().take_while(|&&c| c != '\n').count(),
-        [q @ ('"' | '\''), b, c, ..] if q == b && q == c => closing(chars, i + 3, &[q; 3], true),
-        [q @ ('"' | '\''), ..] => closing(chars, i + 1, &[q], true),
-        ['~', ..] => sigil_end(chars, i),
-        // `?x` is a character; in `valid?(x)` the mark belongs to the name.
-        ['?', '\\', _, ..] if !after_ident => i + 3,
-        ['?', _, ..] if !after_ident => i + 2,
-        _ => i,
-    }
-}
-
-/// The source with comments and literals blanked out. Line breaks and
-/// columns are kept, so indentation still tells how deep a line is.
-pub(super) fn code_only(source: &str) -> String {
-    let chars: Vec<char> = source.chars().collect();
-    let mut out = String::with_capacity(source.len());
-    let mut i = 0;
-    while i < chars.len() {
-        let end = literal_end(&chars, i).min(chars.len());
-        if end == i {
-            out.push(chars[i]);
-            i += 1;
-            continue;
-        }
-        out.extend(
-            chars[i..end]
-                .iter()
-                .map(|&c| if c == '\n' { '\n' } else { ' ' }),
-        );
-        i = end;
-    }
-    out
 }
 
 /// The dotted module name at the start of `text`: `Foo.Bar` in `Foo.Bar.baz(`.

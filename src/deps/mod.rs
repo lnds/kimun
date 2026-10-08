@@ -8,6 +8,7 @@
 mod analyzer;
 mod elixir;
 mod elixir_functions;
+mod elixir_literals;
 mod extractor;
 pub mod graph;
 pub mod heex;

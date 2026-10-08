@@ -3,7 +3,8 @@
 
 use std::collections::BTreeSet;
 
-use super::elixir::{Aliases, code_only, is_ident};
+use super::elixir::{Aliases, is_ident};
+use super::elixir_literals::code_only;
 
 /// Keywords that define something callable, and whether it is public.
 const DEFINITIONS: [(&str, bool); 7] = [

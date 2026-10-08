@@ -5,7 +5,8 @@
 //! two. Both are read lexically, one statement a line, as `mix format`
 //! leaves them.
 
-use super::elixir::{code_only, interpolation_end, is_ident, module_name};
+use super::elixir::{is_ident, module_name};
+use super::elixir_literals::{code_only, interpolation_end};
 
 /// A path a router serves, and the module it hands the request to.
 #[derive(Debug, Clone, PartialEq)]
