@@ -1,3 +1,13 @@
+## v0.32.0 (2026-10-08)
+
+### Feat
+
+- **deps**: the Rust graph is what files use, not the module tree
+
+### Fix
+
+- **impact**: what a Rust package runs is an entry point, and vendor stays out
+
 ## v0.31.2 (2026-10-08)
 
 ### Fix
