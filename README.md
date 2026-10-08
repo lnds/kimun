@@ -8,6 +8,14 @@
 >
 > The mascot is **Madu**, a pudú who is a *machi*: the one who holds the knowledge of her people. She is the sister of Kalku, the mascot of [kalku](https://github.com/lnds/kalku).
 
+**Website: [kimun.tools](https://kimun.tools/en/)** · Also [in Spanish](LEEME.md).
+
+<p align="center">
+  <a href="https://kimun.tools/en/#video"><img src="assets/video-en.jpg" alt="Play the video: Madu, the mascot, beside the words 'kimün = knowledge'" width="720"></a>
+</p>
+
+**New to Kimün? [Watch Madu explain it in two minutes](https://kimun.tools/en/#video)** — the grade, the metrics, what git remembers, the impact of a change and the gate for CI.
+
 A fast command-line tool for code analysis, written in Rust. Run `km score` on any project to get an overall health grade (A++ to F--) across five quality dimensions — cognitive complexity, duplication, indentation depth, Halstead effort, and file size — with a list of the files that need the most attention.
 
 > Note: This repository is not the same as the Rust console note-taking app `kimun` by nico2sh. That project is available at https://github.com/nico2sh/kimun.
@@ -21,10 +29,11 @@ Beyond the aggregate score, Kimün provides 17 specialized commands:
 ## Installation
 
 ```bash
-cargo install --path .
+cargo install kimun              # from crates.io
+brew install lnds/kimun/kimun    # with Homebrew, on macOS and Linux
 ```
 
-This installs the `km` binary.
+Either one installs the `km` binary. There are also ready-made binaries for macOS, Linux and Windows on the [releases page](https://github.com/lnds/kimun/releases). From a checkout of this repository, `cargo install --path .` builds it from source.
 
 ### Shell completions
 
