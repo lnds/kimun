@@ -1,3 +1,10 @@
+## v0.31.1 (2026-10-08)
+
+### Fix
+
+- **impact**: a test line with text beyond ASCII before a call no longer stops the measure
+- **impact**: a mirrored test names no other file, and a run-time segment matches only a parameter
+
 ## v0.31.0 (2026-10-07)
 
 ### Feat
