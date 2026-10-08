@@ -686,3 +686,29 @@ fn a_go_file_belongs_to_its_module() {
     assert_eq!(owner("ops/cmd/main.go").as_deref(), Some("ops"));
     assert_eq!(owner("ops/go.sum").as_deref(), Some("ops"));
 }
+
+#[test]
+fn a_dependency_directory_is_skipped_at_a_project_root_only() {
+    for skipped in [
+        "deps",
+        "apps/web/deps",
+        "target",
+        "_build",
+        "vendor",
+        "web/node_modules",
+    ] {
+        assert!(is_skipped(Path::new(skipped)), "{skipped}");
+    }
+    // Under the sources, the same name is a module of the project.
+    for kept in [
+        "src/deps",
+        "lib/app/target",
+        "crates/core/src/_build",
+        "src",
+        "lib",
+    ] {
+        assert!(!is_skipped(Path::new(kept)), "{kept}");
+    }
+    assert!(is_skipped(Path::new("src/node_modules")));
+    assert!(is_skipped(Path::new("src/svc/vendor")));
+}

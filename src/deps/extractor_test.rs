@@ -1,18 +1,4 @@
 use super::*;
-use std::path::PathBuf;
-
-#[test]
-fn rust_mod_declarations() {
-    let src = r#"
-pub mod analyzer;
-mod report;
-pub(crate) mod utils;
-mod inline { fn foo() {} }  // should be skipped (has {)
-// mod commented_out;
-"#;
-    let result = extract_rust(&PathBuf::from("src/lib.rs"), src);
-    assert_eq!(result, vec!["analyzer", "report", "utils"]);
-}
 
 #[test]
 fn python_relative_imports() {
@@ -54,36 +40,6 @@ import (
 }
 
 #[test]
-fn rust_mod_without_semicolon_is_skipped() {
-    assert!(extract_rust(&PathBuf::from("src/lib.rs"), "mod foo\n").is_empty());
-}
-
-#[test]
-fn rust_pub_super_mod_is_extracted() {
-    let result = extract_rust(&PathBuf::from("src/lib.rs"), "pub(super) mod helpers;\n");
-    assert_eq!(result, vec!["helpers"]);
-}
-
-#[test]
-fn rust_pub_in_path_mod_is_extracted() {
-    let src = "pub(in crate::deps) mod scoped;\npub(in  mod broken;\npublic mod other;\n";
-    let result = extract_rust(&PathBuf::from("src/lib.rs"), src);
-    assert_eq!(result, vec!["scoped"]);
-}
-
-#[test]
-fn rust_mod_name_may_contain_underscores() {
-    let result = extract_rust(&PathBuf::from("src/lib.rs"), "mod string_mask;\n");
-    assert_eq!(result, vec!["string_mask"]);
-}
-
-#[test]
-fn rust_mod_with_invalid_name_is_skipped() {
-    let src = "mod foo-bar;\nmod ;\n";
-    assert!(extract_rust(&PathBuf::from("src/lib.rs"), src).is_empty());
-}
-
-#[test]
 fn js_comment_lines_are_skipped() {
     let src =
         "// import a from './line';\n/* import b from './block'; */\n * import c from './doc';\n";
@@ -117,7 +73,6 @@ fn go_strings_outside_imports_are_not_imports() {
 #[test]
 fn dispatcher_routes_each_language_to_its_extractor() {
     let cases = [
-        ("src/lib.rs", "Rust", "mod foo;\n", "foo"),
         ("pkg/a.py", "Python", "from .foo import bar\n", ".foo"),
         (
             "src/a.js",
@@ -135,15 +90,15 @@ fn dispatcher_routes_each_language_to_its_extractor() {
         ("src/a.tsx", "TSX", "import a from './foo';\n", "./foo"),
         ("main.go", "Go", "import \"fmt\"\n", "fmt"),
     ];
-    for (path, language, source, expected) in cases {
-        let result = extract_imports(&PathBuf::from(path), language, source);
+    for (_, language, source, expected) in cases {
+        let result = extract_imports(language, source);
         assert_eq!(result, vec![expected], "{language}");
     }
 }
 
 #[test]
 fn kaikai_is_extracted_through_the_dispatcher() {
-    let result = extract_imports(&PathBuf::from("app/main.kai"), "Kaikai", "import app.b\n");
+    let result = extract_imports("Kaikai", "import app.b\n");
     assert_eq!(result, vec!["app.b"]);
 }
 

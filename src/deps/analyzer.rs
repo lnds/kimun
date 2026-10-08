@@ -236,7 +236,6 @@ pub fn resolve_import(
 ) -> Vec<PathBuf> {
     let dir = importer.parent().unwrap_or(Path::new(""));
     let single = match language {
-        "Rust" => resolve_rust(dir, import_str, file_set),
         "Python" => resolve_python(dir, import_str, file_set),
         "JavaScript" | "TypeScript" | "JSX" | "TSX" => resolve_js(dir, import_str, file_set),
         "Go" => resolve_go(import_str, go_module, file_set),
@@ -244,20 +243,6 @@ pub fn resolve_import(
         _ => None,
     };
     single.into_iter().collect()
-}
-
-fn resolve_rust(dir: &Path, name: &str, file_set: &HashSet<PathBuf>) -> Option<PathBuf> {
-    // `mod foo;` → foo.rs or foo/mod.rs relative to current directory
-    let as_file = dir.join(format!("{name}.rs"));
-    if file_set.contains(&as_file) {
-        return Some(as_file);
-    }
-    let as_mod = dir.join(name).join("mod.rs");
-    if file_set.contains(&as_mod) {
-        return Some(as_mod);
-    }
-    // lib.rs files can also declare submodules as name/lib.rs (rare but possible)
-    None
 }
 
 fn resolve_python(dir: &Path, import_str: &str, file_set: &HashSet<PathBuf>) -> Option<PathBuf> {
@@ -430,22 +415,6 @@ mod tests {
         let result = build_graph(&files, &edges);
         assert_eq!(result.cycles.len(), 1);
         assert_eq!(result.cycles[0].len(), 3);
-    }
-
-    #[test]
-    fn resolve_rust_file() {
-        let mut file_set = HashSet::new();
-        file_set.insert(PathBuf::from("src/foo.rs"));
-        let result = resolve_import(Path::new("src/main.rs"), "foo", "Rust", &file_set, None);
-        assert_eq!(result, vec![PathBuf::from("src/foo.rs")]);
-    }
-
-    #[test]
-    fn resolve_rust_mod_dir() {
-        let mut file_set = HashSet::new();
-        file_set.insert(PathBuf::from("src/bar/mod.rs"));
-        let result = resolve_import(Path::new("src/main.rs"), "bar", "Rust", &file_set, None);
-        assert_eq!(result, vec![PathBuf::from("src/bar/mod.rs")]);
     }
 
     #[test]

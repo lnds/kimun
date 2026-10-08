@@ -15,6 +15,28 @@ fn command_line_tasks_are_entry_points_by_convention() {
 }
 
 #[test]
+fn what_a_rust_package_runs_is_an_entry_point() {
+    let entry = entry_points(&[]);
+    for run in [
+        "cli/src/main.rs",
+        "src/main.rs",
+        "shop/src/bin/seed.rs",
+        "shop/examples/demo.rs",
+        "shop/benches/totals.rs",
+        "shop/build.rs",
+    ] {
+        assert!(entry.conventional(Path::new(run)), "{run}");
+    }
+    for used in [
+        "shop/src/lib.rs",
+        "shop/src/main_menu.rs",
+        "shop/src/rebuild.rs",
+    ] {
+        assert!(!entry.conventional(Path::new(used)), "{used}");
+    }
+}
+
+#[test]
 fn a_directory_that_only_shares_part_of_the_name_is_not_one() {
     let entry = entry_points(&[]);
     assert!(!entry.conventional(Path::new("shop/lib/shop/tasks/seed.ex")));

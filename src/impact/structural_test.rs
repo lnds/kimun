@@ -1,6 +1,7 @@
 use super::*;
 use crate::git::ChangeKind;
 use crate::impact::protection::Protection;
+use crate::impact::role::role;
 use crate::impact::structural_json::JsonStructural;
 use crate::impact::structural_report::{reach_line, render, summary};
 
@@ -237,14 +238,14 @@ fn test_support_is_neither_a_test_nor_a_dependent() {
 fn nothing_to_measure_without_a_changed_source() {
     let changes = [
         change("README.md", &[1]),
-        change("src/main.rs", &[1]),
-        change("src/lib.rs", &[2]),
+        change("app/main.py", &[1]),
+        change("app/util.py", &[2]),
     ];
     let radius = radius(project(&[]), &changes);
 
     assert!(radius.origins.is_empty());
     assert_eq!(radius.functions, None);
-    assert_eq!(radius.unavailable, [("Rust".to_string(), 2)]);
+    assert_eq!(radius.unavailable, [("Python".to_string(), 2)]);
     let lines = render(&radius, 20);
     assert_eq!(
         lines[2],
@@ -252,7 +253,7 @@ fn nothing_to_measure_without_a_changed_source() {
     );
     assert_eq!(
         lines.last().unwrap(),
-        "Not measured for Rust (2 changed): its graph does not reflect usage yet."
+        "Not measured for Python (2 changed): its graph does not reflect usage yet."
     );
 }
 
@@ -363,7 +364,8 @@ fn what_each_file_is_to_the_radius() {
 
     assert!(is_reliable(Path::new("lib/a.ex")));
     assert!(is_reliable(Path::new("src/a.ts")));
-    assert!(!is_reliable(Path::new("src/a.rs")));
+    assert!(is_reliable(Path::new("src/a.rs")));
+    assert!(!is_reliable(Path::new("app/a.py")));
     assert!(!is_reliable(Path::new("README.md")));
 }
 
@@ -918,4 +920,57 @@ fn a_file_at_a_conventional_place_that_is_used_is_no_entry_point() {
     // Declared in the configuration, it is one whoever uses it.
     radius.mark_entry_points(|_| false, in_tasks);
     assert_eq!(radius.untested_entry_points().count(), 1);
+}
+
+fn crate_with_tests() -> Vec<(PathBuf, String)> {
+    [
+        ("shop/Cargo.toml", "[package]\nname = \"my-shop\"\nversion = \"0.1.0\"\n"),
+        ("shop/src/lib.rs", "pub mod orders;\npub mod cart;\npub mod receipt;\npub mod report;\npub mod stock;\n"),
+        ("shop/src/stock.rs", "pub fn left() -> u32 { crate::orders::total() }\n#[cfg(test)]\nmod tests;\n"),
+        ("shop/src/stock/tests.rs", "use super::*;\n#[test]\nfn some() { assert_eq!(left(), 1) }\n"),
+        ("shop/src/orders.rs", "pub fn total() -> u32 { 1 }\n"),
+        (
+            "shop/src/cart.rs",
+            "use crate::orders;\npub fn summary() -> u32 { orders::total() }\n#[cfg(test)]\nmod tests {\n    use super::*;\n    #[test]\n    fn sums() { assert_eq!(summary(), 1) }\n}\n",
+        ),
+        ("shop/src/receipt.rs", "pub fn lines() -> u32 { crate::orders::total() }\n"),
+        ("shop/src/report.rs", "use super::orders::total;\npub fn double() -> u32 { total() * 2 }\n"),
+        (
+            "shop/tests/receipt.rs",
+            "mod common;\nuse my_shop::receipt::lines;\n#[test]\nfn one() { assert_eq!(lines(), 1) }\n",
+        ),
+        ("shop/tests/common/mod.rs", "pub fn setup() -> u32 { my_shop::report::double() }\n"),
+    ]
+    .iter()
+    .map(|(path, text)| (PathBuf::from(path), text.to_string()))
+    .collect()
+}
+
+#[test]
+fn rust_tests_kept_beside_the_code_and_under_tests_protect() {
+    let radius = radius(crate_with_tests(), &[change("shop/src/orders.rs", &[1])]);
+
+    let files: Vec<&str> = radius
+        .direct
+        .iter()
+        .map(|d| d.file.to_str().unwrap())
+        .collect();
+    assert_eq!(
+        files,
+        [
+            "shop/src/report.rs",
+            "shop/src/cart.rs",
+            "shop/src/receipt.rs",
+            "shop/src/stock.rs"
+        ]
+    );
+    // Its own `#[test]`s.
+    assert_eq!(protection_of(&radius, "cart.rs"), Protection::Direct);
+    // A file of `tests/` that holds tests, through the name of the package.
+    assert_eq!(protection_of(&radius, "receipt.rs"), Protection::Direct);
+    // A `tests.rs` module is a test of the file that declares it.
+    assert_eq!(protection_of(&radius, "stock.rs"), Protection::Direct);
+    // Test support that holds no test protects nothing.
+    assert_eq!(protection_of(&radius, "report.rs"), Protection::None);
+    assert!(radius.unavailable.is_empty());
 }

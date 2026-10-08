@@ -13,9 +13,13 @@ mod extractor;
 pub mod graph;
 pub mod heex;
 mod kaikai;
+pub mod layout;
 mod phoenix;
 mod report;
 pub mod routes;
+mod rust;
+mod rust_crates;
+mod rust_literals;
 
 use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
@@ -27,6 +31,7 @@ use crate::walk::{self, WalkConfig};
 use analyzer::{DepEntry, DepResult, UnsupportedLanguage, build_graph};
 pub use extractor::is_supported;
 use graph::{FileGraph, Source};
+use layout::{Layout, is_cargo_manifest};
 
 /// Count the skipped files per language, largest group first.
 fn count_unsupported(skipped: &[(PathBuf, String)]) -> Vec<UnsupportedLanguage> {
@@ -95,8 +100,22 @@ fn analyze(cfg: &WalkConfig<'_>) -> DepResult {
             templates: Vec::new(),
         })
         .collect();
+    let manifests: Vec<(&Path, String)> = skipped
+        .iter()
+        .filter(|(path, _)| is_cargo_manifest(path))
+        .map(|(path, _)| {
+            let text = std::fs::read_to_string(cfg.path.join(path)).unwrap_or_default();
+            (path.as_path(), text)
+        })
+        .collect();
+    let layout = Layout {
+        known: file_set,
+        go_module: go_module.as_deref(),
+        ..Layout::default()
+    }
+    .with_cargo(manifests.iter().map(|(path, text)| (*path, text.as_str())));
     // One directory is analysed, with no manifests to tell projects apart.
-    let edges = FileGraph::build(&sources, &file_set, go_module.as_deref(), &|_, _| false).edges();
+    let edges = FileGraph::build(&sources, &layout, &|_, _| false).edges();
 
     let mut result = build_graph(&all_files, &edges);
     result.unsupported = unsupported;

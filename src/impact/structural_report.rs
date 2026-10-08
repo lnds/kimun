@@ -189,7 +189,7 @@ fn body(radius: &Structural, top: usize) -> Vec<String> {
     if radius.origins.is_empty() {
         return vec![
             " No changed source file in a language with a reliable graph".to_string(),
-            " (Elixir, JavaScript/TypeScript, Kaikai).".to_string(),
+            " (Elixir, JavaScript/TypeScript, Kaikai, Rust).".to_string(),
         ];
     }
     if radius.direct.is_empty() {

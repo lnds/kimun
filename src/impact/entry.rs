@@ -16,7 +16,13 @@ const TASK_DIRS: &[&[&str]] = &[
     &["management", "commands"],
     &["bin"],
     &["scripts"],
+    &["examples"],
+    &["benches"],
 ];
+
+/// Files that are the start of a program wherever they are, as the end of
+/// their path: the binary of a Rust package and its build script.
+const PROGRAMS: &[&str] = &["src/main.rs", "build.rs"];
 
 /// Tells the entry points among the files of a repository.
 pub struct EntryPoints {
@@ -41,9 +47,10 @@ impl EntryPoints {
             .flat_map(|dir| dir.components())
             .filter_map(|c| c.as_os_str().to_str())
             .collect();
-        TASK_DIRS
+        let in_tasks = TASK_DIRS
             .iter()
-            .any(|task| dirs.windows(task.len()).any(|window| window == *task))
+            .any(|task| dirs.windows(task.len()).any(|window| window == *task));
+        in_tasks || PROGRAMS.iter().any(|program| path.ends_with(program))
     }
 
     /// Whether the repository declares `path` an entry point.

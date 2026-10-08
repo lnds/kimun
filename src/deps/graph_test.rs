@@ -1,4 +1,5 @@
 use super::*;
+use crate::deps::layout::is_cargo_manifest;
 
 fn source(path: &str, text: &str) -> Source {
     let language = match path.rsplit('.').next() {
@@ -20,8 +21,11 @@ fn build(sources: &[Source]) -> FileGraph {
 }
 
 fn build_with(sources: &[Source], related: Related) -> FileGraph {
-    let known = sources.iter().map(|s| s.path.clone()).collect();
-    FileGraph::build(sources, &known, None, related)
+    let layout = Layout {
+        known: sources.iter().map(|s| s.path.clone()).collect(),
+        ..Layout::default()
+    };
+    FileGraph::build(sources, &layout, related)
 }
 
 /// What `file` uses, as the paths used and the calls made on each.
@@ -221,4 +225,27 @@ fn what_the_projects_declare_comes_before_what_is_near() {
         uses(&graph, "apps/web/lib/web.ex"),
         [("apps/one/lib/adapter.ex", vec!["Adapter.run"])]
     );
+}
+
+#[test]
+fn rust_files_use_what_their_paths_name() {
+    let sources = [
+        source("app/src/lib.rs", "pub mod orders;\npub mod cart;"),
+        source("app/src/orders.rs", "pub fn total() {}\n#[test]\nfn t() {}"),
+        source("app/src/cart.rs", "use crate::orders::total;"),
+        source("app/tests/cart.rs", "use my_app::cart;\n#[test]\nfn t() {}"),
+    ];
+    let manifest = "[package]\nname = \"my-app\"\nversion = \"0.1.0\"\n";
+    let layout = Layout::default().with_cargo([(Path::new("app/Cargo.toml"), manifest)]);
+    let graph = FileGraph::build(&sources, &layout, &|_, _| false);
+
+    let used = |file: usize| -> Vec<usize> { graph.uses[file].iter().map(|u| u.to).collect() };
+    // Declaring the modules is not using them.
+    assert!(used(0).is_empty());
+    assert_eq!(used(2), [1]);
+    // The integration test reaches the library by the name of its package.
+    assert_eq!(used(3), [2]);
+    assert_eq!(graph.own_tests, [false, true, false, true]);
+    assert!(is_cargo_manifest(Path::new("app/Cargo.toml")));
+    assert!(!is_cargo_manifest(Path::new("app/Cargo.lock")));
 }

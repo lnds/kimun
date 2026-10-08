@@ -9,17 +9,17 @@ use ignore::WalkBuilder;
 use super::{DepTarget, Ecosystem, Edge, Manifest, Project, ProjectGraph, Scope, reader};
 use crate::walk::TEST_DIRS;
 
-/// Directories that hold fetched dependencies or build output. Their
-/// manifests belong to other people's projects.
-const SKIPPED_DIRS: &[&str] = &[
-    "testdata",
-    ".git",
-    "node_modules",
-    "deps",
-    "_build",
-    "target",
-    "vendor",
-];
+/// Directories that are never part of a project, wherever they are.
+/// `vendor` is the one people commit, so it is never taken for a module.
+const SKIPPED_DIRS: &[&str] = &["testdata", ".git", "node_modules", "vendor"];
+
+/// Directories that hold fetched dependencies or build output at the root
+/// of a project. Their manifests belong to other people's projects.
+const OUTPUT_DIRS: &[&str] = &["deps", "_build", "target"];
+
+/// Directories of source code. Under one of them, a directory named as
+/// one of `OUTPUT_DIRS` is a module like any other: `src/deps`.
+const SOURCE_DIRS: &[&str] = &["src", "lib", "app"];
 
 /// Directories of sample projects that tests read: manifests, but nobody's
 /// project. A whole test directory is not skipped, since an end-to-end suite
@@ -32,12 +32,14 @@ pub fn is_skipped(path: &Path) -> bool {
     let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
         return false;
     };
-    let in_tests = || {
+    let under = |dirs: &[&str]| {
         path.components()
             .filter_map(|c| c.as_os_str().to_str())
-            .any(|c| TEST_DIRS.contains(&c))
+            .any(|c| dirs.contains(&c))
     };
-    SKIPPED_DIRS.contains(&name) || (FIXTURE_DIRS.contains(&name) && in_tests())
+    SKIPPED_DIRS.contains(&name)
+        || (OUTPUT_DIRS.contains(&name) && !under(SOURCE_DIRS))
+        || (FIXTURE_DIRS.contains(&name) && under(TEST_DIRS))
 }
 
 /// One manifest found in the walk.

@@ -261,7 +261,7 @@ fn report_layout_is_exact() {
         "Structural radius — source files that use what changed",
         sep.as_str(),
         " No changed source file in a language with a reliable graph",
-        " (Elixir, JavaScript/TypeScript, Kaikai).",
+        " (Elixir, JavaScript/TypeScript, Kaikai, Rust).",
         sep.as_str(),
         "",
         "Diffusion",

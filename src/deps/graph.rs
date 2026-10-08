@@ -1,12 +1,14 @@
 //! The dependency graph between files, built from sources given as text, so
 //! they can come from disk or from the tree of a commit.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 use super::analyzer::resolve_import;
 use super::elixir::{self, ElixirFile};
 use super::extractor::extract_imports;
+use super::layout::Layout;
+use super::rust_crates;
 
 /// A source file to place in the graph.
 pub struct Source {
@@ -62,7 +64,31 @@ pub struct FileGraph {
     /// References left out because several files define the module named
     /// and none is nearer than the others.
     pub ambiguous: usize,
+    /// For each file, whether it holds tests of its own, when the language
+    /// keeps them beside the code.
+    pub own_tests: Vec<bool>,
     modules: ModuleIndex,
+}
+
+/// A use that tells no calls.
+fn no_calls(to: usize) -> (usize, BTreeSet<String>) {
+    (to, BTreeSet::new())
+}
+
+/// The files a source imports, for the languages whose imports resolve
+/// one by one from where the importer is.
+fn imports(
+    source: &Source,
+    layout: &Layout,
+    by_path: &HashMap<&Path, usize>,
+) -> BTreeMap<usize, BTreeSet<String>> {
+    let (known, go) = (&layout.known, layout.go_module);
+    extract_imports(&source.language, &source.text)
+        .iter()
+        .flat_map(|import| resolve_import(&source.path, import, &source.language, known, go))
+        .filter_map(|path| by_path.get(path.as_path()).copied())
+        .map(no_calls)
+        .collect()
 }
 
 fn is_elixir(language: &str) -> bool {
@@ -127,14 +153,8 @@ impl ModuleIndex {
 }
 
 impl FileGraph {
-    /// Build the graph of `sources`. `known` holds the paths resolvers may
-    /// look up besides the sources themselves, such as manifests.
-    pub fn build(
-        sources: &[Source],
-        known: &HashSet<PathBuf>,
-        go_module: Option<&str>,
-        related: Related,
-    ) -> Self {
+    /// Build the graph of `sources`.
+    pub fn build(sources: &[Source], layout: &Layout, related: Related) -> Self {
         let files: Vec<PathBuf> = sources.iter().map(|s| s.path.clone()).collect();
         let by_path: HashMap<&Path, usize> = sources
             .iter()
@@ -153,23 +173,24 @@ impl FileGraph {
             }
         }
 
+        let rust: Vec<Option<&str>> = sources
+            .iter()
+            .map(|s| (s.language == "Rust").then_some(s.text.as_str()))
+            .collect();
+        let (mut rust_uses, own_tests) = rust_crates::read(&files, &rust, &layout.packages);
+
         let mut graph = FileGraph {
             files,
             modules,
+            own_tests,
             ..Self::default()
         };
         let modules = std::mem::take(&mut graph.modules);
         for (file, source) in sources.iter().enumerate() {
-            let uses = match &parsed[file] {
-                Some(parsed) => graph.elixir_uses(file, parsed, &modules, related),
-                None => extract_imports(&source.path, &source.language, &source.text)
-                    .iter()
-                    .flat_map(|import| {
-                        resolve_import(&source.path, import, &source.language, known, go_module)
-                    })
-                    .filter_map(|path| by_path.get(path.as_path()).copied())
-                    .map(|to| (to, BTreeSet::new()))
-                    .collect(),
+            let uses = match (&parsed[file], rust_uses[file].take()) {
+                (Some(parsed), _) => graph.elixir_uses(file, parsed, &modules, related),
+                (None, Some(used)) => used.into_iter().map(no_calls).collect(),
+                (None, None) => imports(source, layout, &by_path),
             };
             graph.uses.push(
                 uses.into_iter()

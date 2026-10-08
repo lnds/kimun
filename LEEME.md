@@ -662,7 +662,7 @@ Changed files outside every project (reach unknown): Makefile
 
 - **`--affected`** imprime los proyectos cuyas compilaciones y tests pide el diff, uno por línea, y nada más: los que cambiaron y los alcanzados. Si algún archivo modificado está fuera de todo proyecto, imprime **todos** los proyectos y explica por qué en stderr: saltarse una suite de tests es peor que ejecutar una de más. Lee solo el diff y los manifiestos, no el historial.
 - Un repositorio con un solo proyecto recibe una línea que dice que este nivel no aplica, en vez de "0 reached".
-- En `node_modules`, `deps`, `_build`, `target`, `vendor` y `testdata` nunca se buscan manifiestos, ni tampoco en un directorio `fixtures` dentro de un directorio de tests. Una suite de extremo a extremo con su propio manifiesto (`test/e2e/package.json`) es un proyecto.
+- En `node_modules`, `vendor` y `testdata` nunca se buscan manifiestos, ni en `deps`, `_build` y `target` (salvo que estén bajo `src`, `lib` o `app`, donde son parte del proyecto), ni tampoco en un directorio `fixtures` dentro de un directorio de tests. Una suite de extremo a extremo con su propio manifiesto (`test/e2e/package.json`) es un proyecto.
 
 Límites:
 
@@ -726,7 +726,7 @@ Cómo se mide:
 - En Elixir, lo que un framework relaciona por convención cuenta como un uso. Un controlador de Phoenix usa las vistas que llevan su nombre (`PageController` y `PageJSON`, `PageHTML`, `PageView`), así que el test del controlador las protege. Un módulo usa los componentes que renderizan sus plantillas, ya sea que estén escritas en él con `~H`, guardadas en un archivo `.html.heex` a su lado (`page/index.ex` y `page/index.html.heex`) o en un directorio que lleva su nombre (`page_html.ex` y `page_html/home.html.heex`).
 
 
-Se mide para los lenguajes cuyo grafo refleja el uso: Elixir, JavaScript/TypeScript y Kaikai. Para Rust, Python y Go el bloque dice que no está disponible, en vez de informar un radio trazado sobre declaraciones. Solo se leen los proyectos que el cambio afecta; el repositorio completo cuando el alcance sobre los proyectos es desconocido.
+Se mide para los lenguajes cuyo grafo refleja el uso: Elixir, JavaScript/TypeScript, Kaikai y Rust. Para Python y Go el bloque dice que no está disponible, en vez de informar un radio trazado sobre declaraciones. Solo se leen los proyectos que el cambio afecta; el repositorio completo cuando el alcance sobre los proyectos es desconocido.
 
 Límites: un test en el mismo lugar, o que lleva el nombre de un archivo, puede no ejercitar la llamada que cambió, y uno que se refiere a un archivo puede simular con mocks lo que este llama: la columna dice que existe un test, no que cubre. `users` es más débil todavía: dice que algo que usa el archivo tiene tests. Los nombres de función se comparan sin aridad. Los módulos nombrados en tiempo de ejecución (`apply/3`, configuración) o generados por macros no se ven. Una petición se lee cuando su ruta está escrita en la llamada (`live(conn, ~p"/orders")`), no cuando viene de una variable o de un helper, y una ruta cuando está declarada en una sola línea.
 
@@ -925,7 +925,7 @@ Analiza las dependencias internas entre módulos leyendo las sentencias import/u
 km deps [path]
 ```
 
-Soporta Elixir (cada módulo al que el código se refiere, con el `alias` deshecho; mira las notas más abajo), Rust (`mod X;`, con cualquier calificador de visibilidad: `pub`, `pub(crate)`, `pub(in path)`), Python (`from .X import` relativo), JavaScript/TypeScript (`import`/`require` relativos), Go (imports que coinciden con la ruta del módulo en `go.mod`) y Kaikai (`import a.b.c`, incluidas las formas `as` y `.{…}`). Las dependencias externas (crates, paquetes de npm, la biblioteca estándar de Kaikai) se ignoran.
+Soporta Elixir (cada módulo al que el código se refiere, con el `alias` deshecho; mira las notas más abajo), Rust (cada ruta que nombra un módulo del workspace: `use`, `crate::`, `super::`, un módulo hijo; mira las notas más abajo), Python (`from .X import` relativo), JavaScript/TypeScript (`import`/`require` relativos), Go (imports que coinciden con la ruta del módulo en `go.mod`) y Kaikai (`import a.b.c`, incluidas las formas `as` y `.{…}`). Las dependencias externas (crates, paquetes de npm, la biblioteca estándar de Kaikai) se ignoran.
 
 Los archivos en cualquier otro lenguaje quedan fuera del grafo, en vez de listarse con cero dependencias. El pie de la tabla, el arreglo `unsupported` de la salida JSON y el campo `unsupported:N` del formato short dicen cuántos archivos se omitieron, así que "no medido" nunca se muestra como "sin dependencias".
 
@@ -938,6 +938,16 @@ Notas sobre Elixir:
 - Los comentarios y los literales no contienen referencias, pero el código que un string interpola sí: `"Total: #{Orders.total(order)}"` usa `Orders`.
 - Un controlador de Phoenix usa las vistas que llevan su nombre (`PageController` y `PageJSON`, `PageHTML`, `PageView`), y un módulo usa los componentes que renderizan sus plantillas `~H`.
 - No se ven: los módulos nombrados en tiempo de ejecución (`apply/3`, configuración), los generados por macros, y los que un router de Phoenix nombra bajo el alias de un `scope`.
+
+Notas sobre Rust:
+
+- Una dependencia es una ruta: `use crate::git::GitRepo`, una ruta calificada `super::analyzer::run(x)`, una llamada sobre un módulo hijo (`report::print(x)`). Se leen los grupos, `as`, `self`, los globs y los `use` de varias líneas. `mod x;` solo dice dónde vive un módulo y no agrega relación.
+- Cada crate es un árbol de módulos que crece desde su raíz (`src/lib.rs`, `src/main.rs`, un archivo de `src/bin`, `tests`, `examples` o `benches`, `build.rs`) por sus declaraciones `mod`, incluido `#[path]`. Una ruta lleva al archivo del módulo más profundo que nombra: el ítem puede estar definido ahí o solo reexportado.
+- Los demás targets de un paquete llegan a su librería por el nombre (`my_app::orders` desde `tests/` o `main.rs`), y también los otros crates del workspace. El nombre sale de `[package] name`, con `-` leído como `_`.
+- Un tipo usa los archivos que tienen sus bloques `impl`, porque lo que definen se alcanza a través del tipo.
+- Para `km impact`, un archivo con funciones `#[test]` tiene un test propio; un archivo de `tests/` que las tiene, o un módulo `tests.rs`, es un test. Lo que un paquete ejecuta (`src/main.rs`, `src/bin`, `examples`, `benches`, `build.rs`) es un punto de entrada.
+- Los comentarios, los strings y `$crate` dentro de una macro no nombran nada.
+- No se ve: lo que una macro genera o nombra, `include!`, una librería con `[lib] path` o `name` propios, una dependencia renombrada en `Cargo.toml`, y los módulos detrás de `cfg`, que cuentan todos. Un uso hecho solo desde un módulo de tests en el mismo archivo igual convierte al archivo en dependiente. Un test que ejecuta el binario (`assert_cmd`, `CARGO_BIN_EXE_*`) no nombra ningún archivo, así que no protege a ninguno. Dos paquetes con el mismo nombre en un repositorio no se distinguen.
 
 Notas sobre Kaikai:
 
@@ -958,13 +968,18 @@ Ejemplo de salida:
 ```
 Dependency Graph
 ────────────────────────────────────────────────────────────────────────
- File                    Language Fan-In Fan-Out Cycle
+ File                 Language Fan-In Fan-Out Cycle
 ────────────────────────────────────────────────────────────────────────
- main.rs                     Rust      0      26    no
- score/mod.rs                Rust      1       7    no
- report/mod.rs               Rust      1       5    no
+ report_helpers.rs        Rust     26       1    no
+ util.rs                  Rust     25       2   yes
+ walk.rs                  Rust     24       1    no
 ────────────────────────────────────────────────────────────────────────
-No dependency cycles detected.
+
+Dependency cycles: 14
+  Cycle 1 (3 files):
+    cogcom/analyzer.rs
+    cogcom/detection.rs
+    cogcom/report.rs
 ```
 
 ### `km authors` -- Resumen de propiedad por autor
