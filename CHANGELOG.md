@@ -1,3 +1,9 @@
+## v0.31.2 (2026-10-08)
+
+### Fix
+
+- **deps**: the code an Elixir string interpolates is code
+
 ## v0.31.1 (2026-10-08)
 
 ### Fix
