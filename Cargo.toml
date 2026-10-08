@@ -8,6 +8,7 @@ repository = "https://github.com/lnds/kimun"
 homepage = "https://github.com/lnds/kimun"
 keywords = ["code-metrics", "complexity", "loc", "halstead", "maintainability"]
 categories = ["command-line-utilities", "development-tools"]
+exclude = ["assets/"]
 
 [[bin]]
 name = "km"
