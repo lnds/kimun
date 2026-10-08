@@ -244,3 +244,17 @@ fn a_type_uses_the_files_that_hold_its_impl_blocks() {
     assert_eq!(used_by(&g, "src/git/tree.rs"), ["src/git/mod.rs"]);
     assert_eq!(used_by(&g, "src/lib.rs"), ["src/git/mod.rs"]);
 }
+
+#[test]
+fn a_tree_that_starts_inside_src_still_has_its_root() {
+    let g = graph(
+        &[
+            ("main.rs", "mod util;\nmod loc;\nfn main() { loc::run() }"),
+            ("util.rs", "pub fn parse() {}"),
+            ("loc/mod.rs", "pub fn run() { crate::util::parse() }"),
+        ],
+        &[],
+    );
+    assert_eq!(used_by(&g, "main.rs"), ["loc/mod.rs"]);
+    assert_eq!(used_by(&g, "loc/mod.rs"), ["util.rs"]);
+}

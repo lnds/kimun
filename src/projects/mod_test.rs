@@ -703,11 +703,12 @@ fn a_dependency_directory_is_skipped_at_a_project_root_only() {
     for kept in [
         "src/deps",
         "lib/app/target",
-        "crates/core/src/vendor",
+        "crates/core/src/_build",
         "src",
         "lib",
     ] {
         assert!(!is_skipped(Path::new(kept)), "{kept}");
     }
     assert!(is_skipped(Path::new("src/node_modules")));
+    assert!(is_skipped(Path::new("src/svc/vendor")));
 }

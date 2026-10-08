@@ -123,7 +123,25 @@ impl<'a> Crates<'a> {
             }
             crates.grow(krate, *root);
         }
+        crates.grow_strays(roots.len());
         crates
+    }
+
+    /// A `lib.rs` or `main.rs` no crate reached is a root too: the tree
+    /// analysed may start inside `src`, where nothing tells its layout.
+    fn grow_strays(&mut self, known: usize) {
+        let mut strays: Vec<usize> = self
+            .by_path
+            .values()
+            .copied()
+            .filter(|&f| matches!(name_of(&self.files[f]), "lib.rs" | "main.rs"))
+            .collect();
+        strays.sort_by_key(|&f| (name_of(&self.files[f]) != "lib.rs", self.files[f].clone()));
+        for (at, root) in strays.into_iter().enumerate() {
+            if self.identity[root].is_none() {
+                self.grow(known + at, root);
+            }
+        }
     }
 
     /// Place every file the crate rooted at `root` reaches.

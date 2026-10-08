@@ -10,11 +10,12 @@ use super::{DepTarget, Ecosystem, Edge, Manifest, Project, ProjectGraph, Scope, 
 use crate::walk::TEST_DIRS;
 
 /// Directories that are never part of a project, wherever they are.
-const SKIPPED_DIRS: &[&str] = &["testdata", ".git", "node_modules"];
+/// `vendor` is the one people commit, so it is never taken for a module.
+const SKIPPED_DIRS: &[&str] = &["testdata", ".git", "node_modules", "vendor"];
 
 /// Directories that hold fetched dependencies or build output at the root
 /// of a project. Their manifests belong to other people's projects.
-const OUTPUT_DIRS: &[&str] = &["deps", "_build", "target", "vendor"];
+const OUTPUT_DIRS: &[&str] = &["deps", "_build", "target"];
 
 /// Directories of source code. Under one of them, a directory named as
 /// one of `OUTPUT_DIRS` is a module like any other: `src/deps`.

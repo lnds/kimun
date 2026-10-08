@@ -662,7 +662,7 @@ Changed files outside every project (reach unknown): Makefile
 
 - **`--affected`** imprime los proyectos cuyas compilaciones y tests pide el diff, uno por línea, y nada más: los que cambiaron y los alcanzados. Si algún archivo modificado está fuera de todo proyecto, imprime **todos** los proyectos y explica por qué en stderr: saltarse una suite de tests es peor que ejecutar una de más. Lee solo el diff y los manifiestos, no el historial.
 - Un repositorio con un solo proyecto recibe una línea que dice que este nivel no aplica, en vez de "0 reached".
-- En `node_modules` y `testdata` nunca se buscan manifiestos, ni en `deps`, `_build`, `target` y `vendor` (salvo que estén bajo `src`, `lib` o `app`, donde son parte del proyecto), ni tampoco en un directorio `fixtures` dentro de un directorio de tests. Una suite de extremo a extremo con su propio manifiesto (`test/e2e/package.json`) es un proyecto.
+- En `node_modules`, `vendor` y `testdata` nunca se buscan manifiestos, ni en `deps`, `_build` y `target` (salvo que estén bajo `src`, `lib` o `app`, donde son parte del proyecto), ni tampoco en un directorio `fixtures` dentro de un directorio de tests. Una suite de extremo a extremo con su propio manifiesto (`test/e2e/package.json`) es un proyecto.
 
 Límites:
 
@@ -945,9 +945,9 @@ Notas sobre Rust:
 - Cada crate es un árbol de módulos que crece desde su raíz (`src/lib.rs`, `src/main.rs`, un archivo de `src/bin`, `tests`, `examples` o `benches`, `build.rs`) por sus declaraciones `mod`, incluido `#[path]`. Una ruta lleva al archivo del módulo más profundo que nombra: el ítem puede estar definido ahí o solo reexportado.
 - Los demás targets de un paquete llegan a su librería por el nombre (`my_app::orders` desde `tests/` o `main.rs`), y también los otros crates del workspace. El nombre sale de `[package] name`, con `-` leído como `_`.
 - Un tipo usa los archivos que tienen sus bloques `impl`, porque lo que definen se alcanza a través del tipo.
-- Para `km impact`, un archivo con funciones `#[test]` tiene un test propio, y un archivo de `tests/` que las tiene es un test.
+- Para `km impact`, un archivo con funciones `#[test]` tiene un test propio; un archivo de `tests/` que las tiene, o un módulo `tests.rs`, es un test. Lo que un paquete ejecuta (`src/main.rs`, `src/bin`, `examples`, `benches`, `build.rs`) es un punto de entrada.
 - Los comentarios, los strings y `$crate` dentro de una macro no nombran nada.
-- No se ve: lo que una macro genera o nombra, `include!`, una librería con `[lib] path` o `name` propios, una dependencia renombrada en `Cargo.toml`, y los módulos detrás de `cfg`, que cuentan todos. Un uso hecho solo desde un módulo de tests en el mismo archivo igual convierte al archivo en dependiente.
+- No se ve: lo que una macro genera o nombra, `include!`, una librería con `[lib] path` o `name` propios, una dependencia renombrada en `Cargo.toml`, y los módulos detrás de `cfg`, que cuentan todos. Un uso hecho solo desde un módulo de tests en el mismo archivo igual convierte al archivo en dependiente. Un test que ejecuta el binario (`assert_cmd`, `CARGO_BIN_EXE_*`) no nombra ningún archivo, así que no protege a ninguno. Dos paquetes con el mismo nombre en un repositorio no se distinguen.
 
 Notas sobre Kaikai:
 
@@ -968,13 +968,18 @@ Ejemplo de salida:
 ```
 Dependency Graph
 ────────────────────────────────────────────────────────────────────────
- File                    Language Fan-In Fan-Out Cycle
+ File                 Language Fan-In Fan-Out Cycle
 ────────────────────────────────────────────────────────────────────────
- main.rs                     Rust      0      26    no
- score/mod.rs                Rust      1       7    no
- report/mod.rs               Rust      1       5    no
+ report_helpers.rs        Rust     26       1    no
+ util.rs                  Rust     25       2   yes
+ walk.rs                  Rust     24       1    no
 ────────────────────────────────────────────────────────────────────────
-No dependency cycles detected.
+
+Dependency cycles: 14
+  Cycle 1 (3 files):
+    cogcom/analyzer.rs
+    cogcom/detection.rs
+    cogcom/report.rs
 ```
 
 ### `km authors` -- Resumen de propiedad por autor

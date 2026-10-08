@@ -662,7 +662,7 @@ Changed files outside every project (reach unknown): Makefile
 
 - **`--affected`** prints the projects whose builds and tests the diff calls for, one per line, and nothing else: the changed and the reached ones. If any changed file is outside every project, it prints **all** projects and says why on stderr — skipping a test suite is worse than running one too many. It reads only the diff and the manifests, not the history.
 - A repository with a single project gets a line saying this level does not apply, rather than "0 reached".
-- `node_modules` and `testdata` are never searched for manifests, nor are `deps`, `_build`, `target` and `vendor` (unless they sit under `src`, `lib` or `app`, where they are part of the project), nor is a `fixtures` directory inside a test directory. An end-to-end suite with its own manifest (`test/e2e/package.json`) is a project.
+- `node_modules`, `vendor` and `testdata` are never searched for manifests, nor are `deps`, `_build` and `target` (unless they sit under `src`, `lib` or `app`, where they are part of the project), nor is a `fixtures` directory inside a test directory. An end-to-end suite with its own manifest (`test/e2e/package.json`) is a project.
 
 Limits:
 
@@ -945,9 +945,9 @@ Rust notes:
 - Each crate is a tree of modules grown from its root (`src/lib.rs`, `src/main.rs`, a file of `src/bin`, `tests`, `examples` or `benches`, `build.rs`) by its `mod` declarations, `#[path]` included. A path leads to the file of the deepest module it names: the item may be defined there or only re-exported.
 - Other targets of a package reach its library by name (`my_app::orders` from `tests/` or `main.rs`), and so do the other crates of the workspace. The name comes from `[package] name`, with `-` read as `_`.
 - A type uses the files that hold its `impl` blocks, since what they define is reached through the type.
-- For `km impact`, a file that holds `#[test]` functions has a test of its own, and a file of `tests/` that holds them is a test.
+- For `km impact`, a file that holds `#[test]` functions has a test of its own; a file of `tests/` that holds them, or a `tests.rs` module, is a test. What a package runs (`src/main.rs`, `src/bin`, `examples`, `benches`, `build.rs`) is an entry point.
 - Comments, strings and `$crate` in a macro name nothing.
-- Not seen: what a macro generates or names, `include!`, a library with a `[lib] path` or `name` of its own, a dependency renamed in `Cargo.toml`, and modules behind `cfg`, which all count. A use only from an inline test module still makes the file a dependent.
+- Not seen: what a macro generates or names, `include!`, a library with a `[lib] path` or `name` of its own, a dependency renamed in `Cargo.toml`, and modules behind `cfg`, which all count. A use only from an inline test module still makes the file a dependent. A test that runs the binary (`assert_cmd`, `CARGO_BIN_EXE_*`) names no file, so it protects none. Two packages of the same name in one repository are not told apart.
 
 Kaikai notes:
 
@@ -968,13 +968,18 @@ Example output:
 ```
 Dependency Graph
 ────────────────────────────────────────────────────────────────────────
- File                    Language Fan-In Fan-Out Cycle
+ File                 Language Fan-In Fan-Out Cycle
 ────────────────────────────────────────────────────────────────────────
- main.rs                     Rust      0      26    no
- score/mod.rs                Rust      1       7    no
- report/mod.rs               Rust      1       5    no
+ report_helpers.rs        Rust     26       1    no
+ util.rs                  Rust     25       2   yes
+ walk.rs                  Rust     24       1    no
 ────────────────────────────────────────────────────────────────────────
-No dependency cycles detected.
+
+Dependency cycles: 14
+  Cycle 1 (3 files):
+    cogcom/analyzer.rs
+    cogcom/detection.rs
+    cogcom/report.rs
 ```
 
 ### `km authors` -- Per-author ownership summary

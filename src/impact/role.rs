@@ -36,10 +36,14 @@ pub fn role(path: &Path) -> Role {
 }
 
 /// What each file of `graph` is. A file that holds tests is a test when it
-/// sits among them: test support otherwise, as `tests/common` is.
+/// sits among them or carries their name: test support otherwise, as
+/// `tests/common` is.
 pub fn roles_of(graph: &FileGraph) -> Vec<Role> {
+    // `src/x/tests.rs`: the tests of a module kept in a file of their own.
+    let named_tests = |path: &Path| path.file_stem().is_some_and(|stem| stem == "tests");
     let holding = |file: usize| match role(&graph.files[file]) {
         Role::Other if graph.own_tests[file] => Role::Test,
+        Role::Source if graph.own_tests[file] && named_tests(&graph.files[file]) => Role::Test,
         role => role,
     };
     (0..graph.files.len()).map(holding).collect()

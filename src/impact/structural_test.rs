@@ -925,7 +925,9 @@ fn a_file_at_a_conventional_place_that_is_used_is_no_entry_point() {
 fn crate_with_tests() -> Vec<(PathBuf, String)> {
     [
         ("shop/Cargo.toml", "[package]\nname = \"my-shop\"\nversion = \"0.1.0\"\n"),
-        ("shop/src/lib.rs", "pub mod orders;\npub mod cart;\npub mod receipt;\npub mod report;\n"),
+        ("shop/src/lib.rs", "pub mod orders;\npub mod cart;\npub mod receipt;\npub mod report;\npub mod stock;\n"),
+        ("shop/src/stock.rs", "pub fn left() -> u32 { crate::orders::total() }\n#[cfg(test)]\nmod tests;\n"),
+        ("shop/src/stock/tests.rs", "use super::*;\n#[test]\nfn some() { assert_eq!(left(), 1) }\n"),
         ("shop/src/orders.rs", "pub fn total() -> u32 { 1 }\n"),
         (
             "shop/src/cart.rs",
@@ -958,13 +960,16 @@ fn rust_tests_kept_beside_the_code_and_under_tests_protect() {
         [
             "shop/src/report.rs",
             "shop/src/cart.rs",
-            "shop/src/receipt.rs"
+            "shop/src/receipt.rs",
+            "shop/src/stock.rs"
         ]
     );
     // Its own `#[test]`s.
     assert_eq!(protection_of(&radius, "cart.rs"), Protection::Direct);
     // A file of `tests/` that holds tests, through the name of the package.
     assert_eq!(protection_of(&radius, "receipt.rs"), Protection::Direct);
+    // A `tests.rs` module is a test of the file that declares it.
+    assert_eq!(protection_of(&radius, "stock.rs"), Protection::Direct);
     // Test support that holds no test protects nothing.
     assert_eq!(protection_of(&radius, "report.rs"), Protection::None);
     assert!(radius.unavailable.is_empty());
