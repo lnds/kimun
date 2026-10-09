@@ -726,7 +726,7 @@ Cómo se mide:
 - En Elixir, lo que un framework relaciona por convención cuenta como un uso. Un controlador de Phoenix usa las vistas que llevan su nombre (`PageController` y `PageJSON`, `PageHTML`, `PageView`), así que el test del controlador las protege. Un módulo usa los componentes que renderizan sus plantillas, ya sea que estén escritas en él con `~H`, guardadas en un archivo `.html.heex` a su lado (`page/index.ex` y `page/index.html.heex`) o en un directorio que lleva su nombre (`page_html.ex` y `page_html/home.html.heex`).
 
 
-Se mide para los lenguajes cuyo grafo refleja el uso: Elixir, JavaScript/TypeScript, Kaikai y Rust. Para Python y Go el bloque dice que no está disponible, en vez de informar un radio trazado sobre declaraciones. Solo se leen los proyectos que el cambio afecta; el repositorio completo cuando el alcance sobre los proyectos es desconocido.
+Se mide para los lenguajes cuyo grafo refleja el uso: Elixir, JavaScript/TypeScript, Kaikai, Python y Rust. Para Go el bloque dice que no está disponible, en vez de informar un radio trazado sobre declaraciones. Solo se leen los proyectos que el cambio afecta; el repositorio completo cuando el alcance sobre los proyectos es desconocido.
 
 Límites: un test en el mismo lugar, o que lleva el nombre de un archivo, puede no ejercitar la llamada que cambió, y uno que se refiere a un archivo puede simular con mocks lo que este llama: la columna dice que existe un test, no que cubre. `users` es más débil todavía: dice que algo que usa el archivo tiene tests. Los nombres de función se comparan sin aridad. Los módulos nombrados en tiempo de ejecución (`apply/3`, configuración) o generados por macros no se ven. Una petición se lee cuando su ruta está escrita en la llamada (`live(conn, ~p"/orders")`), no cuando viene de una variable o de un helper, y una ruta cuando está declarada en una sola línea.
 
@@ -925,7 +925,7 @@ Analiza las dependencias internas entre módulos leyendo las sentencias import/u
 km deps [path]
 ```
 
-Soporta Elixir (cada módulo al que el código se refiere, con el `alias` deshecho; mira las notas más abajo), Rust (cada ruta que nombra un módulo del workspace: `use`, `crate::`, `super::`, un módulo hijo; mira las notas más abajo), Python (`from .X import` relativo), JavaScript/TypeScript (`import`/`require` relativos), Go (imports que coinciden con la ruta del módulo en `go.mod`) y Kaikai (`import a.b.c`, incluidas las formas `as` y `.{…}`). Las dependencias externas (crates, paquetes de npm, la biblioteca estándar de Kaikai) se ignoran.
+Soporta Elixir (cada módulo al que el código se refiere, con el `alias` deshecho; mira las notas más abajo), Rust (cada ruta que nombra un módulo del workspace: `use`, `crate::`, `super::`, un módulo hijo; mira las notas más abajo), Python (`import` y `from … import`, absolutos y relativos; mira las notas más abajo), JavaScript/TypeScript (`import`/`require` relativos), Go (imports que coinciden con la ruta del módulo en `go.mod`) y Kaikai (`import a.b.c`, incluidas las formas `as` y `.{…}`). Las dependencias externas (crates, paquetes de npm, la biblioteca estándar de Kaikai) se ignoran.
 
 Los archivos en cualquier otro lenguaje quedan fuera del grafo, en vez de listarse con cero dependencias. El pie de la tabla, el arreglo `unsupported` de la salida JSON y el campo `unsupported:N` del formato short dicen cuántos archivos se omitieron, así que "no medido" nunca se muestra como "sin dependencias".
 
@@ -948,6 +948,16 @@ Notas sobre Rust:
 - Para `km impact`, un archivo con funciones `#[test]` tiene un test propio; un archivo de `tests/` que las tiene, o un módulo `tests.rs`, es un test. Lo que un paquete ejecuta (`src/main.rs`, `src/bin`, `examples`, `benches`, `build.rs`) es un punto de entrada.
 - Los comentarios, los strings y `$crate` dentro de una macro no nombran nada.
 - No se ve: lo que una macro genera o nombra, `include!`, una librería con `[lib] path` o `name` propios, una dependencia renombrada en `Cargo.toml`, y los módulos detrás de `cfg`, que cuentan todos. Un uso hecho solo desde un módulo de tests en el mismo archivo igual convierte al archivo en dependiente. Un test que ejecuta el binario (`assert_cmd`, `CARGO_BIN_EXE_*`) no nombra ningún archivo, así que no protege a ninguno. Dos paquetes con el mismo nombre en un repositorio no se distinguen.
+
+Notas sobre Python:
+
+- Se lee cada `import a.b` y `from a.b import c`, donde sea que esté escrito: en una función, bajo `if TYPE_CHECKING:`, en varias líneas entre paréntesis o con una barra invertida. Uno escrito en un docstring o en un comentario no es un import.
+- Una ruta con puntos nombra `a/b.py` o el paquete `a/b/__init__.py`; un stub (`.pyi`) vale por un módulo sin fuente. Solo se usa el módulo más profundo: `import a.b.c` no agrega arista hacia `a/__init__.py`.
+- En `from a.b import c`, `c` es el submódulo `a/b/c.py` cuando ese archivo existe, y si no, un nombre que `a.b` define.
+- Un import relativo parte del paquete del archivo que importa, un nivel más arriba por cada punto adicional.
+- Un import absoluto se busca desde cada directorio sobre el archivo que importa que no sea él mismo un paquete (no tiene `__init__.py`), del más cercano al más lejano, y desde el directorio `src` bajo cada uno. Eso cubre un proyecto que se ejecuta desde su raíz, un layout `src` con `tests/` al lado, y varios proyectos en un repositorio. Lo que no se encuentra bajo ninguno es externo: la biblioteca estándar, los paquetes instalados.
+- Para `km impact`, `test_*.py`, `*_test.py` y `tests.py` son tests, y `conftest.py` es soporte de tests, que no protege nada; `__main__.py`, `setup.py` y `manage.py` son puntos de entrada, igual que lo que está bajo `management/commands`.
+- No se ven: los módulos nombrados en tiempo de ejecución (`importlib`, `__import__`, los settings de Django e `INSTALLED_APPS`), las raíces agregadas a `sys.path` o declaradas en `pyproject.toml` que no sean `src`, y un paquete namespace repartido en varias raíces. Un nombre que un paquete reexporta lleva a su `__init__.py`, y de ahí al módulo que lo define.
 
 Notas sobre Kaikai:
 

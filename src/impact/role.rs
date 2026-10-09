@@ -26,9 +26,12 @@ pub fn role(path: &Path) -> Role {
         .filter_map(|c| c.as_os_str().to_str())
         .any(|c| TEST_DIRS.contains(&c));
     let is_script = graphed_language(path) == Some("Elixir Script");
-    if is_test_file(path) {
+    let named = |name: &str| path.file_name().is_some_and(|file| file == name);
+    // `tests.py` holds the tests of a Django app, and `conftest.py` the
+    // fixtures of the tests around it, wherever they sit.
+    if is_test_file(path) || named("tests.py") {
         Role::Test
-    } else if in_test_dir || is_script {
+    } else if in_test_dir || is_script || named("conftest.py") {
         Role::Other
     } else {
         Role::Source

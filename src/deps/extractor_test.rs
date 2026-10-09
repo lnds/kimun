@@ -1,13 +1,6 @@
 use super::*;
 
 #[test]
-fn python_relative_imports() {
-    let src = "from .foo import bar\nfrom . import baz\nfrom ..utils import helper\nimport os\n";
-    let result = extract_python(src);
-    assert_eq!(result, vec![".foo", "..utils"]);
-}
-
-#[test]
 fn js_relative_imports() {
     let src = r#"
 import foo from './foo';
@@ -73,7 +66,7 @@ fn go_strings_outside_imports_are_not_imports() {
 #[test]
 fn dispatcher_routes_each_language_to_its_extractor() {
     let cases = [
-        ("pkg/a.py", "Python", "from .foo import bar\n", ".foo"),
+        ("pkg/a.py", "Python", "from .foo import bar\n", ".foo:bar"),
         (
             "src/a.js",
             "JavaScript",

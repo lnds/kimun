@@ -37,6 +37,17 @@ fn what_a_rust_package_runs_is_an_entry_point() {
 }
 
 #[test]
+fn what_python_runs_is_an_entry_point() {
+    let entry = entry_points(&[]);
+    for run in ["shop/__main__.py", "setup.py", "site/manage.py"] {
+        assert!(entry.conventional(Path::new(run)), "{run}");
+    }
+    for used in ["shop/__init__.py", "shop/main.py", "shop/setup_tools.py"] {
+        assert!(!entry.conventional(Path::new(used)), "{used}");
+    }
+}
+
+#[test]
 fn a_directory_that_only_shares_part_of_the_name_is_not_one() {
     let entry = entry_points(&[]);
     assert!(!entry.conventional(Path::new("shop/lib/shop/tasks/seed.ex")));

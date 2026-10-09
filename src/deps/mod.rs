@@ -15,6 +15,7 @@ pub mod heex;
 mod kaikai;
 pub mod layout;
 mod phoenix;
+mod python;
 mod report;
 pub mod routes;
 mod rust;
