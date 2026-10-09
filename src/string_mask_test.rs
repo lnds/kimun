@@ -170,3 +170,23 @@ fn mask_empty_lines() {
     let mask = multi_line_string_mask(&[], spec);
     assert!(mask.is_empty());
 }
+
+#[test]
+fn starts_in_string_marks_the_closing_line() {
+    let spec = detect(std::path::Path::new("test.py")).unwrap();
+    let lines: Vec<String> = ["x = \"\"\"", "inside", "closing\"\"\" + y", "z = 2"]
+        .into_iter()
+        .map(String::from)
+        .collect();
+    assert_eq!(
+        starts_in_string_mask(&lines, spec),
+        [false, true, true, false]
+    );
+}
+
+#[test]
+fn starts_in_string_without_triple_quotes() {
+    let spec = detect(std::path::Path::new("test.rs")).unwrap();
+    let lines = vec!["x = \"\"\"".to_string(), "inside".to_string()];
+    assert_eq!(starts_in_string_mask(&lines, spec), [false, false]);
+}

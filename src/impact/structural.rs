@@ -30,6 +30,7 @@ const RELIABLE: &[&str] = &[
     "JSX",
     "TSX",
     "Kaikai",
+    "Python",
     "Rust",
 ];
 

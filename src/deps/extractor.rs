@@ -2,11 +2,11 @@
 ///
 /// Each extractor returns raw import strings that the resolver will map to
 /// project-relative file paths. Only potentially-internal references are
-/// returned: relative imports (JS/TS/Python). Go and Kaikai imports are
-/// returned verbatim for the resolver to filter: by module path (Go) or by
-/// what exists in the project (Kaikai). Elixir and Rust are read apart:
+/// returned: relative imports (JS/TS). Go, Kaikai and Python imports are
+/// returned for the resolver to filter: by module path (Go) or by what
+/// exists in the project (Kaikai, Python). Elixir and Rust are read apart:
 /// their dependencies are names to resolve over the whole graph.
-use super::kaikai;
+use super::{kaikai, python};
 
 /// Whether imports can be extracted and resolved for this language.
 /// Files in any other language have no measured dependencies.
@@ -30,31 +30,12 @@ pub fn is_supported(language: &str) -> bool {
 /// Returns strings that the resolver will attempt to map to project files.
 pub fn extract_imports(language: &str, source: &str) -> Vec<String> {
     match language {
-        "Python" => extract_python(source),
+        "Python" => python::extract(source),
         "JavaScript" | "TypeScript" | "JSX" | "TSX" => extract_js(source),
         "Go" => extract_go(source),
         "Kaikai" => kaikai::extract(source),
         _ => vec![],
     }
-}
-
-/// Python: extract relative imports (`from .foo import bar`, `from . import bar`).
-/// Absolute imports are skipped — they may be external packages.
-fn extract_python(source: &str) -> Vec<String> {
-    let mut imports = Vec::new();
-    for line in source.lines() {
-        let trimmed = line.trim();
-        if let Some(module) = trimmed
-            .strip_prefix("from ")
-            .and_then(|r| r.split_whitespace().next())
-        {
-            // Only relative imports start with `.`
-            if module.starts_with('.') && module != "." {
-                imports.push(module.to_string());
-            }
-        }
-    }
-    imports
 }
 
 /// JavaScript/TypeScript: extract relative import/require paths (`./foo`, `../bar`).

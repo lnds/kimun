@@ -21,8 +21,15 @@ const TASK_DIRS: &[&[&str]] = &[
 ];
 
 /// Files that are the start of a program wherever they are, as the end of
-/// their path: the binary of a Rust package and its build script.
-const PROGRAMS: &[&str] = &["src/main.rs", "build.rs"];
+/// their path: the binary of a Rust package and its build script, and what
+/// Python runs a package, an installation or a Django project from.
+const PROGRAMS: &[&str] = &[
+    "src/main.rs",
+    "build.rs",
+    "__main__.py",
+    "setup.py",
+    "manage.py",
+];
 
 /// Tells the entry points among the files of a repository.
 pub struct EntryPoints {

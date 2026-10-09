@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-use super::kaikai;
+use super::{kaikai, python};
 
 /// A single file's dependency metrics.
 #[derive(Clone)]
@@ -236,41 +236,13 @@ pub fn resolve_import(
 ) -> Vec<PathBuf> {
     let dir = importer.parent().unwrap_or(Path::new(""));
     let single = match language {
-        "Python" => resolve_python(dir, import_str, file_set),
+        "Python" => python::resolve(importer, import_str, file_set),
         "JavaScript" | "TypeScript" | "JSX" | "TSX" => resolve_js(dir, import_str, file_set),
         "Go" => resolve_go(import_str, go_module, file_set),
         "Kaikai" => return kaikai::resolve(importer, import_str, file_set),
         _ => None,
     };
     single.into_iter().collect()
-}
-
-fn resolve_python(dir: &Path, import_str: &str, file_set: &HashSet<PathBuf>) -> Option<PathBuf> {
-    // Count leading dots for relative level
-    let dots = import_str.chars().take_while(|c| *c == '.').count();
-    let module = &import_str[dots..]; // module name after dots
-
-    // Navigate up `dots - 1` directories from current dir
-    let mut base = dir.to_path_buf();
-    for _ in 1..dots {
-        base = base.parent().unwrap_or(Path::new("")).to_path_buf();
-    }
-
-    if module.is_empty() {
-        return None;
-    }
-
-    // Convert dotted module to path: foo.bar → foo/bar
-    let rel = module.replace('.', "/");
-    let as_file = base.join(format!("{rel}.py"));
-    if file_set.contains(&as_file) {
-        return Some(as_file);
-    }
-    let as_init = base.join(&rel).join("__init__.py");
-    if file_set.contains(&as_init) {
-        return Some(as_init);
-    }
-    None
 }
 
 fn resolve_js(dir: &Path, import_str: &str, file_set: &HashSet<PathBuf>) -> Option<PathBuf> {
@@ -437,88 +409,11 @@ mod tests {
         assert_eq!(p, PathBuf::from("src/bar.rs"));
     }
 
-    // ── Python resolution ──────────────────────────────────────────────────
-
     #[test]
-    fn resolve_python_relative_as_file() {
-        let mut file_set = HashSet::new();
-        file_set.insert(PathBuf::from("src/utils.py"));
-        let result = resolve_import(
-            Path::new("src/main.py"),
-            ".utils",
-            "Python",
-            &file_set,
-            None,
-        );
-        assert_eq!(result, vec![PathBuf::from("src/utils.py")]);
-    }
-
-    #[test]
-    fn resolve_python_relative_as_package() {
-        let mut file_set = HashSet::new();
-        file_set.insert(PathBuf::from("src/utils/__init__.py"));
-        let result = resolve_import(
-            Path::new("src/main.py"),
-            ".utils",
-            "Python",
-            &file_set,
-            None,
-        );
-        assert_eq!(result, vec![PathBuf::from("src/utils/__init__.py")]);
-    }
-
-    #[test]
-    fn resolve_python_double_dot_goes_up() {
-        let mut file_set = HashSet::new();
-        file_set.insert(PathBuf::from("common.py"));
-        // From src/sub/main.py, ..common → src/common.py? No, two dots goes up two levels
-        // importer: src/sub/main.py → dir = src/sub
-        // dots=2 → base goes up 1 level (for _ in 1..2) → base = src
-        // module = "common" → src/common.py
-        file_set.insert(PathBuf::from("src/common.py"));
-        let result = resolve_import(
-            Path::new("src/sub/main.py"),
-            "..common",
-            "Python",
-            &file_set,
-            None,
-        );
-        assert_eq!(result, vec![PathBuf::from("src/common.py")]);
-    }
-
-    #[test]
-    fn resolve_python_dotted_module_path() {
-        let mut file_set = HashSet::new();
-        file_set.insert(PathBuf::from("src/foo/bar.py"));
-        let result = resolve_import(
-            Path::new("src/main.py"),
-            ".foo.bar",
-            "Python",
-            &file_set,
-            None,
-        );
-        assert_eq!(result, vec![PathBuf::from("src/foo/bar.py")]);
-    }
-
-    #[test]
-    fn resolve_python_module_only_dots_returns_none() {
-        // Single dot with no module name → skip
-        let file_set = HashSet::new();
-        let result = resolve_import(Path::new("src/main.py"), ".", "Python", &file_set, None);
-        assert!(result.is_empty());
-    }
-
-    #[test]
-    fn resolve_python_not_found_returns_none() {
-        let file_set = HashSet::new();
-        let result = resolve_import(
-            Path::new("src/main.py"),
-            ".missing",
-            "Python",
-            &file_set,
-            None,
-        );
-        assert!(result.is_empty());
+    fn resolve_python_through_the_dispatcher() {
+        let file_set = HashSet::from([PathBuf::from("app/b.py")]);
+        let result = resolve_import(Path::new("main.py"), "app.b", "Python", &file_set, None);
+        assert_eq!(result, vec![PathBuf::from("app/b.py")]);
     }
 
     // ── JavaScript/TypeScript resolution ──────────────────────────────────

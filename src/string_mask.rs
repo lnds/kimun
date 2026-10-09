@@ -20,6 +20,24 @@ pub fn multi_line_string_mask(lines: &[String], spec: &LanguageSpec) -> Vec<bool
     mask
 }
 
+/// Mark the lines that start inside a triple-quoted string: the interior
+/// lines and the one that closes it. What such a line holds before the
+/// closing delimiter is text, whatever it looks like.
+pub fn starts_in_string_mask(lines: &[String], spec: &LanguageSpec) -> Vec<bool> {
+    if !spec.triple_quote_strings {
+        return vec![false; lines.len()];
+    }
+    let mut in_triple: Option<&str> = None;
+    lines
+        .iter()
+        .map(|line| {
+            let started_in_string = in_triple.is_some();
+            scan_triple_quotes(line, &mut in_triple);
+            started_in_string
+        })
+        .collect()
+}
+
 /// Demote the interior lines of multi-line strings from `Code` to `Blank`.
 ///
 /// Prose and data embedded in a triple-quoted literal are not control flow:

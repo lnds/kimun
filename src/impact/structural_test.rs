@@ -238,14 +238,14 @@ fn test_support_is_neither_a_test_nor_a_dependent() {
 fn nothing_to_measure_without_a_changed_source() {
     let changes = [
         change("README.md", &[1]),
-        change("app/main.py", &[1]),
-        change("app/util.py", &[2]),
+        change("app/main.go", &[1]),
+        change("app/util.go", &[2]),
     ];
     let radius = radius(project(&[]), &changes);
 
     assert!(radius.origins.is_empty());
     assert_eq!(radius.functions, None);
-    assert_eq!(radius.unavailable, [("Python".to_string(), 2)]);
+    assert_eq!(radius.unavailable, [("Go".to_string(), 2)]);
     let lines = render(&radius, 20);
     assert_eq!(
         lines[2],
@@ -253,7 +253,7 @@ fn nothing_to_measure_without_a_changed_source() {
     );
     assert_eq!(
         lines.last().unwrap(),
-        "Not measured for Python (2 changed): its graph does not reflect usage yet."
+        "Not measured for Go (2 changed): its graph does not reflect usage yet."
     );
 }
 
@@ -362,10 +362,17 @@ fn what_each_file_is_to_the_radius() {
     assert_eq!(role(Path::new("config/runtime.exs")), Role::Other);
     assert_eq!(role(Path::new("mix.exs")), Role::Other);
 
+    assert_eq!(role(Path::new("shop/tests.py")), Role::Test);
+    assert_eq!(role(Path::new("tests/billing/tests.py")), Role::Test);
+    assert_eq!(role(Path::new("shop/contests.py")), Role::Source);
+    assert_eq!(role(Path::new("conftest.py")), Role::Other);
+    assert_eq!(role(Path::new("src/shop/conftest.py")), Role::Other);
+
     assert!(is_reliable(Path::new("lib/a.ex")));
     assert!(is_reliable(Path::new("src/a.ts")));
     assert!(is_reliable(Path::new("src/a.rs")));
-    assert!(!is_reliable(Path::new("app/a.py")));
+    assert!(is_reliable(Path::new("app/a.py")));
+    assert!(!is_reliable(Path::new("app/a.go")));
     assert!(!is_reliable(Path::new("README.md")));
 }
 
@@ -972,5 +979,52 @@ fn rust_tests_kept_beside_the_code_and_under_tests_protect() {
     assert_eq!(protection_of(&radius, "stock.rs"), Protection::Direct);
     // Test support that holds no test protects nothing.
     assert_eq!(protection_of(&radius, "report.rs"), Protection::None);
+    assert!(radius.unavailable.is_empty());
+}
+
+fn python_package_with_tests() -> Vec<(PathBuf, String)> {
+    [
+        ("src/shop/__init__.py", ""),
+        ("src/shop/orders.py", "def total():\n    return 1\n"),
+        ("src/shop/cart.py", "from shop.orders import total\n"),
+        ("src/shop/receipt.py", "from . import orders\n"),
+        ("src/shop/stock.py", "import shop.orders\n"),
+        ("src/shop/report.py", "from .cart import summary\n"),
+        ("tests/test_cart.py", "from shop.cart import summary\n"),
+        ("tests/billing/tests.py", "from shop import receipt\n"),
+        ("tests/conftest.py", "import shop.stock\n"),
+    ]
+    .iter()
+    .map(|(path, text)| (PathBuf::from(path), text.to_string()))
+    .collect()
+}
+
+#[test]
+fn python_absolute_and_relative_imports_carry_the_radius() {
+    let changes = [change("src/shop/orders.py", &[1])];
+    let radius = radius(python_package_with_tests(), &changes);
+
+    let mut files: Vec<&str> = radius
+        .direct
+        .iter()
+        .map(|d| d.file.to_str().unwrap())
+        .collect();
+    files.sort_unstable();
+    assert_eq!(
+        files,
+        [
+            "src/shop/cart.py",
+            "src/shop/receipt.py",
+            "src/shop/stock.py"
+        ]
+    );
+    // `report.py` uses `cart.py`.
+    assert_eq!(radius.by_distance, [3, 1]);
+    // A test under `tests/`, through the package a `src` directory holds.
+    assert_eq!(protection_of(&radius, "cart.py"), Protection::Direct);
+    // `tests.py` is a test whatever it tests.
+    assert_eq!(protection_of(&radius, "receipt.py"), Protection::Direct);
+    // Test support protects nothing.
+    assert_eq!(protection_of(&radius, "stock.py"), Protection::None);
     assert!(radius.unavailable.is_empty());
 }
