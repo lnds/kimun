@@ -8,8 +8,8 @@ use super::analyzer::resolve_import;
 use super::elixir::{self, ElixirFile};
 use super::extractor::extract_imports;
 use super::layout::Layout;
-use super::python;
 use super::rust_crates;
+use super::{python_names, python_uses};
 
 /// A source file to place in the graph.
 pub struct Source {
@@ -43,17 +43,28 @@ pub enum Unnarrowed {
     Outside(usize),
 }
 
+/// Tells the functions of a source a change to some lines affects, or the
+/// line that may concern all of them.
+type Teller = fn(&str, &[usize]) -> Result<BTreeSet<String>, usize>;
+
+/// What tells the changed functions of a language, if anything does.
+fn teller(language: &str) -> Option<Teller> {
+    match language {
+        "Python" => Some(python_names::changed),
+        "Elixir" | "Elixir Script" => Some(super::elixir_functions::changed_functions),
+        _ => None,
+    }
+}
+
 impl Source {
     /// The public functions of this file a change to `lines` affects, by
     /// name, or why they cannot be told.
     pub fn changed_functions(&self, lines: &[usize]) -> Result<BTreeSet<String>, Unnarrowed> {
-        if !is_elixir(&self.language) {
-            return Err(Unnarrowed::Language);
-        }
+        let told = teller(&self.language).ok_or(Unnarrowed::Language)?;
         if lines.is_empty() {
             return Err(Unnarrowed::NoLines);
         }
-        super::elixir_functions::changed_functions(&self.text, lines).map_err(Unnarrowed::Outside)
+        told(&self.text, lines).map_err(Unnarrowed::Outside)
     }
 }
 
@@ -77,22 +88,20 @@ fn no_calls(to: usize) -> (usize, BTreeSet<String>) {
 }
 
 /// The files a source imports, for the languages whose imports resolve
-/// one by one from where the importer is.
+/// one by one from where the importer is. Python tells the names taken too.
 fn imports(
     source: &Source,
     layout: &Layout,
     by_path: &HashMap<&Path, usize>,
+    python: &python_uses::Modules,
 ) -> BTreeMap<usize, BTreeSet<String>> {
+    if let Some(uses) = python.uses(source, layout, by_path) {
+        return uses;
+    }
     let (known, go) = (&layout.known, layout.go_module);
-    let resolve = |import: &String| match source.language.as_str() {
-        "Python" => python::resolve(&source.path, import, known, &layout.python_roots)
-            .into_iter()
-            .collect(),
-        language => resolve_import(&source.path, import, language, known, go),
-    };
     extract_imports(&source.language, &source.text)
         .iter()
-        .flat_map(resolve)
+        .flat_map(|import| resolve_import(&source.path, import, &source.language, known, go))
         .filter_map(|path| by_path.get(path.as_path()).copied())
         .map(no_calls)
         .collect()
@@ -185,6 +194,7 @@ impl FileGraph {
             .map(|s| (s.language == "Rust").then_some(s.text.as_str()))
             .collect();
         let (mut rust_uses, own_tests) = rust_crates::read(&files, &rust, &layout.packages);
+        let python = python_uses::Modules::of(sources);
 
         let mut graph = FileGraph {
             files,
@@ -197,7 +207,7 @@ impl FileGraph {
             let uses = match (&parsed[file], rust_uses[file].take()) {
                 (Some(parsed), _) => graph.elixir_uses(file, parsed, &modules, related),
                 (None, Some(used)) => used.into_iter().map(no_calls).collect(),
-                (None, None) => imports(source, layout, &by_path),
+                (None, None) => imports(source, layout, &by_path, &python),
             };
             graph.uses.push(
                 uses.into_iter()

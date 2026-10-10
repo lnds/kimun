@@ -987,8 +987,14 @@ fn python_package_with_tests() -> Vec<(PathBuf, String)> {
         ("src/shop/__init__.py", ""),
         ("src/shop/orders.py", "def total():\n    return 1\n"),
         ("src/shop/cart.py", "from shop.orders import total\n"),
-        ("src/shop/receipt.py", "from . import orders\n"),
-        ("src/shop/stock.py", "import shop.orders\n"),
+        (
+            "src/shop/receipt.py",
+            "from . import orders\n\nTOTAL = orders.total()\n",
+        ),
+        (
+            "src/shop/stock.py",
+            "import shop.orders\n\nTOTAL = shop.orders.total()\n",
+        ),
         ("src/shop/report.py", "from .cart import summary\n"),
         ("tests/test_cart.py", "from shop.cart import summary\n"),
         ("tests/billing/tests.py", "from shop import receipt\n"),
@@ -1027,4 +1033,53 @@ fn python_absolute_and_relative_imports_carry_the_radius() {
     // Test support protects nothing.
     assert_eq!(protection_of(&radius, "stock.py"), Protection::None);
     assert!(radius.unavailable.is_empty());
+}
+
+fn python_shop() -> Vec<(PathBuf, String)> {
+    [
+        (
+            "shop/prices.py",
+            "def tax(x):\n    return x\n\n\ndef total(x):\n    return x\n\n\nsetup()\n",
+        ),
+        ("shop/cart.py", "from shop.prices import tax\n"),
+        ("shop/receipt.py", "from shop.prices import total\n"),
+        ("shop/stock.py", "import shop.prices\n"),
+        ("shop/web.py", "from shop.cart import add\n"),
+        ("shop/print.py", "from shop.receipt import show\n"),
+    ]
+    .iter()
+    .map(|(path, text)| (PathBuf::from(path), text.to_string()))
+    .collect()
+}
+
+#[test]
+fn a_python_change_is_narrowed_to_the_names_it_touches() {
+    let radius = radius(python_shop(), &[change("shop/prices.py", &[2])]);
+
+    assert_eq!(radius.functions, Some(vec!["tax".to_string()]));
+    assert_eq!(
+        direct(&radius),
+        [
+            ("cart.py", Exposure::Calls, 0, vec!["prices.tax"]),
+            // Imported, with nothing read on it.
+            ("stock.py", Exposure::Refers, 0, vec![]),
+            // Takes a name the change leaves alone.
+            ("receipt.py", Exposure::Elsewhere, 0, vec![]),
+        ]
+    );
+    // The radius goes on through `cart.py` only: `print.py` is left out.
+    assert_eq!(radius.by_distance, [1, 1]);
+    assert_eq!(radius.upper_bound, 5);
+}
+
+#[test]
+fn python_code_that_runs_on_import_counts_every_use() {
+    let radius = radius(python_shop(), &[change("shop/prices.py", &[9])]);
+
+    assert_eq!(radius.functions, None);
+    assert_eq!(
+        radius.narrowing[0].reason.as_deref(),
+        Some("line 9 is outside every function")
+    );
+    assert_eq!(radius.by_distance, [3, 2]);
 }

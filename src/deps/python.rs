@@ -6,8 +6,51 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use crate::loc::language::languages;
+use crate::loc::language::{LanguageSpec, languages};
 use crate::string_mask::starts_in_string_mask;
+
+/// A name an import statement binds in a file.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Binding {
+    /// The module named, with its leading dots.
+    pub module: String,
+    /// The name `from … import` takes from it, if one is taken.
+    pub name: Option<String>,
+    /// What the file calls it: the alias, the name taken, or the dotted
+    /// path of a plain `import`. `None` for `*`, which binds every name.
+    pub bound: Option<String>,
+}
+
+impl Binding {
+    /// The import as `extract` gives it.
+    pub fn import(&self) -> String {
+        match &self.name {
+            Some(name) => format!("{}:{name}", self.module),
+            None => self.module.clone(),
+        }
+    }
+
+    /// The module `name` would be, were it a submodule of `module`.
+    pub fn submodule(&self) -> Option<String> {
+        let name = self.name.as_ref()?;
+        let dot = if self.module.ends_with('.') { "" } else { "." };
+        Some(format!("{}{dot}{name}", self.module))
+    }
+}
+
+/// A file as its imports and the rest of its code.
+#[derive(Debug, Default)]
+pub struct Read {
+    pub bindings: Vec<Binding>,
+    /// The lines that are not import statements, without comments or the
+    /// inside of multi-line strings.
+    pub code: Vec<String>,
+}
+
+/// The specification of Python, which tells where strings are.
+pub fn spec() -> Option<&'static LanguageSpec> {
+    languages().iter().find(|s| s.name == "Python")
+}
 
 /// Extract what each `import` and `from … import` statement names, wherever
 /// it is written: at the top, in a function, under `if TYPE_CHECKING:`.
@@ -19,8 +62,15 @@ use crate::string_mask::starts_in_string_mask;
 /// Statements may run over several lines, in parentheses or with a
 /// backslash. A statement written inside a docstring is not one.
 pub fn extract(source: &str) -> Vec<String> {
-    let Some(spec) = languages().iter().find(|s| s.name == "Python") else {
-        return vec![];
+    read(source).bindings.iter().map(Binding::import).collect()
+}
+
+/// Read the imports of a file, with the names they bind, apart from the
+/// rest of its code.
+pub fn read(source: &str) -> Read {
+    let mut read = Read::default();
+    let Some(spec) = spec() else {
+        return read;
     };
     let lines: Vec<String> = source.lines().map(String::from).collect();
     let in_string = starts_in_string_mask(&lines, spec);
@@ -30,10 +80,10 @@ pub fn extract(source: &str) -> Vec<String> {
         .filter(|(_, masked)| !masked)
         .map(|(line, _)| without_comment(line));
 
-    let mut imports = Vec::new();
-    while let Some(line) = code.next() {
-        let line = line.trim_start();
+    while let Some(written) = code.next() {
+        let line = written.trim_start();
         if keyword(line, "import").is_none() && keyword(line, "from").is_none() {
+            read.code.push(written.to_string());
             continue;
         }
         let mut statement = line.to_string();
@@ -43,13 +93,14 @@ pub fn extract(source: &str) -> Vec<String> {
             statement.push_str(more);
         }
         for part in statement.split(';') {
-            read_statement(part.trim(), &mut imports);
+            read_statement(part.trim(), &mut read.bindings);
         }
     }
-    imports
+    read
 }
 
-/// An import statement holds no string, so `#` always starts a comment.
+/// The line without its comment. An import statement holds no string, so
+/// there `#` always starts one.
 fn without_comment(line: &str) -> &str {
     line.split('#').next().unwrap_or(line)
 }
@@ -66,19 +117,23 @@ fn unfinished(statement: &mut String) -> bool {
 }
 
 /// What follows `word` when `text` starts with it as a whole word.
-fn keyword<'a>(text: &'a str, word: &str) -> Option<&'a str> {
+pub fn keyword<'a>(text: &'a str, word: &str) -> Option<&'a str> {
     let rest = text.strip_prefix(word)?;
     let apart = |c: char| !(c.is_alphanumeric() || c == '_');
     rest.starts_with(apart).then_some(rest)
 }
 
-/// Add what one statement imports, if it is an import.
-fn read_statement(statement: &str, imports: &mut Vec<String>) {
+/// Add what one statement binds, if it is an import.
+fn read_statement(statement: &str, bindings: &mut Vec<Binding>) {
     if let Some(listed) = keyword(statement, "import") {
-        imports.extend(
+        bindings.extend(
             names(listed)
-                .filter(|name| is_module(name))
-                .map(str::to_string),
+                .filter(|(name, _)| is_module(name))
+                .map(|(name, alias)| Binding {
+                    module: name.to_string(),
+                    name: None,
+                    bound: Some(alias.unwrap_or(name).to_string()),
+                }),
         );
         return;
     }
@@ -95,22 +150,29 @@ fn read_statement(statement: &str, imports: &mut Vec<String>) {
     if !(is_module(path) || path.is_empty() && !module.is_empty()) {
         return;
     }
-    for name in names(listed) {
-        if name == "*" {
-            imports.push(module.to_string());
-        } else if is_identifier(name) {
-            imports.push(format!("{module}:{name}"));
+    for (name, alias) in names(listed) {
+        let star = name == "*";
+        if !star && !is_identifier(name) {
+            continue;
         }
+        bindings.push(Binding {
+            module: module.to_string(),
+            name: (!star).then(|| name.to_string()),
+            bound: (!star).then(|| alias.unwrap_or(name).to_string()),
+        });
     }
 }
 
-/// The names of a comma-separated list, each without its `as` alias, and
-/// without the parentheses around the list.
-fn names(listed: &str) -> impl Iterator<Item = &str> {
+/// The names of a comma-separated list, each with its `as` alias if it has
+/// one, without the parentheses around the list.
+fn names(listed: &str) -> impl Iterator<Item = (&str, Option<&str>)> {
     let around = |c: char| c.is_whitespace() || c == '(' || c == ')';
-    listed
-        .split(',')
-        .filter_map(move |item| item.trim_matches(around).split_whitespace().next())
+    listed.split(',').filter_map(move |item| {
+        let mut words = item.trim_matches(around).split_whitespace();
+        let name = words.next()?;
+        let alias = words.next().filter(|&word| word == "as").and(words.next());
+        Some((name, alias))
+    })
 }
 
 fn is_identifier(name: &str) -> bool {

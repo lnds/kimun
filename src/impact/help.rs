@@ -49,9 +49,10 @@ Blast radius -- projects reached through their manifests:
 
 Blast radius -- source files that use what changed:
   Inside the projects the change affects, the dependency graph is read
-  backwards from the changed files. In Elixir the change is narrowed to the
-  functions it touches, and each file that uses the module either calls one
-  of them, refers to the module without calling it, or is left out. A file
+  backwards from the changed files. In Elixir and Python the change is
+  narrowed to the functions it touches (in Python, the top-level names of
+  the module), and each file that uses the module either calls one of
+  them, refers to the module without calling it, or is left out. A file
   that calls what changed and that no test reaches is reported: an
   integration test is probably missing. A test protects a file when it
   refers to it or sits at the same place (lib/a/b.ex, test/a/b_test.exs);

@@ -178,7 +178,7 @@ fn other_languages_go_through_their_import_resolver() {
 }
 
 #[test]
-fn changed_functions_are_told_only_for_elixir() {
+fn changed_functions_are_told_for_elixir_and_python() {
     let elixir = source(
         "lib/a.ex",
         "defmodule A do\n  def f, do: g()\n\n  defp g, do: 1\nend\n",
@@ -194,6 +194,21 @@ fn changed_functions_are_told_only_for_elixir() {
     // No line known, or a line that may concern every function.
     assert_eq!(elixir.changed_functions(&[]), Err(Unnarrowed::NoLines));
     assert_eq!(elixir.changed_functions(&[1]), Err(Unnarrowed::Outside(1)));
+
+    let python = source(
+        "shop/prices.py",
+        "RATE = 2\n\ndef tax(x):\n    return x * RATE\n\nsetup()\n",
+    );
+    assert_eq!(
+        python
+            .changed_functions(&[1])
+            .unwrap()
+            .into_iter()
+            .collect::<Vec<_>>(),
+        ["RATE", "tax"]
+    );
+    assert_eq!(python.changed_functions(&[]), Err(Unnarrowed::NoLines));
+    assert_eq!(python.changed_functions(&[6]), Err(Unnarrowed::Outside(6)));
 
     let typescript = source("src/a.ts", "export function f() { return 1 }\n");
     assert_eq!(
@@ -268,11 +283,72 @@ fn python_imports_follow_the_roots_a_project_declares() {
 
     assert_eq!(
         uses(&graph, "svc/tests/test_cart.py"),
-        [("svc/python/shop/cart.py", vec![])]
+        [("svc/python/shop/cart.py", vec!["cart.add"])]
     );
     assert_eq!(
         uses(&graph, "svc/python/shop/orders.py"),
         [("svc/python/shop/cart.py", vec![])]
     );
     assert!(is_manifest(Path::new("svc/pyproject.toml")));
+}
+
+#[test]
+fn python_uses_tell_the_names_taken_from_each_module() {
+    let prices = "RATE = 2\n\ndef tax(x):\n    return x\n\ndef total(x):\n    return x\n";
+    let sources = [
+        source("shop/__init__.py", "from .prices import total\n"),
+        source("shop/prices.py", prices),
+        source(
+            "shop/named.py",
+            "from shop.prices import tax as vat, RATE\n",
+        ),
+        source(
+            "shop/module.py",
+            "import shop.prices\n\nX = shop.prices.tax(1)\n",
+        ),
+        source(
+            "shop/alias.py",
+            "import shop.prices as p\n\nX = p.total(1)\n",
+        ),
+        source(
+            "shop/sub.py",
+            "from shop import prices\n\nX = prices.RATE\n",
+        ),
+        source("shop/star.py", "from .prices import *\n\nX = tax(RATE)\n"),
+        source(
+            "shop/value.py",
+            "from . import prices\n\nHANDLERS = [prices]\n",
+        ),
+        source("shop/idle.py", "import shop.prices\n"),
+        source("shop/package.py", "from shop import total\n"),
+    ];
+    let graph = build(&sources);
+    let prices = |calls: &[&'static str]| vec![("shop/prices.py", calls.to_vec())];
+
+    assert_eq!(
+        uses(&graph, "shop/named.py"),
+        prices(&["prices.RATE", "prices.tax"])
+    );
+    assert_eq!(uses(&graph, "shop/module.py"), prices(&["prices.tax"]));
+    assert_eq!(uses(&graph, "shop/alias.py"), prices(&["prices.total"]));
+    // A name taken from a package that is one of its modules.
+    assert_eq!(uses(&graph, "shop/sub.py"), prices(&["prices.RATE"]));
+    // `*` takes the names the file goes on to mention.
+    assert_eq!(
+        uses(&graph, "shop/star.py"),
+        prices(&["prices.RATE", "prices.tax"])
+    );
+    // A module handed over as a value may give any of its names.
+    assert_eq!(
+        uses(&graph, "shop/value.py"),
+        prices(&["prices.RATE", "prices.tax", "prices.total"])
+    );
+    // Imported and never read.
+    assert_eq!(uses(&graph, "shop/idle.py"), prices(&[]));
+    // A name a package re-exports is taken from the package.
+    assert_eq!(
+        uses(&graph, "shop/package.py"),
+        [("shop/__init__.py", vec!["shop.total"])]
+    );
+    assert_eq!(uses(&graph, "shop/__init__.py"), prices(&["prices.total"]));
 }
