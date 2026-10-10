@@ -1,3 +1,9 @@
+## v0.34.0 (2026-10-09)
+
+### Feat
+
+- **projects**: the development groups of PDM are dev dependencies
+
 ## v0.33.0 (2026-10-09)
 
 ### Feat
