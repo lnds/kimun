@@ -634,6 +634,7 @@ Un **proyecto** es un directorio con un manifiesto. Un proyecto **depende** de o
 | JavaScript / TypeScript | `package.json` | cualquier dependencia cuyo nombre sea otro paquete del repositorio (workspaces de npm, yarn y pnpm), además de `file:` y `link:` |
 | Elixir | `mix.exs` | dependencias con `path:` e `in_umbrella: true` |
 | Go | `go.mod`, `go.work` | módulos requeridos que son otro módulo del repositorio, y `replace` con un directorio |
+| Python | `pyproject.toml` | cualquier requisito cuyo nombre sea otro proyecto del repositorio (sin distinguir mayúsculas ni `-`, `_`, `.`), y los que tienen un `path` en `[tool.uv.sources]` o en las tablas de Poetry; se leen `[project]` (`dependencies`, `optional-dependencies`), `[dependency-groups]`, `[build-system] requires` y `[tool.poetry]` |
 
 ```
 Blast radius — projects reached through their manifests
@@ -650,7 +651,7 @@ Changed files outside every project (reach unknown): Makefile
 ```
 
 - **Scope**: una dependencia `dev` (solo de desarrollo o de test) alcanza al dependiente, cuyos tests usan el proyecto que cambió, y se detiene ahí: el proyecto que cambió no es parte de lo que el dependiente entrega, así que no se alcanza a los dependientes del dependiente. Las dependencias `build` y `optional` siguen adelante igual que las de ejecución.
-- **Raíces de workspace**: un `Cargo.toml` con `[workspace]`, un `package.json` con `workspaces` (o junto a un `pnpm-workspace.yaml`), un `mix.exs` umbrella con `apps_path`, un `go.work`. Un cambio en el manifiesto o en el archivo lock de una de esas raíces (`Cargo.lock`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `bun.lock`, `mix.lock`) alcanza a todos los proyectos que tiene debajo a distancia 1, con scope `workspace`, y sigue adelante desde ellos. Una raíz de workspace es un proyecto por sí misma solo cuando declara uno (`[package]` en Cargo, `app:` en mix); un `package.json` en una raíz de workspace nunca lo es.
+- **Raíces de workspace**: un `Cargo.toml` con `[workspace]`, un `package.json` con `workspaces` (o junto a un `pnpm-workspace.yaml`), un `mix.exs` umbrella con `apps_path`, un `go.work`, un `pyproject.toml` con `[tool.uv.workspace]`. Un cambio en el manifiesto o en el archivo lock de una de esas raíces (`Cargo.lock`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `bun.lock`, `mix.lock`, `uv.lock`) alcanza a todos los proyectos que tiene debajo a distancia 1, con scope `workspace`, y sigue adelante desde ellos. Una raíz de workspace es un proyecto por sí misma solo cuando declara uno (`[package]` en Cargo, `app:` en mix, `[project]` en Python); un `package.json` en una raíz de workspace nunca lo es.
 - **Los archivos inertes** no alcanzan nada: un cambio en la documentación (`.md`, `.mdx`, `.rst`, `.adoc`, `.txt`) no rompe ninguna compilación ni ningún test. No cuenta como un cambio en su proyecto, ni como un archivo de alcance desconocido. `.kimun.toml` puede declarar más:
 
   ```toml
@@ -667,6 +668,7 @@ Changed files outside every project (reach unknown): Makefile
 Límites:
 
 - `mix.exs` es código y se lee como texto. Una dependencia cuya ruta se construye en tiempo de ejecución (`Path.expand(...)`, interpolación de strings, una lista generada) no se puede atribuir; el informe nombra el manifiesto y cuántas se le escaparon.
+- De Python solo se lee `pyproject.toml`. Un proyecto que se declara en `setup.py` (que es código) o `setup.cfg` no se ve, ni una dependencia local escrita en `requirements.txt` (`-e ../lib`). Un `pyproject.toml` que solo configura herramientas, sin `[project]` ni `[tool.poetry]`, no es un proyecto. Los extras (`optional-dependencies`) son `optional`; los grupos de dependencias son `dev`.
 - El acoplamiento entre ecosistemas no es visible: un cliente web y el servicio cuya API llama no tienen entre ellos ninguna dependencia de manifiesto.
 - Un proyecto anidado en otro (`assets/package.json` dentro de una aplicación Phoenix) no tiene dependencia hacia el que lo contiene ni desde él, salvo que un manifiesto la declare.
 - El grafo se lee del árbol de trabajo. Los archivos de un proyecto que el diff elimina o mueve ya no pertenecen a ningún proyecto: su alcance es desconocido, y los manifiestos que todavía lo nombran se informan como no leídos.

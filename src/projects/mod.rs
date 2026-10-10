@@ -12,6 +12,7 @@ mod discover;
 mod gomod;
 mod mix;
 mod npm;
+mod pyproject;
 mod radius;
 
 use std::path::PathBuf;
@@ -29,6 +30,23 @@ pub enum Ecosystem {
     Npm,
     Mix,
     Go,
+    Python,
+}
+
+impl Ecosystem {
+    /// The form of a project name that names are compared by. A Python
+    /// package is the same whatever the case of its name and whichever of
+    /// `-`, `_` and `.` separates its parts.
+    fn key(self, name: &str) -> String {
+        if self != Ecosystem::Python {
+            return name.to_string();
+        }
+        name.split(['-', '_', '.'])
+            .filter(|part| !part.is_empty())
+            .map(str::to_lowercase)
+            .collect::<Vec<_>>()
+            .join("-")
+    }
 }
 
 /// What a dependency is needed for, strongest first.
@@ -106,6 +124,7 @@ fn reader(file_name: &str) -> Option<(Ecosystem, Reader)> {
         "mix.exs" => Some((Ecosystem::Mix, mix::read)),
         "go.mod" => Some((Ecosystem::Go, gomod::read)),
         "go.work" => Some((Ecosystem::Go, gomod::read_work)),
+        "pyproject.toml" => Some((Ecosystem::Python, pyproject::read)),
         _ => None,
     }
 }

@@ -212,6 +212,7 @@ pub fn is_generated(path: &Path) -> bool {
             | "pnpm-lock.yaml"
             | "Gemfile.lock"
             | "poetry.lock"
+            | "uv.lock"
             | "composer.lock"
             | "Pipfile.lock"
             | "mix.lock"

@@ -183,7 +183,8 @@ impl Resolver {
                 name: name.clone(),
             });
         }
-        self.by_name.insert((found.ecosystem, name), index);
+        self.by_name
+            .insert((found.ecosystem, found.ecosystem.key(&name)), index);
     }
 
     fn at_path(&self, dir: &Path, relative: &Path) -> Resolved {
@@ -197,7 +198,7 @@ impl Resolver {
             DepTarget::Path(relative) => self.at_path(&found.dir, relative),
             DepTarget::Name(name) => self
                 .by_name
-                .get(&(found.ecosystem, name.clone()))
+                .get(&(found.ecosystem, found.ecosystem.key(name)))
                 .map_or(Resolved::External, |&i| Resolved::Project(i)),
             DepTarget::Workspace(name) => found
                 .dir

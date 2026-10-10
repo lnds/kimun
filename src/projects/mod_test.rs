@@ -712,3 +712,92 @@ fn a_dependency_directory_is_skipped_at_a_project_root_only() {
     assert!(is_skipped(Path::new("src/node_modules")));
     assert!(is_skipped(Path::new("src/svc/vendor")));
 }
+
+#[test]
+fn python_projects_are_linked_by_name_and_by_source() {
+    let graph = discover(&[
+        (
+            "pyproject.toml",
+            "[tool.uv.workspace]\nmembers = [\"apps/*\", \"libs/*\"]\n",
+        ),
+        (
+            "libs/core/pyproject.toml",
+            "[project]\nname = \"Acme_Core\"\n",
+        ),
+        (
+            "libs/log/pyproject.toml",
+            "[project]\nname = \"acme-log\"\n",
+        ),
+        (
+            "libs/fixtures/pyproject.toml",
+            "[tool.poetry]\nname = \"fixtures\"\n",
+        ),
+        (
+            "apps/api/pyproject.toml",
+            r#"
+[project]
+name = "api"
+dependencies = ["acme-core>=1", "renamed", "requests"]
+
+[dependency-groups]
+test = ["fixtures", "pytest"]
+
+[tool.uv.sources]
+acme-core = { workspace = true }
+renamed = { path = "../../libs/log" }
+"#,
+        ),
+        // Only the configuration of a linter: nobody's project.
+        ("scripts/pyproject.toml", "[tool.ruff]\nline-length = 100\n"),
+    ]);
+
+    assert_eq!(
+        roots(&graph),
+        ["apps/api", "libs/core", "libs/fixtures", "libs/log"]
+    );
+    assert_eq!(
+        edges(&graph),
+        [
+            edge("apps/api", "libs/core", Scope::Runtime),
+            edge("apps/api", "libs/fixtures", Scope::Dev),
+            edge("apps/api", "libs/log", Scope::Runtime),
+        ]
+    );
+    // `requests` and `pytest` are on an index: neither edges nor unread.
+    assert!(graph.unread.is_empty());
+
+    assert_eq!(graph.workspaces, [PathBuf::from("")]);
+    for governing in ["pyproject.toml", "uv.lock"] {
+        assert_eq!(
+            graph.workspace_of(Path::new(governing)),
+            Some(Path::new("")),
+            "{governing}"
+        );
+    }
+    assert_eq!(
+        graph.workspace_of(Path::new("libs/core/pyproject.toml")),
+        None
+    );
+}
+
+#[test]
+fn a_python_source_pointing_at_no_project_is_reported() {
+    let graph = discover(&[(
+        "app/pyproject.toml",
+        "[project]\nname = \"app\"\ndependencies = [\"gone\"]\n\n[tool.uv.sources]\ngone = { path = \"../gone\" }\n",
+    )]);
+    assert!(graph.edges.is_empty());
+    assert_eq!(graph.unread, [(PathBuf::from("app/pyproject.toml"), 1)]);
+}
+
+#[test]
+fn only_python_names_are_compared_loosely() {
+    let graph = discover(&[
+        (
+            "web/package.json",
+            r#"{ "name": "web", "dependencies": { "acme_core": "*" } }"#,
+        ),
+        ("core/package.json", r#"{ "name": "acme-core" }"#),
+    ]);
+    assert!(graph.edges.is_empty());
+}

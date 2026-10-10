@@ -236,9 +236,10 @@ fn body(radius: &ProjectRadius) -> Vec<String> {
     let total = radius.total();
     let one_line = |line: String| vec![line];
     if total == 0 {
-        return one_line(
-            " No project manifests found (Cargo.toml, package.json, mix.exs, go.mod).".to_string(),
-        );
+        return vec![
+            " No project manifests found (Cargo.toml, package.json, mix.exs, go.mod,".to_string(),
+            " pyproject.toml).".to_string(),
+        ];
     }
     if total == 1 {
         return one_line(format!(
