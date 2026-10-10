@@ -634,7 +634,7 @@ Un **proyecto** es un directorio con un manifiesto. Un proyecto **depende** de o
 | JavaScript / TypeScript | `package.json` | cualquier dependencia cuyo nombre sea otro paquete del repositorio (workspaces de npm, yarn y pnpm), además de `file:` y `link:` |
 | Elixir | `mix.exs` | dependencias con `path:` e `in_umbrella: true` |
 | Go | `go.mod`, `go.work` | módulos requeridos que son otro módulo del repositorio, y `replace` con un directorio |
-| Python | `pyproject.toml` | cualquier requisito cuyo nombre sea otro proyecto del repositorio (sin distinguir mayúsculas ni `-`, `_`, `.`), y los que tienen un `path` en `[tool.uv.sources]` o en las tablas de Poetry; se leen `[project]` (`dependencies`, `optional-dependencies`), `[dependency-groups]`, `[build-system] requires` y `[tool.poetry]` |
+| Python | `pyproject.toml` | cualquier requisito cuyo nombre sea otro proyecto del repositorio (sin distinguir mayúsculas ni `-`, `_`, `.`), y los que tienen un `path` en `[tool.uv.sources]` o en las tablas de Poetry; se leen `[project]` (`dependencies`, `optional-dependencies`), `[dependency-groups]`, `[build-system] requires`, `[tool.poetry]` y los grupos de desarrollo de uv y PDM |
 
 ```
 Blast radius — projects reached through their manifests
