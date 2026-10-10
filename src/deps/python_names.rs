@@ -137,29 +137,62 @@ fn statements(lines: &[&str]) -> Vec<Statement> {
         .collect()
 }
 
-/// Whether `text` mentions `name` as a name of its own: a whole word that
-/// is neither an attribute of something else nor a definition of its own.
+/// Each place `text` uses `name` as a whole word that is not an attribute
+/// of something else, as what is written before it and after it.
+fn uses_of<'a>(text: &'a str, name: &'a str) -> impl Iterator<Item = (&'a str, &'a str)> {
+    text.match_indices(name)
+        .map(move |(at, _)| (&text[..at], &text[at + name.len()..]))
+        .filter(|(before, after)| {
+            !before.ends_with(|c| is_ident(c) || c == '.') && !after.starts_with(is_ident)
+        })
+}
+
+/// Whether `text` mentions `name` as a name of its own, other than to
+/// define something else called the same, such as a method.
 pub fn mentions(text: &str, name: &str) -> bool {
-    text.match_indices(name).any(|(at, _)| {
-        let before = &text[..at];
-        !before.ends_with(|c| is_ident(c) || c == '.')
-            && !before.ends_with("def ")
-            && !before.ends_with("class ")
-            && !text[at + name.len()..].starts_with(is_ident)
-    })
+    uses_of(text, name).any(|(before, _)| !before.ends_with("def ") && !before.ends_with("class "))
+}
+
+/// The name a statement defines, if it defines one.
+fn name_of(statement: &Statement) -> Option<&str> {
+    match &statement.kind {
+        Kind::Defines(name) => Some(name),
+        _ => None,
+    }
 }
 
 /// The names a module defines at its top level.
 pub fn defined(source: &str) -> Vec<String> {
     let lines: Vec<&str> = source.lines().collect();
-    let names: BTreeSet<String> = statements(&lines)
-        .into_iter()
-        .filter_map(|statement| match statement.kind {
-            Kind::Defines(name) => Some(name),
-            _ => None,
-        })
-        .collect();
-    names.into_iter().collect()
+    let statements = statements(&lines);
+    let names: BTreeSet<&str> = statements.iter().filter_map(name_of).collect();
+    names.into_iter().map(str::to_string).collect()
+}
+
+/// The names the statements define that a change to `lines` touches.
+/// `Err` with the first line that touches code that runs on import.
+fn touched<'a>(
+    statements: &'a [Statement],
+    text: &[&str],
+    lines: &[usize],
+) -> Result<BTreeSet<&'a str>, usize> {
+    let mut touched = BTreeSet::new();
+    for &line in lines {
+        let holder = statements
+            .iter()
+            .find(|s| (s.first..=s.last).contains(&line));
+        // A comment or a blank line between two statements changes neither.
+        let Some(statement) =
+            holder.filter(|s| !text[line - 1..s.last].iter().all(|l| is_silent(l)))
+        else {
+            continue;
+        };
+        if statement.kind == Kind::Runs {
+            return Err(line);
+        }
+        touched.extend(name_of(statement));
+    }
+    Ok(touched)
 }
 
 /// The names of a module a change to `lines` affects: the ones it touches
@@ -170,36 +203,19 @@ pub fn defined(source: &str) -> Vec<String> {
 pub fn changed(source: &str, lines: &[usize]) -> Result<BTreeSet<String>, usize> {
     let text: Vec<&str> = source.lines().collect();
     let statements = statements(&text);
-    let body = |s: &Statement| text[s.first - 1..s.last].join("\n");
-
-    let mut changed: BTreeSet<&str> = BTreeSet::new();
-    for &line in lines {
-        let holder = statements
-            .iter()
-            .find(|s| (s.first..=s.last).contains(&line));
-        let Some(statement) = holder else { continue };
-        // A comment or a blank line between two statements changes neither.
-        let trailing = text[line - 1..statement.last].iter().all(|l| is_silent(l));
-        match &statement.kind {
-            _ if trailing => {}
-            Kind::Defines(name) => {
-                changed.insert(name.as_str());
-            }
-            Kind::Neutral => {}
-            Kind::Runs => return Err(line),
-        }
-    }
+    let mut changed = touched(&statements, &text, lines)?;
 
     // A name that uses a changed one behaves differently too.
+    let bodies: Vec<(&str, String)> = statements
+        .iter()
+        .filter_map(|s| Some((name_of(s)?, text[s.first - 1..s.last].join("\n"))))
+        .collect();
     loop {
-        let users: Vec<&str> = statements
+        let users: Vec<&str> = bodies
             .iter()
-            .filter_map(|s| match &s.kind {
-                Kind::Defines(name) if !changed.contains(name.as_str()) => Some((s, name)),
-                _ => None,
-            })
-            .filter(|(s, _)| changed.iter().any(|name| mentions(&body(s), name)))
-            .map(|(_, name)| name.as_str())
+            .filter(|(name, _)| !changed.contains(name))
+            .filter(|(_, body)| changed.iter().any(|name| mentions(body, name)))
+            .map(|(name, _)| *name)
             .collect();
         if users.is_empty() {
             break;
@@ -222,18 +238,13 @@ pub struct Taken {
 /// a name or a dotted path.
 pub fn taken(code: &[String], bound: &str) -> Taken {
     let mut taken = Taken::default();
-    for line in code {
-        for (at, _) in line.match_indices(bound) {
-            let after = &line[at + bound.len()..];
-            if line[..at].ends_with(|c| is_ident(c) || c == '.') || after.starts_with(is_ident) {
-                continue;
+    for (_, after) in code.iter().flat_map(|line| uses_of(line, bound)) {
+        let read = after.strip_prefix('.').map(ident_of);
+        match read.filter(|name| !name.is_empty()) {
+            Some(name) => {
+                taken.names.insert(name.to_string());
             }
-            match after.strip_prefix('.').map(ident_of) {
-                Some(name) if !name.is_empty() => {
-                    taken.names.insert(name.to_string());
-                }
-                _ => taken.whole = true,
-            }
+            None => taken.whole = true,
         }
     }
     taken
