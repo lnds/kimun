@@ -120,6 +120,7 @@ pub fn read(source: &str) -> Manifest {
     );
     declared.groups(at(&doc, &["dependency-groups"]), Scope::Dev);
     declared.requirements(at(&doc, &["tool", "uv", "dev-dependencies"]), Scope::Dev);
+    declared.groups(at(&doc, &["tool", "pdm", "dev-dependencies"]), Scope::Dev);
     declared.requirements(at(&doc, &["build-system", "requires"]), Scope::Build);
     declared.sources(at(&doc, &["tool", "uv", "sources"]));
 

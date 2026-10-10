@@ -251,3 +251,18 @@ fn a_root_declared_twice_is_one_and_none_is_none() {
     assert!(roots("[project]\nname = \"app\"\n").is_empty());
     assert!(roots("[tool").is_empty());
 }
+
+#[test]
+fn pdm_development_groups_are_dev_dependencies() {
+    let m = read(
+        r#"
+[project]
+name = "app"
+
+[tool.pdm.dev-dependencies]
+test = ["acme-fixtures>=1", "-e file:///${PROJECT_ROOT}/../core#egg=core"]
+"#,
+    );
+    // An editable install is an option of pip, not a requirement.
+    assert_eq!(m.deps, [dep(name("acme-fixtures"), Scope::Dev)]);
+}
