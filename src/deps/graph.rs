@@ -8,8 +8,8 @@ use super::analyzer::resolve_import;
 use super::elixir::{self, ElixirFile};
 use super::extractor::extract_imports;
 use super::layout::Layout;
-use super::python;
 use super::rust_crates;
+use super::{python, python_names};
 
 /// A source file to place in the graph.
 pub struct Source {
@@ -47,13 +47,15 @@ impl Source {
     /// The public functions of this file a change to `lines` affects, by
     /// name, or why they cannot be told.
     pub fn changed_functions(&self, lines: &[usize]) -> Result<BTreeSet<String>, Unnarrowed> {
-        if !is_elixir(&self.language) {
-            return Err(Unnarrowed::Language);
-        }
+        let told = match self.language.as_str() {
+            "Python" => python_names::changed,
+            language if is_elixir(language) => super::elixir_functions::changed_functions,
+            _ => return Err(Unnarrowed::Language),
+        };
         if lines.is_empty() {
             return Err(Unnarrowed::NoLines);
         }
-        super::elixir_functions::changed_functions(&self.text, lines).map_err(Unnarrowed::Outside)
+        told(&self.text, lines).map_err(Unnarrowed::Outside)
     }
 }
 
@@ -84,18 +86,67 @@ fn imports(
     by_path: &HashMap<&Path, usize>,
 ) -> BTreeMap<usize, BTreeSet<String>> {
     let (known, go) = (&layout.known, layout.go_module);
-    let resolve = |import: &String| match source.language.as_str() {
-        "Python" => python::resolve(&source.path, import, known, &layout.python_roots)
-            .into_iter()
-            .collect(),
-        language => resolve_import(&source.path, import, language, known, go),
-    };
     extract_imports(&source.language, &source.text)
         .iter()
-        .flat_map(resolve)
+        .flat_map(|import| resolve_import(&source.path, import, &source.language, known, go))
         .filter_map(|path| by_path.get(path.as_path()).copied())
         .map(no_calls)
         .collect()
+}
+
+/// The name calls on a Python module are told by: that of its file, or of
+/// its directory when it is a package.
+fn python_label(path: &Path) -> String {
+    let named = match path.file_stem() {
+        Some(stem) if stem == "__init__" => path.parent().and_then(Path::file_name),
+        stem => stem,
+    };
+    named.map_or_else(String::new, |name| name.to_string_lossy().into_owned())
+}
+
+/// The files a Python source imports, each with the names it takes there.
+/// `defined` gives the names each file of the graph defines, for an import
+/// that does not say which ones it takes.
+fn python_uses(
+    source: &Source,
+    layout: &Layout,
+    files: &[PathBuf],
+    by_path: &HashMap<&Path, usize>,
+    defined: &[Vec<String>],
+) -> BTreeMap<usize, BTreeSet<String>> {
+    let resolve = |import: &str| {
+        let path = python::resolve(&source.path, import, &layout.known, &layout.python_roots)?;
+        by_path.get(path.as_path()).copied()
+    };
+    let read = python::read(&source.text);
+    let mentioned = |name: &&String| {
+        read.code
+            .iter()
+            .any(|line| python_names::mentions(line, name))
+    };
+
+    let mut uses: BTreeMap<usize, BTreeSet<String>> = BTreeMap::new();
+    for binding in &read.bindings {
+        // A name taken from a package may be one of its modules.
+        let submodule = binding.submodule().and_then(|module| resolve(&module));
+        let Some(to) = submodule.or_else(|| resolve(&binding.module)) else {
+            continue;
+        };
+        let names: Vec<String> = match (&binding.bound, &binding.name) {
+            (None, _) => defined[to].iter().filter(mentioned).cloned().collect(),
+            (Some(_), Some(name)) if submodule.is_none() => vec![name.clone()],
+            (Some(bound), _) => {
+                let taken = python_names::taken(&read.code, bound);
+                let whole = taken.whole.then_some(&defined[to]).into_iter().flatten();
+                taken.names.iter().chain(whole).cloned().collect()
+            }
+        };
+        let label = python_label(&files[to]);
+        uses.entry(to)
+            .or_default()
+            .extend(names.iter().map(|name| format!("{label}.{name}")));
+    }
+    uses
 }
 
 fn is_elixir(language: &str) -> bool {
@@ -185,6 +236,13 @@ impl FileGraph {
             .map(|s| (s.language == "Rust").then_some(s.text.as_str()))
             .collect();
         let (mut rust_uses, own_tests) = rust_crates::read(&files, &rust, &layout.packages);
+        let python: Vec<Vec<String>> = sources
+            .iter()
+            .map(|s| match s.language.as_str() {
+                "Python" => python_names::defined(&s.text),
+                _ => Vec::new(),
+            })
+            .collect();
 
         let mut graph = FileGraph {
             files,
@@ -197,6 +255,9 @@ impl FileGraph {
             let uses = match (&parsed[file], rust_uses[file].take()) {
                 (Some(parsed), _) => graph.elixir_uses(file, parsed, &modules, related),
                 (None, Some(used)) => used.into_iter().map(no_calls).collect(),
+                (None, None) if source.language == "Python" => {
+                    python_uses(source, layout, &graph.files, &by_path, &python)
+                }
                 (None, None) => imports(source, layout, &by_path),
             };
             graph.uses.push(
