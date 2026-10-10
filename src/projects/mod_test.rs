@@ -801,3 +801,17 @@ fn only_python_names_are_compared_loosely() {
     ]);
     assert!(graph.edges.is_empty());
 }
+
+#[test]
+fn python_roots_are_relative_to_the_repository() {
+    let manifest = "[tool.pytest.ini_options]\npythonpath = [\".\", \"python\", \"../shared\", \"../../../out\"]\n";
+    assert_eq!(
+        python_roots(Path::new("libs/core/pyproject.toml"), manifest),
+        [
+            PathBuf::from("libs/core"),
+            PathBuf::from("libs/core/python"),
+            PathBuf::from("libs/shared"),
+            // What leaves the repository is dropped.
+        ]
+    );
+}

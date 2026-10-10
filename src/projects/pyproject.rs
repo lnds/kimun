@@ -159,6 +159,67 @@ pub fn read(source: &str) -> Manifest {
     }
 }
 
+/// The strings of a value that is one string or a list of them.
+fn strings(value: Option<&Value>) -> Vec<&str> {
+    match value {
+        Some(Value::String(one)) => vec![one.as_str()],
+        Some(Value::Array(many)) => many.iter().filter_map(Value::as_str).collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// The directories, relative to the manifest, a `pyproject.toml` says its
+/// packages are imported from: where the build backend finds them, and what
+/// pytest adds to the search path.
+pub fn import_roots(source: &str) -> Vec<PathBuf> {
+    let Ok(doc) = source.parse::<Table>() else {
+        return Vec::new();
+    };
+    let tool = |keys: &[&str]| at(&doc, &[&["tool"], keys].concat());
+
+    let mut roots = strings(tool(&["setuptools", "packages", "find", "where"]));
+    roots.extend(strings(tool(&["setuptools", "package-dir", ""])));
+    roots.extend(strings(tool(&["pytest", "ini_options", "pythonpath"])));
+    roots.extend(strings(tool(&["maturin", "python-source"])));
+    roots.extend(strings(tool(&["pdm", "build", "package-dir"])));
+    roots.extend(strings(tool(&["uv", "build-backend", "module-root"])));
+    let included = tool(&["poetry", "packages"]).and_then(Value::as_array);
+    roots.extend(
+        included
+            .into_iter()
+            .flatten()
+            .filter_map(|package| package.get("from")?.as_str()),
+    );
+    let mut roots: Vec<PathBuf> = roots.into_iter().map(PathBuf::from).collect();
+
+    // Hatch lists the roots, or the packages themselves, for a target or
+    // for every one.
+    for build in [
+        &["hatch", "build"][..],
+        &["hatch", "build", "targets", "wheel"],
+    ] {
+        let key = |name: &str| tool(&[build, &[name]].concat());
+        match key("sources") {
+            Some(Value::Table(renamed)) => roots.extend(renamed.keys().map(PathBuf::from)),
+            listed => roots.extend(strings(listed).into_iter().map(PathBuf::from)),
+        }
+        let packages = strings(key("packages"));
+        roots.extend(
+            packages
+                .into_iter()
+                .filter_map(|package| Some(PathBuf::from(package).parent()?.to_path_buf())),
+        );
+    }
+
+    let mut seen = Vec::new();
+    for root in roots {
+        if !seen.contains(&root) {
+            seen.push(root);
+        }
+    }
+    seen
+}
+
 #[cfg(test)]
 #[path = "pyproject_test.rs"]
 mod tests;

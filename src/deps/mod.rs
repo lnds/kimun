@@ -32,7 +32,7 @@ use crate::walk::{self, WalkConfig};
 use analyzer::{DepEntry, DepResult, UnsupportedLanguage, build_graph};
 pub use extractor::is_supported;
 use graph::{FileGraph, Source};
-use layout::{Layout, is_cargo_manifest};
+use layout::{Layout, is_manifest};
 
 /// Count the skipped files per language, largest group first.
 fn count_unsupported(skipped: &[(PathBuf, String)]) -> Vec<UnsupportedLanguage> {
@@ -103,7 +103,7 @@ fn analyze(cfg: &WalkConfig<'_>) -> DepResult {
         .collect();
     let manifests: Vec<(&Path, String)> = skipped
         .iter()
-        .filter(|(path, _)| is_cargo_manifest(path))
+        .filter(|(path, _)| is_manifest(path))
         .map(|(path, _)| {
             let text = std::fs::read_to_string(cfg.path.join(path)).unwrap_or_default();
             (path.as_path(), text)
@@ -114,7 +114,7 @@ fn analyze(cfg: &WalkConfig<'_>) -> DepResult {
         go_module: go_module.as_deref(),
         ..Layout::default()
     }
-    .with_cargo(manifests.iter().map(|(path, text)| (*path, text.as_str())));
+    .with_manifests(manifests.iter().map(|(path, text)| (*path, text.as_str())));
     // One directory is analysed, with no manifests to tell projects apart.
     let edges = FileGraph::build(&sources, &layout, &|_, _| false).edges();
 

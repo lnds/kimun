@@ -15,13 +15,23 @@ mod npm;
 mod pyproject;
 mod radius;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub use discover::{files_on_disk, is_manifest, is_skipped};
 
 /// The name of the package a `Cargo.toml` declares, if it declares one.
 pub fn cargo_package(manifest: &str) -> Option<String> {
     cargo::read(manifest).name
+}
+
+/// The directories the `pyproject.toml` at `manifest` says its packages are
+/// imported from, relative to the repository like `manifest` itself.
+pub fn python_roots(manifest: &Path, text: &str) -> Vec<PathBuf> {
+    let dir = manifest.parent().unwrap_or(Path::new(""));
+    pyproject::import_roots(text)
+        .iter()
+        .filter_map(|root| discover::normalize(&dir.join(root)))
+        .collect()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

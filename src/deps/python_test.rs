@@ -5,7 +5,7 @@ fn known(paths: &[&str]) -> HashSet<PathBuf> {
 }
 
 fn resolved(importer: &str, import: &str, paths: &[&str]) -> Option<PathBuf> {
-    resolve(Path::new(importer), import, &known(paths))
+    resolve(Path::new(importer), import, &known(paths), &[])
 }
 
 fn path(text: &str) -> Option<PathBuf> {
@@ -378,5 +378,66 @@ fn stub_stands_for_a_module_without_source() {
     assert_eq!(
         resolved("main.py", "shop.fast", &files),
         path("shop/fast.pyi")
+    );
+}
+
+// ── declared roots ───────────────────────────────────────────────────────────
+
+fn declared(projects: &[(&str, &[&str])]) -> Vec<(PathBuf, Vec<PathBuf>)> {
+    projects
+        .iter()
+        .map(|(dir, roots)| {
+            (
+                PathBuf::from(dir),
+                roots.iter().map(PathBuf::from).collect(),
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn a_declared_root_is_looked_up_after_the_conventional_ones() {
+    let files = known(&["python/shop/cart.py", "tests/test_cart.py", "tests/shop.py"]);
+    let roots = declared(&[("", &["python"])]);
+    let resolve = |import: &str| resolve(Path::new("tests/test_cart.py"), import, &files, &roots);
+
+    assert_eq!(resolve("shop.cart"), path("python/shop/cart.py"));
+    // What sits beside the importer still comes first.
+    assert_eq!(resolve("shop"), path("tests/shop.py"));
+    // Without the declaration the package is not found.
+    assert_eq!(
+        resolved("tests/test_cart.py", "shop.cart", &["python/shop/cart.py"]),
+        None
+    );
+}
+
+#[test]
+fn the_roots_are_those_of_the_nearest_project() {
+    let files = known(&["libs/a/python/shop/cart.py", "libs/b/lib/shop/cart.py"]);
+    let roots = declared(&[
+        ("libs/a", &["libs/a/python"]),
+        ("libs/b", &["libs/b/lib"]),
+        ("", &["nowhere"]),
+    ]);
+    let from = |importer: &str| resolve(Path::new(importer), "shop.cart", &files, &roots);
+
+    assert_eq!(
+        from("libs/a/tests/test_cart.py"),
+        path("libs/a/python/shop/cart.py")
+    );
+    assert_eq!(
+        from("libs/b/tests/test_cart.py"),
+        path("libs/b/lib/shop/cart.py")
+    );
+    assert_eq!(from("tools/run.py"), None);
+}
+
+#[test]
+fn a_relative_import_ignores_the_declared_roots() {
+    let files = known(&["python/shop/cart.py", "app/orders.py"]);
+    let roots = declared(&[("", &["python/shop"])]);
+    assert_eq!(
+        resolve(Path::new("app/orders.py"), ".cart", &files, &roots),
+        None
     );
 }

@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-use super::{kaikai, python};
+use super::kaikai;
 
 /// A single file's dependency metrics.
 #[derive(Clone)]
@@ -226,7 +226,8 @@ impl From<&DepResult> for JsonDepResult {
 
 /// Resolve a raw import string to the project-relative files it names, given the
 /// importer's location. Empty if the import names no known project file.
-/// Only a Kaikai package import can name more than one file.
+/// Only a Kaikai package import can name more than one file. Python is
+/// resolved apart, since its roots depend on the layout.
 pub fn resolve_import(
     importer: &Path,  // project-relative path of the importing file
     import_str: &str, // raw import string from extractor
@@ -236,7 +237,6 @@ pub fn resolve_import(
 ) -> Vec<PathBuf> {
     let dir = importer.parent().unwrap_or(Path::new(""));
     let single = match language {
-        "Python" => python::resolve(importer, import_str, file_set),
         "JavaScript" | "TypeScript" | "JSX" | "TSX" => resolve_js(dir, import_str, file_set),
         "Go" => resolve_go(import_str, go_module, file_set),
         "Kaikai" => return kaikai::resolve(importer, import_str, file_set),
@@ -407,13 +407,6 @@ mod tests {
     fn normalize_dotdot() {
         let p = normalize_path(Path::new("src/foo/../bar.rs"));
         assert_eq!(p, PathBuf::from("src/bar.rs"));
-    }
-
-    #[test]
-    fn resolve_python_through_the_dispatcher() {
-        let file_set = HashSet::from([PathBuf::from("app/b.py")]);
-        let result = resolve_import(Path::new("main.py"), "app.b", "Python", &file_set, None);
-        assert_eq!(result, vec![PathBuf::from("app/b.py")]);
     }
 
     // ── JavaScript/TypeScript resolution ──────────────────────────────────

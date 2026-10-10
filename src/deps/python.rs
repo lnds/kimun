@@ -131,9 +131,16 @@ fn is_module(path: &str) -> bool {
 /// A relative import starts at the importer's package, one level up per
 /// extra dot. An absolute one is looked up from each directory above the
 /// importer that is not itself a package, nearest first, and from the `src`
-/// directory under each: the roots a project is run or installed from. A
-/// name found under none of them is external.
-pub fn resolve(importer: &Path, import: &str, known: &HashSet<PathBuf>) -> Option<PathBuf> {
+/// directory under each: the roots a project is run or installed from. Then
+/// come the roots `declared` by the nearest project above the importer that
+/// declares any, each project given as its directory and its roots. A name
+/// found under none of them is external.
+pub fn resolve(
+    importer: &Path,
+    import: &str,
+    known: &HashSet<PathBuf>,
+    declared: &[(PathBuf, Vec<PathBuf>)],
+) -> Option<PathBuf> {
     let (module, name) = match import.split_once(':') {
         Some((module, name)) => (module, Some(name)),
         None => (import, None),
@@ -145,7 +152,10 @@ pub fn resolve(importer: &Path, import: &str, known: &HashSet<PathBuf>) -> Optio
 
     let dir = importer.parent().unwrap_or(Path::new(""));
     let roots: Vec<PathBuf> = match dots {
-        0 => roots(dir, known),
+        0 => roots(dir, known)
+            .into_iter()
+            .chain(declared_for(dir, declared).iter().cloned())
+            .collect(),
         _ => dir
             .ancestors()
             .nth(dots - 1)
@@ -170,6 +180,15 @@ fn roots(dir: &Path, known: &HashSet<PathBuf>) -> Vec<PathBuf> {
         .filter(|above| module_file(above, &[], known).is_none())
         .flat_map(|above| [above.to_path_buf(), above.join("src")])
         .collect()
+}
+
+/// The roots declared by the nearest project above `dir`.
+fn declared_for<'a>(dir: &Path, declared: &'a [(PathBuf, Vec<PathBuf>)]) -> &'a [PathBuf] {
+    declared
+        .iter()
+        .filter(|(project, _)| dir.starts_with(project))
+        .max_by_key(|(project, _)| project.components().count())
+        .map_or(&[], |(_, roots)| roots)
 }
 
 /// The file of the module `segments` name under `root`: a module of its
