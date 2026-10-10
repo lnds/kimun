@@ -634,6 +634,7 @@ A **project** is a directory with a manifest. A project **depends** on another w
 | JavaScript / TypeScript | `package.json` | any dependency whose name is another package of the repository (npm, yarn and pnpm workspaces), plus `file:` and `link:` |
 | Elixir | `mix.exs` | `path:` dependencies and `in_umbrella: true` |
 | Go | `go.mod`, `go.work` | required modules that are another module of the repository, and `replace` with a directory |
+| Python | `pyproject.toml` | any requirement whose name is another project of the repository (whatever the case, and whichever of `-`, `_`, `.`), and those given a `path` in `[tool.uv.sources]` or in the tables of Poetry; read from `[project]` (`dependencies`, `optional-dependencies`), `[dependency-groups]`, `[build-system] requires` and `[tool.poetry]` |
 
 ```
 Blast radius — projects reached through their manifests
@@ -650,7 +651,7 @@ Changed files outside every project (reach unknown): Makefile
 ```
 
 - **Scope**: a `dev` dependency (dev or test only) reaches the dependent, whose tests use the changed project, and stops there: the changed project is not part of what the dependent ships, so the dependents of the dependent are not reached. `build` and `optional` dependencies carry on like runtime ones.
-- **Workspace roots**: a `Cargo.toml` with `[workspace]`, a `package.json` with `workspaces` (or next to a `pnpm-workspace.yaml`), an umbrella `mix.exs` with `apps_path`, a `go.work`. A change to the manifest or the lock file at such a root (`Cargo.lock`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `bun.lock`, `mix.lock`) reaches every project under it at distance 1, with scope `workspace`, and carries on from them. A workspace root is a project itself only when it declares one (`[package]` in Cargo, `app:` in mix); a `package.json` at a workspace root never is.
+- **Workspace roots**: a `Cargo.toml` with `[workspace]`, a `package.json` with `workspaces` (or next to a `pnpm-workspace.yaml`), an umbrella `mix.exs` with `apps_path`, a `go.work`, a `pyproject.toml` with `[tool.uv.workspace]`. A change to the manifest or the lock file at such a root (`Cargo.lock`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `bun.lock`, `mix.lock`, `uv.lock`) reaches every project under it at distance 1, with scope `workspace`, and carries on from them. A workspace root is a project itself only when it declares one (`[package]` in Cargo, `app:` in mix, `[project]` in Python); a `package.json` at a workspace root never is.
 - **Inert files** reach nothing: a change to documentation (`.md`, `.mdx`, `.rst`, `.adoc`, `.txt`) breaks no build and no test. It does not count as a change to its project, nor as a file of unknown reach. `.kimun.toml` can declare more:
 
   ```toml
@@ -667,6 +668,7 @@ Changed files outside every project (reach unknown): Makefile
 Limits:
 
 - `mix.exs` is code and is read as text. A dependency whose path is built at run time (`Path.expand(...)`, string interpolation, a generated list) cannot be attributed; the report names the manifest and how many it missed.
+- Of Python only `pyproject.toml` is read. A project declared in `setup.py` (which is code) or `setup.cfg` is not seen, nor is a local dependency written in `requirements.txt` (`-e ../lib`). A `pyproject.toml` that only configures tools, with neither `[project]` nor `[tool.poetry]`, is not a project. Extras (`optional-dependencies`) are `optional`; dependency groups are `dev`.
 - Coupling across ecosystems is not visible: a web client and the service whose API it calls have no manifest dependency between them.
 - A project nested in another (`assets/package.json` inside a Phoenix application) has no dependency to or from the one that contains it unless a manifest declares one.
 - The graph is read from the working tree. The files of a project the diff deletes or moves away belong to no project any more: their reach is unknown, and the manifests still naming it are reported as not read.

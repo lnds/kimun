@@ -21,6 +21,8 @@ const WORKSPACE_FILES: &[&str] = &[
     "mix.lock",
     "go.work",
     "go.work.sum",
+    "pyproject.toml",
+    "uv.lock",
 ];
 
 impl ProjectGraph {

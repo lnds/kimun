@@ -198,8 +198,11 @@ fn render_says_when_the_level_does_not_apply() {
     let (_dir, none) = graph(&[("main.py", "")]);
     let lines = render(&radius_of(&none, &["main.py"]));
     assert_eq!(
-        lines[2],
-        " No project manifests found (Cargo.toml, package.json, mix.exs, go.mod)."
+        lines[2..4],
+        [
+            " No project manifests found (Cargo.toml, package.json, mix.exs, go.mod,",
+            " pyproject.toml)."
+        ]
     );
     assert_eq!(lines[1].chars().count(), 78);
 }
