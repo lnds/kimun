@@ -8,6 +8,7 @@ use super::analyzer::resolve_import;
 use super::elixir::{self, ElixirFile};
 use super::extractor::extract_imports;
 use super::layout::Layout;
+use super::python;
 use super::rust_crates;
 
 /// A source file to place in the graph.
@@ -83,9 +84,15 @@ fn imports(
     by_path: &HashMap<&Path, usize>,
 ) -> BTreeMap<usize, BTreeSet<String>> {
     let (known, go) = (&layout.known, layout.go_module);
+    let resolve = |import: &String| match source.language.as_str() {
+        "Python" => python::resolve(&source.path, import, known, &layout.python_roots)
+            .into_iter()
+            .collect(),
+        language => resolve_import(&source.path, import, language, known, go),
+    };
     extract_imports(&source.language, &source.text)
         .iter()
-        .flat_map(|import| resolve_import(&source.path, import, &source.language, known, go))
+        .flat_map(resolve)
         .filter_map(|path| by_path.get(path.as_path()).copied())
         .map(no_calls)
         .collect()

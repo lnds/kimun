@@ -52,7 +52,7 @@ struct Found {
 
 /// Resolve `.` and `..` without touching the filesystem. `None` when the
 /// path leaves the repository.
-fn normalize(path: &Path) -> Option<PathBuf> {
+pub(super) fn normalize(path: &Path) -> Option<PathBuf> {
     let mut parts: Vec<Component> = Vec::new();
     for component in path.components() {
         match component {

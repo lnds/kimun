@@ -1,11 +1,12 @@
 use super::*;
-use crate::deps::layout::is_cargo_manifest;
+use crate::deps::layout::is_manifest;
 
 fn source(path: &str, text: &str) -> Source {
     let language = match path.rsplit('.').next() {
         Some("ex") => "Elixir",
         Some("exs") => "Elixir Script",
         Some("ts") => "TypeScript",
+        Some("py") => "Python",
         _ => "Rust",
     };
     Source {
@@ -236,7 +237,7 @@ fn rust_files_use_what_their_paths_name() {
         source("app/tests/cart.rs", "use my_app::cart;\n#[test]\nfn t() {}"),
     ];
     let manifest = "[package]\nname = \"my-app\"\nversion = \"0.1.0\"\n";
-    let layout = Layout::default().with_cargo([(Path::new("app/Cargo.toml"), manifest)]);
+    let layout = Layout::default().with_manifests([(Path::new("app/Cargo.toml"), manifest)]);
     let graph = FileGraph::build(&sources, &layout, &|_, _| false);
 
     let used = |file: usize| -> Vec<usize> { graph.uses[file].iter().map(|u| u.to).collect() };
@@ -246,6 +247,32 @@ fn rust_files_use_what_their_paths_name() {
     // The integration test reaches the library by the name of its package.
     assert_eq!(used(3), [2]);
     assert_eq!(graph.own_tests, [false, true, false, true]);
-    assert!(is_cargo_manifest(Path::new("app/Cargo.toml")));
-    assert!(!is_cargo_manifest(Path::new("app/Cargo.lock")));
+    assert!(is_manifest(Path::new("app/Cargo.toml")));
+    assert!(!is_manifest(Path::new("app/Cargo.lock")));
+}
+
+#[test]
+fn python_imports_follow_the_roots_a_project_declares() {
+    let sources = [
+        source("svc/python/shop/cart.py", "def add(): ...\n"),
+        source("svc/python/shop/orders.py", "from shop import cart\n"),
+        source("svc/tests/test_cart.py", "from shop.cart import add\n"),
+    ];
+    let manifest = "[tool.setuptools.packages.find]\nwhere = [\"python\"]\n";
+    let layout = Layout {
+        known: sources.iter().map(|s| s.path.clone()).collect(),
+        ..Layout::default()
+    }
+    .with_manifests([(Path::new("svc/pyproject.toml"), manifest)]);
+    let graph = FileGraph::build(&sources, &layout, &|_, _| false);
+
+    assert_eq!(
+        uses(&graph, "svc/tests/test_cart.py"),
+        [("svc/python/shop/cart.py", vec![])]
+    );
+    assert_eq!(
+        uses(&graph, "svc/python/shop/orders.py"),
+        [("svc/python/shop/cart.py", vec![])]
+    );
+    assert!(is_manifest(Path::new("svc/pyproject.toml")));
 }

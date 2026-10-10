@@ -176,3 +176,78 @@ dependencies = ["-e ../core", "", "  spaced >=1"]
 fn invalid_toml_declares_nothing() {
     assert_eq!(read("[project\nname ="), Manifest::default());
 }
+
+fn roots(source: &str) -> Vec<String> {
+    import_roots(source)
+        .iter()
+        .map(|root| root.display().to_string())
+        .collect()
+}
+
+#[test]
+fn import_roots_of_each_build_backend() {
+    assert_eq!(
+        roots("[tool.setuptools.packages.find]\nwhere = [\"python\", \"plugins\"]\n"),
+        ["python", "plugins"]
+    );
+    assert_eq!(
+        roots("[tool.setuptools.package-dir]\n\"\" = \"lib\"\n"),
+        ["lib"]
+    );
+    assert_eq!(
+        roots(
+            "[tool.poetry]\npackages = [{ include = \"acme\", from = \"python\" }, { include = \"flat\" }]\n"
+        ),
+        ["python"]
+    );
+    assert_eq!(
+        roots("[tool.maturin]\npython-source = \"python\"\n"),
+        ["python"]
+    );
+    assert_eq!(roots("[tool.pdm.build]\npackage-dir = \"lib\"\n"), ["lib"]);
+    assert_eq!(
+        roots("[tool.uv.build-backend]\nmodule-root = \"lib\"\n"),
+        ["lib"]
+    );
+}
+
+#[test]
+fn hatch_lists_roots_or_the_packages_under_them() {
+    assert_eq!(
+        roots("[tool.hatch.build.targets.wheel]\nsources = [\"python\"]\n"),
+        ["python"]
+    );
+    assert_eq!(
+        roots("[tool.hatch.build.targets.wheel.sources]\n\"python\" = \"\"\n"),
+        ["python"]
+    );
+    assert_eq!(
+        roots("[tool.hatch.build.targets.wheel]\npackages = [\"python/acme\", \"python/tools\"]\n"),
+        ["python"]
+    );
+    assert_eq!(roots("[tool.hatch.build]\nsources = [\"lib\"]\n"), ["lib"]);
+}
+
+#[test]
+fn what_pytest_adds_to_the_search_path_is_a_root() {
+    assert_eq!(
+        roots("[tool.pytest.ini_options]\npythonpath = [\".\", \"python\"]\n"),
+        [".", "python"]
+    );
+    assert_eq!(
+        roots("[tool.pytest.ini_options]\npythonpath = \"python\"\n"),
+        ["python"]
+    );
+}
+
+#[test]
+fn a_root_declared_twice_is_one_and_none_is_none() {
+    assert_eq!(
+        roots(
+            "[tool.setuptools.packages.find]\nwhere = [\"python\"]\n\n[tool.pytest.ini_options]\npythonpath = [\"python\"]\n"
+        ),
+        ["python"]
+    );
+    assert!(roots("[project]\nname = \"app\"\n").is_empty());
+    assert!(roots("[tool").is_empty());
+}

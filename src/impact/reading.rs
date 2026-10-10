@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use crate::deps::graph::{FileGraph, Related, Source};
 use crate::deps::heex;
-use crate::deps::layout::{Layout, is_cargo_manifest};
+use crate::deps::layout::{Layout, is_manifest};
 use crate::loc::language::detect;
 
 /// The language of a file, when it has a graph.
@@ -18,9 +18,8 @@ pub fn graphed_language(path: &Path) -> Option<&'static str> {
 /// the file that renders them, and manifests say how packages are named;
 /// neither is a file of the graph.
 pub fn read(files: Vec<(PathBuf, String)>, related: Related) -> (Vec<Source>, FileGraph) {
-    let (manifests, files): (Vec<_>, Vec<_>) = files
-        .into_iter()
-        .partition(|(path, _)| is_cargo_manifest(path));
+    let (manifests, files): (Vec<_>, Vec<_>) =
+        files.into_iter().partition(|(path, _)| is_manifest(path));
     let (templates, files): (Vec<_>, Vec<_>) = files
         .into_iter()
         .partition(|(path, _)| heex::is_template(path));
@@ -42,7 +41,7 @@ pub fn read(files: Vec<(PathBuf, String)>, related: Related) -> (Vec<Source>, Fi
         known: sources.iter().map(|s| s.path.clone()).collect(),
         ..Layout::default()
     }
-    .with_cargo(manifests.iter().map(|(p, t)| (p.as_path(), t.as_str())));
+    .with_manifests(manifests.iter().map(|(p, t)| (p.as_path(), t.as_str())));
     let graph = FileGraph::build(&sources, &layout, related);
     (sources, graph)
 }
