@@ -1,3 +1,16 @@
+## v0.33.0 (2026-10-09)
+
+### Feat
+
+- **impact**: a Python change is narrowed to the names it touches
+- **deps**: Python imports follow the roots a pyproject.toml declares
+- **projects**: pyproject.toml is a manifest
+- **deps**: Python imports, absolute and relative, resolve to the files they name
+
+### Refactor
+
+- **deps**: what a Python file uses is read in a module of its own
+
 ## v0.32.0 (2026-10-08)
 
 ### Feat
