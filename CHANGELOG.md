@@ -1,3 +1,13 @@
+## v0.34.1 (2026-10-11)
+
+### Fix
+
+- **cogcom**: a function body introduced by `=` ends at its indentation
+
+### Refactor
+
+- **detection**: one walk for brace and indent scoped functions
+
 ## v0.34.0 (2026-10-09)
 
 ### Feat
