@@ -127,17 +127,95 @@ pub fn extract_function_name(trimmed: &str, markers: &dyn FunctionDetectionMarke
     "<anonymous>".to_string()
 }
 
+/// Whether the `=` at `pos` stands alone, rather than being part of an
+/// operator such as `==`, `=>`, `<=` or `+=`.
+fn is_plain_assign(bytes: &[u8], pos: usize) -> bool {
+    let before = pos.checked_sub(1).map(|p| bytes[p]);
+    let after = bytes.get(pos + 1).copied();
+    !before.is_some_and(|b| b"=!<>+-*/%&|^:~".contains(&b))
+        && !after.is_some_and(|b| b"=>~".contains(&b))
+}
+
+/// Whether a line after the declaration can hold the `=` that introduces
+/// the body: the one that closes the parameter list, or one the `=` ends.
+/// Elsewhere in a signature a `=` binds something else, such as the
+/// associated type of `impl Iterator<Item = T>`.
+fn may_introduce_body(masked: &str) -> bool {
+    masked.trim_start().starts_with(')') || masked.trim_end().ends_with('=')
+}
+
+/// Whether `next` still belongs to an expression body declared at
+/// `base_indent`: it is indented deeper, or it opens the block of a
+/// signature whose `=` was not the body (`where T: Iterator<Item = u32>`).
+fn continues_expression(next: Option<&(usize, &str)>, base_indent: usize) -> bool {
+    next.is_some_and(|(_, line)| {
+        indent_level(line) > base_indent || line.trim_start().starts_with('{')
+    })
+}
+
+/// What has been read of a function so far: how deep its braces and
+/// parentheses are, and what introduces its body.
+#[derive(Default)]
+struct BodyScan {
+    brace_depth: isize,
+    paren_depth: isize,
+    found_open: bool,
+    expression_body: bool,
+}
+
+impl BodyScan {
+    /// Read one line, already masked. `may_introduce` tells whether a `=`
+    /// on it can be the one that introduces the body.
+    fn read(&mut self, masked: &str, may_introduce: bool) {
+        let bytes = masked.as_bytes();
+        for (pos, &ch) in bytes.iter().enumerate() {
+            match ch {
+                b'{' => {
+                    self.brace_depth += 1;
+                    self.found_open = true;
+                }
+                b'}' => self.brace_depth -= 1,
+                b'(' => self.paren_depth += 1,
+                b')' => self.paren_depth -= 1,
+                b'=' if may_introduce && self.outside_signature() => {
+                    self.expression_body |= is_plain_assign(bytes, pos);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Before the body and outside the parameter list, where a `=` is a
+    /// default value.
+    fn outside_signature(&self) -> bool {
+        !self.found_open && self.paren_depth <= 0
+    }
+
+    /// Whether the body ends at the line just read, given the one after it.
+    fn ends(&self, next: Option<&(usize, &str)>, base_indent: usize) -> bool {
+        if self.expression_body {
+            self.brace_depth <= 0 && !continues_expression(next, base_indent)
+        } else {
+            self.found_open && self.brace_depth == 0
+        }
+    }
+}
+
 /// Starting from `code_lines[start]`, collect all lines belonging to the
 /// function body by tracking brace depth (string/char literals are masked).
 /// Returns `(func_code_lines, end_index)` where `end_index` is the index
-/// of the closing brace line in `code_lines`.
+/// of the last line of the body in `code_lines`.
+///
+/// A body introduced by `=` instead of a brace (`fn f(x) = expr`) has no
+/// closing delimiter of its own: it runs while its braces are open and
+/// while the lines that follow are indented deeper than the declaration.
 fn find_function_body<'a>(
     code_lines: &[(usize, &'a str)],
     start: usize,
     line_comments: &[&str],
 ) -> (Vec<(usize, &'a str)>, usize) {
-    let mut brace_depth: isize = 0;
-    let mut found_open = false;
+    let mut scan = BodyScan::default();
+    let base_indent = indent_level(code_lines[start].1);
     let mut func_code_lines: Vec<(usize, &str)> = Vec::new();
     let mut j = start;
 
@@ -146,16 +224,8 @@ fn find_function_body<'a>(
         func_code_lines.push((jidx, jline));
 
         let masked = mask_strings(jline, line_comments);
-        for ch in masked.bytes() {
-            if ch == b'{' {
-                brace_depth += 1;
-                found_open = true;
-            } else if ch == b'}' {
-                brace_depth -= 1;
-            }
-        }
-
-        if found_open && brace_depth == 0 {
+        scan.read(&masked, j == start || may_introduce_body(&masked));
+        if scan.ends(code_lines.get(j + 1), base_indent) {
             break;
         }
         j += 1;
@@ -171,168 +241,78 @@ pub fn detect_function_bodies<'a>(
     code_lines: &[(usize, &'a str)],
     markers: &dyn FunctionDetectionMarkers,
 ) -> Vec<FunctionBody<'a>> {
-    let mut functions = Vec::new();
-
     if markers.brace_scoped() {
-        detect_brace_scoped(code_lines, markers, &mut functions);
+        // Declarations by markers or the C-family heuristic; the body by
+        // brace depth.
+        detect_with(
+            code_lines,
+            markers,
+            |trimmed| is_function_declaration(trimmed, markers),
+            |start| {
+                let (body, end) = find_function_body(code_lines, start, markers.line_comments());
+                (body, end + 1)
+            },
+        )
     } else {
-        detect_indent_scoped(all_lines, code_lines, markers, &mut functions);
+        // Indent-scoped languages (Python, Ruby): the body by indentation.
+        detect_with(
+            code_lines,
+            markers,
+            |trimmed| {
+                let mut function_markers = markers.function_markers().iter();
+                function_markers.any(|m| trimmed.starts_with(m))
+            },
+            |start| indented_body(all_lines, code_lines, start),
+        )
     }
+}
 
+/// Walk the code lines. Where `is_declaration` accepts a line, `body_at`
+/// gives the lines of that function and the index of the first line after it.
+fn detect_with<'a>(
+    code_lines: &[(usize, &'a str)],
+    markers: &dyn FunctionDetectionMarkers,
+    is_declaration: impl Fn(&str) -> bool,
+    body_at: impl Fn(usize) -> (Vec<(usize, &'a str)>, usize),
+) -> Vec<FunctionBody<'a>> {
+    let mut functions = Vec::new();
+    let mut i = 0;
+    while i < code_lines.len() {
+        let (line_idx, line) = code_lines[i];
+        let trimmed = line.trim();
+        if !is_declaration(trimmed) {
+            i += 1;
+            continue;
+        }
+        let (body, next) = body_at(i);
+        functions.push(FunctionBody {
+            name: extract_function_name(trimmed, markers),
+            start_line: line_idx + 1,
+            code_lines: body,
+        });
+        i = next;
+    }
     functions
 }
 
-/// Walk code lines, find function declarations by markers or C-family
-/// heuristic, track brace depth to determine body extent.
-fn detect_brace_scoped<'a>(
+/// The declaration at `code_lines[start]` and the lines indented deeper
+/// than it, with the index of the first line after them.
+fn indented_body<'a>(
+    all_lines: &[String],
     code_lines: &[(usize, &'a str)],
-    markers: &dyn FunctionDetectionMarkers,
-    functions: &mut Vec<FunctionBody<'a>>,
-) {
-    let mut i = 0;
-    while i < code_lines.len() {
-        let (line_idx, line) = code_lines[i];
-        let trimmed = line.trim();
-
-        if is_function_declaration(trimmed, markers) {
-            let name = extract_function_name(trimmed, markers);
-            let (func_code_lines, end) = find_function_body(code_lines, i, markers.line_comments());
-            functions.push(FunctionBody {
-                name,
-                start_line: line_idx + 1,
-                code_lines: func_code_lines,
-            });
-            i = end + 1;
-        } else {
-            i += 1;
-        }
-    }
+    start: usize,
+) -> (Vec<(usize, &'a str)>, usize) {
+    let base_indent = indent_level(code_lines[start].1);
+    let len = code_lines[start + 1..]
+        .iter()
+        .take_while(|(idx, line)| {
+            indent_level(&all_lines[*idx]) > base_indent || line.trim().is_empty()
+        })
+        .count();
+    let end = start + 1 + len;
+    (code_lines[start..end].to_vec(), end)
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn is_c_family_function_no_paren_returns_false() {
-        assert!(!is_c_family_function("let x = 1;"));
-        assert!(!is_c_family_function("int x = 1;"));
-        assert!(!is_c_family_function("struct Foo"));
-    }
-
-    #[test]
-    fn is_c_family_function_no_open_brace_or_closing_paren() {
-        // Has '(' but doesn't end with '{' or ')'
-        assert!(!is_c_family_function("foo(x, y,"));
-        assert!(!is_c_family_function("bar(x, y;"));
-    }
-
-    #[test]
-    fn is_c_family_function_control_keyword_returns_false() {
-        assert!(!is_c_family_function("if (condition) {"));
-        assert!(!is_c_family_function("while (x > 0) {"));
-        assert!(!is_c_family_function("for (int i = 0; i < n; i++) {"));
-    }
-
-    #[test]
-    fn is_c_family_function_valid_function() {
-        assert!(is_c_family_function("int foo(int x) {"));
-        assert!(is_c_family_function("void bar()"));
-        assert!(is_c_family_function("static void baz(int a, int b) {"));
-    }
-
-    #[test]
-    fn is_c_family_function_preprocessor_directive_returns_false() {
-        // Function-like #define looks like a C function but is not one.
-        assert!(!is_c_family_function(
-            "#define TRACE_ALLOC(name) trace_record(name)"
-        ));
-        assert!(!is_c_family_function(
-            "#define MAX(a, b) ((a) > (b) ? (a) : (b))"
-        ));
-        assert!(!is_c_family_function("#if defined(FOO)"));
-        assert!(!is_c_family_function("#include <stdio.h>"));
-    }
-
-    #[test]
-    fn is_c_family_function_matches_bash_posix_form() {
-        // `foo() {` on its own line is a bash function definition (POSIX form).
-        // The C-family heuristic must accept it so `Bourne Shell` files get
-        // per-function decomposition — SHELL markers include `"function "`
-        // for the `function foo { ... }` shape, but the more common POSIX
-        // `foo() {` shape has no keyword prefix and relies on this fallback.
-        assert!(is_c_family_function("foo() {"));
-        assert!(is_c_family_function("_private_helper() {"));
-    }
-
-    #[test]
-    fn is_c_family_function_rejects_shell_command_substitution() {
-        // `VAR=$(cmd | filter)` has `(`, ends with `)`, first word not a
-        // control keyword — but the `=` before the `(` means it's an
-        // assignment, not a function definition. Same for local/readonly
-        // assignments with command substitution.
-        assert!(!is_c_family_function(
-            "SRC_FINGERPRINT=$(cd \"$SCRIPT_DIR\" && cat file | sha256sum | cut -c1-16)"
-        ));
-        assert!(!is_c_family_function("OUT_SIZE=$(wc -c < \"$OUT\")"));
-        assert!(!is_c_family_function("local pid=$(pgrep vault)"));
-        assert!(!is_c_family_function("readonly FOO=$(date +%s)"));
-    }
-
-    #[test]
-    fn is_c_family_function_rejects_c_family_assignment() {
-        // `x = foo(bar)` — same category as bash assignments: an assignment,
-        // not a function definition.
-        assert!(!is_c_family_function("x = foo(bar)"));
-        assert!(!is_c_family_function("let x = compute(a, b)"));
-    }
-}
-
-/// Walk code lines for indent-scoped languages (Python, Ruby), using
-/// indentation level to determine where function bodies end.
-fn detect_indent_scoped<'a>(
-    all_lines: &[String],
-    code_lines: &[(usize, &'a str)],
-    markers: &dyn FunctionDetectionMarkers,
-    functions: &mut Vec<FunctionBody<'a>>,
-) {
-    let mut i = 0;
-    while i < code_lines.len() {
-        let (line_idx, line) = code_lines[i];
-        let trimmed = line.trim();
-
-        let is_function = markers
-            .function_markers()
-            .iter()
-            .any(|m| trimmed.starts_with(m));
-
-        if is_function {
-            let name = extract_function_name(trimmed, markers);
-            let start_line = line_idx + 1;
-            let base_indent = indent_level(line);
-
-            let mut func_code_lines: Vec<(usize, &str)> = vec![(line_idx, line)];
-            let mut j = i + 1;
-
-            while j < code_lines.len() {
-                let (jidx, jline) = code_lines[j];
-                let jline_full = &all_lines[jidx];
-                if indent_level(jline_full) <= base_indent && !jline.trim().is_empty() {
-                    break;
-                }
-                func_code_lines.push((jidx, jline));
-                j += 1;
-            }
-
-            functions.push(FunctionBody {
-                name,
-                start_line,
-                code_lines: func_code_lines,
-            });
-
-            i = j;
-        } else {
-            i += 1;
-        }
-    }
-}
+#[path = "detection_test.rs"]
+mod tests;
