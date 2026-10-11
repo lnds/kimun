@@ -281,6 +281,8 @@ Opciones:
 | `--per-function` | Muestra el desglose por función |
 | `--sort-by METRIC` | Ordena por `total`, `max` o `avg` (por defecto: `total`) |
 
+En los lenguajes de llaves una función termina donde sus llaves se balancean. Un cuerpo introducido por `=` (`fn f(x) = expr`, como en Kaikai, Kotlin o Scala) no tiene una llave de cierre propia: sigue mientras sus llaves estén abiertas y las líneas siguientes tengan más indentación que la declaración. `km cycom` encuentra las funciones de la misma manera.
+
 ### `km mi` -- Índice de mantenibilidad (variante de Visual Studio)
 
 Calcula el [índice de mantenibilidad](https://learn.microsoft.com/en-us/visualstudio/code-quality/code-metrics-maintainability-index-range-and-meaning) por archivo con la fórmula de Visual Studio. El MI se normaliza a una escala de 0 a 100, sin el término de peso de los comentarios.

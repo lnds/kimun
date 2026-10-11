@@ -127,17 +127,50 @@ pub fn extract_function_name(trimmed: &str, markers: &dyn FunctionDetectionMarke
     "<anonymous>".to_string()
 }
 
+/// Whether the `=` at `pos` stands alone, rather than being part of an
+/// operator such as `==`, `=>`, `<=` or `+=`.
+fn is_plain_assign(bytes: &[u8], pos: usize) -> bool {
+    let before = pos.checked_sub(1).map(|p| bytes[p]);
+    let after = bytes.get(pos + 1).copied();
+    !before.is_some_and(|b| b"=!<>+-*/%&|^:~".contains(&b))
+        && !after.is_some_and(|b| b"=>~".contains(&b))
+}
+
+/// Whether a line after the declaration can hold the `=` that introduces
+/// the body: the one that closes the parameter list, or one the `=` ends.
+/// Elsewhere in a signature a `=` binds something else, such as the
+/// associated type of `impl Iterator<Item = T>`.
+fn may_introduce_body(masked: &str) -> bool {
+    masked.trim_start().starts_with(')') || masked.trim_end().ends_with('=')
+}
+
+/// Whether `next` still belongs to an expression body declared at
+/// `base_indent`: it is indented deeper, or it opens the block of a
+/// signature whose `=` was not the body (`where T: Iterator<Item = u32>`).
+fn continues_expression(next: Option<&(usize, &str)>, base_indent: usize) -> bool {
+    next.is_some_and(|(_, line)| {
+        indent_level(line) > base_indent || line.trim_start().starts_with('{')
+    })
+}
+
 /// Starting from `code_lines[start]`, collect all lines belonging to the
 /// function body by tracking brace depth (string/char literals are masked).
 /// Returns `(func_code_lines, end_index)` where `end_index` is the index
-/// of the closing brace line in `code_lines`.
+/// of the last line of the body in `code_lines`.
+///
+/// A body introduced by `=` instead of a brace (`fn f(x) = expr`) has no
+/// closing delimiter of its own: it runs while its braces are open and
+/// while the lines that follow are indented deeper than the declaration.
 fn find_function_body<'a>(
     code_lines: &[(usize, &'a str)],
     start: usize,
     line_comments: &[&str],
 ) -> (Vec<(usize, &'a str)>, usize) {
     let mut brace_depth: isize = 0;
+    let mut paren_depth: isize = 0;
     let mut found_open = false;
+    let mut expression_body = false;
+    let base_indent = indent_level(code_lines[start].1);
     let mut func_code_lines: Vec<(usize, &str)> = Vec::new();
     let mut j = start;
 
@@ -146,16 +179,35 @@ fn find_function_body<'a>(
         func_code_lines.push((jidx, jline));
 
         let masked = mask_strings(jline, line_comments);
-        for ch in masked.bytes() {
-            if ch == b'{' {
-                brace_depth += 1;
-                found_open = true;
-            } else if ch == b'}' {
-                brace_depth -= 1;
+        let bytes = masked.as_bytes();
+        let may_introduce = j == start || may_introduce_body(&masked);
+        for (pos, &ch) in bytes.iter().enumerate() {
+            match ch {
+                b'{' => {
+                    brace_depth += 1;
+                    found_open = true;
+                }
+                b'}' => brace_depth -= 1,
+                b'(' => paren_depth += 1,
+                b')' => paren_depth -= 1,
+                // A `=` inside the parameter list is a default value.
+                b'=' if may_introduce
+                    && !found_open
+                    && paren_depth <= 0
+                    && is_plain_assign(bytes, pos) =>
+                {
+                    expression_body = true;
+                }
+                _ => {}
             }
         }
 
-        if found_open && brace_depth == 0 {
+        let done = if expression_body {
+            brace_depth <= 0 && !continues_expression(code_lines.get(j + 1), base_indent)
+        } else {
+            found_open && brace_depth == 0
+        };
+        if done {
             break;
         }
         j += 1;
@@ -212,6 +264,148 @@ fn detect_brace_scoped<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct Markers(&'static str);
+
+    impl FunctionDetectionMarkers for Markers {
+        fn function_markers(&self) -> &[&str] {
+            std::slice::from_ref(&self.0)
+        }
+        fn brace_scoped(&self) -> bool {
+            true
+        }
+        fn line_comments(&self) -> &[&str] {
+            &["#"]
+        }
+    }
+
+    /// Name and number of lines of each function detected in `src`.
+    fn bodies(marker: &'static str, src: &str) -> Vec<(String, usize)> {
+        let lines: Vec<String> = src.lines().map(String::from).collect();
+        let code_lines: Vec<(usize, &str)> = lines
+            .iter()
+            .enumerate()
+            .filter(|(_, l)| !l.trim().is_empty())
+            .map(|(i, l)| (i, l.as_str()))
+            .collect();
+        detect_function_bodies(&lines, &code_lines, &Markers(marker))
+            .into_iter()
+            .map(|b| (b.name, b.code_lines.len()))
+            .collect()
+    }
+
+    fn named(pairs: &[(&str, usize)]) -> Vec<(String, usize)> {
+        pairs.iter().map(|(n, l)| (n.to_string(), *l)).collect()
+    }
+
+    #[test]
+    fn expression_body_without_braces_ends_at_its_indentation() {
+        let src = "\
+fn first(x: Int) : Int =
+  second(x)
+
+fn second(x: Int) : Int {
+  if x > 0 { 1 } else { 0 }
+}
+";
+        assert_eq!(bodies("fn ", src), named(&[("first", 2), ("second", 3)]));
+    }
+
+    #[test]
+    fn expression_body_runs_past_the_first_balanced_line() {
+        let src = "\
+fn outer(e: Int, d: Int) : Int =
+  if e > 0 { e }
+  else {
+    if d > 0 { e } else {
+      render(d)
+      mark(e)
+    }
+  }
+
+fn next(x: Int) : Int = if x > 0 { 1 } else { 0 }
+";
+        assert_eq!(bodies("fn ", src), named(&[("outer", 8), ("next", 1)]));
+    }
+
+    #[test]
+    fn expression_body_closing_brace_at_declaration_indent() {
+        let src = "\
+fun kind(x: Int) = when (x) {
+    0 -> 1
+    else -> 2
+}
+fun other(x: Int) = x + 1
+";
+        assert_eq!(bodies("fun ", src), named(&[("kind", 4), ("other", 1)]));
+    }
+
+    #[test]
+    fn expression_body_after_a_signature_on_several_lines() {
+        let src = "\
+fn long(
+  a: Int = 1,
+  b: Int,
+) : Int =
+  a + b
+
+fn after() : Int = 1
+";
+        assert_eq!(bodies("fn ", src), named(&[("long", 5), ("after", 1)]));
+    }
+
+    #[test]
+    fn default_argument_is_not_an_expression_body() {
+        let src = "\
+fn f(a: Int = 1)
+{
+  a
+}
+fn g() { 1 }
+";
+        assert_eq!(bodies("fn ", src), named(&[("f", 4), ("g", 1)]));
+    }
+
+    #[test]
+    fn assign_in_where_clause_keeps_the_block_on_the_next_line() {
+        let src = "\
+fn sum<I>(items: I) -> u32
+where
+    I: Iterator<Item = u32>,
+{
+    items.sum()
+}
+fn g() { 1 }
+";
+        assert_eq!(bodies("fn ", src), named(&[("sum", 6), ("g", 1)]));
+    }
+
+    #[test]
+    fn assign_inside_a_signature_is_not_an_expression_body() {
+        // The lifetime hides the opening parenthesis from the masking.
+        let src = "\
+fn compute<'a>(
+    graph: &'a Graph,
+    files: impl Iterator<Item = &'a Path>,
+) -> Radius {
+    let seeds = files
+        .count();
+    seeds
+}
+fn g() { 1 }
+";
+        assert_eq!(bodies("fn ", src), named(&[("compute", 8), ("g", 1)]));
+    }
+
+    #[test]
+    fn comparison_and_arrow_are_not_assignments() {
+        assert!(is_plain_assign(b"a = b", 2));
+        for (text, pos) in [("a == b", 2), ("a == b", 3), ("a => b", 2), ("a <= b", 3)] {
+            assert!(!is_plain_assign(text.as_bytes(), pos), "{text} at {pos}");
+        }
+        assert!(!is_plain_assign(b"a += b", 3));
+        assert!(!is_plain_assign(b"a != b", 3));
+    }
 
     #[test]
     fn is_c_family_function_no_paren_returns_false() {
