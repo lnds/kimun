@@ -37,6 +37,9 @@ pub struct LanguageSpec {
     pub single_quote_strings: bool,
     /// Whether triple quotes delimit multi-line strings (Python).
     pub triple_quote_strings: bool,
+    /// Whether `r"…"` and `r#"…"#` are raw strings: no escapes, and one
+    /// opened with `#` ends only at a quote followed by as many (Rust).
+    pub raw_strings: bool,
     /// Pragma delimiters that override block comment detection (Haskell).
     pub pragma: Option<(&'static str, &'static str)>,
     /// Documentation attribute delimiters, e.g. Kaikai's `#[doc(` … `)]`.
@@ -50,8 +53,23 @@ pub struct LanguageSpec {
 /// Return the static registry of all supported language specifications.
 pub fn languages() -> &'static [LanguageSpec] {
     static LANGUAGES: &[LanguageSpec] = &[
-        lang_spec!("Rust", ext: ["rs"],
-              line: "//", block: "/*", "*/", nested: true),
+        // Rust is defined manually because of its raw strings, which the
+        // macro does not carry.
+        LanguageSpec {
+            name: "Rust",
+            extensions: &["rs"],
+            filenames: &[],
+            line_comments: &["//"],
+            line_comment_not_before: "",
+            block_comment: Some(("/*", "*/")),
+            nested_block_comments: true,
+            single_quote_strings: false,
+            triple_quote_strings: false,
+            raw_strings: true,
+            pragma: None,
+            doc_attribute: None,
+            shebangs: &[],
+        },
         lang_spec!("Python", ext: ["py", "pyi"],
               line: "#", sq: true, tq: true,
               shebangs: ["python", "python3"]),
@@ -118,6 +136,7 @@ pub fn languages() -> &'static [LanguageSpec] {
             nested_block_comments: true,
             single_quote_strings: false,
             triple_quote_strings: false,
+            raw_strings: false,
             pragma: Some(("{-#", "#-}")),
             shebangs: &[],
         },
@@ -160,6 +179,7 @@ pub fn languages() -> &'static [LanguageSpec] {
             nested_block_comments: false,
             single_quote_strings: false,
             triple_quote_strings: true,
+            raw_strings: false,
             pragma: None,
             doc_attribute: Some(("#[doc(", ")]")),
             shebangs: &[],

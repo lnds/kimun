@@ -1,4 +1,6 @@
-use crate::loc::counter::LineKind;
+use std::borrow::Cow;
+
+use crate::loc::counter::{LineKind, RawSpan, raw_string_spans};
 use crate::loc::language::LanguageSpec;
 
 /// For languages with triple-quoted strings (Python, Kaikai), mark interior lines
@@ -63,6 +65,46 @@ pub fn demote_multi_line_strings(
             }
         })
         .collect()
+}
+
+/// The lines and kinds an analysis of code reads: without the text of
+/// literals that span lines or hold quotes, which is no code whatever it
+/// looks like. The interior lines of multi-line strings become blanks, and
+/// each raw string is left as `""`.
+pub fn code_view<'a>(
+    lines: &'a [String],
+    kinds: &[LineKind],
+    spec: &LanguageSpec,
+) -> (Cow<'a, [String]>, Vec<LineKind>) {
+    let mut kinds = demote_multi_line_strings(lines, kinds, spec);
+    let may_hold_one = |line: &String| line.contains("r\"") || line.contains("r#");
+    if !spec.raw_strings || !lines.iter().any(may_hold_one) {
+        return (Cow::Borrowed(lines), kinds);
+    }
+    let mut view = lines.to_vec();
+    for (at, spans) in raw_string_spans(lines, spec).iter().enumerate() {
+        if spans.is_empty() {
+            continue;
+        }
+        view[at] = without_raw_text(&lines[at], spans);
+        if view[at].is_empty() {
+            kinds[at] = LineKind::Blank;
+        }
+    }
+    (Cow::Owned(view), kinds)
+}
+
+/// `line` with each raw string blanked, and `""` where one opens.
+fn without_raw_text(line: &str, spans: &[RawSpan]) -> String {
+    let mut bytes = line.as_bytes().to_vec();
+    for span in spans {
+        bytes[span.start..span.end].fill(b' ');
+        if span.opens {
+            bytes[span.start..span.start + 2].fill(b'"');
+        }
+    }
+    let text = String::from_utf8(bytes).unwrap_or_default();
+    text.trim_end().to_string()
 }
 
 /// Advance past a character while inside a triple-quoted string.

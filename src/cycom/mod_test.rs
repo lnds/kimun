@@ -205,3 +205,35 @@ fn analyze_file_leaves_inline_tests_out_when_they_are_excluded() {
     assert_eq!(everything.function_count, 2);
     assert!(production.total_complexity < everything.total_complexity);
 }
+
+#[test]
+fn text_inside_raw_strings_is_no_code() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("lib.rs");
+    let src = "\
+fn text() -> &'static str {
+    r#\"
+fn fake(a: u32) {
+    if a > 1 && a < 3 { }
+}
+\"#
+}
+
+fn json() -> &'static str {
+    r#\"{ \"if\": \"while {\" }\"#
+}
+
+fn real(n: u32) -> u32 {
+    if n > 1 { 2 } else { 3 }
+}
+";
+    fs::write(&path, src).unwrap();
+    let spec = crate::loc::language::detect(&path).unwrap();
+    let file = analyze_file(&path, spec, true).unwrap().unwrap();
+    let found: Vec<(&str, usize)> = file
+        .functions
+        .iter()
+        .map(|f| (f.name.as_str(), f.complexity))
+        .collect();
+    assert_eq!(found, [("text", 1), ("json", 1), ("real", 2)]);
+}

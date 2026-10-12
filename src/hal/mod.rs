@@ -15,7 +15,7 @@ use std::path::Path;
 use crate::loc::counter::LineKind;
 use crate::loc::language::LanguageSpec;
 use crate::report_helpers;
-use crate::string_mask::multi_line_string_mask;
+use crate::string_mask::{code_view, multi_line_string_mask};
 use crate::util::read_and_classify;
 use crate::walk::WalkConfig;
 use analyzer::compute;
@@ -29,7 +29,8 @@ pub(crate) fn analyze_content(
     spec: &LanguageSpec,
 ) -> Option<analyzer::HalsteadMetrics> {
     let rules = rules_for(spec.name)?;
-    let string_mask = multi_line_string_mask(lines, spec);
+    let (lines, kinds) = code_view(lines, kinds, spec);
+    let string_mask = multi_line_string_mask(&lines, spec);
 
     let code_lines: Vec<&str> = lines
         .iter()
@@ -63,6 +64,7 @@ pub(crate) fn analyze_file(
         Some(v) => v,
         None => return Ok(None),
     };
+    let (lines, kinds) = code_view(&lines, &kinds, spec);
     let string_mask = multi_line_string_mask(&lines, spec);
 
     // Collect only code lines that are not inside multi-line strings

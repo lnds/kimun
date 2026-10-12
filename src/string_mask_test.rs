@@ -190,3 +190,60 @@ fn starts_in_string_without_triple_quotes() {
     let lines = vec!["x = \"\"\"".to_string(), "inside".to_string()];
     assert_eq!(starts_in_string_mask(&lines, spec), [false, false]);
 }
+
+fn view(file: &str, src: &str) -> (Vec<String>, Vec<LineKind>) {
+    let spec = detect(std::path::Path::new(file)).unwrap();
+    let lines: Vec<String> = src.lines().map(String::from).collect();
+    let kinds = crate::loc::counter::classify_reader(src.as_bytes(), spec);
+    let (lines, kinds) = code_view(&lines, &kinds, spec);
+    (lines.into_owned(), kinds)
+}
+
+#[test]
+fn code_view_leaves_a_raw_string_empty() {
+    let (lines, kinds) = view(
+        "a.rs",
+        "let a = r#\"{ \"if\": \"while {\" }\"#;\nlet b = br\"x\" + 1;\n",
+    );
+    assert_eq!(
+        lines,
+        [
+            "let a = \"\"                      ;",
+            "let b = b\"\"   + 1;"
+        ]
+    );
+    assert_eq!(kinds, [LineKind::Code, LineKind::Code]);
+}
+
+#[test]
+fn code_view_blanks_the_lines_inside_a_raw_string() {
+    let (lines, kinds) = view("a.rs", "let a = r#\"{\n  if x {\n}\"#;\nlet b = 1;\n");
+    assert_eq!(lines, ["let a = \"\"", "", "   ;", "let b = 1;"]);
+    assert_eq!(
+        kinds,
+        [
+            LineKind::Code,
+            LineKind::Blank,
+            LineKind::Code,
+            LineKind::Code
+        ]
+    );
+}
+
+#[test]
+fn code_view_borrows_what_holds_no_raw_string() {
+    let spec = detect(std::path::Path::new("a.rs")).unwrap();
+    let lines = vec!["let a = \"x\";".to_string()];
+    let (same, _) = code_view(&lines, &[LineKind::Code], spec);
+    assert!(matches!(same, Cow::Borrowed(_)));
+
+    // Another language keeps its text, whatever it looks like.
+    let (lines, _) = view("a.c", "x = r#\"a\"#;\n");
+    assert_eq!(lines, ["x = r#\"a\"#;"]);
+}
+
+#[test]
+fn code_view_still_demotes_the_interior_of_triple_quoted_strings() {
+    let (_, kinds) = view("a.py", "x = \"\"\"\nif a:\n\"\"\"\n");
+    assert_eq!(kinds[1], LineKind::Blank);
+}

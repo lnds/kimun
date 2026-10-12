@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use crate::cli::OutputMode;
 use crate::cycom::markers::markers_for;
 use crate::loc::language::{LanguageSpec, detect};
-use crate::string_mask::demote_multi_line_strings;
+use crate::string_mask::code_view;
 use crate::util::read_and_classify;
 use crate::walk::WalkConfig;
 
@@ -42,7 +42,7 @@ fn analyze_file(
         None => return Ok(None),
     };
 
-    let kinds = demote_multi_line_strings(&lines, &kinds, spec);
+    let (lines, kinds) = code_view(&lines, &kinds, spec);
     let smells = match detect_smells(&lines, &kinds, markers, max_lines, max_params) {
         Some(s) => s,
         None => return Ok(None),
