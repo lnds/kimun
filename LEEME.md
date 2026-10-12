@@ -1,30 +1,52 @@
 # Kimün (km)
 
-<p align="center">
-  <img src="assets/madu.png" alt="Madu, la mascota de Kimün" width="220">
-</p>
-
-> *Kimün* significa "conocimiento" o "sabiduría" en mapudungun, la lengua del pueblo mapuche.
->
-> La mascota es **Madu**, una pudú que es *machi*: la que guarda el conocimiento de su pueblo. Es hermana de Kalku, la mascota de [kalku](https://github.com/lnds/kalku).
-
-**Sitio web: [kimun.tools](https://kimun.tools/)** · También [en inglés](README.md).
-
-<p align="center">
-  <a href="https://kimun.tools/#video"><img src="assets/video-es.jpg" alt="Reproducir el video: Madu, la mascota, junto a las palabras 'kimün = conocimiento'" width="720"></a>
-</p>
-
-**¿No conoces Kimün? [Mira a Madu explicarlo en dos minutos](https://kimun.tools/#video)**: la nota, las métricas, lo que git recuerda, el impacto de un cambio y la compuerta para CI.
-
 Una herramienta de línea de comandos rápida para analizar código, escrita en Rust. Ejecuta `km score` en cualquier proyecto para obtener una nota general de salud (de A++ a F--) en cinco dimensiones de calidad (complejidad cognitiva, duplicación, profundidad de indentación, esfuerzo de Halstead y tamaño de archivo), junto con la lista de los archivos que más atención necesitan.
 
-> Aviso: este repositorio no es la aplicación de notas para la consola `kimun`, escrita en Rust por nico2sh. Ese proyecto está en https://github.com/nico2sh/kimun.
+```
+$ km score
+Code Health Score
+──────────────────────────────────────────────────────────────────
+ Project Score:  A (91.4)
+ Files Analyzed: 140
+ Total LOC:      20,050
+──────────────────────────────────────────────────────────────────
+ Dimension                 Weight   Score   Grade
+──────────────────────────────────────────────────────────────────
+ Cognitive Complexity         30%    83.8   B+
+ Duplication                  20%    99.7   A++
+ Indentation Complexity       15%    93.0   A+
+ Halstead Effort              20%    86.9   B+
+ File Size                    15%    99.9   A++
+──────────────────────────────────────────────────────────────────
 
-Además del puntaje agregado, Kimün ofrece 17 comandos especializados:
+ Files Needing Attention (worst per-file scores, excl. duplication)
+──────────────────────────────────────────────────────────────────
+ Score  Grade  File                       Issues
+──────────────────────────────────────────────────────────────────
+  59.8  D-     ./src/deps/analyzer.rs     Cognitive: 36
+  63.9  D+     ./src/cogcom/analyzer.rs   Cognitive: 35
+  72.3  C      ./src/smells/rules.rs      Cognitive: 20
+  73.5  C+     ./src/loc/mod.rs           Cognitive: 19
+  73.6  C+     ./src/hal/tokenizer.rs     Cognitive: 22
+  74.6  C+     ./src/knowledge/mod.rs     Cognitive: 21
+  75.7  C+     ./src/dups/mod.rs          Cognitive: 19
+  76.5  C+     ./src/test_blocks.rs       Cognitive: 17
+  78.2  B-     ./src/cli_help.rs          Cognitive: 16
+  78.9  B-     ./src/walk.rs              Cognitive: 16
+──────────────────────────────────────────────────────────────────
+```
 
-- **Métricas estáticas**: líneas de código por lenguaje (compatible con [cloc](https://github.com/AlDanial/cloc)), detección de código duplicado (Regla de Tres), complejidad de Halstead, complejidad ciclomática, complejidad cognitiva (SonarSource), complejidad por indentación, dos variantes del índice de mantenibilidad (Visual Studio y verifysoft), detección de code smells y un informe completo con todas las métricas.
+Eso es Kimün midiendo su propio código.
+
+**Sitio web: [kimun.tools](https://kimun.tools/)** · [Un video de dos minutos](https://kimun.tools/#video) con la nota, las métricas, lo que git recuerda, el impacto de un cambio y la compuerta para CI · También [en inglés](README.md).
+
+Además del puntaje agregado, Kimün ofrece 18 comandos especializados:
+
+- **Métricas estáticas**: líneas de código por lenguaje (compatible con [cloc](https://github.com/AlDanial/cloc)), detección de código duplicado (Regla de Tres), complejidad de Halstead, complejidad ciclomática, complejidad cognitiva (SonarSource), complejidad por indentación, dos variantes del índice de mantenibilidad (Visual Studio y verifysoft), detección de code smells, dependencias entre archivos y sus ciclos, y un informe completo con todas las métricas.
 - **Análisis basado en git**: detección de hotspots (frecuencia de cambio × complejidad, método de Thornhill), churn (frecuencia de cambio pura), propiedad del código y mapas de conocimiento con `git blame`, acoplamiento temporal entre archivos que cambian juntos, impacto de un diff (difusión y cambios conjuntos que faltan), resumen de propiedad por autor y clasificación de archivos por antigüedad (Active / Stale / Frozen).
-- **Análisis con IA**: integración opcional con Claude para ejecutar todas las herramientas y producir un informe narrativo.
+- **Para agentes de código**: todos los comandos pueden responder en JSON, y `km ai` es una integración opcional con Claude que ejecuta las herramientas y escribe un informe narrativo. Ningún otro comando llama a un modelo.
+
+> Aviso: este repositorio no es la aplicación de notas para la consola `kimun`, escrita en Rust por nico2sh. Ese proyecto está en https://github.com/nico2sh/kimun.
 
 ## Instalación
 
@@ -1361,6 +1383,20 @@ Las métricas y metodologías implementadas en Kimün se basan en las siguientes
 - **Verifysoft**, [Maintainability Index](https://www.verifysoft.com/en_maintainability.html). Fórmula extendida del MI con un componente de peso de los comentarios (MIcw) que premia el código bien comentado.
 - **Yasutaka Kamei et al.**, "A Large-Scale Empirical Study of Just-in-Time Quality Assurance" (IEEE TSE 39(6), 2013). Base de las medidas de difusión de `km impact`.
 - **Thomas Zimmermann, Andreas Zeller, Peter Weissgerber, Stephan Diehl**, "Mining Version Histories to Guide Software Changes" (IEEE TSE 31(6), 2005). Base del radio lógico de `km impact`.
+
+## El nombre
+
+<p align="center">
+  <img src="assets/madu.png" alt="Madu, la mascota de Kimün" width="220">
+</p>
+
+*Kimün* significa "conocimiento" o "sabiduría" en mapudungun, la lengua del pueblo mapuche.
+
+La mascota es **Madu**, una pudú que es *machi*: la que guarda el conocimiento de su pueblo. Es hermana de Kalku, la mascota de [kalku](https://github.com/lnds/kalku). Ella explica Kimün en [un video de dos minutos](https://kimun.tools/#video):
+
+<p align="center">
+  <a href="https://kimun.tools/#video"><img src="assets/video-es.jpg" alt="Reproducir el video: Madu, la mascota, junto a las palabras 'kimün = conocimiento'" width="720"></a>
+</p>
 
 ## Licencia
 
