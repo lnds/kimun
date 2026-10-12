@@ -1,3 +1,10 @@
+## v0.34.3 (2026-10-12)
+
+### Fix
+
+- **dups**: only the item under `#[cfg(test)]` is left out, not the rest of the file
+- **detection**: Rust lifetimes, items and bodiless declarations are not taken for functions
+
 ## v0.34.2 (2026-10-12)
 
 ### Build
