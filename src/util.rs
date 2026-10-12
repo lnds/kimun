@@ -2,8 +2,7 @@
 //!
 //! Provides binary file detection, streaming file hashing (for dedup),
 //! string masking (for complexity analysis), file reading with line
-//! classification, time-period parsing for `--since` flags, and
-//! `#[cfg(test)]` block detection for duplication exclusion.
+//! classification, and time-period parsing for `--since` flags.
 
 use std::error::Error;
 use std::fs::File;
@@ -131,17 +130,6 @@ pub fn read_and_classify(path: &Path, spec: &LanguageSpec) -> io::Result<Option<
     let kinds = classify_reader(normalized.as_bytes(), spec);
 
     Ok(Some((lines, kinds)))
-}
-
-/// Find the line index where `#[cfg(test)]` starts (for stripping inline test blocks).
-/// Returns `lines.len()` if no such line is found.
-pub fn find_test_block_start(lines: &[String]) -> usize {
-    for (i, line) in lines.iter().enumerate() {
-        if line.trim() == "#[cfg(test)]" {
-            return i;
-        }
-    }
-    lines.len()
 }
 
 /// Count leading whitespace as spaces (tabs count as 4 spaces).

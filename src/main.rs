@@ -67,6 +67,8 @@ mod smells;
 mod string_mask;
 /// Temporal coupling analysis (co-changing files in git history).
 mod tc;
+/// Inline test blocks of Rust (`#[cfg(test)]`), left out with the tests.
+mod test_blocks;
 /// Shared utilities (string masking, file reading, since parsing).
 mod util;
 /// Filesystem walking with .gitignore support and test exclusion.

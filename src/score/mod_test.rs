@@ -1,6 +1,5 @@
 use super::*;
 use crate::cli::OutputMode;
-use crate::util::find_test_block_start;
 use crate::walk::{ExcludeFilter, WalkConfig};
 use git2::Repository;
 use std::fs;
@@ -119,38 +118,6 @@ fn run_on_current_repo_legacy() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(Path::new("."), false, &filter);
     run(&cfg, OutputMode::Table, 5, 6, "legacy").unwrap();
-}
-
-#[test]
-fn find_test_block_start_finds_cfg_test() {
-    let lines = vec![
-        "fn foo() {}".to_string(),
-        "#[cfg(test)]".to_string(),
-        "mod tests {}".to_string(),
-    ];
-    assert_eq!(find_test_block_start(&lines), 1);
-}
-
-#[test]
-fn find_test_block_start_with_leading_spaces() {
-    let lines = vec![
-        "fn foo() {}".to_string(),
-        "  #[cfg(test)]  ".to_string(),
-        "mod tests {}".to_string(),
-    ];
-    assert_eq!(find_test_block_start(&lines), 1);
-}
-
-#[test]
-fn find_test_block_start_no_match() {
-    let lines = vec!["fn foo() {}".to_string(), "fn bar() {}".to_string()];
-    assert_eq!(find_test_block_start(&lines), 2);
-}
-
-#[test]
-fn find_test_block_start_empty() {
-    let lines: Vec<String> = vec![];
-    assert_eq!(find_test_block_start(&lines), 0);
 }
 
 #[test]

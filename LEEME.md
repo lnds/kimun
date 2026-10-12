@@ -1071,7 +1071,7 @@ Calcula un puntaje general de salud del código para el proyecto, con una nota q
 
 > **Cambio incompatible en v0.14:** el modelo de puntaje por defecto pasó de MI + complejidad ciclomática (6 dimensiones) a complejidad cognitiva (5 dimensiones). Usa `--model legacy` para recuperar el comportamiento de v0.13.
 
-Los archivos que no son código (Markdown, TOML, JSON, etc.) se excluyen automáticamente. Los bloques de test en línea (`#[cfg(test)]`) se excluyen del análisis de duplicación.
+Los archivos que no son código (Markdown, TOML, JSON, etc.) se excluyen automáticamente. Los bloques de test en línea (`#[cfg(test)]`) se excluyen del análisis de duplicación: el ítem bajo el atributo y nada más, así que el código que sigue a un módulo de tests sí se mide.
 
 ```bash
 km score [path]

@@ -22,7 +22,7 @@ mod report;
 pub mod routes;
 mod rust;
 mod rust_crates;
-mod rust_literals;
+pub(crate) mod rust_literals;
 
 use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};

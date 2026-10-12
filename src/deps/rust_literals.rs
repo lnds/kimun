@@ -123,7 +123,7 @@ fn piece_at(chars: &[char], i: usize) -> Option<Piece> {
 /// The source with comments and literals blanked, lines kept, and the
 /// content of each string, in the order they appear. A string is left as
 /// its two quotes around blanks.
-pub(super) fn code_and_strings(source: &str) -> (String, Vec<String>) {
+pub(crate) fn code_and_strings(source: &str) -> (String, Vec<String>) {
     let chars: Vec<char> = source.chars().collect();
     let mut code = String::with_capacity(source.len());
     let mut strings = Vec::new();

@@ -1071,7 +1071,7 @@ Computes an overall code health score for the project, grading it from A++ (exce
 
 > **Breaking change in v0.14:** The default scoring model changed from MI + Cyclomatic Complexity (6 dimensions) to Cognitive Complexity (5 dimensions). Use `--model legacy` to restore v0.13 behavior.
 
-Non-code files (Markdown, TOML, JSON, etc.) are automatically excluded. Inline test blocks (`#[cfg(test)]`) are excluded from duplication analysis.
+Non-code files (Markdown, TOML, JSON, etc.) are automatically excluded. Inline test blocks (`#[cfg(test)]`) are excluded from duplication analysis: the item under the attribute and nothing else, so the code after a test module is measured.
 
 ```bash
 km score [path]
