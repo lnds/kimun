@@ -1,3 +1,9 @@
+## v0.34.2 (2026-10-12)
+
+### Build
+
+- **deps**: update the dependencies, git2 0.21, reqwest 0.13 and toml 1.1 among them
+
 ## v0.34.1 (2026-10-11)
 
 ### Fix
