@@ -25,6 +25,7 @@ use super::routes;
 const RELIABLE: &[&str] = &[
     "Elixir",
     "Elixir Script",
+    "Go",
     "JavaScript",
     "TypeScript",
     "JSX",

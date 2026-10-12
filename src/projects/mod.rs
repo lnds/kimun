@@ -24,6 +24,11 @@ pub fn cargo_package(manifest: &str) -> Option<String> {
     cargo::read(manifest).name
 }
 
+/// The module path a `go.mod` declares, if it declares one.
+pub fn go_module(manifest: &str) -> Option<String> {
+    gomod::read(manifest).name
+}
+
 /// The directories the `pyproject.toml` at `manifest` says its packages are
 /// imported from, relative to the repository like `manifest` itself.
 pub fn python_roots(manifest: &Path, text: &str) -> Vec<PathBuf> {
