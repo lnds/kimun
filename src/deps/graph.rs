@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use super::analyzer::resolve_import;
 use super::elixir::{self, ElixirFile};
 use super::extractor::extract_imports;
+use super::golang;
 use super::layout::Layout;
 use super::rust_crates;
 use super::{python_names, python_uses};
@@ -88,20 +89,23 @@ fn no_calls(to: usize) -> (usize, BTreeSet<String>) {
 }
 
 /// The files a source imports, for the languages whose imports resolve
-/// one by one from where the importer is. Python tells the names taken too.
+/// one by one from where the importer is. Python tells the names taken
+/// too, and a Go import leads to every file of a package.
 fn imports(
     source: &Source,
     layout: &Layout,
     by_path: &HashMap<&Path, usize>,
     python: &python_uses::Modules,
+    go: &golang::Packages,
 ) -> BTreeMap<usize, BTreeSet<String>> {
-    if let Some(uses) = python.uses(source, layout, by_path) {
+    let apart = python.uses(source, layout, by_path);
+    if let Some(uses) = apart.or_else(|| go.uses(source)) {
         return uses;
     }
-    let (known, go) = (&layout.known, layout.go_module);
+    let known = &layout.known;
     extract_imports(&source.language, &source.text)
         .iter()
-        .flat_map(|import| resolve_import(&source.path, import, &source.language, known, go))
+        .flat_map(|import| resolve_import(&source.path, import, &source.language, known))
         .filter_map(|path| by_path.get(path.as_path()).copied())
         .map(no_calls)
         .collect()
@@ -195,6 +199,7 @@ impl FileGraph {
             .collect();
         let (mut rust_uses, own_tests) = rust_crates::read(&files, &rust, &layout.packages);
         let python = python_uses::Modules::of(sources);
+        let go = golang::Packages::of(sources, layout);
 
         let mut graph = FileGraph {
             files,
@@ -207,7 +212,7 @@ impl FileGraph {
             let uses = match (&parsed[file], rust_uses[file].take()) {
                 (Some(parsed), _) => graph.elixir_uses(file, parsed, &modules, related),
                 (None, Some(used)) => used.into_iter().map(no_calls).collect(),
-                (None, None) => imports(source, layout, &by_path, &python),
+                (None, None) => imports(source, layout, &by_path, &python, &go),
             };
             graph.uses.push(
                 uses.into_iter()

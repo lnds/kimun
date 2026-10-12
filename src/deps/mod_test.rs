@@ -3,35 +3,6 @@ use crate::cli::OutputMode;
 use crate::walk::{ExcludeFilter, WalkConfig};
 use std::fs;
 
-// ── detect_go_module ─────────────────────────────────────────────────────────
-
-#[test]
-fn detect_go_module_returns_none_for_missing_file() {
-    let dir = tempfile::tempdir().unwrap();
-    assert!(detect_go_module(dir.path()).is_none());
-}
-
-#[test]
-fn detect_go_module_returns_module_name() {
-    let dir = tempfile::tempdir().unwrap();
-    fs::write(
-        dir.path().join("go.mod"),
-        "module github.com/user/myproject\n\ngo 1.21\n",
-    )
-    .unwrap();
-    assert_eq!(
-        detect_go_module(dir.path()),
-        Some("github.com/user/myproject".to_string())
-    );
-}
-
-#[test]
-fn detect_go_module_no_module_line() {
-    let dir = tempfile::tempdir().unwrap();
-    fs::write(dir.path().join("go.mod"), "go 1.21\n").unwrap();
-    assert!(detect_go_module(dir.path()).is_none());
-}
-
 // ── run ──────────────────────────────────────────────────────────────────────
 
 #[test]
@@ -349,4 +320,40 @@ fn visible_entries_are_the_cycle_members_or_the_first_ones() {
     };
     assert_eq!(paths(true), vec!["a.rs", "b.rs"]);
     assert_eq!(paths(false), vec!["clean.rs"]);
+}
+
+#[test]
+fn go_modules_in_subdirectories_resolve_from_where_they_are() {
+    let dir = tempfile::tempdir().unwrap();
+    write(dir.path(), "libs/core/go.mod", "module example.com/core\n");
+    write(dir.path(), "libs/core/model/model.go", "package model\n");
+    write(dir.path(), "libs/core/model/field.go", "package model\n");
+    write(
+        dir.path(),
+        "libs/core/model/model_test.go",
+        "package model\n",
+    );
+    write(dir.path(), "libs/core/model/sql/sql.go", "package sql\n");
+    write(dir.path(), "svc/api/go.mod", "module example.com/api\n");
+    write(
+        dir.path(),
+        "svc/api/main.go",
+        "package main\n\nimport (\n\t\"fmt\"\n\t\"example.com/core/model\"\n)\n",
+    );
+    let filter = ExcludeFilter::default();
+    // Tests are walked too: a test file is still not what a package offers.
+    let cfg = WalkConfig::new(dir.path(), true, &filter);
+    let result = analyze(&cfg);
+
+    assert_eq!(metrics(&result, "svc/api/main.go"), (0, 2, false));
+    assert_eq!(metrics(&result, "libs/core/model/model.go"), (1, 0, false));
+    assert_eq!(metrics(&result, "libs/core/model/field.go"), (1, 0, false));
+    assert_eq!(
+        metrics(&result, "libs/core/model/model_test.go"),
+        (0, 0, false)
+    );
+    assert_eq!(
+        metrics(&result, "libs/core/model/sql/sql.go"),
+        (0, 0, false)
+    );
 }

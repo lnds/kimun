@@ -226,19 +226,17 @@ impl From<&DepResult> for JsonDepResult {
 
 /// Resolve a raw import string to the project-relative files it names, given the
 /// importer's location. Empty if the import names no known project file.
-/// Only a Kaikai package import can name more than one file. Python is
-/// resolved apart, since its roots depend on the layout.
+/// Only a Kaikai package import can name more than one file. Python and Go
+/// are resolved apart, since they depend on the layout.
 pub fn resolve_import(
     importer: &Path,  // project-relative path of the importing file
     import_str: &str, // raw import string from extractor
     language: &str,
     file_set: &HashSet<PathBuf>,
-    go_module: Option<&str>,
 ) -> Vec<PathBuf> {
     let dir = importer.parent().unwrap_or(Path::new(""));
     let single = match language {
         "JavaScript" | "TypeScript" | "JSX" | "TSX" => resolve_js(dir, import_str, file_set),
-        "Go" => resolve_go(import_str, go_module, file_set),
         "Kaikai" => return kaikai::resolve(importer, import_str, file_set),
         _ => None,
     };
@@ -269,24 +267,6 @@ fn resolve_js(dir: &Path, import_str: &str, file_set: &HashSet<PathBuf>) -> Opti
         }
     }
     None
-}
-
-fn resolve_go(
-    import_str: &str,
-    go_module: Option<&str>,
-    file_set: &HashSet<PathBuf>,
-) -> Option<PathBuf> {
-    let module = go_module?;
-    let rel = import_str.strip_prefix(module)?.trim_start_matches('/');
-    if rel.is_empty() {
-        return None;
-    }
-    // Find any .go file in that directory
-    let dir = PathBuf::from(rel);
-    file_set
-        .iter()
-        .find(|p| p.starts_with(&dir) && p.extension().is_some_and(|e| e == "go"))
-        .cloned()
 }
 
 /// Normalize a path by resolving `..` components (without touching the filesystem).
@@ -398,7 +378,6 @@ mod tests {
             "../utils",
             "TypeScript",
             &file_set,
-            None,
         );
         assert_eq!(result, vec![PathBuf::from("src/utils.ts")]);
     }
@@ -420,7 +399,6 @@ mod tests {
             "./utils.js",
             "JavaScript",
             &file_set,
-            None,
         );
         assert_eq!(result, vec![PathBuf::from("src/utils.js")]);
     }
@@ -429,13 +407,7 @@ mod tests {
     fn resolve_js_without_extension_ts() {
         let mut file_set = HashSet::new();
         file_set.insert(PathBuf::from("src/utils.ts"));
-        let result = resolve_import(
-            Path::new("src/app.ts"),
-            "./utils",
-            "TypeScript",
-            &file_set,
-            None,
-        );
+        let result = resolve_import(Path::new("src/app.ts"), "./utils", "TypeScript", &file_set);
         assert_eq!(result, vec![PathBuf::from("src/utils.ts")]);
     }
 
@@ -443,13 +415,7 @@ mod tests {
     fn resolve_js_index_file() {
         let mut file_set = HashSet::new();
         file_set.insert(PathBuf::from("src/components/index.tsx"));
-        let result = resolve_import(
-            Path::new("src/app.tsx"),
-            "./components",
-            "TSX",
-            &file_set,
-            None,
-        );
+        let result = resolve_import(Path::new("src/app.tsx"), "./components", "TSX", &file_set);
         assert_eq!(result, vec![PathBuf::from("src/components/index.tsx")]);
     }
 
@@ -457,7 +423,7 @@ mod tests {
     fn resolve_js_jsx_extension() {
         let mut file_set = HashSet::new();
         file_set.insert(PathBuf::from("src/Button.jsx"));
-        let result = resolve_import(Path::new("src/App.jsx"), "./Button", "JSX", &file_set, None);
+        let result = resolve_import(Path::new("src/App.jsx"), "./Button", "JSX", &file_set);
         assert_eq!(result, vec![PathBuf::from("src/Button.jsx")]);
     }
 
@@ -469,7 +435,6 @@ mod tests {
             "./missing",
             "TypeScript",
             &file_set,
-            None,
         );
         assert!(result.is_empty());
     }
@@ -483,64 +448,6 @@ mod tests {
             "./nonexistent.ts",
             "TypeScript",
             &file_set,
-            None,
-        );
-        assert!(result.is_empty());
-    }
-
-    // ── Go resolution ──────────────────────────────────────────────────────
-
-    #[test]
-    fn resolve_go_with_module() {
-        let mut file_set = HashSet::new();
-        file_set.insert(PathBuf::from("pkg/foo/main.go"));
-        let result = resolve_import(
-            Path::new("main.go"),
-            "github.com/user/proj/pkg/foo",
-            "Go",
-            &file_set,
-            Some("github.com/user/proj"),
-        );
-        assert_eq!(result, vec![PathBuf::from("pkg/foo/main.go")]);
-    }
-
-    #[test]
-    fn resolve_go_no_module_returns_none() {
-        let file_set = HashSet::new();
-        let result = resolve_import(
-            Path::new("main.go"),
-            "github.com/user/proj/pkg/foo",
-            "Go",
-            &file_set,
-            None, // no go_module
-        );
-        assert!(result.is_empty());
-    }
-
-    #[test]
-    fn resolve_go_external_package_returns_none() {
-        // Import doesn't start with module prefix
-        let file_set = HashSet::new();
-        let result = resolve_import(
-            Path::new("main.go"),
-            "fmt",
-            "Go",
-            &file_set,
-            Some("github.com/user/proj"),
-        );
-        assert!(result.is_empty());
-    }
-
-    #[test]
-    fn resolve_go_root_module_path_returns_none() {
-        // Strip prefix leaves empty string
-        let file_set = HashSet::new();
-        let result = resolve_import(
-            Path::new("main.go"),
-            "github.com/user/proj",
-            "Go",
-            &file_set,
-            Some("github.com/user/proj"),
         );
         assert!(result.is_empty());
     }
@@ -548,7 +455,7 @@ mod tests {
     #[test]
     fn resolve_unknown_language_returns_none() {
         let file_set = HashSet::new();
-        let result = resolve_import(Path::new("main.sh"), "utils", "Bash", &file_set, None);
+        let result = resolve_import(Path::new("main.sh"), "utils", "Bash", &file_set);
         assert!(result.is_empty());
     }
 
@@ -556,13 +463,7 @@ mod tests {
     fn resolve_kaikai_through_the_dispatcher() {
         let mut file_set = HashSet::new();
         file_set.insert(PathBuf::from("app/b.kai"));
-        let result = resolve_import(
-            Path::new("app/main.kai"),
-            "app.b",
-            "Kaikai",
-            &file_set,
-            None,
-        );
+        let result = resolve_import(Path::new("app/main.kai"), "app.b", "Kaikai", &file_set);
         assert_eq!(result, vec![PathBuf::from("app/b.kai")]);
     }
 

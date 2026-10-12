@@ -236,25 +236,67 @@ fn test_support_is_neither_a_test_nor_a_dependent() {
 
 #[test]
 fn nothing_to_measure_without_a_changed_source() {
-    let changes = [
-        change("README.md", &[1]),
-        change("app/main.go", &[1]),
-        change("app/util.go", &[2]),
-    ];
-    let radius = radius(project(&[]), &changes);
+    let changes = [change("README.md", &[1]), change("app/util.rb", &[2])];
+    let mut radius = radius(project(&[]), &changes);
 
     assert!(radius.origins.is_empty());
     assert_eq!(radius.functions, None);
-    assert_eq!(radius.unavailable, [("Go".to_string(), 2)]);
+    // A language with no graph at all is not announced as unmeasured.
+    assert!(radius.unavailable.is_empty());
     let lines = render(&radius, 20);
     assert_eq!(
         lines[2],
         " No changed source file in a language with a reliable graph"
     );
+
+    // Every language with a graph is measured today; one that is read
+    // without being reliable yet is told apart.
+    radius.unavailable = vec![("Ruby".to_string(), 2)];
     assert_eq!(
-        lines.last().unwrap(),
-        "Not measured for Go (2 changed): its graph does not reflect usage yet."
+        render(&radius, 20).last().unwrap(),
+        "Not measured for Ruby (2 changed): its graph does not reflect usage yet."
     );
+}
+
+#[test]
+fn a_go_change_reaches_every_importer_of_its_package() {
+    let sources = [
+        ("go.mod", "module example.com/shop\n\ngo 1.22\n"),
+        ("store/store.go", "package store\n\nfunc Open() {}\n"),
+        ("store/index.go", "package store\n"),
+        ("store/store_test.go", "package store\n"),
+        (
+            "api/handler.go",
+            "package api\n\nimport \"example.com/shop/store\"\n",
+        ),
+        ("api/handler_test.go", "package api\n"),
+        (
+            "jobs/sweep.go",
+            "package jobs\n\nimport (\n\t\"fmt\"\n\t\"example.com/shop/store\"\n)\n",
+        ),
+        (
+            "cmd/shop/main.go",
+            "package main\n\nimport \"example.com/shop/api\"\n",
+        ),
+    ]
+    .iter()
+    .map(|(path, text)| (PathBuf::from(path), text.to_string()))
+    .collect();
+    // `index.go` is imported by nobody by name: its package is.
+    let radius = radius(sources, &[change("store/index.go", &[1])]);
+
+    let mut files: Vec<&str> = radius
+        .direct
+        .iter()
+        .map(|d| d.file.to_str().unwrap())
+        .collect();
+    files.sort_unstable();
+    assert_eq!(files, ["api/handler.go", "jobs/sweep.go"]);
+    // `cmd/shop/main.go` uses the package of `handler.go`.
+    assert_eq!(radius.by_distance, [2, 1]);
+    assert_eq!(protection_of(&radius, "handler.go"), Protection::Direct);
+    assert_eq!(protection_of(&radius, "sweep.go"), Protection::None);
+    assert!(radius.unavailable.is_empty());
 }
 
 #[test]
@@ -372,7 +414,8 @@ fn what_each_file_is_to_the_radius() {
     assert!(is_reliable(Path::new("src/a.ts")));
     assert!(is_reliable(Path::new("src/a.rs")));
     assert!(is_reliable(Path::new("app/a.py")));
-    assert!(!is_reliable(Path::new("app/a.go")));
+    assert!(is_reliable(Path::new("app/a.go")));
+    assert!(!is_reliable(Path::new("app/a.rb")));
     assert!(!is_reliable(Path::new("README.md")));
 }
 

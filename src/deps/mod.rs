@@ -10,6 +10,7 @@ mod elixir;
 mod elixir_functions;
 mod elixir_literals;
 mod extractor;
+mod golang;
 pub mod graph;
 pub mod heex;
 mod kaikai;
@@ -57,21 +58,8 @@ fn count_unsupported(skipped: &[(PathBuf, String)]) -> Vec<UnsupportedLanguage> 
     unsupported
 }
 
-/// Try to read the Go module name from `go.mod` in the project root.
-fn detect_go_module(root: &Path) -> Option<String> {
-    let content = std::fs::read_to_string(root.join("go.mod")).ok()?;
-    for line in content.lines() {
-        if let Some(rest) = line.strip_prefix("module ") {
-            return Some(rest.trim().to_string());
-        }
-    }
-    None
-}
-
 /// Walk files, extract and resolve their imports, and build the dependency graph.
 fn analyze(cfg: &WalkConfig<'_>) -> DepResult {
-    let go_module = detect_go_module(cfg.path);
-
     // Collect all source files with their language. A file whose language has
     // no import extractor stays out of the graph: listing it with zero
     // dependencies would pass an unmeasured file off as a measured one.
@@ -103,20 +91,24 @@ fn analyze(cfg: &WalkConfig<'_>) -> DepResult {
             templates: Vec::new(),
         })
         .collect();
-    let manifests: Vec<(&Path, String)> = skipped
+    let mut manifests: Vec<(PathBuf, String)> = skipped
         .iter()
         .filter(|(path, _)| is_manifest(path))
         .map(|(path, _)| {
             let text = std::fs::read_to_string(cfg.path.join(path)).unwrap_or_default();
-            (path.as_path(), text)
+            (path.clone(), text)
         })
         .collect();
+    // `go.mod` has no language, so the walk above does not find it.
+    if all_files.iter().any(|(_, language)| language == "Go") {
+        let go_mod = |path: &Path| path.file_name().is_some_and(|name| name == "go.mod");
+        manifests.extend(crate::projects::files_on_disk(cfg.path, go_mod));
+    }
     let layout = Layout {
         known: file_set,
-        go_module: go_module.as_deref(),
         ..Layout::default()
     }
-    .with_manifests(manifests.iter().map(|(path, text)| (*path, text.as_str())));
+    .with_manifests(manifests.iter().map(|(p, t)| (p.as_path(), t.as_str())));
     // One directory is analysed, with no manifests to tell projects apart.
     let edges = FileGraph::build(&sources, &layout, &|_, _| false).edges();
 
