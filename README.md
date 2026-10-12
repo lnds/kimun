@@ -863,7 +863,6 @@ km impact --since-ref origin/main --format json
 | `structural.radius` | `files`, `source_files` and `share` (0 to 1): the radius as a number |
 | `structural.reach[]` | The files of the radius, by `distance` |
 | `structural.upper_bound` | Files reached if every use of a changed file counted, whatever the function |
-| `structural.unavailable[]` | Languages of changed files the source level is not measured for |
 | `projects.changed[]`, `projects.reached[]` | Projects holding a changed file, and those reached, each with `origin`, `distance`, `via`, `scope` |
 | `projects.affected[]` | Projects whose builds and tests the change calls for (what `--affected` prints) |
 | `projects.outside[]` | Changed files that belong to no project: their reach is unknown |

@@ -7,12 +7,6 @@ use serde::Serialize;
 use super::protection::Protection;
 use super::structural::{Dependent, Exposure, Narrowing, Structural};
 
-#[derive(Serialize)]
-struct JsonUnavailable<'a> {
-    language: &'a str,
-    files: usize,
-}
-
 /// The radius as a number: the files the change concerns, over those measured.
 #[derive(Serialize)]
 struct JsonRadius {
@@ -56,7 +50,6 @@ pub struct JsonStructural<'a> {
     /// Whether a test that is part of the change protects a file that uses
     /// what changed.
     change_tests_a_dependent: bool,
-    unavailable: Vec<JsonUnavailable<'a>>,
     ambiguous: usize,
 }
 
@@ -100,14 +93,6 @@ impl<'a> From<&'a Structural> for JsonStructural<'a> {
                 .map(|d| text(&d.file))
                 .collect(),
             change_tests_a_dependent: radius.exposed().any(|d| d.tests_in_diff > 0),
-            unavailable: radius
-                .unavailable
-                .iter()
-                .map(|(language, files)| JsonUnavailable {
-                    language,
-                    files: *files,
-                })
-                .collect(),
             ambiguous: radius.ambiguous,
         }
     }

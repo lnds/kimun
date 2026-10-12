@@ -188,7 +188,7 @@ pub(super) fn summary(radius: &Structural) -> Vec<String> {
 fn body(radius: &Structural, top: usize) -> Vec<String> {
     if radius.origins.is_empty() {
         return vec![
-            " No changed source file in a language with a reliable graph".to_string(),
+            " No changed source file in a language the radius is measured for".to_string(),
             " (Elixir, Go, JavaScript/TypeScript, Kaikai, Python, Rust).".to_string(),
         ];
     }
@@ -253,11 +253,6 @@ fn warnings(radius: &Structural) -> Vec<String> {
             "{unknown} more with no test use the module without a call that tells whether the change concerns them."
         ));
     }
-    lines.extend(radius.unavailable.iter().map(|(language, files)| {
-        format!(
-            "Not measured for {language} ({files} changed): its graph does not reflect usage yet."
-        )
-    }));
     if radius.ambiguous > 0 {
         lines.push(format!(
             "Module references left out for naming more than one file: {}",

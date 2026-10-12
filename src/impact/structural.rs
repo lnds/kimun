@@ -19,25 +19,10 @@ use super::reading::{self, graphed_language};
 use super::role::{self, Role, roles_of};
 use super::routes;
 
-/// Languages whose graph reflects what uses what. For the others `deps`
-/// reads declarations that do not amount to usage, and a radius drawn on
-/// them would be made up.
-const RELIABLE: &[&str] = &[
-    "Elixir",
-    "Elixir Script",
-    "Go",
-    "JavaScript",
-    "TypeScript",
-    "JSX",
-    "TSX",
-    "Kaikai",
-    "Python",
-    "Rust",
-];
-
-/// Whether the graph of the language of `path` can be trusted for a radius.
-pub fn is_reliable(path: &Path) -> bool {
-    graphed_language(path).is_some_and(|language| RELIABLE.contains(&language))
+/// Whether the radius is measured for the language of `path`: every
+/// language that has a graph.
+pub fn is_measured(path: &Path) -> bool {
+    graphed_language(path).is_some()
 }
 
 /// How a file that uses a changed one stands to the change.
@@ -121,8 +106,6 @@ pub struct Structural {
     /// Files reached when every use of a changed file counts, whatever the
     /// function: what the radius cannot exceed.
     pub upper_bound: usize,
-    /// Changed files in languages whose graph is not reliable, by language.
-    pub unavailable: Vec<(String, usize)>,
     /// Elixir module references left out for naming several files.
     pub ambiguous: usize,
 }
@@ -171,20 +154,6 @@ impl Structural {
             d.entry_point = declared(&d.file) || (!d.used && conventional(&d.file));
         }
     }
-}
-
-/// Changed files in languages that have a graph, but not a reliable one.
-fn unavailable(changed: &[&Path]) -> Vec<(String, usize)> {
-    let mut by_language: BTreeMap<&str, usize> = BTreeMap::new();
-    for path in changed {
-        if let Some(language) = graphed_language(path).filter(|l| !RELIABLE.contains(l)) {
-            *by_language.entry(language).or_default() += 1;
-        }
-    }
-    by_language
-        .into_iter()
-        .map(|(language, files)| (language.to_string(), files))
-        .collect()
 }
 
 /// The graph read backwards: for each file, the sources and the tests that
@@ -400,7 +369,6 @@ pub fn compute(
             .map(|level| level.iter().map(|&f| graph.files[f].clone()).collect())
             .collect(),
         upper_bound: levels.iter().map(Vec::len).sum(),
-        unavailable: unavailable(&changed.iter().map(|c| c.path.as_path()).collect::<Vec<_>>()),
         ambiguous: graph.ambiguous,
     }
 }

@@ -863,7 +863,6 @@ km impact --since-ref origin/main --format json
 | `structural.radius` | `files`, `source_files` y `share` (de 0 a 1): el radio como número |
 | `structural.reach[]` | Los archivos del radio, por `distance` |
 | `structural.upper_bound` | Archivos alcanzados si contara cada uso de un archivo modificado, sea cual sea la función |
-| `structural.unavailable[]` | Lenguajes de archivos modificados para los que no se mide el nivel de archivos fuente |
 | `projects.changed[]`, `projects.reached[]` | Proyectos que contienen un archivo modificado, y los alcanzados, cada uno con `origin`, `distance`, `via`, `scope` |
 | `projects.affected[]` | Proyectos cuyas compilaciones y tests pide el cambio (lo que imprime `--affected`) |
 | `projects.outside[]` | Archivos modificados que no pertenecen a ningún proyecto: su alcance es desconocido |

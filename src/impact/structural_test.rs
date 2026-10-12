@@ -237,24 +237,14 @@ fn test_support_is_neither_a_test_nor_a_dependent() {
 #[test]
 fn nothing_to_measure_without_a_changed_source() {
     let changes = [change("README.md", &[1]), change("app/util.rb", &[2])];
-    let mut radius = radius(project(&[]), &changes);
+    let radius = radius(project(&[]), &changes);
 
     assert!(radius.origins.is_empty());
     assert_eq!(radius.functions, None);
-    // A language with no graph at all is not announced as unmeasured.
-    assert!(radius.unavailable.is_empty());
     let lines = render(&radius, 20);
     assert_eq!(
         lines[2],
-        " No changed source file in a language with a reliable graph"
-    );
-
-    // Every language with a graph is measured today; one that is read
-    // without being reliable yet is told apart.
-    radius.unavailable = vec![("Ruby".to_string(), 2)];
-    assert_eq!(
-        render(&radius, 20).last().unwrap(),
-        "Not measured for Ruby (2 changed): its graph does not reflect usage yet."
+        " No changed source file in a language the radius is measured for"
     );
 }
 
@@ -296,7 +286,6 @@ fn a_go_change_reaches_every_importer_of_its_package() {
     assert_eq!(radius.by_distance, [2, 1]);
     assert_eq!(protection_of(&radius, "handler.go"), Protection::Direct);
     assert_eq!(protection_of(&radius, "sweep.go"), Protection::None);
-    assert!(radius.unavailable.is_empty());
 }
 
 #[test]
@@ -410,16 +399,16 @@ fn what_each_file_is_to_the_radius() {
     assert_eq!(role(Path::new("conftest.py")), Role::Other);
     assert_eq!(role(Path::new("src/shop/conftest.py")), Role::Other);
 
-    assert!(is_reliable(Path::new("lib/a.ex")));
-    assert!(is_reliable(Path::new("src/a.ts")));
-    assert!(is_reliable(Path::new("src/a.rs")));
-    assert!(is_reliable(Path::new("app/a.py")));
-    assert!(is_reliable(Path::new("app/a.go")));
+    assert!(is_measured(Path::new("lib/a.ex")));
+    assert!(is_measured(Path::new("src/a.ts")));
+    assert!(is_measured(Path::new("src/a.rs")));
+    assert!(is_measured(Path::new("app/a.py")));
+    assert!(is_measured(Path::new("app/a.go")));
     for measured in ["config/a.exs", "web/a.js", "src/a.kai"] {
-        assert!(is_reliable(Path::new(measured)), "{measured}");
+        assert!(is_measured(Path::new(measured)), "{measured}");
     }
-    assert!(!is_reliable(Path::new("app/a.rb")));
-    assert!(!is_reliable(Path::new("README.md")));
+    assert!(!is_measured(Path::new("app/a.rb")));
+    assert!(!is_measured(Path::new("README.md")));
 }
 
 #[test]
@@ -1025,7 +1014,6 @@ fn rust_tests_kept_beside_the_code_and_under_tests_protect() {
     assert_eq!(protection_of(&radius, "stock.rs"), Protection::Direct);
     // Test support that holds no test protects nothing.
     assert_eq!(protection_of(&radius, "report.rs"), Protection::None);
-    assert!(radius.unavailable.is_empty());
 }
 
 fn python_package_with_tests() -> Vec<(PathBuf, String)> {
@@ -1078,7 +1066,6 @@ fn python_absolute_and_relative_imports_carry_the_radius() {
     assert_eq!(protection_of(&radius, "receipt.py"), Protection::Direct);
     // Test support protects nothing.
     assert_eq!(protection_of(&radius, "stock.py"), Protection::None);
-    assert!(radius.unavailable.is_empty());
 }
 
 fn python_shop() -> Vec<(PathBuf, String)> {
