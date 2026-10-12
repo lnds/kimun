@@ -1,30 +1,52 @@
 # Kimün (km)
 
-<p align="center">
-  <img src="assets/madu.png" alt="Madu, the mascot of Kimün" width="220">
-</p>
-
-> *Kimün* means "knowledge" or "wisdom" in Mapudungun, the language of the Mapuche people.
->
-> The mascot is **Madu**, a pudú who is a *machi*: the one who holds the knowledge of her people. She is the sister of Kalku, the mascot of [kalku](https://github.com/lnds/kalku).
-
-**Website: [kimun.tools](https://kimun.tools/en/)** · Also [in Spanish](LEEME.md).
-
-<p align="center">
-  <a href="https://kimun.tools/en/#video"><img src="assets/video-en.jpg" alt="Play the video: Madu, the mascot, beside the words 'kimün = knowledge'" width="720"></a>
-</p>
-
-**New to Kimün? [Watch Madu explain it in two minutes](https://kimun.tools/en/#video)** — the grade, the metrics, what git remembers, the impact of a change and the gate for CI.
-
 A fast command-line tool for code analysis, written in Rust. Run `km score` on any project to get an overall health grade (A++ to F--) across five quality dimensions — cognitive complexity, duplication, indentation depth, Halstead effort, and file size — with a list of the files that need the most attention.
 
-> Note: This repository is not the same as the Rust console note-taking app `kimun` by nico2sh. That project is available at https://github.com/nico2sh/kimun.
+```
+$ km score
+Code Health Score
+──────────────────────────────────────────────────────────────────
+ Project Score:  A (91.4)
+ Files Analyzed: 140
+ Total LOC:      20,050
+──────────────────────────────────────────────────────────────────
+ Dimension                 Weight   Score   Grade
+──────────────────────────────────────────────────────────────────
+ Cognitive Complexity         30%    83.8   B+
+ Duplication                  20%    99.7   A++
+ Indentation Complexity       15%    93.0   A+
+ Halstead Effort              20%    86.9   B+
+ File Size                    15%    99.9   A++
+──────────────────────────────────────────────────────────────────
 
-Beyond the aggregate score, Kimün provides 17 specialized commands:
+ Files Needing Attention (worst per-file scores, excl. duplication)
+──────────────────────────────────────────────────────────────────
+ Score  Grade  File                       Issues
+──────────────────────────────────────────────────────────────────
+  59.8  D-     ./src/deps/analyzer.rs     Cognitive: 36
+  63.9  D+     ./src/cogcom/analyzer.rs   Cognitive: 35
+  72.3  C      ./src/smells/rules.rs      Cognitive: 20
+  73.5  C+     ./src/loc/mod.rs           Cognitive: 19
+  73.6  C+     ./src/hal/tokenizer.rs     Cognitive: 22
+  74.6  C+     ./src/knowledge/mod.rs     Cognitive: 21
+  75.7  C+     ./src/dups/mod.rs          Cognitive: 19
+  76.5  C+     ./src/test_blocks.rs       Cognitive: 17
+  78.2  B-     ./src/cli_help.rs          Cognitive: 16
+  78.9  B-     ./src/walk.rs              Cognitive: 16
+──────────────────────────────────────────────────────────────────
+```
 
-- **Static metrics** — lines of code by language ([cloc](https://github.com/AlDanial/cloc)-compatible), duplicate detection (Rule of Three), Halstead complexity, cyclomatic complexity, cognitive complexity (SonarSource), indentation complexity, two Maintainability Index variants (Visual Studio and verifysoft), code smell detection, and a comprehensive multi-metric report.
+That is Kimün measuring its own source.
+
+**Website: [kimun.tools](https://kimun.tools/en/)** · [A two-minute video](https://kimun.tools/en/#video) of the grade, the metrics, what git remembers, the impact of a change and the gate for CI · Also [in Spanish](LEEME.md).
+
+Beyond the aggregate score, Kimün provides 18 specialized commands:
+
+- **Static metrics** — lines of code by language ([cloc](https://github.com/AlDanial/cloc)-compatible), duplicate detection (Rule of Three), Halstead complexity, cyclomatic complexity, cognitive complexity (SonarSource), indentation complexity, two Maintainability Index variants (Visual Studio and verifysoft), code smell detection, dependencies between files and their cycles, and a comprehensive multi-metric report.
 - **Git-based analysis** — hotspot detection (change frequency × complexity, Thornhill method), code churn (pure change frequency), code ownership / knowledge maps via `git blame`, temporal coupling between files that change together, impact of a diff (diffusion and missing co-changes), per-author ownership summary, and file age classification (Active / Stale / Frozen).
-- **AI-powered analysis** — optional integration with Claude to run all tools and produce a narrative report.
+- **For coding agents** — every command can answer in JSON, and `km ai` is an optional integration with Claude that runs the tools and writes a narrative report. No other command calls a model.
+
+> Note: This repository is not the same as the Rust console note-taking app `kimun` by nico2sh. That project is available at https://github.com/nico2sh/kimun.
 
 ## Installation
 
@@ -1361,6 +1383,20 @@ The metrics and methodologies implemented in Kimün are based on the following s
 - **Verifysoft**, [Maintainability Index](https://www.verifysoft.com/en_maintainability.html). Extended MI formula with a comment-weight component (MIcw) that rewards well-commented code.
 - **Yasutaka Kamei et al.**, "A Large-Scale Empirical Study of Just-in-Time Quality Assurance" (IEEE TSE 39(6), 2013). Basis for the diffusion measures of `km impact`.
 - **Thomas Zimmermann, Andreas Zeller, Peter Weissgerber, Stephan Diehl**, "Mining Version Histories to Guide Software Changes" (IEEE TSE 31(6), 2005). Basis for the logical radius of `km impact`.
+
+## The name
+
+<p align="center">
+  <img src="assets/madu.png" alt="Madu, the mascot of Kimün" width="220">
+</p>
+
+*Kimün* means "knowledge" or "wisdom" in Mapudungun, the language of the Mapuche people.
+
+The mascot is **Madu**, a pudú who is a *machi*: the one who holds the knowledge of her people. She is the sister of Kalku, the mascot of [kalku](https://github.com/lnds/kalku). She explains Kimün in [a two-minute video](https://kimun.tools/en/#video):
+
+<p align="center">
+  <a href="https://kimun.tools/en/#video"><img src="assets/video-en.jpg" alt="Play the video: Madu, the mascot, beside the words 'kimün = knowledge'" width="720"></a>
+</p>
 
 ## License
 
