@@ -1,4 +1,4 @@
-use crate::detection::FunctionDetectionMarkers;
+use crate::detection::{FunctionDetectionMarkers, FunctionSyntax};
 use crate::loc::counter::LineKind;
 
 use super::*;
@@ -12,6 +12,9 @@ impl FunctionDetectionMarkers for TestMarkers {
     }
     fn brace_scoped(&self) -> bool {
         true
+    }
+    fn function_syntax(&self) -> FunctionSyntax {
+        FunctionSyntax::KeywordWithLifetimes
     }
     fn line_comments(&self) -> &[&str] {
         &["//"]

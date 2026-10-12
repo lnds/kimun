@@ -12,7 +12,42 @@ use crate::util::{indent_level, mask_strings};
 pub trait FunctionDetectionMarkers {
     fn function_markers(&self) -> &[&str];
     fn brace_scoped(&self) -> bool;
+    fn function_syntax(&self) -> FunctionSyntax;
     fn line_comments(&self) -> &[&str];
+}
+
+/// Implement `FunctionDetectionMarkers` for a marker struct, from its
+/// fields of the same names.
+macro_rules! detection_markers {
+    ($markers:ty) => {
+        impl $crate::detection::FunctionDetectionMarkers for $markers {
+            fn function_markers(&self) -> &[&str] {
+                self.function_markers
+            }
+            fn brace_scoped(&self) -> bool {
+                self.brace_scoped
+            }
+            fn function_syntax(&self) -> $crate::detection::FunctionSyntax {
+                self.function_syntax
+            }
+            fn line_comments(&self) -> &[&str] {
+                self.line_comments
+            }
+        }
+    };
+}
+pub(crate) use detection_markers;
+
+/// How a language writes its functions, beyond the markers.
+#[derive(Clone, Copy, PartialEq)]
+pub enum FunctionSyntax {
+    /// With one of the markers or, failing that, in the C-family shape.
+    Loose,
+    /// Always with one of the markers.
+    Keyword,
+    /// As `Keyword`, in a language where `'a` names a lifetime instead of
+    /// opening a character literal.
+    KeywordWithLifetimes,
 }
 
 /// A detected function body: name, start line, and the code lines within it.
@@ -52,7 +87,7 @@ fn is_function_declaration(trimmed: &str, markers: &dyn FunctionDetectionMarkers
     {
         return true;
     }
-    is_c_family_function(trimmed)
+    markers.function_syntax() == FunctionSyntax::Loose && is_c_family_function(trimmed)
 }
 
 /// Heuristic for C/C++/Java/C#/Bash function detection: line contains '('
@@ -100,31 +135,29 @@ fn is_c_family_function(trimmed: &str) -> bool {
 /// Extract the function name from a declaration line using language-specific
 /// markers or the C-family heuristic (token before the first `(`).
 pub fn extract_function_name(trimmed: &str, markers: &dyn FunctionDetectionMarkers) -> String {
-    for marker in markers.function_markers() {
-        if let Some(pos) = trimmed.find(marker) {
-            let after = &trimmed[pos + marker.len()..];
-            let name: String = after
-                .chars()
-                .take_while(|c| c.is_alphanumeric() || *c == '_')
-                .collect();
-            if !name.is_empty() {
-                return name;
-            }
-        }
-    }
+    let mut function_markers = markers.function_markers().iter();
+    function_markers
+        .find_map(|marker| name_after(trimmed, marker))
+        .or_else(|| name_before_paren(trimmed))
+        .unwrap_or_else(|| "<anonymous>".to_string())
+}
 
-    // C-family heuristic: name is the token before '('
-    if let Some(paren_pos) = trimmed.find('(') {
-        let before = trimmed[..paren_pos].trim();
-        if let Some(name) = before.split_whitespace().next_back() {
-            let name = name.trim_start_matches('*');
-            if !name.is_empty() {
-                return name.to_string();
-            }
-        }
-    }
+/// The identifier that follows `marker` in a declaration, if any.
+fn name_after(trimmed: &str, marker: &str) -> Option<String> {
+    let after = &trimmed[trimmed.find(marker)? + marker.len()..];
+    let name: String = after
+        .chars()
+        .take_while(|c| c.is_alphanumeric() || *c == '_')
+        .collect();
+    (!name.is_empty()).then_some(name)
+}
 
-    "<anonymous>".to_string()
+/// C-family heuristic: the name is the token before the first `(`.
+fn name_before_paren(trimmed: &str) -> Option<String> {
+    let before = trimmed[..trimmed.find('(')?].trim();
+    let name = before.split_whitespace().next_back()?;
+    let name = name.trim_start_matches('*');
+    (!name.is_empty()).then(|| name.to_string())
 }
 
 /// Whether the `=` at `pos` stands alone, rather than being part of an
@@ -161,6 +194,8 @@ struct BodyScan {
     paren_depth: isize,
     found_open: bool,
     expression_body: bool,
+    /// The declaration ended in `;` before any body: there is none.
+    declaration_only: bool,
 }
 
 impl BodyScan {
@@ -183,6 +218,8 @@ impl BodyScan {
                 _ => {}
             }
         }
+        self.declaration_only =
+            !self.expression_body && self.outside_signature() && masked.trim_end().ends_with(';');
     }
 
     /// Before the body and outside the parameter list, where a `=` is a
@@ -193,7 +230,9 @@ impl BodyScan {
 
     /// Whether the body ends at the line just read, given the one after it.
     fn ends(&self, next: Option<&(usize, &str)>, base_indent: usize) -> bool {
-        if self.expression_body {
+        if self.declaration_only {
+            true
+        } else if self.expression_body {
             self.brace_depth <= 0 && !continues_expression(next, base_indent)
         } else {
             self.found_open && self.brace_depth == 0
@@ -213,6 +252,7 @@ fn find_function_body<'a>(
     code_lines: &[(usize, &'a str)],
     start: usize,
     line_comments: &[&str],
+    lifetimes: bool,
 ) -> (Vec<(usize, &'a str)>, usize) {
     let mut scan = BodyScan::default();
     let base_indent = indent_level(code_lines[start].1);
@@ -223,7 +263,11 @@ fn find_function_body<'a>(
         let (jidx, jline) = code_lines[j];
         func_code_lines.push((jidx, jline));
 
-        let masked = mask_strings(jline, line_comments);
+        let masked = if lifetimes {
+            mask_strings(&without_lifetimes(jline), line_comments)
+        } else {
+            mask_strings(jline, line_comments)
+        };
         scan.read(&masked, j == start || may_introduce_body(&masked));
         if scan.ends(code_lines.get(j + 1), base_indent) {
             break;
@@ -231,7 +275,49 @@ fn find_function_body<'a>(
         j += 1;
     }
 
+    if scan.declaration_only {
+        func_code_lines.clear();
+    }
     (func_code_lines, j)
+}
+
+/// Blank the quote of each lifetime (`'a`, `'static`) and loop label, so
+/// that masking does not take it for the start of a character literal and
+/// hide the rest of the line. Character literals are left as they are.
+fn without_lifetimes(line: &str) -> String {
+    let mut bytes = line.as_bytes().to_vec();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] != b'\'' {
+            i += 1;
+            continue;
+        }
+        let rest = &bytes[i + 1..];
+        let name = rest
+            .iter()
+            .take_while(|b| b.is_ascii_alphanumeric() || **b == b'_')
+            .count();
+        if name > 0 && rest.get(name) != Some(&b'\'') {
+            bytes[i] = b' ';
+            i += 1 + name;
+        } else {
+            i += 1 + literal_len(rest);
+        }
+    }
+    String::from_utf8(bytes).unwrap_or_else(|_| line.to_string())
+}
+
+/// Length of the character literal whose opening quote precedes `rest`,
+/// closing quote included; 0 when it does not close nearby.
+fn literal_len(rest: &[u8]) -> usize {
+    // An escape may hold a quote (`'\''`) and runs as long as `'\u{10FFFF}'`.
+    let (skip, reach) = if rest.first() == Some(&b'\\') {
+        (2, 12)
+    } else {
+        (1, 5)
+    };
+    let close = rest.iter().take(reach).skip(skip).position(|b| *b == b'\'');
+    close.map_or(0, |at| skip + at + 1)
 }
 
 /// Detect function boundaries and return their bodies.
@@ -249,7 +335,9 @@ pub fn detect_function_bodies<'a>(
             markers,
             |trimmed| is_function_declaration(trimmed, markers),
             |start| {
-                let (body, end) = find_function_body(code_lines, start, markers.line_comments());
+                let lifetimes = markers.function_syntax() == FunctionSyntax::KeywordWithLifetimes;
+                let (body, end) =
+                    find_function_body(code_lines, start, markers.line_comments(), lifetimes);
                 (body, end + 1)
             },
         )
@@ -285,11 +373,14 @@ fn detect_with<'a>(
             continue;
         }
         let (body, next) = body_at(i);
-        functions.push(FunctionBody {
-            name: extract_function_name(trimmed, markers),
-            start_line: line_idx + 1,
-            code_lines: body,
-        });
+        // A declaration without a body is no function to measure.
+        if !body.is_empty() {
+            functions.push(FunctionBody {
+                name: extract_function_name(trimmed, markers),
+                start_line: line_idx + 1,
+                code_lines: body,
+            });
+        }
         i = next;
     }
     functions
