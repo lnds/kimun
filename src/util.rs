@@ -12,6 +12,7 @@ use std::time::SystemTime;
 
 use crate::loc::counter::{LineKind, classify_reader};
 use crate::loc::language::LanguageSpec;
+use crate::test_blocks::production_kinds;
 
 /// Lines of source code with per-line kind classification (blank/comment/code).
 pub type ClassifiedSource = (Vec<String>, Vec<LineKind>);
@@ -114,8 +115,13 @@ pub fn mask_strings(line: &str, line_comments: &[&str]) -> String {
 
 /// Read a source file, check for binary content, and classify lines.
 /// Returns None for binary files. On success returns the split lines
-/// and the per-line classification.
-pub fn read_and_classify(path: &Path, spec: &LanguageSpec) -> io::Result<Option<ClassifiedSource>> {
+/// and the per-line classification. With `exclude_tests`, the lines of
+/// inline test blocks come back as blanks.
+pub fn read_and_classify(
+    path: &Path,
+    spec: &LanguageSpec,
+    exclude_tests: bool,
+) -> io::Result<Option<ClassifiedSource>> {
     let file = File::open(path)?;
     let mut reader = BufReader::new(file);
 
@@ -128,6 +134,7 @@ pub fn read_and_classify(path: &Path, spec: &LanguageSpec) -> io::Result<Option<
     let normalized = content.replace("\r\n", "\n");
     let lines: Vec<String> = normalized.lines().map(String::from).collect();
     let kinds = classify_reader(normalized.as_bytes(), spec);
+    let kinds = production_kinds(&lines, kinds, spec, exclude_tests);
 
     Ok(Some((lines, kinds)))
 }

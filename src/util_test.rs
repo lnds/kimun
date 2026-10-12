@@ -66,3 +66,18 @@ fn mask_strings_comment_marker_inside_string() {
         r#"x = "          "; if y"#
     );
 }
+
+#[test]
+fn read_and_classify_blanks_inline_tests_when_they_are_excluded() {
+    let (_dir, path) = crate::test_blocks::tests::source_with_test_module();
+    let spec = crate::loc::language::detect(&path).unwrap();
+    let code = |exclude_tests| {
+        let (lines, kinds) = read_and_classify(&path, spec, exclude_tests)
+            .unwrap()
+            .unwrap();
+        assert_eq!(lines.len(), kinds.len());
+        kinds.iter().filter(|k| **k == LineKind::Code).count()
+    };
+    assert_eq!(code(true), 3);
+    assert_eq!(code(false), 14);
+}

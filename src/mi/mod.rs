@@ -27,31 +27,46 @@ use crate::walk::WalkConfig;
 use analyzer::compute_mi;
 use report::{FileMIMetrics, print_json, print_report, print_short, print_terse};
 
-fn analyze_file(path: &Path, spec: &LanguageSpec) -> Result<Option<FileMIMetrics>, Box<dyn Error>> {
-    let (lines, kinds) = match read_and_classify(path, spec)? {
-        Some(v) => v,
-        None => return Ok(None),
-    };
-    let code_lines = kinds.iter().filter(|k| **k == LineKind::Code).count();
+/// What either variant of the index is computed from.
+pub(crate) struct Inputs {
+    pub volume: f64,
+    pub complexity: usize,
+    pub code_lines: usize,
+    pub comment_lines: usize,
+}
 
-    let volume = match crate::hal::analyze_content(&lines, &kinds, spec) {
-        Some(h) => h.volume,
-        None => return Ok(None),
+/// Read a file into the inputs of the index. `None` for a binary file and
+/// for one without Halstead or cyclomatic metrics.
+pub(crate) fn inputs(
+    path: &Path,
+    spec: &LanguageSpec,
+    exclude_tests: bool,
+) -> Result<Option<Inputs>, Box<dyn Error>> {
+    let Some((lines, kinds)) = read_and_classify(path, spec, exclude_tests)? else {
+        return Ok(None);
     };
+    let count = |kind| kinds.iter().filter(|k| **k == kind).count();
+    let volume = crate::hal::analyze_content(&lines, &kinds, spec).map(|h| h.volume);
+    let complexity =
+        crate::cycom::analyze_content(&lines, &kinds, spec).map(|c| c.total_complexity);
+    Ok(volume.zip(complexity).map(|(volume, complexity)| Inputs {
+        volume,
+        complexity,
+        code_lines: count(LineKind::Code),
+        comment_lines: count(LineKind::Comment),
+    }))
+}
 
-    let complexity = match crate::cycom::analyze_content(&lines, &kinds, spec) {
-        Some(c) => c.total_complexity,
-        None => return Ok(None),
+fn analyze_file(
+    path: &Path,
+    spec: &LanguageSpec,
+    exclude_tests: bool,
+) -> Result<Option<FileMIMetrics>, Box<dyn Error>> {
+    let Some(of) = inputs(path, spec, exclude_tests)? else {
+        return Ok(None);
     };
-
-    // compute_mi returns None only if code_lines==0, volume<=0, or complexity==0.
-    // These should not occur when hal/cycom returned valid results, but guard anyway.
-    let metrics = match compute_mi(volume, complexity, code_lines) {
-        Some(m) => m,
-        None => return Ok(None),
-    };
-
-    Ok(Some(FileMIMetrics {
+    let metrics = compute_mi(of.volume, of.complexity, of.code_lines);
+    Ok(metrics.map(|metrics| FileMIMetrics {
         path: path.to_path_buf(),
         language: spec.name.to_string(),
         metrics,

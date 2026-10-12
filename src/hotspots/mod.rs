@@ -33,21 +33,16 @@ fn compute_complexity(
     file_path: &Path,
     spec: &crate::loc::language::LanguageSpec,
     metric: &str,
+    exclude_tests: bool,
 ) -> Result<Option<usize>, Box<dyn Error>> {
-    match metric {
-        "cycom" => match crate::cycom::analyze_file(file_path, spec)? {
-            Some(c) => Ok(Some(c.total_complexity)),
-            None => Ok(None),
-        },
-        "cogcom" => match crate::cogcom::analyze_file(file_path, spec)? {
-            Some(c) => Ok(Some(c.total_complexity)),
-            None => Ok(None),
-        },
-        _ => match crate::indent::analyze_file(file_path, spec)? {
-            Some(m) => Ok(Some(m.total_indent)),
-            None => Ok(None),
-        },
-    }
+    Ok(match metric {
+        "cycom" => crate::cycom::analyze_file(file_path, spec, exclude_tests)?
+            .map(|file| file.total_complexity),
+        "cogcom" => crate::cogcom::analyze_file(file_path, spec, exclude_tests)?
+            .map(|file| file.total_complexity),
+        _ => crate::indent::analyze_file(file_path, spec, exclude_tests)?
+            .map(|file| file.total_indent),
+    })
 }
 
 /// Identify hotspot files by combining git change frequency with code
@@ -81,6 +76,9 @@ pub fn run(
 
     let (walk_root, walk_prefix) = git_repo.walk_prefix(cfg.path)?;
 
+    let exclude_tests = cfg.exclude_tests();
+    let complexity_of =
+        |path: &Path, spec| compute_complexity(path, spec, complexity_metric, exclude_tests);
     let mut results: Vec<FileHotspot> = Vec::new();
 
     for (file_path, spec) in walk::source_files(&walk_root, cfg.exclude_tests(), cfg.filter) {
@@ -93,7 +91,7 @@ pub fn run(
         };
 
         // Compute complexity (only for files with git history)
-        let complexity = match compute_complexity(&file_path, spec, complexity_metric) {
+        let complexity = match complexity_of(&file_path, spec) {
             Ok(Some(c)) => c,
             Ok(None) => continue,
             Err(err) => {

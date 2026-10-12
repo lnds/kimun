@@ -170,7 +170,7 @@ fn analyze_file_returns_none_for_hal_unsupported() {
     let path = dir.path().join("data.json");
     fs::write(&path, "{\"key\": \"value\"}\n").unwrap();
     let spec = detect(&path).unwrap();
-    let result = analyze_file(&path, spec).unwrap();
+    let result = analyze_file(&path, spec, false).unwrap();
     assert!(
         result.is_none(),
         "JSON file should return None (hal unsupported)"
@@ -183,7 +183,7 @@ fn analyze_file_returns_none_for_empty_code() {
     let path = dir.path().join("empty.rs");
     fs::write(&path, "// only a comment\n").unwrap();
     let spec = detect(&path).unwrap();
-    let result = analyze_file(&path, spec).unwrap();
+    let result = analyze_file(&path, spec, false).unwrap();
     assert!(
         result.is_none(),
         "file with no code lines should return None"
@@ -200,7 +200,7 @@ fn analyze_file_produces_valid_mi() {
     )
     .unwrap();
     let spec = detect(&path).unwrap();
-    let result = analyze_file(&path, spec)
+    let result = analyze_file(&path, spec, false)
         .unwrap()
         .expect("should produce MI");
     assert!(
@@ -244,4 +244,15 @@ fn run_terse_format() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     run(&cfg, OutputMode::Terse, 20, "mi").unwrap();
+}
+
+#[test]
+fn analyze_file_leaves_inline_tests_out_when_they_are_excluded() {
+    let (_dir, path) = crate::test_blocks::tests::source_with_test_module();
+    let spec = detect(&path).unwrap();
+    let production = analyze_file(&path, spec, true).unwrap().unwrap();
+    let everything = analyze_file(&path, spec, false).unwrap().unwrap();
+    assert_eq!(production.metrics.loc, 3);
+    assert_eq!(everything.metrics.loc, 14);
+    assert!(production.metrics.cyclomatic_complexity < everything.metrics.cyclomatic_complexity);
 }

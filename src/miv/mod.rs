@@ -19,41 +19,22 @@ use std::cmp::Reverse;
 use std::error::Error;
 use std::path::Path;
 
-use crate::loc::counter::LineKind;
 use crate::loc::language::LanguageSpec;
 use crate::report_helpers;
-use crate::util::read_and_classify;
 use crate::walk::WalkConfig;
 use analyzer::compute_mi;
 use report::{FileMIMetrics, print_json, print_report, print_short, print_terse};
 
-fn analyze_file(path: &Path, spec: &LanguageSpec) -> Result<Option<FileMIMetrics>, Box<dyn Error>> {
-    let (lines, kinds) = match read_and_classify(path, spec)? {
-        Some(v) => v,
-        None => return Ok(None),
+fn analyze_file(
+    path: &Path,
+    spec: &LanguageSpec,
+    exclude_tests: bool,
+) -> Result<Option<FileMIMetrics>, Box<dyn Error>> {
+    let Some(of) = crate::mi::inputs(path, spec, exclude_tests)? else {
+        return Ok(None);
     };
-
-    let code_lines = kinds.iter().filter(|k| **k == LineKind::Code).count();
-    let comment_lines = kinds.iter().filter(|k| **k == LineKind::Comment).count();
-
-    let volume = match crate::hal::analyze_content(&lines, &kinds, spec) {
-        Some(h) => h.volume,
-        None => return Ok(None),
-    };
-
-    let complexity = match crate::cycom::analyze_content(&lines, &kinds, spec) {
-        Some(c) => c.total_complexity,
-        None => return Ok(None),
-    };
-
-    // compute_mi returns None only if code_lines==0, volume<=0, or complexity==0.
-    // These should not occur when hal/cycom returned valid results, but guard anyway.
-    let metrics = match compute_mi(volume, complexity, code_lines, comment_lines) {
-        Some(m) => m,
-        None => return Ok(None),
-    };
-
-    Ok(Some(FileMIMetrics {
+    let metrics = compute_mi(of.volume, of.complexity, of.code_lines, of.comment_lines);
+    Ok(metrics.map(|metrics| FileMIMetrics {
         path: path.to_path_buf(),
         language: spec.name.to_string(),
         metrics,

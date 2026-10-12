@@ -189,9 +189,9 @@ fn dispatch_smells(
             let git_repo =
                 git::GitRepo::open(t).map_err(|e| format!("not a git repository: {e}"))?;
             let changed = git_repo.files_changed_since(git_ref)?;
-            smells::run_on_files(&changed, output, top, max_lines, max_params)
+            smells::run_on_files(&changed, output, top, max_lines, max_params, !include_tests)
         } else if !files.is_empty() {
-            smells::run_on_files(&files, output, top, max_lines, max_params)
+            smells::run_on_files(&files, output, top, max_lines, max_params, !include_tests)
         } else {
             let cfg = WalkConfig::new(t, include_tests, &filter);
             smells::run(&cfg, output, top, max_lines, max_params)

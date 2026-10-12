@@ -199,6 +199,12 @@ Por defecto, `km dups` omite los archivos que siguen las convenciones habituales
 
 Usa `--include-tests` para analizar también los archivos de test.
 
+#### Tests en línea
+
+Rust guarda los tests dentro del archivo fuente, bajo `#[cfg(test)]`. Todo comando que mide código deja esos ítems fuera junto con los archivos de test: `dups`, `indent`, `hal`, `cycom`, `cogcom`, `mi`, `miv`, `smells`, `hotspots`, `score` y las métricas de `report`. Solo se omite el ítem bajo el atributo, así que el código que sigue a un módulo de tests sí se mide. `--include-tests` los trae de vuelta.
+
+`km loc` y los conteos de líneas de `km report` los siguen contando: son líneas del archivo, tal como las cuenta `cloc`.
+
 ### `km indent` -- Complejidad por indentación
 
 Mide la complejidad de cada archivo a partir de su indentación: la desviación estándar de las profundidades de indentación y la profundidad máxima. Una desviación estándar más alta sugiere un flujo de control más complejo.
@@ -1101,7 +1107,7 @@ Calcula un puntaje general de salud del código para el proyecto, con una nota q
 
 > **Cambio incompatible en v0.14:** el modelo de puntaje por defecto pasó de MI + complejidad ciclomática (6 dimensiones) a complejidad cognitiva (5 dimensiones). Usa `--model legacy` para recuperar el comportamiento de v0.13.
 
-Los archivos que no son código (Markdown, TOML, JSON, etc.) se excluyen automáticamente. Los bloques de test en línea (`#[cfg(test)]`) se excluyen del análisis de duplicación: el ítem bajo el atributo y nada más, así que el código que sigue a un módulo de tests sí se mide.
+Los archivos que no son código (Markdown, TOML, JSON, etc.) se excluyen automáticamente. Los bloques de test en línea (`#[cfg(test)]`) se excluyen de todas las dimensiones, ver [Tests en línea](#tests-en-línea).
 
 ```bash
 km score [path]

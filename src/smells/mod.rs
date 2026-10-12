@@ -30,13 +30,14 @@ fn analyze_file(
     spec: &LanguageSpec,
     max_lines: usize,
     max_params: usize,
+    exclude_tests: bool,
 ) -> Result<Option<FileSmellMetrics>, Box<dyn Error>> {
     let markers = match markers_for(spec.name) {
         Some(m) => m,
         None => return Ok(None),
     };
 
-    let (lines, kinds) = match read_and_classify(path, spec)? {
+    let (lines, kinds) = match read_and_classify(path, spec, exclude_tests)? {
         Some(v) => v,
         None => return Ok(None),
     };
@@ -65,6 +66,7 @@ pub fn run_on_files(
     top: usize,
     max_lines: usize,
     max_params: usize,
+    exclude_tests: bool,
 ) -> Result<(), Box<dyn Error>> {
     let mut results: Vec<FileSmellMetrics> = Vec::new();
 
@@ -73,7 +75,7 @@ pub fn run_on_files(
             Some(s) => s,
             None => continue,
         };
-        match analyze_file(path, spec, max_lines, max_params) {
+        match analyze_file(path, spec, max_lines, max_params, exclude_tests) {
             Ok(Some(m)) => results.push(m),
             Ok(None) => {}
             Err(e) => eprintln!("warning: {}: {e}", path.display()),
@@ -102,8 +104,9 @@ pub fn run(
     max_lines: usize,
     max_params: usize,
 ) -> Result<(), Box<dyn Error>> {
-    let mut results =
-        cfg.collect_analysis(|path, spec| analyze_file(path, spec, max_lines, max_params));
+    let mut results = cfg.collect_analysis(|path, spec, exclude_tests| {
+        analyze_file(path, spec, max_lines, max_params, exclude_tests)
+    });
 
     // Sort by smell count descending
     results.sort_by_key(|r| Reverse(r.total));

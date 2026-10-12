@@ -41,13 +41,14 @@ pub(crate) fn analyze_content(
 pub(crate) fn analyze_file(
     path: &Path,
     spec: &LanguageSpec,
+    exclude_tests: bool,
 ) -> Result<Option<FileCycomMetrics>, Box<dyn Error>> {
     let cm = match markers_for(spec.name) {
         Some(m) => m,
         None => return Ok(None),
     };
 
-    let (lines, kinds) = match read_and_classify(path, spec)? {
+    let (lines, kinds) = match read_and_classify(path, spec, exclude_tests)? {
         Some(v) => v,
         None => return Ok(None),
     };

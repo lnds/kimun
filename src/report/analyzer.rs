@@ -12,6 +12,7 @@ use crate::indent;
 use crate::loc::counter::LineKind;
 use crate::mi;
 use crate::miv;
+use crate::test_blocks::production_kinds;
 use crate::util::read_and_classify;
 
 use super::data::{CycomEntry, HalsteadEntry, IndentEntry, MiVerifysoftEntry, MiVisualStudioEntry};
@@ -46,8 +47,9 @@ pub struct FileReportData {
 pub fn analyze_file_for_report(
     file_path: &Path,
     spec: &crate::loc::language::LanguageSpec,
+    exclude_tests: bool,
 ) -> Option<FileReportData> {
-    let (lines, kinds) = match read_and_classify(file_path, spec) {
+    let (lines, kinds) = match read_and_classify(file_path, spec, false) {
         Ok(Some(v)) => v,
         Ok(None) => return None,
         Err(e) => {
@@ -59,6 +61,10 @@ pub fn analyze_file_for_report(
     let blank = kinds.iter().filter(|k| **k == LineKind::Blank).count();
     let comment_lines = kinds.iter().filter(|k| **k == LineKind::Comment).count();
     let code_lines = kinds.iter().filter(|k| **k == LineKind::Code).count();
+
+    // The line counts above are those of `km loc`; the rest measures
+    // production code.
+    let kinds = production_kinds(&lines, kinds, spec, exclude_tests);
 
     let dup_normalized = crate::dups::normalize_content(&lines, &kinds);
 

@@ -5,6 +5,7 @@
 
 use crate::deps::rust_literals::code_and_strings;
 use crate::loc::counter::LineKind;
+use crate::loc::language::LanguageSpec;
 
 const ATTRIBUTE: &str = "#[cfg(test)]";
 
@@ -80,6 +81,21 @@ pub fn without_test_blocks(lines: &[String], kinds: &[LineKind]) -> Vec<LineKind
     kinds.iter().zip(&mask).map(demote).collect()
 }
 
+/// `kinds` as an analysis reads them: without the inline test blocks when
+/// it leaves tests out. Only Rust keeps tests inside a source file.
+pub fn production_kinds(
+    lines: &[String],
+    kinds: Vec<LineKind>,
+    spec: &LanguageSpec,
+    exclude_tests: bool,
+) -> Vec<LineKind> {
+    if exclude_tests && spec.name == "Rust" {
+        without_test_blocks(lines, &kinds)
+    } else {
+        kinds
+    }
+}
+
 #[cfg(test)]
 #[path = "test_blocks_test.rs"]
-mod tests;
+pub(crate) mod tests;
