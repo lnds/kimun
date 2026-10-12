@@ -60,6 +60,15 @@ pub struct BlameHunkInfo {
     pub lines: usize,
 }
 
+/// Name and email of a signature, `unknown` for what it lacks or what is
+/// not UTF-8.
+fn name_and_email(sig: Option<&git2::Signature<'_>>) -> (String, String) {
+    let text = |field: Option<Result<&str, git2::Error>>| {
+        field.and_then(Result::ok).unwrap_or("unknown").to_string()
+    };
+    (text(sig.map(|s| s.name())), text(sig.map(|s| s.email())))
+}
+
 /// Per-author blame contribution for a single file.
 pub struct BlameInfo {
     /// Author display name from git signature.
@@ -217,11 +226,10 @@ impl GitRepo {
 
         for hunk in blame.iter() {
             let sig = hunk.final_signature();
-            let email = sig.email().unwrap_or("unknown").to_string();
-            let author = sig.name().unwrap_or("unknown").to_string();
+            let (author, email) = name_and_email(sig.as_ref());
             // Use the signature timestamp directly — avoids an O(1) git
             // object lookup per hunk that would otherwise be O(N) total.
-            let commit_time = sig.when().seconds();
+            let commit_time = sig.map_or(0, |s| s.when().seconds());
             let lines = hunk.lines_in_hunk();
 
             // Use name+email as key to avoid collisions when multiple
@@ -256,10 +264,10 @@ impl GitRepo {
         let result = blame
             .iter()
             .map(|hunk| {
-                let sig = hunk.final_signature();
+                let (author, email) = name_and_email(hunk.final_signature().as_ref());
                 BlameHunkInfo {
-                    author: sig.name().unwrap_or("unknown").to_string(),
-                    email: sig.email().unwrap_or("unknown").to_string(),
+                    author,
+                    email,
                     start_line: hunk.final_start_line(),
                     lines: hunk.lines_in_hunk(),
                 }
@@ -274,7 +282,7 @@ impl GitRepo {
         let mut authors = HashSet::new();
 
         self.walk_commits(since, |commit| {
-            if let Some(email) = commit.author().email() {
+            if let Ok(email) = commit.author().email() {
                 authors.insert(email.to_string());
             }
             Ok(ControlFlow::Continue(()))
@@ -339,7 +347,7 @@ impl GitRepo {
         for entry in tree.iter() {
             let name = entry
                 .name()
-                .ok_or_else(|| format!("non-UTF-8 entry in tree: {:?}", entry.id()))?;
+                .map_err(|_| format!("non-UTF-8 entry in tree: {:?}", entry.id()))?;
             let path = dest.join(name);
 
             match entry.kind() {
