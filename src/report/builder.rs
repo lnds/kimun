@@ -107,7 +107,7 @@ pub fn build_report(
         {
             continue;
         }
-        let result = match analyze_file_for_report(&file_path, spec) {
+        let result = match analyze_file_for_report(&file_path, spec, cfg.exclude_tests()) {
             Some(r) => r,
             None => continue,
         };

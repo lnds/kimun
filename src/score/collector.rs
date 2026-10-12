@@ -13,7 +13,6 @@ use crate::hal;
 use crate::indent;
 use crate::loc::counter::LineKind;
 use crate::miv;
-use crate::test_blocks::without_test_blocks;
 use crate::util::read_and_classify;
 
 use super::ScoringModel;
@@ -48,7 +47,7 @@ pub fn analyze_single_file(
     exclude_tests: bool,
     model: &ScoringModel,
 ) -> Option<SingleFileResult> {
-    let (lines, kinds) = match read_and_classify(file_path, spec) {
+    let (lines, kinds) = match read_and_classify(file_path, spec, exclude_tests) {
         Ok(Some(v)) => v,
         Ok(None) => return None,
         Err(e) => {
@@ -99,12 +98,7 @@ pub fn analyze_single_file(
         return None;
     }
 
-    let dup_kinds = if exclude_tests {
-        without_test_blocks(&lines, &kinds)
-    } else {
-        kinds
-    };
-    let normalized = dups::normalize_content(&lines, &dup_kinds);
+    let normalized = dups::normalize_content(&lines, &kinds);
     let normalized_count = normalized.len();
 
     Some(SingleFileResult {

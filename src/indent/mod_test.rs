@@ -122,7 +122,7 @@ fn analyze_file_returns_none_for_comment_only_file() {
     // A file with only comments has no code lines → analyze returns None
     fs::write(&path, "// This is a comment\n// Another comment\n").unwrap();
     let spec = detect(&path).unwrap();
-    let result = analyze_file(&path, spec).unwrap();
+    let result = analyze_file(&path, spec, false).unwrap();
     assert!(result.is_none(), "comment-only file should return None");
 }
 
@@ -164,4 +164,14 @@ fn run_terse_format() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     run(&cfg, OutputMode::Terse).unwrap();
+}
+
+#[test]
+fn analyze_file_leaves_inline_tests_out_when_they_are_excluded() {
+    let (_dir, path) = crate::test_blocks::tests::source_with_test_module();
+    let spec = detect(&path).unwrap();
+    let production = analyze_file(&path, spec, true).unwrap().unwrap();
+    let everything = analyze_file(&path, spec, false).unwrap().unwrap();
+    assert_eq!(production.code_lines, 3);
+    assert_eq!(everything.code_lines, 14);
 }

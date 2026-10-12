@@ -195,8 +195,10 @@ code for line counting.
 file, attribute included: to where its braces balance, or to its `;` or `,`
 when it has none. Comments and literals are read apart
 (`deps::rust_literals`). `without_test_blocks` turns those lines into
-`LineKind::Blank`. Used by `dups` and by the duplication dimension of `score`
-when tests are excluded; the code after a test module is still measured.
+`LineKind::Blank`, and `production_kinds` does so for a Rust file when tests
+are excluded. `util::read_and_classify` applies it, so every analyzer that
+reads through it measures production code; the code after a test module is
+still measured. `loc` and the line counts of `report` keep those lines.
 
 ### Module structure: `src/smells/`
 

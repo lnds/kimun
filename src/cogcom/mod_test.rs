@@ -158,7 +158,7 @@ fn analyze_file_returns_none_for_unsupported() {
     let path = dir.path().join("data.json");
     fs::write(&path, "{\"key\": \"value\"}\n").unwrap();
     let spec = detect(&path).unwrap();
-    let result = analyze_file(&path, spec).unwrap();
+    let result = analyze_file(&path, spec, false).unwrap();
     assert!(
         result.is_none(),
         "JSON has no cognitive markers, should return None"
@@ -171,7 +171,7 @@ fn analyze_file_returns_none_for_comment_only() {
     let path = dir.path().join("comments.rs");
     fs::write(&path, "// just a comment\n// another\n").unwrap();
     let spec = detect(&path).unwrap();
-    let result = analyze_file(&path, spec).unwrap();
+    let result = analyze_file(&path, spec, false).unwrap();
     // A file with only comments has no functions, so analyze returns None
     assert!(
         result.is_none(),
@@ -203,4 +203,15 @@ fn run_terse_format() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     run(&cfg, OutputMode::Terse, 0, 20, false, "total").unwrap();
+}
+
+#[test]
+fn analyze_file_leaves_inline_tests_out_when_they_are_excluded() {
+    let (_dir, path) = crate::test_blocks::tests::source_with_test_module();
+    let spec = crate::loc::language::detect(&path).unwrap();
+    let production = analyze_file(&path, spec, true).unwrap().unwrap();
+    let everything = analyze_file(&path, spec, false).unwrap().unwrap();
+    assert_eq!(production.function_count, 1);
+    assert_eq!(everything.function_count, 2);
+    assert!(production.total_complexity < everything.total_complexity);
 }

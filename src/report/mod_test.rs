@@ -306,3 +306,17 @@ fn run_terse_format() {
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     run(&cfg, OutputMode::Terse, 20, 6).unwrap();
 }
+
+#[test]
+fn inline_tests_stay_in_the_line_counts_and_out_of_the_metrics() {
+    let (_dir, path) = crate::test_blocks::tests::source_with_test_module();
+    let spec = crate::loc::language::detect(&path).unwrap();
+    let production = analyzer::analyze_file_for_report(&path, spec, true).unwrap();
+    let everything = analyzer::analyze_file_for_report(&path, spec, false).unwrap();
+    assert_eq!(production.code_lines, 14);
+    assert_eq!(everything.code_lines, 14);
+    assert_eq!(production.cycom.unwrap().functions, 1);
+    assert_eq!(everything.cycom.unwrap().functions, 2);
+    assert_eq!(production.indent.unwrap().code_lines, 3);
+    assert!(production.dup_normalized.len() < everything.dup_normalized.len());
+}

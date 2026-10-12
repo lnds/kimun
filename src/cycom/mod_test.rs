@@ -194,3 +194,14 @@ fn run_github_format() {
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     run(&cfg, OutputMode::Github, 1, 20, false, "total").unwrap();
 }
+
+#[test]
+fn analyze_file_leaves_inline_tests_out_when_they_are_excluded() {
+    let (_dir, path) = crate::test_blocks::tests::source_with_test_module();
+    let spec = crate::loc::language::detect(&path).unwrap();
+    let production = analyze_file(&path, spec, true).unwrap().unwrap();
+    let everything = analyze_file(&path, spec, false).unwrap().unwrap();
+    assert_eq!(production.function_count, 1);
+    assert_eq!(everything.function_count, 2);
+    assert!(production.total_complexity < everything.total_complexity);
+}

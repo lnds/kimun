@@ -21,7 +21,9 @@ fn finds_long_function_with_correct_count() {
     writeln!(f, "}}").unwrap();
 
     let spec = crate::loc::language::detect(&file).unwrap();
-    let result = super::analyze_file(&file, spec, 50, 4).unwrap().unwrap();
+    let result = super::analyze_file(&file, spec, 50, 4, false)
+        .unwrap()
+        .unwrap();
 
     assert!(
         result.total >= 1,
@@ -51,7 +53,9 @@ fn finds_todo_debt_in_comments() {
     writeln!(f, "}}").unwrap();
 
     let spec = crate::loc::language::detect(&file).unwrap();
-    let result = super::analyze_file(&file, spec, 50, 4).unwrap().unwrap();
+    let result = super::analyze_file(&file, spec, 50, 4, false)
+        .unwrap()
+        .unwrap();
 
     let todos: Vec<_> = result
         .smells
@@ -75,7 +79,9 @@ fn finds_long_params_single_line() {
     writeln!(f, "}}").unwrap();
 
     let spec = crate::loc::language::detect(&file).unwrap();
-    let result = super::analyze_file(&file, spec, 50, 4).unwrap().unwrap();
+    let result = super::analyze_file(&file, spec, 50, 4, false)
+        .unwrap()
+        .unwrap();
 
     let params: Vec<_> = result
         .smells
@@ -104,7 +110,9 @@ fn finds_long_params_multiline() {
     writeln!(f, "}}").unwrap();
 
     let spec = crate::loc::language::detect(&file).unwrap();
-    let result = super::analyze_file(&file, spec, 50, 4).unwrap().unwrap();
+    let result = super::analyze_file(&file, spec, 50, 4, false)
+        .unwrap()
+        .unwrap();
 
     let params: Vec<_> = result
         .smells
@@ -127,7 +135,7 @@ fn no_smells_for_clean_file() {
     writeln!(f, "}}").unwrap();
 
     let spec = crate::loc::language::detect(&file).unwrap();
-    let result = super::analyze_file(&file, spec, 50, 4).unwrap();
+    let result = super::analyze_file(&file, spec, 50, 4, false).unwrap();
     assert!(result.is_none(), "clean file should have no smells");
 }
 
@@ -156,7 +164,7 @@ fn doc_comments_with_use_not_false_positive() {
     writeln!(f, "fn main() {{}}").unwrap();
 
     let spec = crate::loc::language::detect(&file).unwrap();
-    let result = super::analyze_file(&file, spec, 50, 4).unwrap();
+    let result = super::analyze_file(&file, spec, 50, 4, false).unwrap();
     // Should not detect commented-out code for doc comments with `use`
     if let Some(ref metrics) = result {
         let commented: Vec<_> = metrics
@@ -183,13 +191,13 @@ fn run_on_files_with_smell() {
     }
     writeln!(f, "}}").unwrap();
 
-    let result = super::run_on_files(&[file], OutputMode::Table, 20, 50, 4);
+    let result = super::run_on_files(&[file], OutputMode::Table, 20, 50, 4, false);
     assert!(result.is_ok());
 }
 
 #[test]
 fn run_on_files_empty_list() {
-    let result = super::run_on_files(&[], OutputMode::Table, 20, 50, 4);
+    let result = super::run_on_files(&[], OutputMode::Table, 20, 50, 4, false);
     assert!(result.is_ok());
 }
 
@@ -199,20 +207,20 @@ fn run_on_files_skips_unknown_extension() {
     let file = dir.path().join("data.xyz");
     std::fs::write(&file, "hello world").unwrap();
 
-    let result = super::run_on_files(&[file], OutputMode::Table, 20, 50, 4);
+    let result = super::run_on_files(&[file], OutputMode::Table, 20, 50, 4, false);
     assert!(result.is_ok());
 }
 
 #[test]
 fn run_on_files_json_empty() {
-    let result = super::run_on_files(&[], OutputMode::Json, 20, 50, 4);
+    let result = super::run_on_files(&[], OutputMode::Json, 20, 50, 4, false);
     assert!(result.is_ok());
 }
 
 #[test]
 fn run_on_files_nonexistent_path_skips() {
     let paths = vec![PathBuf::from("/nonexistent/path/fake.rs")];
-    let result = super::run_on_files(&paths, OutputMode::Table, 20, 50, 4);
+    let result = super::run_on_files(&paths, OutputMode::Table, 20, 50, 4, false);
     assert!(
         result.is_ok(),
         "nonexistent files should be skipped, not panic"
@@ -230,7 +238,7 @@ fn run_on_files_github_format_with_smells() {
     }
     writeln!(f, "}}").unwrap();
 
-    let result = super::run_on_files(&[file], OutputMode::Github, 20, 50, 4);
+    let result = super::run_on_files(&[file], OutputMode::Github, 20, 50, 4, false);
     assert!(result.is_ok(), "github format should succeed");
 }
 
@@ -245,14 +253,14 @@ fn run_on_files_json_format_via_format_param() {
     }
     writeln!(f, "}}").unwrap();
 
-    let result = super::run_on_files(&[file], OutputMode::Json, 20, 50, 4);
+    let result = super::run_on_files(&[file], OutputMode::Json, 20, 50, 4, false);
     assert!(result.is_ok(), "json format param should succeed");
 }
 
 #[test]
 fn run_on_files_empty_json_format() {
     // json=false but format=Some("json") with empty list → print_json([])
-    let result = super::run_on_files(&[], OutputMode::Json, 20, 50, 4);
+    let result = super::run_on_files(&[], OutputMode::Json, 20, 50, 4, false);
     assert!(result.is_ok());
 }
 
@@ -280,7 +288,7 @@ fn analyze_file_returns_none_for_unsupported_language() {
     std::fs::write(&file, "{\"key\": \"value\"}\n").unwrap();
     let spec = crate::loc::language::detect(&file).unwrap();
     // JSON has no function detection markers → returns None
-    let result = super::analyze_file(&file, spec, 50, 4).unwrap();
+    let result = super::analyze_file(&file, spec, 50, 4, false).unwrap();
     assert!(result.is_none(), "JSON should have no markers, return None");
 }
 
@@ -337,6 +345,19 @@ fn run_on_files_codeclimate_format_with_smells() {
     }
     content.push_str("}\n");
     std::fs::write(&file, &content).unwrap();
-    let result = super::run_on_files(&[file], OutputMode::Codeclimate, 20, 50, 4);
+    let result = super::run_on_files(&[file], OutputMode::Codeclimate, 20, 50, 4, false);
     assert!(result.is_ok(), "codeclimate format on files should succeed");
+}
+
+#[test]
+fn smells_of_inline_tests_are_left_out_when_tests_are_excluded() {
+    let (_dir, file) = crate::test_blocks::tests::source_with_test_module();
+    let spec = crate::loc::language::detect(&file).unwrap();
+    let total = |exclude_tests| {
+        super::analyze_file(&file, spec, 50, 4, exclude_tests)
+            .unwrap()
+            .map_or(0, |found| found.total)
+    };
+    assert_eq!(total(true), 0);
+    assert!(total(false) > 0, "five parameters are a smell");
 }

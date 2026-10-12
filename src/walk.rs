@@ -182,12 +182,16 @@ impl<'a> WalkConfig<'a> {
         source_files(self.path, self.exclude_tests(), self.filter)
     }
 
-    /// Walk and analyze source files using this config.
+    /// Walk and analyze source files using this config. `f` is also told
+    /// whether tests are left out, for those a file keeps inside it.
     pub fn collect_analysis<T>(
         &self,
-        f: impl Fn(&Path, &LanguageSpec) -> Result<Option<T>, Box<dyn std::error::Error>>,
+        f: impl Fn(&Path, &LanguageSpec, bool) -> Result<Option<T>, Box<dyn std::error::Error>>,
     ) -> Vec<T> {
-        collect_analysis(self.path, self.exclude_tests(), self.filter, f)
+        let exclude_tests = self.exclude_tests();
+        collect_analysis(self.path, exclude_tests, self.filter, |path, spec| {
+            f(path, spec, exclude_tests)
+        })
     }
 }
 

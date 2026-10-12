@@ -791,3 +791,19 @@ fn changed_scope_maps_paths_when_analyzing_a_subdirectory() {
     assert!(msg.contains("lib/good.rs dropped"), "{msg}");
     assert!(!msg.contains("root.rs"), "{msg}");
 }
+
+#[test]
+fn a_file_is_scored_without_its_inline_tests_when_they_are_excluded() {
+    let (_dir, path) = crate::test_blocks::tests::source_with_test_module();
+    let spec = crate::loc::language::detect(&path).unwrap();
+    for model in [ScoringModel::Cognitive, ScoringModel::Legacy] {
+        let of = |exclude_tests| {
+            analyze_single_file(&path, spec, exclude_tests, &model)
+                .unwrap()
+                .metrics
+        };
+        assert_eq!(of(true).code_lines, 3);
+        assert_eq!(of(false).code_lines, 14);
+        assert!(of(true).halstead_effort < of(false).halstead_effort);
+    }
+}

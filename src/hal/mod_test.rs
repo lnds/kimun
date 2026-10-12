@@ -178,7 +178,7 @@ fn analyze_file_returns_none_for_unsupported_language() {
     let path = dir.path().join("data.json");
     fs::write(&path, "{\"key\": \"value\"}\n").unwrap();
     let spec = detect(&path).unwrap();
-    let result = analyze_file(&path, spec).unwrap();
+    let result = analyze_file(&path, spec, false).unwrap();
     assert!(
         result.is_none(),
         "JSON file should return None (hal unsupported)"
@@ -192,7 +192,7 @@ fn analyze_file_returns_none_for_comment_only_file() {
     let path = dir.path().join("comments_only.rs");
     fs::write(&path, "// just a comment\n// another comment\n").unwrap();
     let spec = detect(&path).unwrap();
-    let result = analyze_file(&path, spec).unwrap();
+    let result = analyze_file(&path, spec, false).unwrap();
     assert!(
         result.is_none(),
         "comment-only file should return None (no code lines)"
@@ -215,4 +215,13 @@ fn run_terse_format() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     run(&cfg, OutputMode::Terse, 20, "effort").unwrap();
+}
+
+#[test]
+fn analyze_file_leaves_inline_tests_out_when_they_are_excluded() {
+    let (_dir, path) = crate::test_blocks::tests::source_with_test_module();
+    let spec = crate::loc::language::detect(&path).unwrap();
+    let production = analyze_file(&path, spec, true).unwrap().unwrap();
+    let everything = analyze_file(&path, spec, false).unwrap().unwrap();
+    assert!(production.metrics.volume < everything.metrics.volume);
 }

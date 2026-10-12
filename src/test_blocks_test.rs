@@ -142,3 +142,55 @@ fn test_block_lines_become_blank() {
         ]
     );
 }
+
+/// A Rust source of three lines of code followed by a test module of
+/// eleven, which holds a function of five parameters and a nested branch.
+pub(crate) const WITH_TEST_MODULE: &str = "\
+pub fn double(x: u32) -> u32 {
+    x * 2
+}
+
+#[cfg(test)]
+mod tests {
+    fn sum(a: u32, b: u32, c: u32, d: u32, e: u32) -> u32 {
+        for n in 0..a {
+            if n > b {
+                return c + d + e;
+            }
+        }
+        0
+    }
+}
+";
+
+/// `WITH_TEST_MODULE` written to a file of a directory of its own.
+pub(crate) fn source_with_test_module() -> (tempfile::TempDir, std::path::PathBuf) {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("lib.rs");
+    std::fs::write(&path, WITH_TEST_MODULE).unwrap();
+    (dir, path)
+}
+
+fn code_lines_of(language_file: &str, exclude_tests: bool) -> usize {
+    let spec = crate::loc::language::detect(std::path::Path::new(language_file)).unwrap();
+    let lines: Vec<String> = WITH_TEST_MODULE.lines().map(String::from).collect();
+    let kinds = crate::loc::counter::classify_reader(WITH_TEST_MODULE.as_bytes(), spec);
+    production_kinds(&lines, kinds, spec, exclude_tests)
+        .iter()
+        .filter(|kind| **kind == LineKind::Code)
+        .count()
+}
+
+#[test]
+fn production_kinds_leave_the_test_module_out_only_when_asked() {
+    assert_eq!(code_lines_of("lib.rs", true), 3);
+    assert_eq!(code_lines_of("lib.rs", false), 14);
+}
+
+#[test]
+fn production_kinds_touch_no_other_language() {
+    assert_eq!(
+        code_lines_of("lib.kt", true),
+        code_lines_of("lib.kt", false)
+    );
+}

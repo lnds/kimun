@@ -177,6 +177,12 @@ By default, `km dups` skips files matching common test conventions:
 
 Use `--include-tests` to analyze test files as well.
 
+#### Inline tests
+
+Rust keeps tests inside the source file, under `#[cfg(test)]`. Every command that measures code leaves those items out along with the test files: `dups`, `indent`, `hal`, `cycom`, `cogcom`, `mi`, `miv`, `smells`, `hotspots`, `score` and the metrics of `report`. Only the item under the attribute is skipped, so the code after a test module is measured. `--include-tests` brings them back.
+
+`km loc` and the line counts of `km report` still count them: they are lines of the file, as `cloc` counts them.
+
 ### `km indent` -- Indentation complexity
 
 Measures indentation-based complexity per file: standard deviation of indentation depths and maximum depth. Higher stddev suggests more complex control flow.
@@ -1079,7 +1085,7 @@ Computes an overall code health score for the project, grading it from A++ (exce
 
 > **Breaking change in v0.14:** The default scoring model changed from MI + Cyclomatic Complexity (6 dimensions) to Cognitive Complexity (5 dimensions). Use `--model legacy` to restore v0.13 behavior.
 
-Non-code files (Markdown, TOML, JSON, etc.) are automatically excluded. Inline test blocks (`#[cfg(test)]`) are excluded from duplication analysis: the item under the attribute and nothing else, so the code after a test module is measured.
+Non-code files (Markdown, TOML, JSON, etc.) are automatically excluded. Inline test blocks (`#[cfg(test)]`) are excluded from every dimension, see [Inline tests](#inline-tests).
 
 ```bash
 km score [path]

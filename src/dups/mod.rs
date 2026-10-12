@@ -15,7 +15,6 @@ use std::path::Path;
 use crate::git::GitRepo;
 use crate::loc::counter::LineKind;
 use crate::loc::language::LanguageSpec;
-use crate::test_blocks::without_test_blocks;
 use crate::util::read_and_classify;
 use crate::walk::WalkConfig;
 use detector::{NormalizedFile, NormalizedLine, detect_duplicates};
@@ -45,16 +44,9 @@ pub(crate) fn normalize_file(
     spec: &LanguageSpec,
     exclude_tests: bool,
 ) -> Result<Option<NormalizedFile>, Box<dyn Error>> {
-    let (lines, kinds) = match read_and_classify(path, spec)? {
+    let (lines, kinds) = match read_and_classify(path, spec, exclude_tests)? {
         Some(v) => v,
         None => return Ok(None),
-    };
-
-    // Strip inline #[cfg(test)] blocks when excluding tests (Rust-specific)
-    let kinds = if exclude_tests {
-        without_test_blocks(&lines, &kinds)
-    } else {
-        kinds
     };
 
     Ok(Some(NormalizedFile {

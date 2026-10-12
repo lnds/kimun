@@ -377,3 +377,17 @@ fn run_terse_format() {
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     run(&cfg, OutputMode::Terse, 20, "score", None, "indent").unwrap();
 }
+
+#[test]
+fn complexity_leaves_inline_tests_out_when_they_are_excluded() {
+    let (_dir, path) = crate::test_blocks::tests::source_with_test_module();
+    let spec = crate::loc::language::detect(&path).unwrap();
+    for metric in ["cycom", "cogcom", "indent"] {
+        let of = |exclude_tests| {
+            compute_complexity(&path, spec, metric, exclude_tests)
+                .unwrap()
+                .unwrap()
+        };
+        assert!(of(true) < of(false), "{metric}");
+    }
+}

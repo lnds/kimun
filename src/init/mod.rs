@@ -126,7 +126,8 @@ fn collect_stats(cfg: &WalkConfig<'_>) -> Result<ProjectStats, Box<dyn Error>> {
         let Some(markers) = markers_for(spec.name) else {
             continue;
         };
-        let Ok(Some((lines, kinds))) = read_and_classify(&file_path, spec) else {
+        let Ok(Some((lines, kinds))) = read_and_classify(&file_path, spec, cfg.exclude_tests())
+        else {
             continue;
         };
 
