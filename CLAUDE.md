@@ -188,6 +188,15 @@ analyzers that select `LineKind::Code` skip them. Used by `hal`, `cycom`,
 count as control flow. `loc` is deliberately left alone: those lines are still
 code for line counting.
 
+### Shared: `src/test_blocks.rs`
+
+`test_block_mask` marks the lines of each item under `#[cfg(test)]` of a Rust
+file, attribute included: to where its braces balance, or to its `;` or `,`
+when it has none. Comments and literals are read apart
+(`deps::rust_literals`). `without_test_blocks` turns those lines into
+`LineKind::Blank`. Used by `dups` and by the duplication dimension of `score`
+when tests are excluded; the code after a test module is still measured.
+
 ### Module structure: `src/smells/`
 
 Code smell detection. Invoked via `km smells`.

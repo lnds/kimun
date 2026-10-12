@@ -105,6 +105,25 @@ fn normalize_file_skips_comments_and_blanks() {
 }
 
 #[test]
+fn normalize_file_keeps_the_code_after_a_test_block() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("middle.rs");
+    fs::write(
+        &path,
+        "fn before() {}\n\n#[cfg(test)]\nmod tests {\n    fn t() {}\n}\n\nfn after() {}\n",
+    )
+    .unwrap();
+    let spec = detect(Path::new("middle.rs")).unwrap();
+    let numbers = |exclude_tests| -> Vec<usize> {
+        let nf = normalize_file(&path, spec, exclude_tests).unwrap().unwrap();
+        nf.lines.iter().map(|l| l.original_line_number).collect()
+    };
+
+    assert_eq!(numbers(true), vec![1, 8]);
+    assert_eq!(numbers(false), vec![1, 3, 4, 5, 6, 8]);
+}
+
+#[test]
 fn normalize_file_binary_returns_none() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("data.c");
