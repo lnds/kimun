@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
+use std::ops::Range;
 use std::path::Path;
 
 use super::fsm::{
@@ -37,16 +38,36 @@ pub fn count_lines(path: &Path, spec: &LanguageSpec) -> io::Result<Option<FileSt
     Ok(Some(count_reader(reader, spec)))
 }
 
+/// The part of a line that a raw string takes, delimiters included.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RawSpan {
+    pub start: usize,
+    pub end: usize,
+    /// Whether the string opens here, rather than come from the line before.
+    pub opens: bool,
+}
+
 /// Classify each line of source code as Blank, Comment, or Code.
 pub fn classify_reader<R: BufRead>(reader: R, spec: &LanguageSpec) -> Vec<LineKind> {
-    process_lines(reader, spec)
+    let mut kinds = Vec::new();
+    process_lines(reader.lines().map_while(Result::ok), spec, |kind, _| {
+        kinds.push(kind)
+    });
+    kinds
+}
+
+/// Where the raw strings of `lines` are, line by line.
+pub fn raw_string_spans(lines: &[String], spec: &LanguageSpec) -> Vec<Vec<RawSpan>> {
+    let mut spans = Vec::new();
+    process_lines(lines.iter(), spec, |_, of_line| spans.push(of_line));
+    spans
 }
 
 /// Count lines from a buffered reader, aggregating per-line classifications
 /// into blank, comment, and code totals.
 pub fn count_reader<R: BufRead>(reader: R, spec: &LanguageSpec) -> FileStats {
     let mut stats = FileStats::default();
-    for kind in process_lines(reader, spec) {
+    for kind in classify_reader(reader, spec) {
         match kind {
             LineKind::Blank => stats.blank += 1,
             LineKind::Comment => stats.comment += 1,
@@ -56,9 +77,43 @@ pub fn count_reader<R: BufRead>(reader: R, spec: &LanguageSpec) -> FileStats {
     stats
 }
 
+fn in_raw_string(state: &State) -> bool {
+    matches!(state, State::InString(StringKind::Raw(_)))
+}
+
+/// Add the bytes at `at` to the raw strings of a line when they belong to
+/// one: to the one being read when it `goes_on`, as a new one when it
+/// opens.
+fn note_raw(spans: &mut Vec<RawSpan>, at: Range<usize>, goes_on: bool, opened: bool) {
+    match spans.last_mut() {
+        Some(last) if goes_on && last.end == at.start => last.end = at.end,
+        _ if goes_on || opened => spans.push(RawSpan {
+            start: at.start,
+            end: at.end,
+            opens: !goes_on,
+        }),
+        _ => {}
+    }
+}
+
+/// A string that cannot span lines ends with the line, closed or not.
+fn end_line(state: &mut State) {
+    use StringKind::{Double, Single};
+    match state {
+        State::InString(Double | Single) => *state = State::Normal,
+        State::InDocAttribute(Some(Double | Single)) => *state = State::InDocAttribute(None),
+        _ => {}
+    }
+}
+
 /// Classify a single non-blank, non-shebang line given the current FSM state.
 /// Updates `state` in place and returns the line classification.
-fn classify_line(line: &str, state: &mut State, spec: &LanguageSpec) -> LineKind {
+fn classify_line(
+    line: &str,
+    state: &mut State,
+    spec: &LanguageSpec,
+    raw: &mut Vec<RawSpan>,
+) -> LineKind {
     let mut has_code = matches!(state, State::InString(_));
     let mut has_comment = matches!(state, State::InBlockComment(_) | State::InDocAttribute(_));
     let bytes = line.as_bytes();
@@ -66,6 +121,7 @@ fn classify_line(line: &str, state: &mut State, spec: &LanguageSpec) -> LineKind
     let mut i = 0;
 
     while i < len {
+        let was_raw = in_raw_string(state);
         let result = match &state {
             State::Normal => step_normal(&bytes[i..], spec, bytes, i),
             State::InString(kind) => step_in_string(&bytes[i..], kind),
@@ -77,26 +133,14 @@ fn classify_line(line: &str, state: &mut State, spec: &LanguageSpec) -> LineKind
         if let Some(new_state) = result.new_state {
             *state = new_state;
         }
+        note_raw(raw, i..i + result.advance, was_raw, in_raw_string(state));
         i += result.advance;
         if result.break_line {
             break;
         }
     }
 
-    // Reset InString at end of line for non-triple-quote strings
-    if matches!(
-        state,
-        State::InString(StringKind::Double | StringKind::Single)
-    ) {
-        *state = State::Normal;
-    }
-    // Same rule inside a doc attribute: a single-line string cannot span lines.
-    if matches!(
-        state,
-        State::InDocAttribute(Some(StringKind::Double | StringKind::Single))
-    ) {
-        *state = State::InDocAttribute(None);
-    }
+    end_line(state);
 
     if has_code {
         LineKind::Code
@@ -107,39 +151,30 @@ fn classify_line(line: &str, state: &mut State, spec: &LanguageSpec) -> LineKind
     }
 }
 
-/// Process all lines from a reader through the FSM, returning a classification
-/// for each line. Handles shebang detection on the first line and blank line
-/// short-circuiting outside of block comments.
-fn process_lines<R: BufRead>(reader: R, spec: &LanguageSpec) -> Vec<LineKind> {
-    let mut kinds = Vec::new();
+/// Process all lines through the FSM, handing `each` the classification of
+/// every line and the raw strings on it. Handles shebang detection on the
+/// first line and blank line short-circuiting outside of block comments.
+fn process_lines(
+    lines: impl Iterator<Item = impl AsRef<str>>,
+    spec: &LanguageSpec,
+    mut each: impl FnMut(LineKind, Vec<RawSpan>),
+) {
     let mut state = State::Normal;
-    let mut is_first_line = true;
 
-    for line_result in reader.lines() {
-        let line = match line_result {
-            Ok(l) => l,
-            Err(_) => continue,
-        };
-
-        if is_first_line {
-            is_first_line = false;
-            if line.starts_with("#!") {
-                kinds.push(LineKind::Code);
-                continue;
-            }
-        }
-
-        if line.trim().is_empty()
+    for (number, line) in lines.enumerate() {
+        let line = line.as_ref();
+        let mut raw = Vec::new();
+        let kind = if number == 0 && line.starts_with("#!") {
+            LineKind::Code
+        } else if line.trim().is_empty()
             && !matches!(state, State::InBlockComment(_) | State::InDocAttribute(_))
         {
-            kinds.push(LineKind::Blank);
-            continue;
-        }
-
-        kinds.push(classify_line(&line, &mut state, spec));
+            LineKind::Blank
+        } else {
+            classify_line(line, &mut state, spec, &mut raw)
+        };
+        each(kind, raw);
     }
-
-    kinds
 }
 
 #[cfg(test)]

@@ -1361,6 +1361,11 @@ All sections and fields are optional — omit any you don't need. A fully docume
   literals) count as code for `km loc`, but are excluded from cyclomatic,
   cognitive, Halstead, and smell analyses: prose and embedded data are not
   control flow.
+- **Rust raw strings** (`r"..."`, `r#"..."#` and the forms with more `#`, with a
+  `b` or `c` prefix too) end only at a quote followed by as many `#` as opened
+  them, and span lines. What they hold counts as code for `km loc`, whatever it
+  looks like, and is left out of the cyclomatic, cognitive, Halstead, and smell
+  analyses.
 
 ## Development
 

@@ -7,6 +7,7 @@
 //! many bytes to advance, any state transition, and whether the
 //! current line contains code or comment content.
 use super::language::LanguageSpec;
+use super::raw;
 
 /// The kind of string literal currently being parsed.
 #[derive(Debug, PartialEq)]
@@ -15,6 +16,8 @@ pub(super) enum StringKind {
     Single,
     TripleDouble,
     TripleSingle,
+    /// A raw string, with the number of `#` that opened it.
+    Raw(usize),
 }
 
 /// FSM state for the line classifier. Tracks whether we are in normal code,
@@ -84,15 +87,10 @@ fn bytes_start_with(haystack: &[u8], needle: &str) -> bool {
 /// the position just past it. If no closing delimiter is found, returns the
 /// end of the byte slice (treating the rest of the line as pragma content).
 fn skip_pragma(bytes: &[u8], start: usize, pclose: &str) -> usize {
-    let len = bytes.len();
-    let mut i = start;
-    while i < len {
-        if bytes_start_with(&bytes[i..], pclose) {
-            return i + pclose.len();
-        }
-        i += 1;
-    }
-    i
+    bytes[start..]
+        .windows(pclose.len())
+        .position(|window| window == pclose.as_bytes())
+        .map_or(bytes.len(), |at| start + at + pclose.len())
 }
 
 /// Process one byte in Normal state. Detection priority:
@@ -117,7 +115,7 @@ pub(super) fn step_normal(
 ) -> StepResult {
     // String delimiters — triple quotes are matched before the single-byte
     // ones, so `"""` never reads as an empty string followed by a quote.
-    if let Some((width, kind)) = string_open(rest, spec) {
+    if let Some((width, kind)) = literal_open(full_bytes, pos, spec) {
         return StepResult::code(width, Some(State::InString(kind)));
     }
 
@@ -175,7 +173,7 @@ fn string_delimiter(kind: &StringKind) -> &'static [u8] {
     match kind {
         StringKind::TripleDouble => b"\"\"\"",
         StringKind::TripleSingle => b"'''",
-        StringKind::Double => b"\"",
+        StringKind::Double | StringKind::Raw(_) => b"\"",
         StringKind::Single => b"'",
     }
 }
@@ -199,10 +197,25 @@ fn string_open(rest: &[u8], spec: &LanguageSpec) -> Option<(usize, StringKind)> 
     })
 }
 
+/// Detect the string literal that opens at `pos`, raw or not.
+fn literal_open(bytes: &[u8], pos: usize, spec: &LanguageSpec) -> Option<(usize, StringKind)> {
+    let raw = spec.raw_strings.then(|| raw::open(bytes, pos));
+    raw.flatten().or_else(|| string_open(&bytes[pos..], spec))
+}
+
 /// Scan one byte inside a string literal: how far to advance, and whether the
 /// literal closes here. Escapes are only honoured in single-byte-delimited
-/// strings; a triple-quoted body ends at its delimiter.
+/// strings; a triple-quoted body ends at its delimiter, and a raw string at
+/// a quote followed by the `#` that opened it.
 fn string_scan(rest: &[u8], kind: &StringKind) -> (usize, bool) {
+    match kind {
+        StringKind::Raw(hashes) => raw::scan(rest, *hashes),
+        _ => quoted_scan(rest, kind),
+    }
+}
+
+/// `string_scan` inside a string that ends at its delimiter.
+fn quoted_scan(rest: &[u8], kind: &StringKind) -> (usize, bool) {
     let delim = string_delimiter(kind);
     if rest.starts_with(delim) {
         return (delim.len(), true);

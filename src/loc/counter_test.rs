@@ -12,6 +12,7 @@ fn spec_c_like() -> LanguageSpec {
         nested_block_comments: false,
         single_quote_strings: false,
         triple_quote_strings: false,
+        raw_strings: false,
         pragma: None,
         doc_attribute: None,
         shebangs: &[],
@@ -29,6 +30,7 @@ fn spec_rust() -> LanguageSpec {
         nested_block_comments: true,
         single_quote_strings: false,
         triple_quote_strings: false,
+        raw_strings: true,
         pragma: None,
         doc_attribute: None,
         shebangs: &[],
@@ -46,6 +48,7 @@ fn spec_python() -> LanguageSpec {
         nested_block_comments: false,
         single_quote_strings: true,
         triple_quote_strings: true,
+        raw_strings: false,
         pragma: None,
         doc_attribute: None,
         shebangs: &["python", "python3"],
@@ -63,6 +66,7 @@ fn spec_js() -> LanguageSpec {
         nested_block_comments: false,
         single_quote_strings: true,
         triple_quote_strings: false,
+        raw_strings: false,
         pragma: None,
         doc_attribute: None,
         shebangs: &["node"],
@@ -80,6 +84,7 @@ fn spec_haskell() -> LanguageSpec {
         nested_block_comments: true,
         single_quote_strings: false,
         triple_quote_strings: false,
+        raw_strings: false,
         pragma: Some(("{-#", "#-}")),
         doc_attribute: None,
         shebangs: &[],
@@ -97,6 +102,7 @@ fn spec_kaikai() -> LanguageSpec {
         nested_block_comments: false,
         single_quote_strings: false,
         triple_quote_strings: true,
+        raw_strings: false,
         pragma: None,
         doc_attribute: Some(("#[doc(", ")]")),
         shebangs: &[],
@@ -537,6 +543,7 @@ fn spec_no_comments() -> LanguageSpec {
         nested_block_comments: false,
         single_quote_strings: false,
         triple_quote_strings: false,
+        raw_strings: false,
         pragma: None,
         doc_attribute: None,
         shebangs: &[],
@@ -561,6 +568,7 @@ fn spec_batch() -> LanguageSpec {
         nested_block_comments: false,
         single_quote_strings: false,
         triple_quote_strings: false,
+        raw_strings: false,
         pragma: None,
         doc_attribute: None,
         shebangs: &[],
@@ -588,6 +596,7 @@ fn spec_heex() -> LanguageSpec {
         nested_block_comments: false,
         single_quote_strings: true,
         triple_quote_strings: false,
+        raw_strings: false,
         pragma: None,
         doc_attribute: None,
         shebangs: &[],
@@ -605,6 +614,7 @@ fn spec_po() -> LanguageSpec {
         nested_block_comments: false,
         single_quote_strings: false,
         triple_quote_strings: false,
+        raw_strings: false,
         pragma: None,
         doc_attribute: None,
         shebangs: &[],
@@ -654,4 +664,100 @@ fn po_blank_and_code() {
     assert_eq!(stats.blank, 1);
     assert_eq!(stats.code, 4);
     assert_eq!(stats.comment, 0);
+}
+
+// --- Raw strings ---
+
+/// Code and comment lines of the Rust source made of `lines`.
+fn rust_lines(lines: &[&str]) -> (usize, usize) {
+    lines_of(&spec_rust(), lines)
+}
+
+fn lines_of(spec: &LanguageSpec, lines: &[&str]) -> (usize, usize) {
+    let stats = count(spec, &lines.join("\n"));
+    (stats.code, stats.comment)
+}
+
+#[test]
+fn a_quote_inside_a_raw_string_does_not_end_it() {
+    let counted = rust_lines(&[
+        "fn main() {",
+        "    let manifest = r#\"{ \"workspaces\": [\"packages/*\"] }\"#;",
+        "    println!(\"{manifest}\");",
+        "    let n = 1;",
+        "}",
+    ]);
+    assert_eq!(counted, (5, 0));
+}
+
+#[test]
+fn a_raw_string_ends_at_a_quote_with_as_many_hashes_as_opened_it() {
+    let counted = rust_lines(&[
+        "let a = r##\"one \"# /* still text\"##; // closed",
+        "let b = r\"C:\\\"; /* comment */",
+        "let c = 1;",
+    ]);
+    assert_eq!(counted, (3, 0));
+    // The comment after the literal is one.
+    let counted = rust_lines(&["let a = r#\"x\"#; /*", "still a comment", "*/"]);
+    assert_eq!(counted, (1, 2));
+}
+
+#[test]
+fn a_raw_string_spans_lines() {
+    let counted = rust_lines(&[
+        "let text = r#\"",
+        "// not a comment",
+        "/* nor this",
+        "\"#;",
+        "let n = 1; // one",
+    ]);
+    assert_eq!(counted, (5, 0));
+}
+
+#[test]
+fn byte_and_c_raw_strings_are_raw_strings() {
+    for prefix in ["br", "cr"] {
+        let first = format!("let a = {prefix}#\"a \"/*\" b\"#;");
+        assert_eq!(rust_lines(&[&first, "let n = 1;"]), (2, 0), "{prefix}");
+    }
+}
+
+#[test]
+fn an_r_that_starts_no_raw_string() {
+    // A raw identifier, and names that end in `r`.
+    let counted = rust_lines(&[
+        "let r#type = 1; /* one */ let s = \"a\"; /*",
+        "comment */",
+        "let x = car\"/*\"; /*",
+        "comment */",
+        "let y = abr#\"/*\"; /*",
+        "comment */",
+    ]);
+    assert_eq!(counted, (3, 3));
+}
+
+#[test]
+fn raw_strings_belong_to_the_languages_that_have_them() {
+    let lines = ["x = r#\"a \"/*\" b\"#;", "y = 1;"];
+    assert_eq!(rust_lines(&lines), (2, 0));
+    assert_eq!(lines_of(&spec_c_like(), &lines), (1, 1));
+}
+
+#[test]
+fn raw_string_spans_tell_where_each_one_is() {
+    let lines: Vec<String> = ["let a = r#\"x\"# + r\"y\";", "let b = br#\"", "  }", "\"#;"]
+        .iter()
+        .map(|line| line.to_string())
+        .collect();
+    let span = |start, end, opens| RawSpan { start, end, opens };
+    assert_eq!(
+        raw_string_spans(&lines, &spec_rust()),
+        [
+            vec![span(8, 14, true), span(17, 21, true)],
+            vec![span(9, 12, true)],
+            vec![span(0, 3, false)],
+            vec![span(0, 2, false)],
+        ]
+    );
 }

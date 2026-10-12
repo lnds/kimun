@@ -7,6 +7,7 @@ pub(crate) mod counter;
 mod fsm;
 mod lang_macro;
 pub(crate) mod language;
+mod raw;
 pub(crate) mod report;
 
 use std::collections::{HashMap, HashSet};

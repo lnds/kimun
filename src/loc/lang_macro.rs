@@ -24,8 +24,9 @@
 /// Every variant normalizes its comment syntax and forwards to the `@spec`
 /// arm, which holds the single `LanguageSpec` literal.
 ///
-/// Languages needing `line_comment_not_before` or `doc_attribute` are written
-/// as `LanguageSpec` struct literals instead (see Haskell and Kaikai).
+/// Languages needing `line_comment_not_before`, `doc_attribute` or
+/// `raw_strings` are written as `LanguageSpec` struct literals instead (see
+/// Rust, Haskell and Kaikai).
 macro_rules! lang_spec {
     ($name:expr, ext: [$($ext:expr),*], files: [$($f:expr),*], $($rest:tt)*) => {
         lang_spec!(@build $name, &[$($ext),*], &[$($f),*], $($rest)*)
@@ -124,6 +125,7 @@ macro_rules! lang_spec {
             nested_block_comments: false $(|| $nested)?,
             single_quote_strings: false $(|| $sq)?,
             triple_quote_strings: false $(|| $tq)?,
+            raw_strings: false,
             pragma: $pragma,
             doc_attribute: None,
             shebangs: &[$($($sh),*)?],
