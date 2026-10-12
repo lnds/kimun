@@ -322,3 +322,99 @@ fn lifetimes_lose_their_quote_and_character_literals_keep_theirs() {
         "m('(', & a x, ')')"
     );
 }
+
+#[test]
+fn a_line_may_introduce_the_body_by_closing_the_parameters_or_ending_in_assign() {
+    assert!(may_introduce_body(") : Int = a + 1"));
+    assert!(may_introduce_body("  : Int ="));
+    assert!(!may_introduce_body("files: impl Iterator<Item = u32>,"));
+}
+
+#[test]
+fn an_assign_inside_the_parameter_list_introduces_no_body() {
+    let mut closed = BodyScan::default();
+    closed.read("fn f(a: Int = 1)", true);
+    assert_eq!(closed.paren_depth, 0);
+    assert!(!closed.expression_body);
+
+    let mut open = BodyScan::default();
+    open.read("fn f(a: Int = 1,", true);
+    assert_eq!(open.paren_depth, 1);
+    assert!(!open.expression_body);
+
+    let mut after = BodyScan::default();
+    after.read("fn f(a: Int) : Int = a", true);
+    assert!(after.expression_body);
+}
+
+#[test]
+fn a_lifetime_right_after_a_character_literal_loses_its_quote() {
+    assert_eq!(without_lifetimes("('x''a y)"), "('x' a y)");
+}
+
+#[test]
+fn a_character_literal_is_as_long_as_its_closing_quote_says() {
+    assert_eq!(literal_len(b"a'"), 2);
+    assert_eq!(literal_len(b"\\''"), 3);
+    assert_eq!(literal_len(b"\\n' rest"), 3);
+    // The longest ones: four bytes of a character, eleven of an escape.
+    assert_eq!(literal_len("\u{1F600}'".as_bytes()), 5);
+    assert_eq!(literal_len(b"\\u{10FFFFF}'"), 12);
+}
+
+#[test]
+fn a_quote_that_closes_too_far_is_no_character_literal() {
+    assert_eq!(literal_len(b"abcdef"), 0);
+    assert_eq!(literal_len(b"abcde'"), 0);
+    assert_eq!(literal_len(b"\\u{10FFFFFF}'"), 0);
+    assert_eq!(literal_len(b""), 0);
+}
+
+#[test]
+fn a_function_right_after_a_line_that_declares_none_is_found() {
+    let src = "\
+const LIMIT: u32 = 1;
+fn first() -> u32 { 1 }
+";
+    assert_eq!(
+        bodies_as("fn ", FunctionSyntax::Keyword, src),
+        named(&[("first", 1)])
+    );
+}
+
+struct Indented;
+
+impl FunctionDetectionMarkers for Indented {
+    fn function_markers(&self) -> &[&str] {
+        &["def "]
+    }
+    fn brace_scoped(&self) -> bool {
+        false
+    }
+    fn function_syntax(&self) -> FunctionSyntax {
+        FunctionSyntax::Loose
+    }
+    fn line_comments(&self) -> &[&str] {
+        &["#"]
+    }
+}
+
+#[test]
+fn an_indented_body_holds_every_line_deeper_than_its_declaration() {
+    let lines: Vec<String> = "\
+def first():
+    x = 1
+    return x
+def second():
+    return 2
+"
+    .lines()
+    .map(String::from)
+    .collect();
+    let code_lines: Vec<(usize, &str)> = lines.iter().map(String::as_str).enumerate().collect();
+    let found: Vec<(String, usize)> = detect_function_bodies(&lines, &code_lines, &Indented)
+        .into_iter()
+        .map(|b| (b.name, b.code_lines.len()))
+        .collect();
+    assert_eq!(found, named(&[("first", 3), ("second", 2)]));
+}

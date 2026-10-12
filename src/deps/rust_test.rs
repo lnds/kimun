@@ -201,3 +201,90 @@ fn takes(x: impl Iterator<Item = u8>) -> impl Fn() -> Box<dyn Any> { todo!() }
             .contains(&path(&[], &["crate", "model", "Wrapper"]))
     );
 }
+
+fn mod_paths(source: &str) -> Vec<(String, Option<String>)> {
+    parse(source)
+        .mods
+        .into_iter()
+        .map(|m| (m.name, m.path))
+        .collect()
+}
+
+#[test]
+fn each_path_attribute_names_the_string_it_holds() {
+    let mods = mod_paths("#[path = \"a.rs\"]\nmod a;\n#[path = \"b.rs\"]\nmod b;\n");
+    assert_eq!(
+        mods,
+        [
+            ("a".to_string(), Some("a.rs".to_string())),
+            ("b".to_string(), Some("b.rs".to_string())),
+        ]
+    );
+}
+
+#[test]
+fn a_path_attribute_ends_with_the_statement_it_is_on() {
+    for statement in [
+        "const A: u8 = 1;",
+        "use a::b as c;",
+        "use a::*;",
+        "use a::{b, c};",
+    ] {
+        let source = format!("#[path = \"x.rs\"]\n{statement}\nmod m;\n");
+        assert_eq!(mod_paths(&source), [("m".to_string(), None)], "{statement}");
+    }
+}
+
+#[test]
+fn what_an_attribute_holds_names_no_path() {
+    assert!(paths_of("#![warn(clippy::all)]\nfn f() {}\n").is_empty());
+    assert!(paths_of("#[derive(serde::Serialize)]\nstruct A;\n").is_empty());
+    assert_eq!(
+        paths_of("#[derive(Debug)]\nstruct A(crate::b::B);\n"),
+        ["crate::b::B"]
+    );
+}
+
+#[test]
+fn a_mod_that_declares_nothing_is_skipped_alone() {
+    // Not Rust, but what is read must not swallow what follows.
+    let file = parse("mod outer { mod }\nuse crate::x::Y;\n");
+    assert_eq!(file.paths, [path(&[], &["crate", "x", "Y"])]);
+    assert_eq!(paths_of("mod a::b;"), ["a::b"]);
+}
+
+#[test]
+fn an_arrow_inside_generics_closes_none() {
+    let file = parse("impl<F: Fn() -> u32> Call for Holder<F> {}\n");
+    assert_eq!(file.impls, [path(&[], &["Holder"])]);
+}
+
+#[test]
+fn an_impl_at_the_very_start_and_a_stray_angle_are_read() {
+    assert_eq!(parse("impl Foo {}").impls, [path(&[], &["Foo"])]);
+    assert_eq!(parse("impl A > B {}").impls, [path(&[], &["A"])]);
+}
+
+#[test]
+fn a_macro_crate_at_the_very_start_names_nothing() {
+    assert!(parse("$crate::a::b").paths.is_empty());
+}
+
+#[test]
+fn a_use_inside_an_inline_module_keeps_what_follows_inside_it() {
+    let file = parse("mod m {\n    use a::{b, c};\n    use x::y;\n}\n");
+    assert!(file.paths.contains(&path(&["m"], &["x", "y"])));
+}
+
+#[test]
+fn what_a_use_names_and_what_it_does_not() {
+    // A name is bound only to a path of more than one segment.
+    assert!(parse("use serde;").imports.is_empty());
+    // `self` stands for the module before it, when there is one.
+    let group = parse("use a::{self, b};");
+    assert_eq!(group.paths, [path(&[], &["a"]), path(&[], &["a", "b"])]);
+    assert_eq!(group.imports, [("b".to_string(), path(&[], &["a", "b"]))]);
+    assert_eq!(parse("use self;").paths, [path(&[], &["self"])]);
+    // An alias that is no name binds nothing.
+    assert!(parse("use a::b as ;").imports.is_empty());
+}

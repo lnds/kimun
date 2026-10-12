@@ -14,6 +14,18 @@ fn nothing_is_masked_without_the_attribute() {
 }
 
 #[test]
+fn items_under_the_attribute_one_after_another_are_all_masked() {
+    let src = "\
+#[cfg(test)]
+use std::fmt;
+#[cfg(test)]
+use std::io;
+fn kept() {}
+";
+    assert_eq!(masked(src), [1, 2, 3, 4]);
+}
+
+#[test]
 fn code_after_a_test_module_is_kept() {
     let src = "\
 pub fn before() -> u32 {

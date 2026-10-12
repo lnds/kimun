@@ -415,6 +415,9 @@ fn what_each_file_is_to_the_radius() {
     assert!(is_reliable(Path::new("src/a.rs")));
     assert!(is_reliable(Path::new("app/a.py")));
     assert!(is_reliable(Path::new("app/a.go")));
+    for measured in ["config/a.exs", "web/a.js", "src/a.kai"] {
+        assert!(is_reliable(Path::new(measured)), "{measured}");
+    }
     assert!(!is_reliable(Path::new("app/a.rb")));
     assert!(!is_reliable(Path::new("README.md")));
 }
@@ -1125,4 +1128,15 @@ fn python_code_that_runs_on_import_counts_every_use() {
         Some("line 9 is outside every function")
     );
     assert_eq!(radius.by_distance, [3, 2]);
+}
+
+#[test]
+fn a_change_without_known_lines_says_so() {
+    let radius = radius(python_shop(), &[change("shop/prices.py", &[])]);
+
+    assert_eq!(radius.functions, None);
+    assert_eq!(
+        radius.narrowing[0].reason.as_deref(),
+        Some("no changed line is known")
+    );
 }

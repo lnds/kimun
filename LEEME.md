@@ -44,7 +44,7 @@ Además del puntaje agregado, Kimün ofrece 18 comandos especializados:
 
 - **Métricas estáticas**: líneas de código por lenguaje (compatible con [cloc](https://github.com/AlDanial/cloc)), detección de código duplicado (Regla de Tres), complejidad de Halstead, complejidad ciclomática, complejidad cognitiva (SonarSource), complejidad por indentación, dos variantes del índice de mantenibilidad (Visual Studio y verifysoft), detección de code smells, dependencias entre archivos y sus ciclos, y un informe completo con todas las métricas.
 - **Análisis basado en git**: detección de hotspots (frecuencia de cambio × complejidad, método de Thornhill), churn (frecuencia de cambio pura), propiedad del código y mapas de conocimiento con `git blame`, acoplamiento temporal entre archivos que cambian juntos, impacto de un diff (difusión y cambios conjuntos que faltan), resumen de propiedad por autor y clasificación de archivos por antigüedad (Active / Stale / Frozen).
-- **Para agentes de código**: todos los comandos pueden responder en JSON, y `km ai` es una integración opcional con Claude que ejecuta las herramientas y escribe un informe narrativo. Ningún otro comando llama a un modelo.
+- **Para agentes de código**: todos los comandos que miden pueden responder en JSON, y `km ai` es una integración opcional con Claude que ejecuta las herramientas y escribe un informe narrativo. Ningún otro comando llama a un modelo.
 
 > Aviso: este repositorio no es la aplicación de notas para la consola `kimun`, escrita en Rust por nico2sh. Ese proyecto está en https://github.com/nico2sh/kimun.
 
