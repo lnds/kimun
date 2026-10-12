@@ -36,13 +36,13 @@ Code Health Score
 ──────────────────────────────────────────────────────────────────
 ```
 
-That is Kimün measuring its own source.
+That is Kimün measuring its own source: 140 files and 20,050 lines of code, tests left out, in 0.11 seconds on an Apple M3 Max. Counting all 235 files of `src/`, tests included, takes `km loc` 0.04 seconds and `cloc` 2.4.
 
 **Website: [kimun.tools](https://kimun.tools/en/)** · [A two-minute video](https://kimun.tools/en/#video) of the grade, the metrics, what git remembers, the impact of a change and the gate for CI · Also [in Spanish](LEEME.md).
 
 Beyond the aggregate score, Kimün provides 18 specialized commands:
 
-- **Static metrics** — lines of code by language ([cloc](https://github.com/AlDanial/cloc)-compatible), duplicate detection (Rule of Three), Halstead complexity, cyclomatic complexity, cognitive complexity (SonarSource), indentation complexity, two Maintainability Index variants (Visual Studio and verifysoft), code smell detection, dependencies between files and their cycles, and a comprehensive multi-metric report.
+- **Static metrics** — lines of code by language (classified as [cloc](https://github.com/AlDanial/cloc) classifies them), duplicate detection (Rule of Three), Halstead complexity, cyclomatic complexity, cognitive complexity (SonarSource), indentation complexity, two Maintainability Index variants (Visual Studio and verifysoft), code smell detection, dependencies between files and their cycles, and a comprehensive multi-metric report.
 - **Git-based analysis** — hotspot detection (change frequency × complexity, Thornhill method), code churn (pure change frequency), code ownership / knowledge maps via `git blame`, temporal coupling between files that change together, impact of a diff (diffusion and missing co-changes), per-author ownership summary, and file age classification (Active / Stale / Frozen).
 - **For coding agents** — every command that measures can answer in JSON, and `km ai` is an optional integration with Claude that runs the tools and writes a narrative report. No other command calls a model.
 
@@ -55,7 +55,7 @@ cargo install kimun              # from crates.io
 brew install lnds/kimun/kimun    # with Homebrew, on macOS and Linux
 ```
 
-Either one installs the `km` binary. There are also ready-made binaries for macOS, Linux and Windows on the [releases page](https://github.com/lnds/kimun/releases). From a checkout of this repository, `cargo install --path .` builds it from source.
+Either one installs the `km` binary. There are also ready-made binaries for macOS (Apple Silicon), Linux (x86_64 and arm64) and Windows (x86_64) on the [releases page](https://github.com/lnds/kimun/releases). From a checkout of this repository, `cargo install --path .` builds it from source.
 
 ### Shell completions
 
@@ -95,12 +95,15 @@ Run on a specific path:
 km loc src/
 ```
 
+Test files are left out by default, so the totals are lower than those of `cloc` on the same directory. With `--include-tests` both count the same files.
+
 Options:
 
 | Flag | Description |
 |------|-------------|
 | `-v`, `--verbose` | Show summary stats (files read, unique, ignored, elapsed time) |
 | `--by-author` | Break down lines of code by git author (requires a git repository) |
+| `--include-tests` | Count test files and directories too (left out by default) |
 | `--format {table,json,short,terse}` | Output format (default: table) |
 
 Example output:
@@ -1099,13 +1102,13 @@ Example output:
 
 Computes an overall code health score for the project, grading it from A++ (exceptional) to F-- (severe issues). Uses only static metrics (no git required).
 
-> **Breaking change in v0.14:** The default scoring model changed from MI + Cyclomatic Complexity (6 dimensions) to Cognitive Complexity (5 dimensions). Use `--model legacy` to restore v0.13 behavior.
+There are two scoring models: `cogcom`, the default, built on Cognitive Complexity (5 dimensions), and `legacy`, built on the Maintainability Index and Cyclomatic Complexity (6 dimensions).
 
 Non-code files (Markdown, TOML, JSON, etc.) are automatically excluded. Inline test blocks (`#[cfg(test)]`) are excluded from duplication analysis: the item under the attribute and nothing else, so the code after a test module is measured.
 
 ```bash
 km score [path]
-km score --model legacy [path]    # v0.13 scoring model
+km score --model legacy [path]    # MI + cyclomatic model
 ```
 
 #### Dimensions and weights (default: cogcom)
@@ -1149,7 +1152,7 @@ Options:
 
 | Flag | Description |
 |------|-------------|
-| `--model MODEL` | Scoring model: `cogcom` (default, v0.14+) or `legacy` (MI + cyclomatic, v0.13) |
+| `--model MODEL` | Scoring model: `cogcom` (default) or `legacy` (MI + cyclomatic) |
 | `--trend [REF]` | Compare current score against a git ref (default: `HEAD`). Shows change: `B- → B (+2.3)`. Useful for PR review: `--trend origin/main` |
 | `--fail-if-worse` | With `--trend`: exit with code 1 if the score dropped by more than `--gate-tolerance` |
 | `--gate-tolerance POINTS` | Score drop `--fail-if-worse` allows before failing (default: `0.01` with `--gate-scope project`, `0.5` with `--gate-scope changed`). Compares unrounded scores |
@@ -1165,26 +1168,33 @@ Example output:
 ```
 Code Health Score
 ──────────────────────────────────────────────────────────────────
- Project Score:  B+ (84.3)
- Files Analyzed: 42
- Total LOC:      8,432
+ Project Score:  A (91.4)
+ Files Analyzed: 140
+ Total LOC:      20,050
 ──────────────────────────────────────────────────────────────────
  Dimension                 Weight   Score   Grade
 ──────────────────────────────────────────────────────────────────
- Cognitive Complexity         30%    85.6   B+
- Duplication                  20%    91.3   A
- Indentation Complexity       15%    79.8   B-
- Halstead Effort              20%    85.1   B+
- File Size                    15%    89.2   A-
+ Cognitive Complexity         30%    83.8   B+
+ Duplication                  20%    99.7   A++
+ Indentation Complexity       15%    93.0   A+
+ Halstead Effort              20%    86.9   B+
+ File Size                    15%    99.9   A++
 ──────────────────────────────────────────────────────────────────
 
- Files Needing Attention (worst scores)
+ Files Needing Attention (worst per-file scores, excl. duplication)
 ──────────────────────────────────────────────────────────────────
  Score  Grade  File                       Issues
 ──────────────────────────────────────────────────────────────────
-  54.2  F      src/legacy/parser.rs       Cognitive: 42, Indent: 3.2
-  63.7  D+     src/utils/helpers.rs       Effort: 15200, Indent: 2.4
-  68.9  C-     src/core/engine.rs         Size: 1243 LOC
+  59.8  D-     ./src/deps/analyzer.rs     Cognitive: 36
+  63.9  D+     ./src/cogcom/analyzer.rs   Cognitive: 35
+  72.3  C      ./src/smells/rules.rs      Cognitive: 20
+  73.5  C+     ./src/loc/mod.rs           Cognitive: 19
+  73.6  C+     ./src/hal/tokenizer.rs     Cognitive: 22
+  74.6  C+     ./src/knowledge/mod.rs     Cognitive: 21
+  75.7  C+     ./src/dups/mod.rs          Cognitive: 19
+  76.5  C+     ./src/test_blocks.rs       Cognitive: 17
+  78.2  B-     ./src/cli_help.rs          Cognitive: 16
+  78.9  B-     ./src/walk.rs              Cognitive: 16
 ──────────────────────────────────────────────────────────────────
 ```
 
@@ -1400,4 +1410,4 @@ The mascot is **Madu**, a pudú who is a *machi*: the one who holds the knowledg
 
 ## License
 
-See [Cargo.toml](Cargo.toml) for package details.
+MIT. See [LICENSE](LICENSE).

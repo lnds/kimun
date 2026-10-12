@@ -36,13 +36,13 @@ Code Health Score
 ──────────────────────────────────────────────────────────────────
 ```
 
-Eso es Kimün midiendo su propio código.
+Eso es Kimün midiendo su propio código: 140 archivos y 20.050 líneas de código, sin los tests, en 0,11 segundos en un Apple M3 Max. Contar los 235 archivos de `src/`, con los tests, le toma 0,04 segundos a `km loc` y 2,4 a `cloc`.
 
 **Sitio web: [kimun.tools](https://kimun.tools/)** · [Un video de dos minutos](https://kimun.tools/#video) con la nota, las métricas, lo que git recuerda, el impacto de un cambio y la compuerta para CI · También [en inglés](README.md).
 
 Además del puntaje agregado, Kimün ofrece 18 comandos especializados:
 
-- **Métricas estáticas**: líneas de código por lenguaje (compatible con [cloc](https://github.com/AlDanial/cloc)), detección de código duplicado (Regla de Tres), complejidad de Halstead, complejidad ciclomática, complejidad cognitiva (SonarSource), complejidad por indentación, dos variantes del índice de mantenibilidad (Visual Studio y verifysoft), detección de code smells, dependencias entre archivos y sus ciclos, y un informe completo con todas las métricas.
+- **Métricas estáticas**: líneas de código por lenguaje (clasificadas como las clasifica [cloc](https://github.com/AlDanial/cloc)), detección de código duplicado (Regla de Tres), complejidad de Halstead, complejidad ciclomática, complejidad cognitiva (SonarSource), complejidad por indentación, dos variantes del índice de mantenibilidad (Visual Studio y verifysoft), detección de code smells, dependencias entre archivos y sus ciclos, y un informe completo con todas las métricas.
 - **Análisis basado en git**: detección de hotspots (frecuencia de cambio × complejidad, método de Thornhill), churn (frecuencia de cambio pura), propiedad del código y mapas de conocimiento con `git blame`, acoplamiento temporal entre archivos que cambian juntos, impacto de un diff (difusión y cambios conjuntos que faltan), resumen de propiedad por autor y clasificación de archivos por antigüedad (Active / Stale / Frozen).
 - **Para agentes de código**: todos los comandos que miden pueden responder en JSON, y `km ai` es una integración opcional con Claude que ejecuta las herramientas y escribe un informe narrativo. Ningún otro comando llama a un modelo.
 
@@ -55,7 +55,7 @@ cargo install kimun              # desde crates.io
 brew install lnds/kimun/kimun    # con Homebrew, en macOS y Linux
 ```
 
-Cualquiera de los dos instala el binario `km`. También hay binarios listos para macOS, Linux y Windows en la [página de releases](https://github.com/lnds/kimun/releases). Desde una copia de este repositorio, `cargo install --path .` lo compila desde el código fuente.
+Cualquiera de los dos instala el binario `km`. También hay binarios listos para macOS (Apple Silicon), Linux (x86_64 y arm64) y Windows (x86_64) en la [página de releases](https://github.com/lnds/kimun/releases). Desde una copia de este repositorio, `cargo install --path .` lo compila desde el código fuente.
 
 ### Autocompletado para el shell
 
@@ -95,12 +95,15 @@ Ejecútalo en una ruta específica:
 km loc src/
 ```
 
+Los archivos de tests quedan fuera por defecto, así que los totales son menores que los de `cloc` sobre el mismo directorio. Con `--include-tests` ambos cuentan los mismos archivos.
+
 Opciones:
 
 | Flag | Descripción |
 |------|-------------|
 | `-v`, `--verbose` | Muestra estadísticas de resumen (archivos leídos, únicos, ignorados, tiempo transcurrido) |
 | `--by-author` | Desglosa las líneas de código por autor de git (requiere un repositorio git) |
+| `--include-tests` | Cuenta también los archivos y directorios de tests (por defecto quedan fuera) |
 | `--format {table,json,short,terse}` | Formato de salida (por defecto: table) |
 
 Ejemplo de salida:
@@ -1099,13 +1102,13 @@ Ejemplo de salida:
 
 Calcula un puntaje general de salud del código para el proyecto, con una nota que va de A++ (excepcional) a F-- (problemas graves). Usa solo métricas estáticas (no requiere git).
 
-> **Cambio incompatible en v0.14:** el modelo de puntaje por defecto pasó de MI + complejidad ciclomática (6 dimensiones) a complejidad cognitiva (5 dimensiones). Usa `--model legacy` para recuperar el comportamiento de v0.13.
+Hay dos modelos de puntaje: `cogcom`, el modelo por defecto, basado en la complejidad cognitiva (5 dimensiones), y `legacy`, basado en el índice de mantenibilidad y la complejidad ciclomática (6 dimensiones).
 
 Los archivos que no son código (Markdown, TOML, JSON, etc.) se excluyen automáticamente. Los bloques de test en línea (`#[cfg(test)]`) se excluyen del análisis de duplicación: el ítem bajo el atributo y nada más, así que el código que sigue a un módulo de tests sí se mide.
 
 ```bash
 km score [path]
-km score --model legacy [path]    # modelo de puntaje de v0.13
+km score --model legacy [path]    # modelo de MI + ciclomática
 ```
 
 #### Dimensiones y pesos (por defecto: cogcom)
@@ -1149,7 +1152,7 @@ Opciones:
 
 | Flag | Descripción |
 |------|-------------|
-| `--model MODEL` | Modelo de puntaje: `cogcom` (por defecto, v0.14+) o `legacy` (MI + ciclomática, v0.13) |
+| `--model MODEL` | Modelo de puntaje: `cogcom` (por defecto) o `legacy` (MI + ciclomática) |
 | `--trend [REF]` | Compara el puntaje actual con una ref de git (por defecto: `HEAD`). Muestra el cambio: `B- → B (+2.3)`. Útil para revisar un PR: `--trend origin/main` |
 | `--fail-if-worse` | Con `--trend`: termina con código 1 si el puntaje bajó más que `--gate-tolerance` |
 | `--gate-tolerance POINTS` | Caída de puntaje que `--fail-if-worse` permite antes de fallar (por defecto: `0.01` con `--gate-scope project`, `0.5` con `--gate-scope changed`). Compara los puntajes sin redondear |
@@ -1165,26 +1168,33 @@ Ejemplo de salida:
 ```
 Code Health Score
 ──────────────────────────────────────────────────────────────────
- Project Score:  B+ (84.3)
- Files Analyzed: 42
- Total LOC:      8,432
+ Project Score:  A (91.4)
+ Files Analyzed: 140
+ Total LOC:      20,050
 ──────────────────────────────────────────────────────────────────
  Dimension                 Weight   Score   Grade
 ──────────────────────────────────────────────────────────────────
- Cognitive Complexity         30%    85.6   B+
- Duplication                  20%    91.3   A
- Indentation Complexity       15%    79.8   B-
- Halstead Effort              20%    85.1   B+
- File Size                    15%    89.2   A-
+ Cognitive Complexity         30%    83.8   B+
+ Duplication                  20%    99.7   A++
+ Indentation Complexity       15%    93.0   A+
+ Halstead Effort              20%    86.9   B+
+ File Size                    15%    99.9   A++
 ──────────────────────────────────────────────────────────────────
 
- Files Needing Attention (worst scores)
+ Files Needing Attention (worst per-file scores, excl. duplication)
 ──────────────────────────────────────────────────────────────────
  Score  Grade  File                       Issues
 ──────────────────────────────────────────────────────────────────
-  54.2  F      src/legacy/parser.rs       Cognitive: 42, Indent: 3.2
-  63.7  D+     src/utils/helpers.rs       Effort: 15200, Indent: 2.4
-  68.9  C-     src/core/engine.rs         Size: 1243 LOC
+  59.8  D-     ./src/deps/analyzer.rs     Cognitive: 36
+  63.9  D+     ./src/cogcom/analyzer.rs   Cognitive: 35
+  72.3  C      ./src/smells/rules.rs      Cognitive: 20
+  73.5  C+     ./src/loc/mod.rs           Cognitive: 19
+  73.6  C+     ./src/hal/tokenizer.rs     Cognitive: 22
+  74.6  C+     ./src/knowledge/mod.rs     Cognitive: 21
+  75.7  C+     ./src/dups/mod.rs          Cognitive: 19
+  76.5  C+     ./src/test_blocks.rs       Cognitive: 17
+  78.2  B-     ./src/cli_help.rs          Cognitive: 16
+  78.9  B-     ./src/walk.rs              Cognitive: 16
 ──────────────────────────────────────────────────────────────────
 ```
 
@@ -1400,4 +1410,4 @@ La mascota es **Madu**, una pudú que es *machi*: la que guarda el conocimiento 
 
 ## Licencia
 
-Mira [Cargo.toml](Cargo.toml) para los detalles del paquete.
+MIT. Mira [LICENSE](LICENSE).
