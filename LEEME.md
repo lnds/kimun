@@ -6,37 +6,37 @@ Una herramienta de línea de comandos rápida para analizar código, escrita en 
 $ km score
 Code Health Score
 ──────────────────────────────────────────────────────────────────
- Project Score:  A (91.4)
+ Project Score:  A (91.7)
  Files Analyzed: 140
- Total LOC:      20,050
+ Total LOC:      18,963
 ──────────────────────────────────────────────────────────────────
  Dimension                 Weight   Score   Grade
 ──────────────────────────────────────────────────────────────────
- Cognitive Complexity         30%    83.8   B+
- Duplication                  20%    99.7   A++
- Indentation Complexity       15%    93.0   A+
- Halstead Effort              20%    86.9   B+
- File Size                    15%    99.9   A++
+ Cognitive Complexity         30%    84.1   B+
+ Duplication                  20%   100.0   A++
+ Indentation Complexity       15%    93.1   A+
+ Halstead Effort              20%    87.5   A-
+ File Size                    15%   100.0   A++
 ──────────────────────────────────────────────────────────────────
 
  Files Needing Attention (worst per-file scores, excl. duplication)
 ──────────────────────────────────────────────────────────────────
  Score  Grade  File                       Issues
 ──────────────────────────────────────────────────────────────────
-  59.8  D-     ./src/deps/analyzer.rs     Cognitive: 36
-  63.9  D+     ./src/cogcom/analyzer.rs   Cognitive: 35
-  72.3  C      ./src/smells/rules.rs      Cognitive: 20
-  73.5  C+     ./src/loc/mod.rs           Cognitive: 19
-  73.6  C+     ./src/hal/tokenizer.rs     Cognitive: 22
-  74.6  C+     ./src/knowledge/mod.rs     Cognitive: 21
-  75.7  C+     ./src/dups/mod.rs          Cognitive: 19
-  76.5  C+     ./src/test_blocks.rs       Cognitive: 17
+  60.7  D      ./src/deps/analyzer.rs     Cognitive: 36
+  63.8  D+     ./src/cogcom/analyzer.rs   Cognitive: 35
+  72.4  C      ./src/smells/rules.rs      Cognitive: 20
+  73.7  C+     ./src/hal/tokenizer.rs     Cognitive: 22
+  73.9  C+     ./src/loc/mod.rs           Cognitive: 19
+  74.8  C+     ./src/knowledge/mod.rs     Cognitive: 21
+  75.6  C+     ./src/dups/mod.rs          Cognitive: 19
+  77.4  B-     ./src/test_blocks.rs       Cognitive: 17
   78.2  B-     ./src/cli_help.rs          Cognitive: 16
   78.9  B-     ./src/walk.rs              Cognitive: 16
 ──────────────────────────────────────────────────────────────────
 ```
 
-Eso es Kimün midiendo su propio código: 140 archivos y 20.050 líneas de código, sin los tests, en 0,11 segundos en un Apple M3 Max. Contar los 235 archivos de `src/`, con los tests, le toma 0,04 segundos a `km loc` y 2,4 a `cloc`.
+Eso es Kimün midiendo su propio código: 140 archivos y 18.963 líneas de código, sin los tests, en 0,11 segundos en un Apple M3 Max. Contar los 235 archivos de `src/`, con los tests, le toma 0,04 segundos a `km loc` y 2,4 a `cloc`.
 
 **Sitio web: [kimun.tools](https://kimun.tools/)** · [Un video de dos minutos](https://kimun.tools/#video) con la nota, las métricas, lo que git recuerda, el impacto de un cambio y la compuerta para CI · También [en inglés](README.md).
 
@@ -1174,31 +1174,31 @@ Ejemplo de salida:
 ```
 Code Health Score
 ──────────────────────────────────────────────────────────────────
- Project Score:  A (91.4)
+ Project Score:  A (91.7)
  Files Analyzed: 140
- Total LOC:      20,050
+ Total LOC:      18,963
 ──────────────────────────────────────────────────────────────────
  Dimension                 Weight   Score   Grade
 ──────────────────────────────────────────────────────────────────
- Cognitive Complexity         30%    83.8   B+
- Duplication                  20%    99.7   A++
- Indentation Complexity       15%    93.0   A+
- Halstead Effort              20%    86.9   B+
- File Size                    15%    99.9   A++
+ Cognitive Complexity         30%    84.1   B+
+ Duplication                  20%   100.0   A++
+ Indentation Complexity       15%    93.1   A+
+ Halstead Effort              20%    87.5   A-
+ File Size                    15%   100.0   A++
 ──────────────────────────────────────────────────────────────────
 
  Files Needing Attention (worst per-file scores, excl. duplication)
 ──────────────────────────────────────────────────────────────────
  Score  Grade  File                       Issues
 ──────────────────────────────────────────────────────────────────
-  59.8  D-     ./src/deps/analyzer.rs     Cognitive: 36
-  63.9  D+     ./src/cogcom/analyzer.rs   Cognitive: 35
-  72.3  C      ./src/smells/rules.rs      Cognitive: 20
-  73.5  C+     ./src/loc/mod.rs           Cognitive: 19
-  73.6  C+     ./src/hal/tokenizer.rs     Cognitive: 22
-  74.6  C+     ./src/knowledge/mod.rs     Cognitive: 21
-  75.7  C+     ./src/dups/mod.rs          Cognitive: 19
-  76.5  C+     ./src/test_blocks.rs       Cognitive: 17
+  60.7  D      ./src/deps/analyzer.rs     Cognitive: 36
+  63.8  D+     ./src/cogcom/analyzer.rs   Cognitive: 35
+  72.4  C      ./src/smells/rules.rs      Cognitive: 20
+  73.7  C+     ./src/hal/tokenizer.rs     Cognitive: 22
+  73.9  C+     ./src/loc/mod.rs           Cognitive: 19
+  74.8  C+     ./src/knowledge/mod.rs     Cognitive: 21
+  75.6  C+     ./src/dups/mod.rs          Cognitive: 19
+  77.4  B-     ./src/test_blocks.rs       Cognitive: 17
   78.2  B-     ./src/cli_help.rs          Cognitive: 16
   78.9  B-     ./src/walk.rs              Cognitive: 16
 ──────────────────────────────────────────────────────────────────
