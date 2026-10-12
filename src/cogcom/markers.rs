@@ -1,4 +1,4 @@
-use crate::detection::FunctionDetectionMarkers;
+use crate::detection::{FunctionSyntax, detection_markers};
 
 /// Language-specific tokens used to compute cognitive complexity.
 ///
@@ -26,6 +26,8 @@ pub struct CognitiveMarkers {
     pub function_markers: &'static [&'static str],
     /// Whether functions are delimited by braces (true) or indentation (false).
     pub brace_scoped: bool,
+    /// How functions are told apart, beyond the markers.
+    pub function_syntax: FunctionSyntax,
     /// Line comment markers for this language.
     pub line_comments: &'static [&'static str],
 }
@@ -37,6 +39,7 @@ static RUST: CognitiveMarkers = CognitiveMarkers {
     boolean_operators: &["&&", "||"],
     function_markers: &["fn "],
     brace_scoped: true,
+    function_syntax: FunctionSyntax::KeywordWithLifetimes,
     line_comments: &["//"],
 };
 
@@ -47,6 +50,7 @@ static PYTHON: CognitiveMarkers = CognitiveMarkers {
     boolean_operators: &["and", "or"],
     function_markers: &["async def ", "def "],
     brace_scoped: false,
+    function_syntax: FunctionSyntax::Loose,
     line_comments: &["#"],
 };
 
@@ -57,6 +61,7 @@ static JAVASCRIPT: CognitiveMarkers = CognitiveMarkers {
     boolean_operators: &["&&", "||", "??"],
     function_markers: &["function "],
     brace_scoped: true,
+    function_syntax: FunctionSyntax::Loose,
     line_comments: &["//"],
 };
 
@@ -67,6 +72,7 @@ static C_FAMILY: CognitiveMarkers = CognitiveMarkers {
     boolean_operators: &["&&", "||"],
     function_markers: &[],
     brace_scoped: true,
+    function_syntax: FunctionSyntax::Loose,
     line_comments: &["//"],
 };
 
@@ -77,6 +83,7 @@ static GO: CognitiveMarkers = CognitiveMarkers {
     boolean_operators: &["&&", "||"],
     function_markers: &["func "],
     brace_scoped: true,
+    function_syntax: FunctionSyntax::Keyword,
     line_comments: &["//"],
 };
 
@@ -87,6 +94,7 @@ static RUBY: CognitiveMarkers = CognitiveMarkers {
     boolean_operators: &["&&", "||"],
     function_markers: &["def "],
     brace_scoped: false,
+    function_syntax: FunctionSyntax::Loose,
     line_comments: &["#"],
 };
 
@@ -97,6 +105,7 @@ static KOTLIN: CognitiveMarkers = CognitiveMarkers {
     boolean_operators: &["&&", "||"],
     function_markers: &["fun "],
     brace_scoped: true,
+    function_syntax: FunctionSyntax::Loose,
     line_comments: &["//"],
 };
 
@@ -107,6 +116,7 @@ static SWIFT: CognitiveMarkers = CognitiveMarkers {
     boolean_operators: &["&&", "||"],
     function_markers: &["func "],
     brace_scoped: true,
+    function_syntax: FunctionSyntax::Loose,
     line_comments: &["//"],
 };
 
@@ -117,6 +127,7 @@ static SCALA: CognitiveMarkers = CognitiveMarkers {
     boolean_operators: &["&&", "||"],
     function_markers: &["def "],
     brace_scoped: true,
+    function_syntax: FunctionSyntax::Keyword,
     line_comments: &["//"],
 };
 
@@ -131,6 +142,7 @@ static SHELL: CognitiveMarkers = CognitiveMarkers {
     boolean_operators: &["&&", "||"],
     function_markers: &["function "],
     brace_scoped: true,
+    function_syntax: FunctionSyntax::Loose,
     line_comments: &["#"],
 };
 
@@ -141,6 +153,7 @@ static HASKELL: CognitiveMarkers = CognitiveMarkers {
     boolean_operators: &[],
     function_markers: &[],
     brace_scoped: false,
+    function_syntax: FunctionSyntax::Loose,
     line_comments: &["--"],
 };
 
@@ -151,6 +164,7 @@ static ELIXIR: CognitiveMarkers = CognitiveMarkers {
     boolean_operators: &[],
     function_markers: &["defp ", "def "],
     brace_scoped: false,
+    function_syntax: FunctionSyntax::Loose,
     line_comments: &["#"],
 };
 
@@ -161,6 +175,7 @@ static LUA: CognitiveMarkers = CognitiveMarkers {
     boolean_operators: &[],
     function_markers: &["function "],
     brace_scoped: false,
+    function_syntax: FunctionSyntax::Loose,
     line_comments: &["--"],
 };
 
@@ -171,6 +186,7 @@ static PERL: CognitiveMarkers = CognitiveMarkers {
     boolean_operators: &["&&", "||"],
     function_markers: &["sub "],
     brace_scoped: true,
+    function_syntax: FunctionSyntax::Keyword,
     line_comments: &["#"],
 };
 
@@ -181,6 +197,7 @@ static ERLANG: CognitiveMarkers = CognitiveMarkers {
     boolean_operators: &[],
     function_markers: &[],
     brace_scoped: false,
+    function_syntax: FunctionSyntax::Loose,
     line_comments: &["%"],
 };
 
@@ -191,6 +208,7 @@ static OCAML: CognitiveMarkers = CognitiveMarkers {
     boolean_operators: &[],
     function_markers: &["let "],
     brace_scoped: false,
+    function_syntax: FunctionSyntax::Loose,
     line_comments: &[],
 };
 
@@ -201,6 +219,7 @@ static R: CognitiveMarkers = CognitiveMarkers {
     boolean_operators: &["&&", "||"],
     function_markers: &[],
     brace_scoped: true,
+    function_syntax: FunctionSyntax::Loose,
     line_comments: &["#"],
 };
 
@@ -211,6 +230,7 @@ static JULIA: CognitiveMarkers = CognitiveMarkers {
     boolean_operators: &["&&", "||"],
     function_markers: &["function "],
     brace_scoped: false,
+    function_syntax: FunctionSyntax::Loose,
     line_comments: &["#"],
 };
 
@@ -221,6 +241,7 @@ static NIM: CognitiveMarkers = CognitiveMarkers {
     boolean_operators: &[],
     function_markers: &["proc ", "func "],
     brace_scoped: false,
+    function_syntax: FunctionSyntax::Loose,
     line_comments: &["#"],
 };
 
@@ -231,6 +252,7 @@ static ZIG: CognitiveMarkers = CognitiveMarkers {
     boolean_operators: &[],
     function_markers: &["fn "],
     brace_scoped: true,
+    function_syntax: FunctionSyntax::Keyword,
     line_comments: &["//"],
 };
 
@@ -241,6 +263,7 @@ static CLOJURE: CognitiveMarkers = CognitiveMarkers {
     boolean_operators: &[],
     function_markers: &["defn "],
     brace_scoped: false,
+    function_syntax: FunctionSyntax::Loose,
     line_comments: &[";"],
 };
 
@@ -255,6 +278,7 @@ static KAIKAI: CognitiveMarkers = CognitiveMarkers {
     boolean_operators: &["and", "or"],
     function_markers: &["fn "],
     brace_scoped: true,
+    function_syntax: FunctionSyntax::Keyword,
     line_comments: &["#"],
 };
 
@@ -290,17 +314,7 @@ pub fn cognitive_markers_for(language_name: &str) -> Option<&'static CognitiveMa
     }
 }
 
-impl FunctionDetectionMarkers for CognitiveMarkers {
-    fn function_markers(&self) -> &[&str] {
-        self.function_markers
-    }
-    fn brace_scoped(&self) -> bool {
-        self.brace_scoped
-    }
-    fn line_comments(&self) -> &[&str] {
-        self.line_comments
-    }
-}
+detection_markers!(CognitiveMarkers);
 
 #[cfg(test)]
 #[path = "markers_test.rs"]
