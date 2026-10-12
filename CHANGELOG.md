@@ -1,3 +1,15 @@
+## v0.35.0 (2026-10-12)
+
+### Feat
+
+- leave inline Rust tests out of every metric
+- **deps**: a Go import leads to every file of the package it names
+
+### Fix
+
+- **loc**: read the raw strings of Rust
+- **install**: km builds without the OpenSSL headers of the system
+
 ## v0.34.3 (2026-10-12)
 
 ### Fix
