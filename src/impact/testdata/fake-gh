@@ -1,0 +1,17 @@
+#!/bin/sh
+# Stands in for `gh` in tests, run through a link in a directory of the test.
+# It is never written while tests run: a program written and run at once by
+# a process with several threads can fail with "Text file busy".
+#
+# Beside the link: `args` receives the arguments; the answer is the file
+# named after the subcommand (`view`, `diff`) or else `stdout`; `status`
+# holds the exit status, 0 when missing.
+here=$(dirname "$0")
+echo "$@" > "$here/args"
+if [ -f "$here/$2" ]; then
+  cat "$here/$2"
+else
+  cat "$here/stdout"
+fi
+echo 'not logged in' >&2
+exit "$(cat "$here/status" 2>/dev/null || echo 0)"

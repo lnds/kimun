@@ -112,6 +112,17 @@ pub fn patch(program: &str, dir: &Path, number: u64) -> Result<Vec<u8>, Box<dyn 
     )
 }
 
+/// A link in `dir` to the program that stands in for `gh` in tests. The
+/// program is a file of the repository: one written by the test could not
+/// always be run at once.
+#[cfg(all(test, unix))]
+pub(crate) fn link_fake_gh(dir: &Path) -> std::path::PathBuf {
+    let program = dir.join("fake-gh");
+    let script = concat!(env!("CARGO_MANIFEST_DIR"), "/src/impact/testdata/fake-gh");
+    std::os::unix::fs::symlink(script, &program).unwrap();
+    program
+}
+
 #[cfg(test)]
 #[path = "pr_test.rs"]
 mod tests;
