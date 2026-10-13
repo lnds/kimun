@@ -111,3 +111,9 @@ fn detect_kaikai() {
     let spec = detect(Path::new("main.kai")).unwrap();
     assert_eq!(spec.name, "Kaikai");
 }
+
+#[test]
+fn react_components_are_detected() {
+    assert_eq!(detect(Path::new("App.jsx")).unwrap().name, "JSX");
+    assert_eq!(detect(Path::new("App.tsx")).unwrap().name, "TypeScript");
+}

@@ -18,7 +18,6 @@ pub fn is_supported(language: &str) -> bool {
             | "JavaScript"
             | "TypeScript"
             | "JSX"
-            | "TSX"
             | "Go"
             | "Kaikai"
             | "Elixir"
@@ -31,7 +30,7 @@ pub fn is_supported(language: &str) -> bool {
 pub fn extract_imports(language: &str, source: &str) -> Vec<String> {
     match language {
         "Python" => python::extract(source),
-        "JavaScript" | "TypeScript" | "JSX" | "TSX" => extract_js(source),
+        "JavaScript" | "TypeScript" | "JSX" => extract_js(source),
         "Go" => extract_go(source),
         "Kaikai" => kaikai::extract(source),
         _ => vec![],

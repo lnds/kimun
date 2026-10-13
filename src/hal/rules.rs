@@ -404,7 +404,7 @@ pub fn rules_for(language: &str) -> Option<&'static TokenRules> {
     match language {
         "Rust" => Some(&RUST),
         "Python" => Some(&PYTHON),
-        "JavaScript" | "TypeScript" => Some(&JAVASCRIPT),
+        "JavaScript" | "JSX" | "TypeScript" => Some(&JAVASCRIPT),
         "Go" => Some(&GO),
         "C" | "C++" | "C#" | "Java" | "Objective-C" | "PHP" | "Dart" => Some(&C_FAMILY),
         "Ruby" => Some(&RUBY),
