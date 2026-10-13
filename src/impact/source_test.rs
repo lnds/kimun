@@ -301,19 +301,11 @@ fn history_between_two_refs_ends_where_they_diverged() {
 #[cfg(unix)]
 mod pull_requests {
     use super::*;
-    use std::os::unix::fs::PermissionsExt;
-
     /// A program that answers `pr view` with `view` and `pr diff` with `diff`.
     fn fake_gh(dir: &Path, view: &str, diff: &str) -> String {
-        fs::write(dir.join("view.json"), view).unwrap();
-        fs::write(dir.join("pr.patch"), diff).unwrap();
-        let program = dir.join("fake-gh");
-        fs::write(
-            &program,
-            "#!/bin/sh\nhere=$(dirname \"$0\")\ncase \"$2\" in\n  view) cat \"$here/view.json\" ;;\n  diff) cat \"$here/pr.patch\" ;;\nesac\n",
-        )
-        .unwrap();
-        fs::set_permissions(&program, fs::Permissions::from_mode(0o755)).unwrap();
+        fs::write(dir.join("view"), view).unwrap();
+        fs::write(dir.join("diff"), diff).unwrap();
+        let program = crate::impact::pr::link_fake_gh(dir);
         program.to_str().unwrap().to_string()
     }
 

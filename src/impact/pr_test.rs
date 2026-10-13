@@ -90,24 +90,14 @@ fn a_missing_gh_is_reported_with_how_to_get_it() {
 mod with_a_fake_gh {
     use super::*;
     use std::fs;
-    use std::os::unix::fs::PermissionsExt;
     use std::path::PathBuf;
 
     /// A program that answers as `gh` would: prints `stdout` and exits with
     /// `status`, after recording its arguments next to itself.
     fn fake(dir: &Path, stdout: &str, status: i32) -> PathBuf {
-        let program = dir.join("fake-gh");
         fs::write(dir.join("stdout"), stdout).unwrap();
-        fs::write(
-            &program,
-            format!(
-                "#!/bin/sh\necho \"$@\" > \"$(dirname \"$0\")/args\"\n\
-                 cat \"$(dirname \"$0\")/stdout\"\necho 'not logged in' >&2\nexit {status}\n"
-            ),
-        )
-        .unwrap();
-        fs::set_permissions(&program, fs::Permissions::from_mode(0o755)).unwrap();
-        program
+        fs::write(dir.join("status"), status.to_string()).unwrap();
+        crate::impact::pr::link_fake_gh(dir)
     }
 
     #[test]
