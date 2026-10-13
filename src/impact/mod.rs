@@ -166,7 +166,7 @@ fn structural_radius(
     };
     let in_scope =
         |path: &Path| scope.is_empty() || scope.iter().any(|root| path.starts_with(root));
-    let measured = |p: &Path| structural::is_reliable(p) || heex::is_template(p) || is_manifest(p);
+    let measured = |p: &Path| structural::is_measured(p) || heex::is_template(p) || is_manifest(p);
     let sources = change.sources(git_repo, |p| measured(p) && in_scope(p))?;
     let changed: Vec<structural::Changed> = change.diff.iter().collect();
     let mut radius = structural::compute(sources, &changed, &|from, to| graph.may_use(from, to));
