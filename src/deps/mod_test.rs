@@ -357,3 +357,27 @@ fn go_modules_in_subdirectories_resolve_from_where_they_are() {
         (0, 0, false)
     );
 }
+
+#[test]
+fn jsx_and_tsx_files_enter_the_graph() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        "src/App.tsx",
+        "import { Button } from './Button';\nimport { label } from './label';\n",
+    );
+    write(
+        dir.path(),
+        "src/Button.jsx",
+        "import { label } from './label';\n",
+    );
+    write(dir.path(), "src/label.ts", "export const label = 'ok';\n");
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = analyze(&cfg);
+
+    assert_eq!(metrics(&result, "src/App.tsx"), (0, 2, false));
+    assert_eq!(metrics(&result, "src/Button.jsx"), (1, 1, false));
+    assert_eq!(metrics(&result, "src/label.ts"), (2, 0, false));
+    assert!(result.unsupported.is_empty());
+}

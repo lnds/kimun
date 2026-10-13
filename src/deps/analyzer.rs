@@ -236,7 +236,7 @@ pub fn resolve_import(
 ) -> Vec<PathBuf> {
     let dir = importer.parent().unwrap_or(Path::new(""));
     let single = match language {
-        "JavaScript" | "TypeScript" | "JSX" | "TSX" => resolve_js(dir, import_str, file_set),
+        "JavaScript" | "TypeScript" | "JSX" => resolve_js(dir, import_str, file_set),
         "Kaikai" => return kaikai::resolve(importer, import_str, file_set),
         _ => None,
     };
@@ -415,7 +415,12 @@ mod tests {
     fn resolve_js_index_file() {
         let mut file_set = HashSet::new();
         file_set.insert(PathBuf::from("src/components/index.tsx"));
-        let result = resolve_import(Path::new("src/app.tsx"), "./components", "TSX", &file_set);
+        let result = resolve_import(
+            Path::new("src/app.tsx"),
+            "./components",
+            "TypeScript",
+            &file_set,
+        );
         assert_eq!(result, vec![PathBuf::from("src/components/index.tsx")]);
     }
 

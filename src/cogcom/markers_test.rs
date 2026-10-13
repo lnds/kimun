@@ -155,3 +155,9 @@ fn python_uses_word_boolean_operators() {
     assert!(m.boolean_operators.contains(&"and"));
     assert!(m.boolean_operators.contains(&"or"));
 }
+
+#[test]
+fn jsx_is_measured_as_javascript() {
+    assert!(cognitive_markers_for("JSX").is_some());
+    assert!(crate::cycom::markers::markers_for("JSX").is_some());
+}

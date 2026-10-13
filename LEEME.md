@@ -273,7 +273,7 @@ Halstead Complexity Metrics
 
 #### Lenguajes soportados
 
-Rust, Python, JavaScript, TypeScript, Go, C, C++, C#, Java, Objective-C, PHP, Dart, Ruby, Kotlin, Swift, Shell (Bash/Zsh).
+Rust, Python, JavaScript, JSX, TypeScript, Go, C, C++, C#, Java, Objective-C, PHP, Dart, Ruby, Kotlin, Swift, Shell (Bash/Zsh).
 
 ### `km cycom` -- Complejidad ciclomática
 
@@ -1332,6 +1332,7 @@ Todas las secciones y todos los campos son opcionales: omite los que no necesite
 | Java | `.java` |
 | JavaScript | `.js`, `.mjs`, `.cjs` |
 | JSON | `.json` |
+| JSX | `.jsx` |
 | Julia | `.jl` |
 | Kaikai | `.kai` |
 | Kotlin | `.kt`, `.kts` |
@@ -1354,7 +1355,7 @@ Todas las secciones y todos los campos son opcionales: omite los que no necesite
 | Terraform | `.tf` |
 | Text | `.txt` |
 | TOML | `.toml` |
-| TypeScript | `.ts`, `.mts`, `.cts` |
+| TypeScript | `.ts`, `.tsx`, `.mts`, `.cts` |
 | XML | `.xml`, `.xsl`, `.xslt`, `.svg`, `.fsproj`, `.csproj`, `.vbproj`, `.vcxproj`, `.sln`, `.plist`, `.xaml` |
 | YAML | `.yaml`, `.yml` |
 | Zig | `.zig` |

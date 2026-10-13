@@ -290,7 +290,7 @@ pub fn cognitive_markers_for(language_name: &str) -> Option<&'static CognitiveMa
     match language_name {
         "Rust" => Some(&RUST),
         "Python" => Some(&PYTHON),
-        "JavaScript" | "TypeScript" => Some(&JAVASCRIPT),
+        "JavaScript" | "JSX" | "TypeScript" => Some(&JAVASCRIPT),
         "Java" | "C#" | "C" | "C++" | "Objective-C" | "PHP" | "Dart" => Some(&C_FAMILY),
         "Go" => Some(&GO),
         "Ruby" => Some(&RUBY),

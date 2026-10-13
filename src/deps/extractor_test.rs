@@ -80,7 +80,6 @@ fn dispatcher_routes_each_language_to_its_extractor() {
             "./foo",
         ),
         ("src/a.jsx", "JSX", "import a from './foo';\n", "./foo"),
-        ("src/a.tsx", "TSX", "import a from './foo';\n", "./foo"),
         ("main.go", "Go", "import \"fmt\"\n", "fmt"),
     ];
     for (_, language, source, expected) in cases {
@@ -97,7 +96,7 @@ fn kaikai_is_extracted_through_the_dispatcher() {
 
 #[test]
 fn supported_languages() {
-    for lang in ["Rust", "Python", "TypeScript", "TSX", "Go", "Kaikai"] {
+    for lang in ["Rust", "Python", "TypeScript", "JSX", "Go", "Kaikai"] {
         assert!(is_supported(lang), "{lang} should be supported");
     }
     for lang in ["Bash", "TOML", "Java"] {

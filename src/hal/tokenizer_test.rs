@@ -5,6 +5,7 @@ fn rules_for_known_languages() {
     assert!(rules_for("Rust").is_some());
     assert!(rules_for("Python").is_some());
     assert!(rules_for("JavaScript").is_some());
+    assert!(rules_for("JSX").is_some());
     assert!(rules_for("Go").is_some());
     assert!(rules_for("C").is_some());
     assert!(rules_for("Ruby").is_some());
