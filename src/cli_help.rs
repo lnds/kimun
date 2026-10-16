@@ -235,10 +235,7 @@ Default model (cogcom) — 5 dimensions:
   Indentation Complexity  16%  (stddev of indentation depth)
   Halstead Effort         21%  (mental effort per LOC)
   File Size               10%  (full score up to 500 LOC, 0 at 4000)
-
-Note: up to v0.35 File Size weighed 15% and the others 30/20/15/20.
---model cogcom-0.35 scores with those weights, to compare with
-earlier results or to keep a CI gate stable.
+Up to v0.35 they were 30/20/15/20/15: --model cogcom-0.35.
 
 Legacy model (--model legacy, v0.13) — 6 dimensions:
   Maintainability Index   30%  (verifysoft MI with comment weight)
@@ -293,8 +290,7 @@ The output shows:
     (green = improvement, red = regression)
 
 Use --model legacy to compare using the v0.13 scoring model
-(MI + cyclomatic complexity, 6 dimensions), and --model cogcom-0.35
-for the weights up to v0.35.
+(MI + cyclomatic complexity, 6 dimensions).
 
 Requires a git repository.
 
