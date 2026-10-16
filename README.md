@@ -1367,10 +1367,14 @@ All sections and fields are optional — omit any you don't need. A fully docume
   as code. Documentation attributes (`#[doc("...")]`, including the multi-line
   `#[doc("""...""")]` form) count as comments and are excluded from the
   complexity, Halstead, and smell analyses.
+- **Elixir** — the heredocs of `@moduledoc` and `@doc` (`"""`, `'''`, and the
+  `~S"""` and `~s"""` sigils) count as comments, as cloc counts them, and are
+  excluded from the complexity, Halstead, and smell analyses. A one-line
+  `@doc "..."` and any other heredoc count as code.
 - **Interior lines of multi-line strings** (Kaikai and Python triple-quoted
-  literals) count as code for `km loc`, but are excluded from cyclomatic,
-  cognitive, Halstead, and smell analyses: prose and embedded data are not
-  control flow.
+  literals, Elixir heredocs) count as code for `km loc`, but are excluded from
+  cyclomatic, cognitive, Halstead, and smell analyses: prose and embedded data
+  are not control flow.
 - **Rust raw strings** (`r"..."`, `r#"..."#` and the forms with more `#`, with a
   `b` or `c` prefix too) end only at a quote followed by as many `#` as opened
   them, and span lines. What they hold counts as code for `km loc`, whatever it

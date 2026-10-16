@@ -14,7 +14,7 @@ fn spec_c_like() -> LanguageSpec {
         triple_quote_strings: false,
         raw_strings: false,
         pragma: None,
-        doc_attribute: None,
+        doc_attributes: &[],
         shebangs: &[],
     }
 }
@@ -32,7 +32,7 @@ fn spec_rust() -> LanguageSpec {
         triple_quote_strings: false,
         raw_strings: true,
         pragma: None,
-        doc_attribute: None,
+        doc_attributes: &[],
         shebangs: &[],
     }
 }
@@ -50,7 +50,7 @@ fn spec_python() -> LanguageSpec {
         triple_quote_strings: true,
         raw_strings: false,
         pragma: None,
-        doc_attribute: None,
+        doc_attributes: &[],
         shebangs: &["python", "python3"],
     }
 }
@@ -68,7 +68,7 @@ fn spec_js() -> LanguageSpec {
         triple_quote_strings: false,
         raw_strings: false,
         pragma: None,
-        doc_attribute: None,
+        doc_attributes: &[],
         shebangs: &["node"],
     }
 }
@@ -86,7 +86,7 @@ fn spec_haskell() -> LanguageSpec {
         triple_quote_strings: false,
         raw_strings: false,
         pragma: Some(("{-#", "#-}")),
-        doc_attribute: None,
+        doc_attributes: &[],
         shebangs: &[],
     }
 }
@@ -104,7 +104,7 @@ fn spec_kaikai() -> LanguageSpec {
         triple_quote_strings: true,
         raw_strings: false,
         pragma: None,
-        doc_attribute: Some(("#[doc(", ")]")),
+        doc_attributes: &[("#[doc(", ")]")],
         shebangs: &[],
     }
 }
@@ -347,6 +347,46 @@ fn kaikai_doc_attribute_body_hash_is_comment() {
     assert_eq!(stats.code, 0);
 }
 
+// --- Elixir ---
+
+fn spec_elixir() -> &'static LanguageSpec {
+    super::super::language::detect(std::path::Path::new("lib/a.ex")).unwrap()
+}
+
+#[test]
+fn elixir_doc_heredocs_are_comment() {
+    let text = "defmodule A do\n  @moduledoc \"\"\"\n  If it fails, it retries.\n\n  ## Examples\n  \"\"\"\n\n  @doc ~S\"\"\"\n  Runs it.\n  \"\"\"\n  def run, do: :ok\nend\n";
+    let stats = count(spec_elixir(), text);
+    assert_eq!(stats.comment, 8);
+    assert_eq!(stats.code, 3);
+}
+
+#[test]
+fn elixir_single_line_doc_is_code() {
+    // cloc counts it as code too: only heredocs are documentation
+    let stats = count(spec_elixir(), "@doc \"Runs it.\"\ndef run, do: :ok\n");
+    assert_eq!(stats.code, 2);
+    assert_eq!(stats.comment, 0);
+}
+
+#[test]
+fn elixir_other_heredocs_are_code() {
+    let stats = count(
+        spec_elixir(),
+        "@query \"\"\"\n# not a comment\nSELECT 1\n\"\"\"\n",
+    );
+    assert_eq!(stats.code, 4);
+    assert_eq!(stats.comment, 0);
+}
+
+#[test]
+fn elixir_script_doc_heredocs_are_comment() {
+    let spec = super::super::language::detect(std::path::Path::new("test/a_test.exs")).unwrap();
+    let stats = count(spec, "@doc \"\"\"\nHelper.\n\"\"\"\ndef h, do: 1\n");
+    assert_eq!(stats.comment, 3);
+    assert_eq!(stats.code, 1);
+}
+
 // --- Haskell pragmas ---
 
 #[test]
@@ -545,7 +585,7 @@ fn spec_no_comments() -> LanguageSpec {
         triple_quote_strings: false,
         raw_strings: false,
         pragma: None,
-        doc_attribute: None,
+        doc_attributes: &[],
         shebangs: &[],
     }
 }
@@ -570,7 +610,7 @@ fn spec_batch() -> LanguageSpec {
         triple_quote_strings: false,
         raw_strings: false,
         pragma: None,
-        doc_attribute: None,
+        doc_attributes: &[],
         shebangs: &[],
     }
 }
@@ -598,7 +638,7 @@ fn spec_heex() -> LanguageSpec {
         triple_quote_strings: false,
         raw_strings: false,
         pragma: None,
-        doc_attribute: None,
+        doc_attributes: &[],
         shebangs: &[],
     }
 }
@@ -616,7 +656,7 @@ fn spec_po() -> LanguageSpec {
         triple_quote_strings: false,
         raw_strings: false,
         pragma: None,
-        doc_attribute: None,
+        doc_attributes: &[],
         shebangs: &[],
     }
 }

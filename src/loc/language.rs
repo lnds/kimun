@@ -42,13 +42,42 @@ pub struct LanguageSpec {
     pub raw_strings: bool,
     /// Pragma delimiters that override block comment detection (Haskell).
     pub pragma: Option<(&'static str, &'static str)>,
-    /// Documentation attribute delimiters, e.g. Kaikai's `#[doc(` … `)]`.
-    /// Their body is documentation, so it is classified as comment even
-    /// though it is written as a string literal.
-    pub doc_attribute: Option<(&'static str, &'static str)>,
+    /// Documentation attribute delimiters, opening and closing, e.g.
+    /// Kaikai's `#[doc(` … `)]` or Elixir's `@doc """` … `"""`. Their body
+    /// is documentation, so it is classified as comment even though it is
+    /// written as a string literal.
+    pub doc_attributes: &'static [(&'static str, &'static str)],
     /// Shebang interpreter names for extensionless script detection.
     pub shebangs: &'static [&'static str],
 }
+
+/// The heredocs of `@moduledoc` and `@doc`, plain or as a sigil.
+const ELIXIR_DOCS: &[(&str, &str)] = &[
+    ("@moduledoc \"\"\"", "\"\"\""),
+    ("@moduledoc ~S\"\"\"", "\"\"\""),
+    ("@moduledoc ~s\"\"\"", "\"\"\""),
+    ("@moduledoc '''", "'''"),
+    ("@doc \"\"\"", "\"\"\""),
+    ("@doc ~S\"\"\"", "\"\"\""),
+    ("@doc ~s\"\"\"", "\"\"\""),
+    ("@doc '''", "'''"),
+];
+
+const ELIXIR_SCRIPT: LanguageSpec = LanguageSpec {
+    name: "Elixir Script",
+    extensions: &["exs"],
+    filenames: &[],
+    line_comments: &["#"],
+    line_comment_not_before: "",
+    block_comment: None,
+    nested_block_comments: false,
+    single_quote_strings: true,
+    triple_quote_strings: true,
+    raw_strings: false,
+    pragma: None,
+    doc_attributes: ELIXIR_DOCS,
+    shebangs: &[],
+};
 
 /// Return the static registry of all supported language specifications.
 pub fn languages() -> &'static [LanguageSpec] {
@@ -67,7 +96,7 @@ pub fn languages() -> &'static [LanguageSpec] {
             triple_quote_strings: false,
             raw_strings: true,
             pragma: None,
-            doc_attribute: None,
+            doc_attributes: &[],
             shebangs: &[],
         },
         lang_spec!("Python", ext: ["py", "pyi"],
@@ -133,7 +162,7 @@ pub fn languages() -> &'static [LanguageSpec] {
             filenames: &[],
             line_comments: &["--"],
             line_comment_not_before: "!#$%&*+./<=>?@\\^|~",
-            doc_attribute: None,
+            doc_attributes: &[],
             block_comment: Some(("{-", "-}")),
             nested_block_comments: true,
             single_quote_strings: false,
@@ -159,11 +188,15 @@ pub fn languages() -> &'static [LanguageSpec] {
               line: "#"),
         lang_spec!("Makefile", ext: ["mk"], files: ["Makefile", "makefile", "GNUmakefile"],
               line: "#"),
-        lang_spec!("Elixir", ext: ["ex"],
-              line: "#", sq: true,
-              shebangs: ["elixir"]),
-        lang_spec!("Elixir Script", ext: ["exs"],
-              line: "#", sq: true),
+        // Elixir is defined manually because its `@moduledoc` and `@doc`
+        // heredocs are documentation, as cloc counts them.
+        LanguageSpec {
+            name: "Elixir",
+            extensions: &["ex"],
+            shebangs: &["elixir"],
+            ..ELIXIR_SCRIPT
+        },
+        ELIXIR_SCRIPT,
         lang_spec!("Clojure", ext: ["clj", "cljs", "cljc", "edn"],
               line: ";"),
         lang_spec!("Zig", ext: ["zig"],
@@ -183,7 +216,7 @@ pub fn languages() -> &'static [LanguageSpec] {
             triple_quote_strings: true,
             raw_strings: false,
             pragma: None,
-            doc_attribute: Some(("#[doc(", ")]")),
+            doc_attributes: &[("#[doc(", ")]")],
             shebangs: &[],
         },
         lang_spec!("Objective-C", ext: ["m", "mm"],

@@ -225,3 +225,25 @@ fn analyze_file_leaves_inline_tests_out_when_they_are_excluded() {
     let everything = analyze_file(&path, spec, false).unwrap().unwrap();
     assert!(production.metrics.volume < everything.metrics.volume);
 }
+
+#[test]
+fn elixir_docs_and_heredocs_not_tokenized() {
+    use crate::loc::language::detect;
+    let dir = tempfile::tempdir().unwrap();
+    let code =
+        "defmodule A do\n  def run(x) do\n    if x > 0, do: x |> inc(), else: 0\n  end\nend\n";
+    let documented = "defmodule A do\n  @moduledoc \"\"\"\n  If it fails, the caller retries it.\n  \"\"\"\n\n  @doc \"\"\"\n  Runs it when x is positive.\n  \"\"\"\n  def run(x) do\n    if x > 0, do: x |> inc(), else: 0\n  end\nend\n";
+    let analyze = |name: &str, text: &str| {
+        let path = dir.path().join(name);
+        fs::write(&path, text).unwrap();
+        analyze_file(&path, detect(&path).unwrap(), false)
+            .unwrap()
+            .expect("Elixir has Halstead rules")
+            .metrics
+    };
+    let bare = analyze("bare.ex", code);
+    let with_docs = analyze("docs.ex", documented);
+    assert_eq!(bare.total_operators, with_docs.total_operators);
+    assert_eq!(bare.total_operands, with_docs.total_operands);
+    assert_eq!(bare.distinct_operands, with_docs.distinct_operands);
+}

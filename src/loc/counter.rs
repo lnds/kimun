@@ -101,7 +101,9 @@ fn end_line(state: &mut State) {
     use StringKind::{Double, Single};
     match state {
         State::InString(Double | Single) => *state = State::Normal,
-        State::InDocAttribute(Some(Double | Single)) => *state = State::InDocAttribute(None),
+        State::InDocAttribute(close, Some(Double | Single)) => {
+            *state = State::InDocAttribute(close, None)
+        }
         _ => {}
     }
 }
@@ -115,7 +117,7 @@ fn classify_line(
     raw: &mut Vec<RawSpan>,
 ) -> LineKind {
     let mut has_code = matches!(state, State::InString(_));
-    let mut has_comment = matches!(state, State::InBlockComment(_) | State::InDocAttribute(_));
+    let mut has_comment = matches!(state, State::InBlockComment(_) | State::InDocAttribute(..));
     let bytes = line.as_bytes();
     let len = bytes.len();
     let mut i = 0;
@@ -126,7 +128,9 @@ fn classify_line(
             State::Normal => step_normal(&bytes[i..], spec, bytes, i),
             State::InString(kind) => step_in_string(&bytes[i..], kind),
             State::InBlockComment(depth) => step_in_block_comment(&bytes[i..], spec, *depth),
-            State::InDocAttribute(inner) => step_in_doc_attribute(&bytes[i..], spec, inner),
+            State::InDocAttribute(close, inner) => {
+                step_in_doc_attribute(&bytes[i..], spec, close, inner)
+            }
         };
         has_code |= result.has_code;
         has_comment |= result.has_comment;
@@ -167,7 +171,7 @@ fn process_lines(
         let kind = if number == 0 && line.starts_with("#!") {
             LineKind::Code
         } else if line.trim().is_empty()
-            && !matches!(state, State::InBlockComment(_) | State::InDocAttribute(_))
+            && !matches!(state, State::InBlockComment(_) | State::InDocAttribute(..))
         {
             LineKind::Blank
         } else {
