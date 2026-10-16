@@ -391,6 +391,39 @@ fn scoring_model_from_arg_legacy() {
     assert_eq!(ScoringModel::from_arg("legacy"), ScoringModel::Legacy);
 }
 
+#[test]
+fn scoring_model_from_arg_cogcom_0_35() {
+    assert_eq!(
+        ScoringModel::from_arg("cogcom-0.35"),
+        ScoringModel::Cognitive035
+    );
+}
+
+#[test]
+fn the_weights_up_to_v0_35_give_the_former_score() {
+    let files = vec![FileMetrics {
+        path: "a.rs".into(),
+        code_lines: 100,
+        max_cognitive: Some(20),
+        mi_score: None,
+        max_complexity: None,
+        indent_stddev: Some(1.0),
+        halstead_effort: Some(1000.0),
+    }];
+    let score_with = |model| {
+        let dims = build_dimensions(&files, 100, 0.0, &model);
+        dims.iter().map(|d| d.weight * d.score).sum::<f64>()
+    };
+    let dims = build_dimensions(&files, 100, 0.0, &ScoringModel::Cognitive035);
+    let former = 0.30 * dims[0].score
+        + 0.20 * dims[1].score
+        + 0.15 * dims[2].score
+        + 0.20 * dims[3].score
+        + 0.15 * dims[4].score;
+    assert!((score_with(ScoringModel::Cognitive035) - former).abs() < 1e-9);
+    assert!(score_with(ScoringModel::Cognitive) < former);
+}
+
 // ── run helpers ─────────────────────────────────────────────────────────
 
 fn create_test_repo_with_rust_file() -> (tempfile::TempDir, Repository) {

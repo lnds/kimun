@@ -2,11 +2,19 @@ use super::*;
 
 #[test]
 fn cognitive_weights_sum_to_one() {
-    let total = W_COGCOM + W_DUP + W_INDENT + W_HAL + W_SIZE;
-    assert!(
-        (total - 1.0).abs() < 1e-10,
-        "cognitive dimension weights must sum to 1.0, got {total}"
-    );
+    for w in [COGNITIVE, COGNITIVE_0_35] {
+        let total = w.cogcom + w.dup + w.indent + w.hal + w.size;
+        assert!(
+            (total - 1.0).abs() < 1e-10,
+            "cognitive dimension weights must sum to 1.0, got {total}"
+        );
+    }
+}
+
+#[test]
+fn the_model_of_v0_35_weighs_file_size_at_15_percent() {
+    assert_eq!(ScoringModel::Cognitive.cognitive_weights().size, 0.10);
+    assert_eq!(ScoringModel::Cognitive035.cognitive_weights().size, 0.15);
 }
 
 #[test]
@@ -15,16 +23,6 @@ fn legacy_weights_sum_to_one() {
     assert!(
         (total - 1.0).abs() < 1e-10,
         "legacy dimension weights must sum to 1.0, got {total}"
-    );
-}
-
-#[test]
-fn file_weights_match_cognitive_constants() {
-    let file_sum: f64 = FILE_WEIGHTS.iter().map(|(w, _)| w).sum();
-    let expected = W_COGCOM + W_INDENT + W_HAL + W_SIZE;
-    assert!(
-        (file_sum - expected).abs() < 1e-10,
-        "FILE_WEIGHTS sum should match non-dup cognitive constants"
     );
 }
 

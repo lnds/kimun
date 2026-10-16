@@ -548,9 +548,10 @@ pub enum Commands {
         #[arg(long)]
         min_lines: Option<usize>,
 
-        /// Scoring model: cogcom (default, v0.14+) or legacy (MI + cyclomatic, v0.13).
+        /// Scoring model: cogcom (default), cogcom-0.35 (the weights up to v0.35)
+        /// or legacy (MI + cyclomatic, v0.13).
         /// Overridable via .kimun.toml [score] model.
-        #[arg(long, value_parser = ["cogcom", "legacy"])]
+        #[arg(long, value_parser = ["cogcom", "cogcom-0.35", "legacy"])]
         model: Option<String>,
 
         /// Compare current score against a git ref (default: HEAD).
@@ -690,9 +691,10 @@ pub enum ScoreCommands {
         #[arg(long)]
         min_lines: Option<usize>,
 
-        /// Scoring model: cogcom (default, v0.14+) or legacy (MI + cyclomatic, v0.13).
+        /// Scoring model: cogcom (default), cogcom-0.35 (the weights up to v0.35)
+        /// or legacy (MI + cyclomatic, v0.13).
         /// Overridable via .kimun.toml [score] model.
-        #[arg(long, value_parser = ["cogcom", "legacy"])]
+        #[arg(long, value_parser = ["cogcom", "cogcom-0.35", "legacy"])]
         model: Option<String>,
     },
 }

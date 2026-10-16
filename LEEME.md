@@ -6,33 +6,33 @@ Una herramienta de línea de comandos rápida para analizar código, escrita en 
 $ km score
 Code Health Score
 ──────────────────────────────────────────────────────────────────
- Project Score:  A (91.7)
- Files Analyzed: 140
- Total LOC:      18,963
+ Project Score:  A (91.2)
+ Files Analyzed: 142
+ Total LOC:      19,084
 ──────────────────────────────────────────────────────────────────
  Dimension                 Weight   Score   Grade
 ──────────────────────────────────────────────────────────────────
- Cognitive Complexity         30%    84.1   B+
- Duplication                  20%   100.0   A++
- Indentation Complexity       15%    93.1   A+
- Halstead Effort              20%    87.5   A-
- File Size                    15%   100.0   A++
+ Cognitive Complexity         32%    84.1   B+
+ Duplication                  21%   100.0   A++
+ Indentation Complexity       16%    93.2   A+
+ Halstead Effort              21%    87.5   A-
+ File Size                    10%   100.0   A++
 ──────────────────────────────────────────────────────────────────
 
  Files Needing Attention (worst per-file scores, excl. duplication)
 ──────────────────────────────────────────────────────────────────
  Score  Grade  File                       Issues
 ──────────────────────────────────────────────────────────────────
-  60.7  D      ./src/deps/analyzer.rs     Cognitive: 36
-  63.8  D+     ./src/cogcom/analyzer.rs   Cognitive: 35
-  72.4  C      ./src/smells/rules.rs      Cognitive: 20
-  73.7  C+     ./src/hal/tokenizer.rs     Cognitive: 22
-  73.9  C+     ./src/loc/mod.rs           Cognitive: 19
-  74.8  C+     ./src/knowledge/mod.rs     Cognitive: 21
-  75.6  C+     ./src/dups/mod.rs          Cognitive: 19
-  77.4  B-     ./src/test_blocks.rs       Cognitive: 17
-  78.2  B-     ./src/cli_help.rs          Cognitive: 16
-  78.9  B-     ./src/walk.rs              Cognitive: 16
+  57.7  D-     ./src/deps/analyzer.rs     Cognitive: 36
+  61.0  D      ./src/cogcom/analyzer.rs   Cognitive: 35
+  70.3  C      ./src/smells/rules.rs      Cognitive: 20
+  71.6  C      ./src/hal/tokenizer.rs     Cognitive: 22
+  71.8  C      ./src/loc/mod.rs           Cognitive: 19
+  72.8  C      ./src/knowledge/mod.rs     Cognitive: 21
+  73.8  C+     ./src/dups/mod.rs          Cognitive: 19
+  75.0  C+     ./src/cli_help.rs          Cognitive: 17
+  75.6  C+     ./src/test_blocks.rs       Cognitive: 17
+  77.3  B-     ./src/walk.rs              Cognitive: 16
 ──────────────────────────────────────────────────────────────────
 ```
 
@@ -1107,12 +1107,13 @@ Ejemplo de salida:
 
 Calcula un puntaje general de salud del código para el proyecto, con una nota que va de A++ (excepcional) a F-- (problemas graves). Usa solo métricas estáticas (no requiere git).
 
-Hay dos modelos de puntaje: `cogcom`, el modelo por defecto, basado en la complejidad cognitiva (5 dimensiones), y `legacy`, basado en el índice de mantenibilidad y la complejidad ciclomática (6 dimensiones).
+Hay tres modelos de puntaje: `cogcom`, el modelo por defecto, basado en la complejidad cognitiva (5 dimensiones); `cogcom-0.35`, las mismas dimensiones con los pesos que tenían hasta la v0.35; y `legacy`, basado en el índice de mantenibilidad y la complejidad ciclomática (6 dimensiones).
 
 Los archivos que no son código (Markdown, TOML, JSON, etc.) se excluyen automáticamente. Los bloques de test en línea (`#[cfg(test)]`) se excluyen de todas las dimensiones, ver [Tests en línea](#tests-en-línea).
 
 ```bash
 km score [path]
+km score --model cogcom-0.35 [path]  # los pesos hasta la v0.35
 km score --model legacy [path]    # modelo de MI + ciclomática
 ```
 
@@ -1120,11 +1121,13 @@ km score --model legacy [path]    # modelo de MI + ciclomática
 
 | Dimensión | Peso | Qué mide |
 |-----------|--------|-----------------|
-| Complejidad cognitiva | 30% | Método de SonarSource, penaliza el anidamiento |
-| Duplicación | 20% | % de código duplicado en todo el proyecto |
-| Complejidad por indentación | 15% | Desviación estándar de la profundidad de indentación |
-| Esfuerzo de Halstead | 20% | Esfuerzo mental por LOC |
-| Tamaño de archivo | 15% | Puntaje completo hasta 500 LOC; baja a 0 en 4.000 |
+| Complejidad cognitiva | 32% | Método de SonarSource, penaliza el anidamiento |
+| Duplicación | 21% | % de código duplicado en todo el proyecto |
+| Complejidad por indentación | 16% | Desviación estándar de la profundidad de indentación |
+| Esfuerzo de Halstead | 21% | Esfuerzo mental por LOC |
+| Tamaño de archivo | 10% | Puntaje completo hasta 500 LOC; baja a 0 en 4.000 |
+
+Hasta la v0.35 el tamaño de archivo pesaba 15%, y las demás dimensiones 30%, 20%, 15% y 20%. Ahora pesa menos porque el tamaño ya influye en las otras dimensiones: un archivo grande tiene más código que puede ser complejo, y el puntaje del proyecto es un promedio ponderado por líneas de código. Los estudios sobre módulos encuentran que los defectos crecen menos que proporcionalmente con el tamaño, así que partir un archivo no lo hace por sí solo menos propenso a fallas; lo que el tamaño mide bien es el costo de leerlo y cambiarlo. Los cinco puntos pasaron a las demás dimensiones en proporción a sus pesos. `--model cogcom-0.35` calcula con los pesos anteriores, para comparar con resultados previos o para mantener una compuerta de CI donde estaba.
 
 #### Dimensiones y pesos (--model legacy)
 
@@ -1157,7 +1160,7 @@ Opciones:
 
 | Flag | Descripción |
 |------|-------------|
-| `--model MODEL` | Modelo de puntaje: `cogcom` (por defecto) o `legacy` (MI + ciclomática) |
+| `--model MODEL` | Modelo de puntaje: `cogcom` (por defecto), `cogcom-0.35` (los pesos hasta la v0.35) o `legacy` (MI + ciclomática) |
 | `--trend [REF]` | Compara el puntaje actual con una ref de git (por defecto: `HEAD`). Muestra el cambio: `B- → B (+2.3)`. Útil para revisar un PR: `--trend origin/main` |
 | `--fail-if-worse` | Con `--trend`: termina con código 1 si el puntaje bajó más que `--gate-tolerance` |
 | `--gate-tolerance POINTS` | Caída de puntaje que `--fail-if-worse` permite antes de fallar (por defecto: `0.01` con `--gate-scope project`, `0.5` con `--gate-scope changed`). Compara los puntajes sin redondear |
@@ -1173,33 +1176,33 @@ Ejemplo de salida:
 ```
 Code Health Score
 ──────────────────────────────────────────────────────────────────
- Project Score:  A (91.7)
- Files Analyzed: 140
- Total LOC:      18,963
+ Project Score:  A (91.2)
+ Files Analyzed: 142
+ Total LOC:      19,084
 ──────────────────────────────────────────────────────────────────
  Dimension                 Weight   Score   Grade
 ──────────────────────────────────────────────────────────────────
- Cognitive Complexity         30%    84.1   B+
- Duplication                  20%   100.0   A++
- Indentation Complexity       15%    93.1   A+
- Halstead Effort              20%    87.5   A-
- File Size                    15%   100.0   A++
+ Cognitive Complexity         32%    84.1   B+
+ Duplication                  21%   100.0   A++
+ Indentation Complexity       16%    93.2   A+
+ Halstead Effort              21%    87.5   A-
+ File Size                    10%   100.0   A++
 ──────────────────────────────────────────────────────────────────
 
  Files Needing Attention (worst per-file scores, excl. duplication)
 ──────────────────────────────────────────────────────────────────
  Score  Grade  File                       Issues
 ──────────────────────────────────────────────────────────────────
-  60.7  D      ./src/deps/analyzer.rs     Cognitive: 36
-  63.8  D+     ./src/cogcom/analyzer.rs   Cognitive: 35
-  72.4  C      ./src/smells/rules.rs      Cognitive: 20
-  73.7  C+     ./src/hal/tokenizer.rs     Cognitive: 22
-  73.9  C+     ./src/loc/mod.rs           Cognitive: 19
-  74.8  C+     ./src/knowledge/mod.rs     Cognitive: 21
-  75.6  C+     ./src/dups/mod.rs          Cognitive: 19
-  77.4  B-     ./src/test_blocks.rs       Cognitive: 17
-  78.2  B-     ./src/cli_help.rs          Cognitive: 16
-  78.9  B-     ./src/walk.rs              Cognitive: 16
+  57.7  D-     ./src/deps/analyzer.rs     Cognitive: 36
+  61.0  D      ./src/cogcom/analyzer.rs   Cognitive: 35
+  70.3  C      ./src/smells/rules.rs      Cognitive: 20
+  71.6  C      ./src/hal/tokenizer.rs     Cognitive: 22
+  71.8  C      ./src/loc/mod.rs           Cognitive: 19
+  72.8  C      ./src/knowledge/mod.rs     Cognitive: 21
+  73.8  C+     ./src/dups/mod.rs          Cognitive: 19
+  75.0  C+     ./src/cli_help.rs          Cognitive: 17
+  75.6  C+     ./src/test_blocks.rs       Cognitive: 17
+  77.3  B-     ./src/walk.rs              Cognitive: 16
 ──────────────────────────────────────────────────────────────────
 ```
 
@@ -1219,7 +1222,7 @@ Opciones:
 | Flag | Descripción |
 |------|-------------|
 | `--git-ref REF` | Ref de git con la que se compara (por defecto: `HEAD`) |
-| `--model MODEL` | Modelo de puntaje: `cogcom` (por defecto) o `legacy` |
+| `--model MODEL` | Modelo de puntaje: `cogcom` (por defecto), `cogcom-0.35` o `legacy` |
 | `--format {table,json,short,terse}` | Formato de salida (por defecto: table) |
 | `--bottom N` | Cantidad de peores archivos que se muestran (por defecto: 10) |
 | `--min-lines N` | Mínimo de líneas para un bloque duplicado (por defecto: 6) |
@@ -1276,7 +1279,7 @@ max_duplicates = 10    # CI gate: fail if duplicate groups exceed N
 max_dup_ratio  = 5.0   # CI gate: fail if duplicated-lines ratio exceeds this %
 
 [score]
-model      = "cogcom"  # scoring model: cogcom (default) or legacy
+model      = "cogcom"  # scoring model: cogcom (default), cogcom-0.35 or legacy
 fail_below = "B-"      # CI gate: fail if health score is below this grade
 
 [age]

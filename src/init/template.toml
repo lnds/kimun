@@ -34,8 +34,9 @@ max_dup_ratio = {{max_dup_ratio}}
 
 [score]
 # Scoring model to use.
-# - cogcom  (default, v0.14+): cognitive complexity as the primary dimension
-# - legacy  (v0.13):           MI + cyclomatic complexity
+# - cogcom       (default): cognitive complexity as the primary dimension
+# - cogcom-0.35  (v0.14 to v0.35): the same, with file size at 15%
+# - legacy       (v0.13): MI + cyclomatic complexity
 model = "cogcom"  # default: cogcom
 
 # CI gate: exit with code 1 if the health score falls below this grade.
