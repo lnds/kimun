@@ -35,7 +35,7 @@ Language breakdown: files, blank lines, comment lines, code lines.
 km score [PATH] --format json
 km score [PATH] --format json --model legacy
 ```
-Overall grade (A++ to F--). Default model (cogcom): 5 dimensions — cognitive complexity, duplication, indentation, Halstead effort, file size. Legacy model (--model legacy): 6 dimensions — MI, cyclomatic complexity, duplication, indentation, Halstead effort, file size.
+Overall grade (A++ to F--). Default model (cogcom): 5 dimensions — cognitive complexity, duplication, indentation, Halstead effort, file size. Legacy model (--model legacy): 6 dimensions — MI, cyclomatic complexity, duplication, indentation, Halstead effort, file size. `--model cogcom-0.35` keeps the weights up to v0.35, with file size at 15%.
 
 ### Score Diff (requires git)
 ```bash

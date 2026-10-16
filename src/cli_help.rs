@@ -229,12 +229,16 @@ Analyzes multiple dimensions of code quality and produces a letter grade
 from A++ (exceptional) to F-- (severe issues). Each dimension is
 scored 0-100 and weighted to produce a final project score.
 
-Default model (cogcom, v0.14+) — 5 dimensions:
-  Cognitive Complexity    30%  (SonarSource method, penalizes nesting)
-  Duplication             20%  (project-wide duplicate code %)
-  Indentation Complexity  15%  (stddev of indentation depth)
-  Halstead Effort         20%  (mental effort per LOC)
-  File Size               15%  (full score up to 500 LOC, 0 at 4000)
+Default model (cogcom) — 5 dimensions:
+  Cognitive Complexity    32%  (SonarSource method, penalizes nesting)
+  Duplication             21%  (project-wide duplicate code %)
+  Indentation Complexity  16%  (stddev of indentation depth)
+  Halstead Effort         21%  (mental effort per LOC)
+  File Size               10%  (full score up to 500 LOC, 0 at 4000)
+
+Note: up to v0.35 File Size weighed 15% and the others 30/20/15/20.
+--model cogcom-0.35 scores with those weights, to compare with
+earlier results or to keep a CI gate stable.
 
 Legacy model (--model legacy, v0.13) — 6 dimensions:
   Maintainability Index   30%  (verifysoft MI with comment weight)
@@ -252,7 +256,7 @@ Grade scale:
   B+  (83-86)   B  (80-82)  B- (77-79)
   C+  (73-76)   C  (70-72)  C- (67-69)
   D+  (63-66)   D  (60-62)  D- (57-59)
-  F   (40-56)   F-- (0-39)
+  F   (50-56)   F- (40-49)  F-- (0-39)
 
 The report includes a breakdown by dimension and a list of files
 that need the most attention (lowest per-file scores).
@@ -263,6 +267,7 @@ Examples:
   km score                       # score current directory
   km score src/                  # score a subdirectory
   km score --model legacy        # use v0.13 scoring model
+  km score --model cogcom-0.35   # use the weights up to v0.35
   km score --format json         # machine-readable output
   km score --format short        # compact: score + grade + dimensions
   km score --format terse        # score number only (e.g. 87.3)
@@ -288,7 +293,8 @@ The output shows:
     (green = improvement, red = regression)
 
 Use --model legacy to compare using the v0.13 scoring model
-(MI + cyclomatic complexity, 6 dimensions).
+(MI + cyclomatic complexity, 6 dimensions), and --model cogcom-0.35
+for the weights up to v0.35.
 
 Requires a git repository.
 

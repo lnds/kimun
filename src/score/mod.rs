@@ -59,8 +59,10 @@ pub struct ScoreGate {
 /// Scoring model selection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScoringModel {
-    /// Cognitive complexity model (v0.14+, default): 5 dimensions.
+    /// Cognitive complexity model (default): 5 dimensions.
     Cognitive,
+    /// The cognitive model as weighted from v0.14 to v0.35 (File Size at 15%).
+    Cognitive035,
     /// Legacy model (v0.13): MI + cyclomatic, 6 dimensions.
     Legacy,
 }
@@ -71,10 +73,20 @@ impl ScoringModel {
         match s {
             "legacy" => Self::Legacy,
             "cogcom" => Self::Cognitive,
+            "cogcom-0.35" => Self::Cognitive035,
             other => {
                 debug_assert!(false, "unexpected scoring model: {other}");
                 Self::Cognitive
             }
+        }
+    }
+
+    /// The weights of a cognitive model. The legacy model has its own, so it
+    /// gets those of the default, never read.
+    pub fn cognitive_weights(&self) -> &'static scoring::CognitiveWeights {
+        match self {
+            Self::Cognitive035 => &scoring::COGNITIVE_0_35,
+            Self::Cognitive | Self::Legacy => &scoring::COGNITIVE,
         }
     }
 }

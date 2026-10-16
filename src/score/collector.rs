@@ -65,7 +65,7 @@ pub fn analyze_single_file(
     let halstead_effort = hal_metrics.as_ref().map(|h| h.effort);
 
     let (max_cognitive, mi_score, max_complexity) = match model {
-        ScoringModel::Cognitive => {
+        ScoringModel::Cognitive | ScoringModel::Cognitive035 => {
             let cogcom_result = cogcom::analyze_content(&lines, &kinds, spec);
             let max_cog = cogcom_result.as_ref().map(|c| c.max_complexity);
             (max_cog, None, None)
@@ -91,7 +91,7 @@ pub fn analyze_single_file(
     // Files without the primary complexity dimension (e.g. Markdown, TOML)
     // are excluded even if they have Halstead data.
     let has_model_metric = match model {
-        ScoringModel::Cognitive => max_cognitive.is_some(),
+        ScoringModel::Cognitive | ScoringModel::Cognitive035 => max_cognitive.is_some(),
         ScoringModel::Legacy => mi_score.is_some() || max_complexity.is_some(),
     };
     if !has_model_metric {

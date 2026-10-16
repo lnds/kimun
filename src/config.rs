@@ -15,7 +15,7 @@
 /// max_dup_ratio  = 5.0  # CI gate: fail if duplicated-lines % exceeds this
 ///
 /// [score]
-/// model      = "cogcom"  # scoring model: cogcom or legacy   (default: cogcom)
+/// model      = "cogcom"  # scoring model: cogcom, cogcom-0.35 or legacy (default: cogcom)
 /// fail_below = "B-"      # CI gate: fail if score is below this grade
 ///
 /// [age]
@@ -107,7 +107,7 @@ impl DupsConfig {
 /// Configuration for `km score`.
 #[derive(Debug, Default, Deserialize)]
 pub struct ScoreConfig {
-    /// Scoring model: `cogcom` (default) or `legacy`. CLI `--model` takes precedence.
+    /// Scoring model: `cogcom` (default), `cogcom-0.35` or `legacy`. CLI `--model` takes precedence.
     pub model: Option<String>,
     /// CI gate: fail if score is below this grade. CLI `--fail-below` takes precedence.
     pub fail_below: Option<String>,

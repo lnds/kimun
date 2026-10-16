@@ -5,8 +5,9 @@
 //! (weighted sums across dimensions). Each dimension uses a piecewise
 //! linear curve from `normalize.rs` to map raw metrics to 0–100.
 //!
-//! Supports two scoring models:
-//! - **Cognitive** (v0.14+, default): 5 dimensions with cognitive complexity.
+//! Supports three scoring models:
+//! - **Cognitive** (default): 5 dimensions with cognitive complexity.
+//! - **Cognitive 0.35** (v0.14 to v0.35): the same, with File Size at 15%.
 //! - **Legacy** (v0.13): 6 dimensions with MI + cyclomatic complexity.
 
 use super::ScoringModel;
@@ -17,26 +18,45 @@ use super::normalize::{
     normalize_halstead, normalize_indent, normalize_mi,
 };
 
-// ─── Cognitive model weights (v0.14+, default) ───────────────────────
+// ─── Cognitive model weights ─────────────────────────────────────────
 
-/// Dimension weights for the cognitive model (must sum to 1.0).
-/// Cognitive Complexity gets the most weight (30%) as the primary measure
-/// of code understandability. Halstead Effort (20%) captures implementation
-/// complexity. Duplication (20%) and File Size (15%) capture structural health.
-/// Indentation (15%) captures nesting depth independently.
-pub const W_COGCOM: f64 = 0.30;
-pub const W_DUP: f64 = 0.20;
-pub const W_INDENT: f64 = 0.15;
-pub const W_HAL: f64 = 0.20;
-pub const W_SIZE: f64 = 0.15;
+/// Dimension weights of a cognitive model (must sum to 1.0).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CognitiveWeights {
+    pub cogcom: f64,
+    pub dup: f64,
+    pub indent: f64,
+    pub hal: f64,
+    pub size: f64,
+}
 
-/// All per-file dimension weights for cognitive model (excludes duplication).
-pub const FILE_WEIGHTS: [(f64, &str); 4] = [
-    (W_COGCOM, "Cogcom"),
-    (W_INDENT, "Indent"),
-    (W_HAL, "Halstead"),
-    (W_SIZE, "Size"),
-];
+impl CognitiveWeights {
+    /// Sum of the per-file weights: all but duplication, which is project-level.
+    pub fn file_sum(&self) -> f64 {
+        self.cogcom + self.indent + self.hal + self.size
+    }
+}
+
+/// Weights of the cognitive model (default). Cognitive Complexity weighs the
+/// most, as the primary measure of understandability. File Size weighs the
+/// least: size already drives the other dimensions, and defects grow less
+/// than proportionally with the size of a module.
+pub const COGNITIVE: CognitiveWeights = CognitiveWeights {
+    cogcom: 0.32,
+    dup: 0.21,
+    indent: 0.16,
+    hal: 0.21,
+    size: 0.10,
+};
+
+/// Weights of the cognitive model from v0.14 to v0.35, File Size at 15%.
+pub const COGNITIVE_0_35: CognitiveWeights = CognitiveWeights {
+    cogcom: 0.30,
+    dup: 0.20,
+    indent: 0.15,
+    hal: 0.20,
+    size: 0.15,
+};
 
 // ─── Legacy model weights (v0.13) ────────────────────────────────────
 
@@ -70,7 +90,12 @@ pub fn build_dimensions(
     model: &ScoringModel,
 ) -> Vec<DimensionScore> {
     match model {
-        ScoringModel::Cognitive => build_cognitive_dimensions(file_metrics, total_loc, dup_percent),
+        ScoringModel::Cognitive | ScoringModel::Cognitive035 => build_cognitive_dimensions(
+            file_metrics,
+            total_loc,
+            dup_percent,
+            model.cognitive_weights(),
+        ),
         ScoringModel::Legacy => build_legacy_dimensions(file_metrics, total_loc, dup_percent),
     }
 }
@@ -83,7 +108,9 @@ pub fn build_empty_dimensions(model: &ScoringModel) -> Vec<DimensionScore> {
 /// Score a single file using the active scoring model.
 pub fn score_file(f: &FileMetrics, model: &ScoringModel) -> FileScore {
     match model {
-        ScoringModel::Cognitive => score_file_cognitive(f),
+        ScoringModel::Cognitive | ScoringModel::Cognitive035 => {
+            score_file_cognitive(f, model.cognitive_weights())
+        }
         ScoringModel::Legacy => score_file_legacy(f),
     }
 }
@@ -95,6 +122,7 @@ fn build_cognitive_dimensions(
     file_metrics: &[FileMetrics],
     total_loc: usize,
     dup_percent: f64,
+    w: &CognitiveWeights,
 ) -> Vec<DimensionScore> {
     let cogcom_dim = weighted_mean(file_metrics, total_loc, |f| {
         f.max_cognitive.map(normalize_cognitive)
@@ -119,11 +147,11 @@ fn build_cognitive_dimensions(
     };
 
     vec![
-        dim("Cognitive Complexity", W_COGCOM, cogcom_dim),
-        dim("Duplication", W_DUP, dup_dim),
-        dim("Indentation Complexity", W_INDENT, indent_dim),
-        dim("Halstead Effort", W_HAL, hal_dim),
-        dim("File Size", W_SIZE, size_dim),
+        dim("Cognitive Complexity", w.cogcom, cogcom_dim),
+        dim("Duplication", w.dup, dup_dim),
+        dim("Indentation Complexity", w.indent, indent_dim),
+        dim("Halstead Effort", w.hal, hal_dim),
+        dim("File Size", w.size, size_dim),
     ]
 }
 
@@ -131,9 +159,8 @@ fn build_cognitive_dimensions(
 /// Excludes duplication (project-level only). The weighted sum uses absolute
 /// dimension weights divided by the per-file weight sum, so the result is
 /// renormalized to 0–100 but not directly comparable to the project score.
-fn score_file_cognitive(f: &FileMetrics) -> FileScore {
+fn score_file_cognitive(f: &FileMetrics, w: &CognitiveWeights) -> FileScore {
     let mut issues: Vec<String> = Vec::new();
-    let file_weight_sum: f64 = FILE_WEIGHTS.iter().map(|(w, _)| w).sum();
 
     let cogcom_s = score_dim(
         f.max_cognitive,
@@ -159,8 +186,8 @@ fn score_file_cognitive(f: &FileMetrics) -> FileScore {
         issues.push(format!("Size: {} LOC", f.code_lines));
     }
 
-    let weighted_sum = cogcom_s * W_COGCOM + indent_s * W_INDENT + hal_s * W_HAL + size_s * W_SIZE;
-    let file_score = weighted_sum / file_weight_sum;
+    let weighted_sum = cogcom_s * w.cogcom + indent_s * w.indent + hal_s * w.hal + size_s * w.size;
+    let file_score = weighted_sum / w.file_sum();
 
     FileScore {
         path: f.path.clone(),
