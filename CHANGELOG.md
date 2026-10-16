@@ -1,3 +1,19 @@
+## v0.36.0 (2026-10-16)
+
+### Feat
+
+- **hal**: Elixir has Halstead rules, and its doc heredocs count as comments
+- **score**: file size weighs 10%, and --model cogcom-0.35 keeps the former weights
+
+### Fix
+
+- **loc**: JSX and TSX files are recognised
+- **test**: the program that stands in for gh is no longer written by the tests
+
+### Refactor
+
+- **impact**: the radius is measured for every language that has a graph
+
 ## v0.35.0 (2026-10-12)
 
 ### Feat
