@@ -27,10 +27,11 @@ pub(super) enum State {
     Normal,
     InString(StringKind),
     InBlockComment(usize), // nesting depth
-    /// Inside a documentation attribute (Kaikai `#[doc( … )]`). The payload
-    /// tracks the string literal being read, so that the closing `)]` is only
-    /// recognised outside a string.
-    InDocAttribute(Option<StringKind>),
+    /// Inside a documentation attribute (Kaikai `#[doc( … )]`), with the
+    /// delimiter that closes it. The payload also tracks the string literal
+    /// being read, so that the closing `)]` is only recognised outside a
+    /// string.
+    InDocAttribute(&'static str, Option<StringKind>),
 }
 
 /// Result of processing one FSM step: how many bytes to advance, optional
@@ -121,10 +122,12 @@ pub(super) fn step_normal(
 
     // Documentation attribute (e.g. Kaikai `#[doc(`) — before the line comment
     // check, since the marker starts with the `#` comment character.
-    if let Some((open, _)) = spec.doc_attribute
-        && bytes_start_with(rest, open)
+    if let Some((open, close)) = spec
+        .doc_attributes
+        .iter()
+        .find(|(open, _)| bytes_start_with(rest, open))
     {
-        return StepResult::comment(open.len(), Some(State::InDocAttribute(None)));
+        return StepResult::comment(open.len(), Some(State::InDocAttribute(close, None)));
     }
 
     // Pragma (e.g. Haskell {-# ... #-}) — must check before block comment
@@ -240,20 +243,25 @@ pub(super) fn step_in_string(rest: &[u8], kind: &StringKind) -> StepResult {
 pub(super) fn step_in_doc_attribute(
     rest: &[u8],
     spec: &LanguageSpec,
+    close: &'static str,
     inner: &Option<StringKind>,
 ) -> StepResult {
     if let Some(kind) = inner {
         let (advance, closed) = string_scan(rest, kind);
-        return StepResult::comment(advance, closed.then_some(State::InDocAttribute(None)));
+        return StepResult::comment(
+            advance,
+            closed.then_some(State::InDocAttribute(close, None)),
+        );
     }
 
-    let close = spec.doc_attribute.map(|(_, c)| c).unwrap_or(")]");
     if bytes_start_with(rest, close) {
         return StepResult::comment(close.len(), Some(State::Normal));
     }
 
     match string_open(rest, spec) {
-        Some((width, kind)) => StepResult::comment(width, Some(State::InDocAttribute(Some(kind)))),
+        Some((width, kind)) => {
+            StepResult::comment(width, Some(State::InDocAttribute(close, Some(kind))))
+        }
         None => StepResult::comment(1, None),
     }
 }

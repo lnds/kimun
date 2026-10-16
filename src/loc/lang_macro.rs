@@ -24,7 +24,7 @@
 /// Every variant normalizes its comment syntax and forwards to the `@spec`
 /// arm, which holds the single `LanguageSpec` literal.
 ///
-/// Languages needing `line_comment_not_before`, `doc_attribute` or
+/// Languages needing `line_comment_not_before`, `doc_attributes` or
 /// `raw_strings` are written as `LanguageSpec` struct literals instead (see
 /// Rust, Haskell and Kaikai).
 macro_rules! lang_spec {
@@ -127,7 +127,7 @@ macro_rules! lang_spec {
             triple_quote_strings: false $(|| $tq)?,
             raw_strings: false,
             pragma: $pragma,
-            doc_attribute: None,
+            doc_attributes: &[],
             shebangs: &[$($($sh),*)?],
         }
     };

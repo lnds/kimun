@@ -398,6 +398,60 @@ pub static KAIKAI: TokenRules = TokenRules {
     ],
 };
 
+/// Elixir tokenization rules.
+///
+/// `do` and `end` delimit blocks the way braces do elsewhere, and `fn`
+/// opens an anonymous function closed by `end`, so all three are
+/// operators, as `do`/`end` are in Ruby. `when` guards a clause and
+/// `raise`, `reraise` and `throw` leave the normal flow. The pipe `|>`,
+/// concatenation (`<>`, `++`), the match `=` and the pin `^` are
+/// operators. Definitions (`def`, `defmodule`, ...), the directives that
+/// bring modules in (`alias`, `import`, `require`, `use`) and the names
+/// of documentation and typespec attributes (`@doc`, `@spec`, ...) are
+/// ignored: they declare, they do not compute.
+pub static ELIXIR: TokenRules = TokenRules {
+    operator_keywords: &[
+        "if", "unless", "case", "cond", "with", "for", "receive", "try", "rescue", "catch",
+        "after", "else", "do", "end", "fn", "when", "and", "or", "not", "in", "raise", "reraise",
+        "throw",
+    ],
+    operator_symbols: &[
+        "===", "!==", "<<<", ">>>", "<<~", "~>>", "<~>", "|||", "&&&", "^^^", "...", "|>", "<>",
+        "++", "--", "==", "!=", "=~", "<=", ">=", "&&", "||", "->", "<-", "=>", "::", "..", "//",
+        "**", "<<", ">>", "~>", "<~", "\\\\", "+", "-", "*", "/", "|", "&", "^", "!", "<", ">",
+        "=", ";", ",", ".", ":", "(", ")", "[", "]", "{", "}", "%", "@", "~",
+    ],
+    ignored_keywords: &[
+        "def",
+        "defp",
+        "defmodule",
+        "defmacro",
+        "defmacrop",
+        "defstruct",
+        "defprotocol",
+        "defimpl",
+        "defdelegate",
+        "defguard",
+        "defguardp",
+        "defexception",
+        "defoverridable",
+        "alias",
+        "import",
+        "require",
+        "use",
+        "moduledoc",
+        "doc",
+        "spec",
+        "type",
+        "typep",
+        "opaque",
+        "callback",
+        "macrocallback",
+        "impl",
+        "behaviour",
+    ],
+};
+
 /// Look up the tokenization rules for a language by name.
 /// Returns `None` for unsupported languages (no Halstead analysis available).
 pub fn rules_for(language: &str) -> Option<&'static TokenRules> {
@@ -412,6 +466,7 @@ pub fn rules_for(language: &str) -> Option<&'static TokenRules> {
         "Swift" => Some(&SWIFT),
         "Bourne Shell" | "Bourne Again Shell" | "Zsh" => Some(&SHELL),
         "Kaikai" => Some(&KAIKAI),
+        "Elixir" | "Elixir Script" => Some(&ELIXIR),
         _ => None,
     }
 }

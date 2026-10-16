@@ -198,3 +198,43 @@ fn kaikai_pipeline_and_keywords() {
     // pipeline symbol is an operator
     assert!(counts.distinct_operators.contains("|>"));
 }
+
+#[test]
+fn elixir_rules_cover_both_extensions() {
+    assert!(rules_for("Elixir").is_some());
+    assert!(rules_for("Elixir Script").is_some());
+}
+
+#[test]
+fn elixir_operators_and_declarations() {
+    let rules = rules_for("Elixir").unwrap();
+    let lines = vec![
+        "defp total(items, acc \\\\ 0) when is_list(items) do",
+        "  case items |> Enum.map(&price/1) do",
+        "    [] -> acc",
+        "    prices -> acc + Enum.sum(prices) <> \"\"",
+        "  end",
+        "end",
+    ];
+    let counts = count_tokens(&lines, rules, &["#"]);
+    for op in ["case", "do", "end", "when", "|>", "->", "<>", "\\\\", "&"] {
+        assert!(
+            counts.distinct_operators.contains(op),
+            "{op} is an operator"
+        );
+    }
+    assert!(!counts.distinct_operators.contains("defp"));
+    assert!(!counts.distinct_operands.contains("defp"));
+    assert!(counts.distinct_operands.contains("total"));
+    assert!(counts.distinct_operands.contains("acc"));
+}
+
+#[test]
+fn elixir_attribute_names_are_ignored() {
+    let rules = rules_for("Elixir").unwrap();
+    let counts = count_tokens(&["@spec run(t) :: :ok", "@impl true"], rules, &["#"]);
+    assert!(!counts.distinct_operands.contains("spec"));
+    assert!(!counts.distinct_operands.contains("impl"));
+    assert!(counts.distinct_operators.contains("::"));
+    assert!(counts.distinct_operators.contains("@"));
+}

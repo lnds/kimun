@@ -1370,10 +1370,14 @@ Todas las secciones y todos los campos son opcionales: omite los que no necesite
   cuentan como código. Los atributos de documentación (`#[doc("...")]`, incluida la
   forma de varias líneas `#[doc("""...""")]`) cuentan como comentarios y se excluyen
   de los análisis de complejidad, de Halstead y de smells.
+- **Elixir**: los heredocs de `@moduledoc` y `@doc` (`"""`, `'''` y los sigilos
+  `~S"""` y `~s"""`) cuentan como comentarios, como los cuenta cloc, y se excluyen
+  de los análisis de complejidad, de Halstead y de smells. Un `@doc "..."` de una
+  línea y cualquier otro heredoc cuentan como código.
 - **Las líneas interiores de los strings de varias líneas** (los literales con
-  triple comilla de Kaikai y Python) cuentan como código para `km loc`, pero se
-  excluyen de los análisis ciclomático, cognitivo, de Halstead y de smells: la
-  prosa y los datos incrustados no son flujo de control.
+  triple comilla de Kaikai y Python, los heredocs de Elixir) cuentan como código
+  para `km loc`, pero se excluyen de los análisis ciclomático, cognitivo, de
+  Halstead y de smells: la prosa y los datos incrustados no son flujo de control.
 - **Los strings crudos de Rust** (`r"..."`, `r#"..."#` y las formas con más `#`,
   también con prefijo `b` o `c`) terminan solo en una comilla seguida de tantos `#`
   como los que los abrieron, y abarcan varias líneas. Lo que contienen cuenta como
