@@ -1124,7 +1124,7 @@ km score --model legacy [path]    # MI + cyclomatic model
 | Duplication | 20% | Project-wide duplicate code % |
 | Indentation Complexity | 15% | Stddev of indentation depth |
 | Halstead Effort | 20% | Mental effort per LOC |
-| File Size | 15% | Optimal range 50-300 LOC |
+| File Size | 15% | Full score up to 500 LOC, falling to 0 at 4,000 |
 
 #### Dimensions and weights (--model legacy)
 
@@ -1135,7 +1135,7 @@ km score --model legacy [path]    # MI + cyclomatic model
 | Duplication | 15% | Project-wide duplicate code % |
 | Indentation Complexity | 15% | Stddev of indentation depth |
 | Halstead Effort | 15% | Mental effort per LOC |
-| File Size | 5% | Optimal range 50-300 LOC |
+| File Size | 5% | Full score up to 500 LOC, falling to 0 at 4,000 |
 
 Each dimension is aggregated as a LOC-weighted mean across all files (except Duplication which is a single project-level value). The project score is the weighted sum of all dimension scores.
 

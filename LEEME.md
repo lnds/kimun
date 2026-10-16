@@ -1124,7 +1124,7 @@ km score --model legacy [path]    # modelo de MI + ciclomática
 | Duplicación | 20% | % de código duplicado en todo el proyecto |
 | Complejidad por indentación | 15% | Desviación estándar de la profundidad de indentación |
 | Esfuerzo de Halstead | 20% | Esfuerzo mental por LOC |
-| Tamaño de archivo | 15% | Rango óptimo de 50 a 300 LOC |
+| Tamaño de archivo | 15% | Puntaje completo hasta 500 LOC; baja a 0 en 4.000 |
 
 #### Dimensiones y pesos (--model legacy)
 
@@ -1135,7 +1135,7 @@ km score --model legacy [path]    # modelo de MI + ciclomática
 | Duplicación | 15% | % de código duplicado en todo el proyecto |
 | Complejidad por indentación | 15% | Desviación estándar de la profundidad de indentación |
 | Esfuerzo de Halstead | 15% | Esfuerzo mental por LOC |
-| Tamaño de archivo | 5% | Rango óptimo de 50 a 300 LOC |
+| Tamaño de archivo | 5% | Puntaje completo hasta 500 LOC; baja a 0 en 4.000 |
 
 Cada dimensión se agrega como un promedio ponderado por LOC sobre todos los archivos (salvo la duplicación, que es un único valor a nivel de proyecto). El puntaje del proyecto es la suma ponderada de los puntajes de todas las dimensiones.
 
