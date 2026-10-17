@@ -13,8 +13,9 @@ pub enum Token<'s> {
     Punct(u8),
 }
 
-/// The tokens of `source`.
+/// The tokens of `source`, past the byte order mark it may start with.
 pub fn tokens(source: &str) -> Vec<Token<'_>> {
+    let source = source.strip_prefix('\u{feff}').unwrap_or(source);
     let bytes = source.as_bytes();
     let mut tokens = Vec::new();
     let mut at = 0;

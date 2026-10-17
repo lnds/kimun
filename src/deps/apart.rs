@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
 
 use super::c_family;
+use super::csharp;
 use super::golang;
 use super::graph::{Source, Use};
 use super::java;
@@ -19,6 +20,7 @@ pub struct Apart<'s> {
     go: golang::Packages,
     c: c_family::Files<'s>,
     java: java::Classes,
+    csharp: csharp::Namespaces,
 }
 
 impl<'s> Apart<'s> {
@@ -36,18 +38,22 @@ impl<'s> Apart<'s> {
             go: golang::Packages::of(sources, layout),
             c: c_family::Files::of(sources),
             java: java::Classes::of(sources),
+            csharp: csharp::Namespaces::of(sources),
         }
     }
 
     /// The files `source` uses, when its language is read here. Python
     /// tells the names taken too, a Go import leads to every file of a
-    /// package, and a Java file uses the classes it names.
+    /// package, and a Java or C# file uses the types it names.
     pub fn uses(&self, source: &Source) -> Option<BTreeMap<usize, BTreeSet<String>>> {
         self.python
             .uses(source, self.layout, self.by_path)
             .or_else(|| self.go.uses(source))
             .or_else(|| self.c.uses(source))
-            .or_else(|| self.java.uses(*self.by_path.get(source.path.as_path())?))
+            .or_else(|| {
+                let at = *self.by_path.get(source.path.as_path())?;
+                self.java.uses(at).or_else(|| self.csharp.uses(at))
+            })
     }
 
     /// For each source, the files it uses without naming them, given the

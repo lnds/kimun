@@ -8,11 +8,12 @@
 //! declared by no file of the repository: external.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use super::c_like::{Token, tokens};
-use super::graph::{Source, shared_depth};
-use super::types::{Scope, Types, qualified};
+use super::c_like_reader::{Cursor, Reader, chain_at};
+use super::graph::Source;
+use super::types::{Scope, Types, nearest_all, qualified};
 
 /// What a Java file declares and names.
 #[derive(Debug, Default, PartialEq)]
@@ -30,67 +31,51 @@ pub struct JavaFile {
 
 const DECLARATIONS: &[&str] = &["class", "interface", "enum", "record"];
 
-/// The chain of names that starts at `tokens[at]`, and where it ends: the
-/// words joined by dots. A `.*` that closes it is told apart.
-pub fn chain_at(tokens: &[Token], at: usize) -> (Vec<String>, usize, bool) {
-    let mut names = Vec::new();
-    let mut i = at;
-    while let Some(Token::Word(word)) = tokens.get(i) {
-        names.push(word.to_string());
-        match (tokens.get(i + 1), tokens.get(i + 2)) {
-            (Some(Token::Punct(b'.')), Some(Token::Word(_))) => i += 2,
-            (Some(Token::Punct(b'.')), Some(Token::Punct(b'*'))) => return (names, i + 3, true),
-            _ => return (names, i + 1, false),
-        }
-    }
-    (names, i, false)
-}
-
 /// Read a Java source.
 pub fn read(source: &str) -> JavaFile {
     let tokens = tokens(source);
-    let mut reader = Reader {
-        tokens: &tokens,
-        at: 0,
+    let mut reader = JavaReader {
+        cursor: Cursor {
+            tokens: &tokens,
+            at: 0,
+        },
         depth: 0,
         file: JavaFile::default(),
     };
-    while reader.at < tokens.len() {
-        reader.at = reader.step();
-    }
+    reader.read_all();
     reader.file
 }
 
 /// A Java source being read, token by token.
-struct Reader<'t> {
-    tokens: &'t [Token<'t>],
-    at: usize,
+struct JavaReader<'t> {
+    cursor: Cursor<'t>,
     /// How many braces are open: declarations and imports are read at 0.
     depth: usize,
     file: JavaFile,
 }
 
-impl Reader<'_> {
-    /// Read what starts at the current token; where the next starts.
-    fn step(&mut self) -> usize {
-        let after_dot = self.at > 0 && self.tokens[self.at - 1] == Token::Punct(b'.');
-        match self.tokens[self.at] {
-            Token::Punct(b'{') => self.depth += 1,
-            Token::Punct(b'}') => self.depth = self.depth.saturating_sub(1),
-            Token::Word(_) if after_dot => {}
-            Token::Word(word) if self.depth == 0 => return self.top_level(word),
-            Token::Word(_) => return self.name(),
-            Token::Punct(_) => {}
-        }
-        self.at + 1
+impl<'t> Reader<'t> for JavaReader<'t> {
+    fn cursor(&mut self) -> &mut Cursor<'t> {
+        &mut self.cursor
     }
 
-    /// A word outside every brace: a package, an import, a declaration or
-    /// a name.
-    fn top_level(&mut self, word: &str) -> usize {
+    fn punct(&mut self, mark: u8) {
+        match mark {
+            b'{' => self.depth += 1,
+            b'}' => self.depth = self.depth.saturating_sub(1),
+            _ => {}
+        }
+    }
+
+    fn outside(&self) -> bool {
+        self.depth == 0
+    }
+
+    /// A package, an import, a declaration or a name.
+    fn top_level(&mut self, word: &'t str) -> usize {
         match word {
             "package" => {
-                let (names, end, _) = chain_at(self.tokens, self.at + 1);
+                let (names, end, _) = chain_at(self.cursor.tokens, self.cursor.at + 1);
                 self.file.package = names.join(".");
                 end
             }
@@ -100,10 +85,18 @@ impl Reader<'_> {
         }
     }
 
+    fn name(&mut self) -> usize {
+        let (names, end, _) = chain_at(self.cursor.tokens, self.cursor.at);
+        self.file.names.push(names);
+        end
+    }
+}
+
+impl JavaReader<'_> {
     fn import(&mut self) -> usize {
-        let first = self.at + 1;
-        let is_static = self.tokens.get(first) == Some(&Token::Word("static"));
-        let (names, end, on_demand) = chain_at(self.tokens, first + usize::from(is_static));
+        let first = self.cursor.at + 1;
+        let is_static = self.cursor.tokens.get(first) == Some(&Token::Word("static"));
+        let (names, end, on_demand) = chain_at(self.cursor.tokens, first + usize::from(is_static));
         let imported = names.join(".");
         match (on_demand, is_static) {
             (true, false) => self.file.on_demand.push(imported),
@@ -114,34 +107,14 @@ impl Reader<'_> {
 
     /// `class Name`, and the like: the name it declares.
     fn declaration(&mut self) -> usize {
-        match self.tokens.get(self.at + 1) {
+        match self.cursor.tokens.get(self.cursor.at + 1) {
             Some(Token::Word(name)) => {
                 self.file.declares.push(name.to_string());
-                self.at + 2
+                self.cursor.at + 2
             }
-            _ => self.at + 1,
+            _ => self.cursor.at + 1,
         }
     }
-
-    /// The chain of names that starts here.
-    fn name(&mut self) -> usize {
-        let (names, end, _) = chain_at(self.tokens, self.at);
-        self.file.names.push(names);
-        end
-    }
-}
-
-/// Those of `files` nearest to `from`: a type declared in two copies of a
-/// tree (a flavor, a generated mirror) is the one of the tree it is used
-/// from, while the parts of a type split among files stay together.
-pub fn nearest_all(files: &[usize], from: &Path, paths: &[PathBuf]) -> Vec<usize> {
-    let depth = |&f: &usize| shared_depth(&paths[f], from);
-    let deepest = files.iter().map(depth).max().unwrap_or(0);
-    files
-        .iter()
-        .copied()
-        .filter(|f| depth(f) == deepest)
-        .collect()
 }
 
 /// The Java files of a graph, read, and the classes they declare.

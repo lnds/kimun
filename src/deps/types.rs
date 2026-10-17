@@ -8,6 +8,9 @@
 //! its qualifier is a namespace, whole or from one the file is in.
 
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+
+use super::graph::shared_depth;
 
 /// The files that declare each type, by qualified name. A C# partial
 /// class is declared by several.
@@ -101,6 +104,19 @@ impl Types {
         }
         &[]
     }
+}
+
+/// Those of `files` nearest to `from`: a type declared in two copies of a
+/// tree (a flavor, a generated mirror) is the one of the tree it is used
+/// from, while the parts of a type split among files stay together.
+pub fn nearest_all(files: &[usize], from: &Path, paths: &[PathBuf]) -> Vec<usize> {
+    let depth = |&f: &usize| shared_depth(&paths[f], from);
+    let deepest = files.iter().map(depth).max().unwrap_or(0);
+    files
+        .iter()
+        .copied()
+        .filter(|f| depth(f) == deepest)
+        .collect()
 }
 
 #[cfg(test)]
