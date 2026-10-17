@@ -198,6 +198,16 @@ impl<'a> WalkConfig<'a> {
 /// Test directory names to exclude when `--exclude-tests` is active.
 pub const TEST_DIRS: &[&str] = &["tests", "test", "__tests__", "spec"];
 
+/// Whether a directory holds tests: one of `TEST_DIRS`, or a .NET test
+/// project, named after what it tests (`App.Tests`, `Orders.UnitTests`,
+/// `Api.IntegrationTest`).
+pub fn is_test_dir(name: &str) -> bool {
+    let dotnet = name
+        .rsplit_once('.')
+        .is_some_and(|(_, last)| last.ends_with("Tests") || last.ends_with("Test"));
+    TEST_DIRS.contains(&name) || dotnet
+}
+
 /// Mapping from file extension to test-file naming patterns.
 /// Used to identify and exclude test files based on naming conventions.
 struct TestPattern {
@@ -381,7 +391,7 @@ pub(crate) fn walk(path: &Path, exclude_tests: bool, filter: &ExcludeFilter) -> 
                     if filter.excludes_dir(name) {
                         return false;
                     }
-                    if exclude_tests && TEST_DIRS.contains(&name) {
+                    if exclude_tests && is_test_dir(name) {
                         return false;
                     }
                 }
@@ -414,7 +424,7 @@ fn ancestor_exclusion_reason(
             if filter.excludes_dir(name_str) {
                 return Some("directory");
             }
-            if exclude_tests && TEST_DIRS.contains(&name_str) {
+            if exclude_tests && is_test_dir(name_str) {
                 return Some("test directory");
             }
         }

@@ -23,7 +23,7 @@ use report::{print_json, print_report, print_short, print_terse};
 fn is_test_path(path: &Path) -> bool {
     for component in path.components() {
         if let Some(name) = component.as_os_str().to_str()
-            && walk::TEST_DIRS.contains(&name)
+            && walk::is_test_dir(name)
         {
             return true;
         }

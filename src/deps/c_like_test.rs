@@ -40,3 +40,8 @@ fn punctuation_is_kept() {
         ]
     );
 }
+
+#[test]
+fn a_byte_order_mark_is_no_part_of_the_first_word() {
+    assert_eq!(words("\u{feff}namespace A"), ["namespace", "A"]);
+}

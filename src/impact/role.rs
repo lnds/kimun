@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use crate::deps::graph::FileGraph;
-use crate::walk::{TEST_DIRS, is_test_file};
+use crate::walk::{is_test_dir, is_test_file};
 
 use super::reading::graphed_language;
 
@@ -24,7 +24,7 @@ pub fn role(path: &Path) -> Role {
     let in_test_dir = path
         .components()
         .filter_map(|c| c.as_os_str().to_str())
-        .any(|c| TEST_DIRS.contains(&c));
+        .any(is_test_dir);
     let is_script = graphed_language(path) == Some("Elixir Script");
     let named = |name: &str| path.file_name().is_some_and(|file| file == name);
     // `tests.py` holds the tests of a Django app, and `conftest.py` the

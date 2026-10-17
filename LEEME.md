@@ -197,7 +197,7 @@ Ejemplo de salida detallada (`--report`):
 
 Por defecto, `km dups` omite los archivos que siguen las convenciones habituales de test:
 
-- **Directorios**: `tests/`, `test/`, `__tests__/`, `spec/`
+- **Directorios**: `tests/`, `test/`, `__tests__/`, `spec/`, y los proyectos de prueba de .NET, con el nombre de lo que prueban (`App.Tests/`, `Orders.UnitTests/`, `Api.IntegrationTest/`)
 - **Por extensión**: `*_test.rs`, `*_test.go`, `test_*.py`, `*.test.js`, `*.spec.ts`, `*Test.java`, `*_test.cpp` y más
 
 Usa `--include-tests` para analizar también los archivos de test.
@@ -762,7 +762,7 @@ Cómo se mide:
 - En Elixir, lo que un framework relaciona por convención cuenta como un uso. Un controlador de Phoenix usa las vistas que llevan su nombre (`PageController` y `PageJSON`, `PageHTML`, `PageView`), así que el test del controlador las protege. Un módulo usa los componentes que renderizan sus plantillas, ya sea que estén escritas en él con `~H`, guardadas en un archivo `.html.heex` a su lado (`page/index.ex` y `page/index.html.heex`) o en un directorio que lleva su nombre (`page_html.ex` y `page_html/home.html.heex`).
 
 
-Se mide para los lenguajes cuyo grafo refleja el uso: C, C++, Elixir, Go, Java, JavaScript/TypeScript, Kaikai, Python y Rust. En Go la unidad es el paquete: un cambio en cualquiera de sus archivos alcanza a cada archivo que lo importa. En C y C++ un cambio en un archivo fuente alcanza a los archivos que incluyen su header. Solo se leen los proyectos que el cambio afecta; el repositorio completo cuando el alcance sobre los proyectos es desconocido.
+Se mide para los lenguajes cuyo grafo refleja el uso: C, C++, C#, Elixir, Go, Java, JavaScript/TypeScript, Kaikai, Python y Rust. En Go la unidad es el paquete: un cambio en cualquiera de sus archivos alcanza a cada archivo que lo importa. En C y C++ un cambio en un archivo fuente alcanza a los archivos que incluyen su header. Solo se leen los proyectos que el cambio afecta; el repositorio completo cuando el alcance sobre los proyectos es desconocido.
 
 Límites: un test en el mismo lugar, o que lleva el nombre de un archivo, puede no ejercitar la llamada que cambió, y uno que se refiere a un archivo puede simular con mocks lo que este llama: la columna dice que existe un test, no que cubre. `users` es más débil todavía: dice que algo que usa el archivo tiene tests. Los nombres de función se comparan sin aridad. Los módulos nombrados en tiempo de ejecución (`apply/3`, configuración) o generados por macros no se ven. Una petición se lee cuando su ruta está escrita en la llamada (`live(conn, ~p"/orders")`), no cuando viene de una variable o de un helper, y una ruta cuando está declarada en una sola línea.
 
@@ -960,7 +960,7 @@ Analiza las dependencias internas entre módulos leyendo las sentencias import/u
 km deps [path]
 ```
 
-Soporta Elixir (cada módulo al que el código se refiere, con el `alias` deshecho; mira las notas más abajo), Rust (cada ruta que nombra un módulo del workspace: `use`, `crate::`, `super::`, un módulo hijo; mira las notas más abajo), Python (`import` y `from … import`, absolutos y relativos; mira las notas más abajo), JavaScript/TypeScript (`import`, `export … from`, `require` e `import()`, relativos o a través de los alias de `tsconfig.json` y de los paquetes del workspace; mira las notas más abajo), Go (imports de los paquetes del repositorio, según la ruta de módulo de cada `go.mod`; mira las notas más abajo), C y C++ (`#include`, como lo encuentra un compilador; mira las notas más abajo), Java (las clases que nombra un archivo, a través de su paquete y de sus imports; mira las notas más abajo) y Kaikai (`import a.b.c`, incluidas las formas `as` y `.{…}`). Las dependencias externas (crates, paquetes de npm, headers del sistema, la biblioteca estándar de Kaikai) se ignoran.
+Soporta Elixir (cada módulo al que el código se refiere, con el `alias` deshecho; mira las notas más abajo), Rust (cada ruta que nombra un módulo del workspace: `use`, `crate::`, `super::`, un módulo hijo; mira las notas más abajo), Python (`import` y `from … import`, absolutos y relativos; mira las notas más abajo), JavaScript/TypeScript (`import`, `export … from`, `require` e `import()`, relativos o a través de los alias de `tsconfig.json` y de los paquetes del workspace; mira las notas más abajo), Go (imports de los paquetes del repositorio, según la ruta de módulo de cada `go.mod`; mira las notas más abajo), C y C++ (`#include`, como lo encuentra un compilador; mira las notas más abajo), Java (las clases que nombra un archivo, a través de su paquete y de sus imports; mira las notas más abajo), C# (los tipos que nombra un archivo, a través de sus namespaces y de sus directivas `using`; mira las notas más abajo) y Kaikai (`import a.b.c`, incluidas las formas `as` y `.{…}`). Las dependencias externas (crates, paquetes de npm, headers del sistema, la biblioteca estándar de Kaikai) se ignoran.
 
 Los archivos en cualquier otro lenguaje quedan fuera del grafo, en vez de listarse con cero dependencias. El pie de la tabla, el arreglo `unsupported` de la salida JSON y el campo `unsupported:N` del formato short dicen cuántos archivos se omitieron, así que "no medido" nunca se muestra como "sin dependencias".
 
@@ -1025,6 +1025,14 @@ Notas sobre Java:
 - Cuando varios archivos declaran la misma clase (dos variantes de una biblioteca, una copia generada), se toma la más cercana al archivo que la nombra.
 - El JDK y las bibliotecas no declaran ningún archivo del repositorio: sus clases son externas.
 - Un campo, una variable o un método con el nombre de una clase no se distingue de ella.
+
+Notas sobre C#:
+
+- Un `using` nombra un namespace, no un archivo. Un tipo se conoce por su namespace (de bloque o de archivo) y su nombre, y un archivo usa los tipos que nombra.
+- Un archivo ve por su nombre simple los tipos de cada namespace en que está y de los que lo rodean (`App.Web` ve `App`), del namespace global, de cada `using` y de cada `global using` escrito en su directorio o más arriba. Un alias (`using M = App.Models;`) nombra un tipo o un namespace, `using static` usa el tipo que nombra, y `[Audited]` nombra la clase `AuditedAttribute`.
+- Un tipo parcial lo declara cada uno de sus archivos, y usarlo los usa a todos. Cuando dos proyectos declaran un tipo del mismo nombre, se toma el más cercano al archivo que lo nombra.
+- Los tipos de .NET y de los paquetes de NuGet no declaran ningún archivo del repositorio: son externos. Los usings implícitos del SDK no traen nada del repositorio.
+- Un campo, una variable o un método con el nombre de un tipo no se distingue de él.
 
 Notas sobre Kaikai:
 
