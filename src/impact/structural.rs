@@ -168,13 +168,13 @@ impl Reverse {
     /// other means than naming it.
     fn of(graph: &FileGraph, roles: &[Role], mut referring: Vec<Vec<usize>>) -> Self {
         let mut sources = vec![Vec::new(); graph.files.len()];
-        for (file, uses) in graph.uses.iter().enumerate() {
-            let into = match roles[file] {
+        for (file, role) in roles.iter().enumerate() {
+            let into = match role {
                 Role::Source => &mut sources,
                 Role::Test => &mut referring,
                 Role::Other => continue,
             };
-            for used in uses {
+            for used in graph.uses_of(file) {
                 into[used.to].push(file);
             }
         }
@@ -286,7 +286,7 @@ pub fn compute(
     let dependent = |&file: &usize| {
         let mut exposure = Exposure::Elsewhere;
         let mut calls = BTreeSet::new();
-        for used in &graph.uses[file] {
+        for used in graph.uses_of(file) {
             let Some(changed) = origins.get(&used.to) else {
                 continue;
             };
