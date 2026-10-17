@@ -166,8 +166,10 @@ fn structural_radius(
     };
     let in_scope =
         |path: &Path| scope.is_empty() || scope.iter().any(|root| path.starts_with(root));
-    let measured = |p: &Path| structural::is_measured(p) || heex::is_template(p) || is_manifest(p);
-    let sources = change.sources(git_repo, |p| measured(p) && in_scope(p))?;
+    // Manifests are read wherever they are: a config above every project,
+    // such as a root `tsconfig.json`, says how their imports resolve.
+    let measured = |p: &Path| structural::is_measured(p) || heex::is_template(p);
+    let sources = change.sources(git_repo, |p| (measured(p) && in_scope(p)) || is_manifest(p))?;
     let changed: Vec<structural::Changed> = change.diff.iter().collect();
     let mut radius = structural::compute(sources, &changed, &|from, to| graph.may_use(from, to));
     let config = KimunConfig::load_from(git_repo.root()).impact;

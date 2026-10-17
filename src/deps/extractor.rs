@@ -30,49 +30,11 @@ pub fn is_supported(language: &str) -> bool {
 pub fn extract_imports(language: &str, source: &str) -> Vec<String> {
     match language {
         "Python" => python::extract(source),
-        "JavaScript" | "TypeScript" | "JSX" => extract_js(source),
+        "JavaScript" | "TypeScript" | "JSX" => super::javascript::extract(source),
         "Go" => extract_go(source),
         "Kaikai" => kaikai::extract(source),
         _ => vec![],
     }
-}
-
-/// JavaScript/TypeScript: extract relative import/require paths (`./foo`, `../bar`).
-/// Absolute module specifiers (bare `foo`, `@scope/pkg`) are external — skipped.
-fn extract_js(source: &str) -> Vec<String> {
-    let mut imports = Vec::new();
-    for line in source.lines() {
-        let trimmed = line.trim();
-        // Skip comment lines
-        if trimmed.starts_with("//") || trimmed.starts_with("*") || trimmed.starts_with("/*") {
-            continue;
-        }
-        if let Some(path) = find_relative_string(trimmed) {
-            imports.push(path);
-        }
-    }
-    imports
-}
-
-/// Find the first relative path string literal (`'./…'`, `"../…"`) on a line.
-fn find_relative_string(line: &str) -> Option<String> {
-    for &q in &['"', '\'', '`'] {
-        let mut search = line;
-        while let Some(start) = search.find(q) {
-            let inner = &search[start + 1..];
-            if (inner.starts_with("./") || inner.starts_with("../"))
-                && let Some(end) = inner.find(q)
-            {
-                return Some(inner[..end].to_string());
-            }
-            // Advance past this quote and keep looking
-            search = &search[start + 1..];
-            if search.is_empty() {
-                break;
-            }
-        }
-    }
-    None
 }
 
 /// Go: extract all quoted import paths (both single-line and block imports).
