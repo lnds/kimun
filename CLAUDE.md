@@ -99,7 +99,7 @@ Hotspot analysis (Thornhill, change frequency × complexity). Invoked via `km ho
 
 Knowledge maps (Thornhill, code ownership via git blame). Invoked via `km knowledge`.
 
-- **`analyzer.rs`** — `RiskLevel` enum (Critical/High/Medium/Low), `FileOwnership` struct, `compute_ownership()` function that calculates primary owner, concentration, and knowledge loss risk.
+- **`analyzer.rs`** — `RiskLevel` enum (Critical/High/Medium/Low), `FileOwnership` struct, `compute_ownership()` function that calculates primary owner, concentration, and knowledge loss risk. `compute_bus_factor()` is the truck factor: a file's authors hold at least `AUTHOR_SHARE` (0.75) of its main author's lines, and the authors of the most lines leave first until more than the threshold of the code, weighed by lines, has no author; with `--since`, inactive authors have left before counting.
 - **`report.rs`** — Table and JSON output formatters. `--summary` mode aggregates by author (files owned, lines, languages, worst risk) as an alternative to the per-file view.
 - **`mod.rs`** — Orchestration: opens git repo, walks files (filtering generated files), runs `blame_file()` per file, computes ownership, sorts/filters results. Uses `util::parse_since` for `--since` flag. `--summary` flag switches to author-level aggregation.
 
@@ -113,7 +113,7 @@ Temporal coupling analysis (Thornhill, files that change together). Invoked via 
 
 ### Shared: `src/git/`
 
-`GitRepo` wraps `git2::Repository`. `mod.rs` holds history walks, blame and tree extraction. `changeset.rs` holds what concerns a change set: `diff_stats_since` (ref → working tree), `diff_stats_between` (two refs), `patch_stats` (a patch in git format), all through one `stats_of`, plus `co_change_history` and the merge base they start from. `FileDiffStat` carries the lines touched on both sides and a probe of added lines, so `lines_in` picks the side that matches a text: a patch need not be applied where it is measured. `tree.rs` reads files from the tree of a commit without checking it out (`files_at`, `has_file_at`).
+`GitRepo` wraps `git2::Repository`. Blame and the commit walk read authors through `.mailmap`, and `identity` (email without case, or the name when there is none) is how every command tells people apart. `mod.rs` holds history walks, blame and tree extraction. `changeset.rs` holds what concerns a change set: `diff_stats_since` (ref → working tree), `diff_stats_between` (two refs), `patch_stats` (a patch in git format), all through one `stats_of`, plus `co_change_history` and the merge base they start from. `FileDiffStat` carries the lines touched on both sides and a probe of added lines, so `lines_in` picks the side that matches a text: a patch need not be applied where it is measured. `tree.rs` reads files from the tree of a commit without checking it out (`files_at`, `has_file_at`).
 
 ### Shared: `src/projects/`
 

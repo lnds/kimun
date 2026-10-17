@@ -3,7 +3,6 @@
 /// For each file, determines the primary owner, ownership concentration,
 /// contributor count, and bus-factor risk level. Optionally detects
 /// knowledge loss when the primary owner is no longer active.
-use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
@@ -95,7 +94,7 @@ pub fn compute_ownership(
                 author: b.author.clone(),
                 email: b.email.clone(),
                 percentage: pct,
-                active: recent_authors.contains(&b.email),
+                active: recent_authors.contains(&b.identity()),
             }
         })
         .collect();
@@ -163,32 +162,34 @@ pub struct AuthorSummary {
 pub fn aggregate_by_author(files: &[FileOwnership]) -> Vec<AuthorSummary> {
     use std::collections::{BTreeMap, BTreeSet};
 
-    // key: author → (files_owned, total_lines, languages, worst_risk, knowledge_loss_files)
-    let mut map: BTreeMap<String, (usize, usize, BTreeSet<String>, RiskLevel, usize)> =
-        BTreeMap::new();
+    // key: identity → (name, files_owned, total_lines, languages, worst_risk, knowledge_loss_files)
+    type Entry = (String, usize, usize, BTreeSet<String>, RiskLevel, usize);
+    let mut map: BTreeMap<String, Entry> = BTreeMap::new();
 
     for f in files {
-        let entry = map.entry(f.primary_owner.clone()).or_insert((
+        let key = crate::git::identity(&f.primary_owner, &f.primary_email);
+        let entry = map.entry(key).or_insert((
+            f.primary_owner.clone(),
             0,
             0,
             BTreeSet::new(),
             RiskLevel::Low,
             0,
         ));
-        entry.0 += 1;
-        entry.1 += f.total_lines;
-        entry.2.insert(f.language.clone());
-        if f.risk.sort_key() < entry.3.sort_key() {
-            entry.3 = f.risk;
+        entry.1 += 1;
+        entry.2 += f.total_lines;
+        entry.3.insert(f.language.clone());
+        if f.risk.sort_key() < entry.4.sort_key() {
+            entry.4 = f.risk;
         }
         if f.knowledge_loss {
-            entry.4 += 1;
+            entry.5 += 1;
         }
     }
 
-    map.into_iter()
+    map.into_values()
         .map(
-            |(author, (files_owned, total_lines, languages, worst_risk, knowledge_loss_files))| {
+            |(author, files_owned, total_lines, languages, worst_risk, knowledge_loss_files)| {
                 AuthorSummary {
                     author,
                     files_owned,
@@ -202,78 +203,189 @@ pub fn aggregate_by_author(files: &[FileOwnership]) -> Vec<AuthorSummary> {
         .collect()
 }
 
-/// A single contributor's share in the project-wide bus factor.
+/// How many lines, against those of a file's main author, another author
+/// needs to count as an author of the file too. Avelino et al. ("A novel
+/// approach for estimating truck factors", ICPC 2016) use the same 0.75 on
+/// a normalized degree of authorship; here the measure is blame lines.
+pub const AUTHOR_SHARE: f64 = 0.75;
+
+/// One contributor in the project-wide bus factor.
 pub struct BusFactorEntry {
     pub author: String,
-    /// Total lines attributed to this author across all analyzed files.
+    /// Lines of the analyzed files that blame gives to this contributor.
     pub lines: usize,
-    /// This author's share of total project lines.
+    /// This contributor's share of those lines.
     pub pct: f64,
-    /// Cumulative coverage including this and all higher-ranked authors.
-    pub cumulative_pct: f64,
-    /// True while this author is still needed to reach the threshold.
-    /// The last `is_critical = true` entry is the one that pushes cumulative
-    /// coverage over the threshold.
+    /// Files this contributor is an author of (see [`AUTHOR_SHARE`]).
+    pub files: usize,
+    /// Share of lines in files left with no author once this contributor
+    /// and everyone ranked above have left. Set only for those counted in
+    /// the bus factor.
+    pub orphaned_pct: Option<f64>,
+    /// Whether this contributor is counted in the bus factor.
     pub is_critical: bool,
+    /// Whether this contributor committed in the `--since` window; `None`
+    /// when no window was given.
+    pub active: Option<bool>,
 }
 
 /// Project-wide bus factor result.
 pub struct BusFactor {
-    /// Minimum number of contributors whose combined ownership covers `threshold`%.
+    /// How many contributors have to leave before more than `threshold`% of
+    /// the code is in files with no author left. 0 when that is already so
+    /// because of authors who stopped contributing.
     pub factor: usize,
-    /// Threshold used (e.g. 80.0 for 80%).
+    /// Share of the code, in lines, that has to be left without an author.
     pub threshold: f64,
+    pub total_files: usize,
     /// Total blame lines across all analyzed files.
     pub total_lines: usize,
-    /// All contributors sorted by lines owned descending, annotated with
-    /// cumulative coverage and criticality.
+    /// Share of lines in files whose authors are all inactive, before anyone
+    /// else leaves; `None` when no `--since` window was given.
+    pub orphaned_by_inactivity: Option<f64>,
+    /// Those counted in the bus factor, in the order they leave, then the
+    /// rest by the lines of the files they are authors of.
     pub contributors: Vec<BusFactorEntry>,
 }
 
-/// Compute the project bus factor from a map of author → total blame lines.
+/// What blame says about one person across the project.
+#[derive(Default)]
+struct Person {
+    /// Lines under each name this person signed with.
+    names: HashMap<String, usize>,
+    lines: usize,
+    files: usize,
+    /// Lines of the files this person is an author of.
+    authored_lines: usize,
+}
+
+impl Person {
+    /// The name this person signed most lines with.
+    fn name(&self) -> String {
+        self.names
+            .iter()
+            .max_by(|a, b| a.1.cmp(b.1).then_with(|| b.0.cmp(a.0)))
+            .map(|(name, _)| name.clone())
+            .unwrap_or_default()
+    }
+}
+
+/// Compute the bus factor (truck factor) from the blame of each file.
 ///
-/// The bus factor is the smallest N such that the top N contributors
-/// together own ≥ `threshold`% of all code. A bus factor of 1 means
-/// a single person owns most of the project — extremely high risk.
-pub fn compute_bus_factor(author_lines: &HashMap<String, usize>, threshold: f64) -> BusFactor {
-    let total_lines: usize = author_lines.values().sum();
+/// The authors of a file are those with at least [`AUTHOR_SHARE`] of the
+/// lines of its main author. Contributors leave one at a time, the one who
+/// is an author of the most lines first, until more than `threshold`% of
+/// the lines are in files with no author left; the bus factor is how many
+/// left. Files weigh by their lines, so a one-line file does not count as
+/// much as the core of the project.
+///
+/// With `active`, the authors outside it have already left: the files they
+/// alone wrote are orphaned before anyone is counted.
+pub fn compute_bus_factor(
+    files: &[Vec<BlameInfo>],
+    active: Option<&HashSet<String>>,
+    threshold: f64,
+) -> BusFactor {
+    let mut people: HashMap<String, Person> = HashMap::new();
+    // (lines of the file, identities of its authors)
+    let mut authored: Vec<(usize, Vec<String>)> = Vec::new();
+
+    for blames in files {
+        let size: usize = blames.iter().map(|b| b.lines).sum();
+        let top = blames.iter().map(|b| b.lines).max().unwrap_or(0);
+        let mut authors: Vec<String> = Vec::new();
+        for b in blames {
+            let key = b.identity();
+            let person = people.entry(key.clone()).or_default();
+            *person.names.entry(b.author.clone()).or_default() += b.lines;
+            person.lines += b.lines;
+            if top > 0 && b.lines as f64 >= top as f64 * AUTHOR_SHARE && !authors.contains(&key) {
+                person.files += 1;
+                person.authored_lines += size;
+                authors.push(key);
+            }
+        }
+        authored.push((size, authors));
+    }
+
+    let total_lines: usize = authored.iter().map(|(size, _)| size).sum();
     if total_lines == 0 {
         return BusFactor {
             factor: 0,
             threshold,
+            total_files: files.len(),
             total_lines: 0,
+            orphaned_by_inactivity: None,
             contributors: vec![],
         };
     }
 
-    // Sort by lines descending, then by name for determinism.
-    let mut sorted: Vec<(String, usize)> =
-        author_lines.iter().map(|(k, &v)| (k.clone(), v)).collect();
-    sorted.sort_by_key(|(k, v)| (Reverse(*v), k.clone()));
+    let orphaned_pct = |gone: &HashSet<&str>| -> f64 {
+        let lines: usize = authored
+            .iter()
+            .filter(|(_, authors)| authors.iter().all(|a| gone.contains(a.as_str())))
+            .map(|(size, _)| size)
+            .sum();
+        lines as f64 / total_lines as f64 * 100.0
+    };
 
-    let mut cumulative = 0.0;
-    let mut contributors: Vec<BusFactorEntry> = Vec::new();
+    let is_active = |key: &str| active.is_none_or(|a| a.contains(key));
+    let mut gone: HashSet<&str> = people
+        .keys()
+        .map(String::as_str)
+        .filter(|k| !is_active(k))
+        .collect();
+    let orphaned_by_inactivity = active.map(|_| orphaned_pct(&gone));
 
-    for (author, lines) in sorted {
-        let pct = lines as f64 / total_lines as f64 * 100.0;
-        // is_critical: this author is still needed to reach the threshold
-        // (cumulative before adding this author is below threshold).
-        let is_critical = cumulative < threshold;
-        cumulative += pct;
-        contributors.push(BusFactorEntry {
-            author,
-            lines,
-            pct,
-            cumulative_pct: cumulative,
-            is_critical,
-        });
+    let mut ranked: Vec<&str> = people.keys().map(String::as_str).collect();
+    ranked.sort_by(|a, b| {
+        let (pa, pb) = (&people[*a], &people[*b]);
+        pb.authored_lines
+            .cmp(&pa.authored_lines)
+            .then_with(|| pb.lines.cmp(&pa.lines))
+            .then_with(|| a.cmp(b))
+    });
+
+    let mut orphaned = orphaned_pct(&gone);
+    let mut leaving: Vec<(&str, f64)> = Vec::new();
+    for &key in ranked.iter().filter(|k| is_active(k)) {
+        if orphaned > threshold {
+            break;
+        }
+        gone.insert(key);
+        orphaned = orphaned_pct(&gone);
+        leaving.push((key, orphaned));
     }
 
-    let factor = contributors.iter().filter(|e| e.is_critical).count();
+    let entry = |key: &str, orphaned_pct: Option<f64>| {
+        let person = &people[key];
+        BusFactorEntry {
+            author: person.name(),
+            lines: person.lines,
+            pct: person.lines as f64 / total_lines as f64 * 100.0,
+            files: person.files,
+            orphaned_pct,
+            is_critical: orphaned_pct.is_some(),
+            active: active.map(|_| is_active(key)),
+        }
+    };
+    let mut contributors: Vec<BusFactorEntry> = leaving
+        .iter()
+        .map(|&(key, pct)| entry(key, Some(pct)))
+        .collect();
+    contributors.extend(
+        ranked
+            .iter()
+            .filter(|k| !leaving.iter().any(|(l, _)| l == *k))
+            .map(|k| entry(k, None)),
+    );
+
     BusFactor {
-        factor,
+        factor: leaving.len(),
         threshold,
+        total_files: files.len(),
         total_lines,
+        orphaned_by_inactivity,
         contributors,
     }
 }

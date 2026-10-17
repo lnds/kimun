@@ -721,3 +721,63 @@ fn a_change_that_only_deletes_has_nothing_to_probe() {
     // With nothing to tell the texts apart, the lines after the change are used.
     assert_eq!(stat.lines_in("one\ntwo\nthree\n"), [2]);
 }
+
+/// Commit `files` as `name <email>` on top of HEAD.
+fn commit_as(repo: &Repository, name: &str, email: &str, files: &[(&str, &str)]) {
+    let sig = git2::Signature::new(name, email, &git2::Time::new(1_700_000_000, 0)).unwrap();
+    let mut index = repo.index().unwrap();
+    for (path, content) in files {
+        fs::write(repo.workdir().unwrap().join(path), content).unwrap();
+        index.add_path(Path::new(path)).unwrap();
+    }
+    index.write().unwrap();
+    let tree = repo.find_tree(index.write_tree().unwrap()).unwrap();
+    let parent = repo.head().ok().and_then(|h| h.peel_to_commit().ok());
+    let parents: Vec<&git2::Commit> = parent.iter().collect();
+    repo.commit(Some("HEAD"), &sig, &sig, "commit", &tree, &parents)
+        .unwrap();
+}
+
+#[test]
+fn identity_is_the_email_without_case_or_the_name() {
+    assert_eq!(identity("Ana", "Ana@X.org"), "ana@x.org");
+    assert_eq!(identity("Ana", " ana@x.org "), "ana@x.org");
+    assert_eq!(identity("Ana", "unknown"), "Ana");
+    assert_eq!(identity("Ana", ""), "Ana");
+}
+
+#[test]
+fn blame_joins_names_that_share_an_email() {
+    let (dir, repo) = create_test_repo();
+    commit_as(&repo, "Victor Z", "v@x.org", &[("a.rs", "1\n2\n")]);
+    commit_as(&repo, "vitaut", "V@x.org", &[("a.rs", "1\n2\n3\n")]);
+
+    let blames = GitRepo::open(dir.path())
+        .unwrap()
+        .blame_file(Path::new("a.rs"))
+        .unwrap();
+    assert_eq!(blames.len(), 1);
+    assert_eq!(blames[0].lines, 3);
+}
+
+#[test]
+fn blame_and_recent_authors_read_the_mailmap() {
+    let (dir, repo) = create_test_repo();
+    commit_as(&repo, "Victor Z", "victor@work.org", &[("a.rs", "1\n2\n")]);
+    commit_as(&repo, "vitaut", "vitaut@home.org", &[("a.rs", "1\n2\n3\n")]);
+    commit_as(
+        &repo,
+        "Victor Z",
+        "victor@work.org",
+        &[(".mailmap", "Victor Z <victor@work.org> <vitaut@home.org>\n")],
+    );
+
+    let git_repo = GitRepo::open(dir.path()).unwrap();
+    let blames = git_repo.blame_file(Path::new("a.rs")).unwrap();
+    assert_eq!(blames.len(), 1, "the mailmap joins both addresses");
+    assert_eq!(blames[0].author, "Victor Z");
+    assert_eq!(blames[0].identity(), "victor@work.org");
+
+    let authors = git_repo.recent_authors(None).unwrap();
+    assert_eq!(authors, HashSet::from(["victor@work.org".to_string()]));
+}

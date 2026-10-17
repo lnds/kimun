@@ -152,6 +152,12 @@ Risk levels:
 Use --since to detect knowledge loss: files where the primary owner
 has not committed recently. Use --risk-only to show only those files.
 
+--bus-factor counts how many contributors have to leave before more than
+50% of the code (--bus-factor-threshold) is in files with no author left.
+The authors of a file hold at least 75% of the lines of its main author;
+files weigh by lines. With --since, inactive authors have already left.
+People are told apart by email, read through .mailmap.
+
 Requires a git repository. Generated files (lock files, minified JS, etc.)
 are automatically excluded.
 
@@ -159,6 +165,7 @@ Examples:
   km knowledge                          # ownership by concentration
   km knowledge --sort-by risk           # highest risk first
   km knowledge --since 6m --risk-only   # knowledge loss detection
+  km knowledge --bus-factor --since 1y  # truck factor, inactive authors gone
   km knowledge --format json            # machine-readable output
   km knowledge --format short           # compact: files + critical count
   km knowledge --format terse           # critical file count only";

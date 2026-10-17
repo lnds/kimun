@@ -4,7 +4,7 @@
 /// ownership concentration, contributor count, and knowledge loss risk.
 use serde::Serialize;
 
-use super::analyzer::{AuthorSummary, BusFactor, FileOwnership};
+use super::analyzer::{AUTHOR_SHARE, AuthorSummary, BusFactor, BusFactorEntry, FileOwnership};
 use crate::report_helpers;
 
 const COL_LANG: usize = 10;
@@ -238,90 +238,138 @@ pub fn print_summary_json(authors: &[AuthorSummary]) -> Result<(), Box<dyn std::
     report_helpers::print_json_stdout(&entries)
 }
 
-/// Print the bus factor report as a human-readable table.
-pub fn print_bus_factor_report(bf: &BusFactor) {
-    if bf.total_lines == 0 {
-        println!("No blame data found for bus factor analysis.");
-        return;
-    }
-
-    let risk_label = match bf.factor {
-        0 => "no data",
+/// Label of the risk a bus factor stands for.
+fn bus_factor_risk(factor: usize) -> &'static str {
+    match factor {
+        0 => "CRITICAL — the authors of most of the code are already gone",
         1 => "CRITICAL — one person holds most project knowledge",
         2 => "HIGH — two people hold critical knowledge",
         3 => "MODERATE — three people hold critical knowledge",
         _ => "LOW — knowledge is distributed across several contributors",
-    };
+    }
+}
 
-    println!("Project Bus Factor: {}", bf.factor);
-    println!();
-    println!(
-        " Losing {} key {} would put {:.0}% of the project's knowledge at risk.",
-        bf.factor,
-        if bf.factor == 1 {
-            "contributor"
-        } else {
-            "contributors"
-        },
+/// Render the bus factor report as a table, at most `top` contributors
+/// beyond those counted in the factor. `since` is the activity window, if
+/// one was given.
+pub fn render_bus_factor_report(bf: &BusFactor, top: usize, since: Option<&str>) -> String {
+    use std::fmt::Write;
+
+    let mut out = String::new();
+    if bf.total_lines == 0 {
+        out.push_str("No blame data found for bus factor analysis.\n");
+        return out;
+    }
+
+    let _ = writeln!(out, "Project Bus Factor: {}", bf.factor);
+    let _ = writeln!(out);
+    if let (Some(pct), Some(since)) = (bf.orphaned_by_inactivity, since)
+        && pct > 0.0
+    {
+        let _ = writeln!(
+            out,
+            " {pct:.0}% of the code is already in files whose authors have not committed in {since}."
+        );
+    }
+    if bf.factor > 0 {
+        let orphaned = bf
+            .contributors
+            .iter()
+            .filter_map(|e| e.orphaned_pct)
+            .next_back()
+            .unwrap_or(0.0);
+        let _ = writeln!(
+            out,
+            " If {}, {orphaned:.0}% of the code is in files with no author left.",
+            if bf.factor == 1 {
+                "this contributor leaves".to_string()
+            } else {
+                format!("these {} contributors leave", bf.factor)
+            },
+        );
+    }
+    let _ = writeln!(out, " Risk: {}", bus_factor_risk(bf.factor));
+    let _ = writeln!(
+        out,
+        " Authors of a file hold at least {:.0}% of the lines of its main author; files weigh by lines; threshold {:.0}%.",
+        AUTHOR_SHARE * 100.0,
         bf.threshold,
     );
-    println!(" Risk: {risk_label}");
-    println!();
+    let _ = writeln!(out);
 
-    let max_author_len = bf
-        .contributors
+    let shown = bf.factor + top;
+    let rows = &bf.contributors[..shown.min(bf.contributors.len())];
+    let author = |e: &BusFactorEntry| match e.active {
+        Some(false) => format!("{} (inactive)", e.author),
+        _ => e.author.clone(),
+    };
+    let max_author_len = rows
         .iter()
-        .map(|e| report_helpers::display_width(&e.author))
+        .map(|e| report_helpers::display_width(&author(e)))
         .max()
         .unwrap_or(6)
         .max(6);
 
-    let header_width = 6 + max_author_len + 8 + 8 + 11 + 8;
+    let header_width = 6 + max_author_len + 7 + 8 + 9 + 10;
     let separator = report_helpers::separator(header_width.max(70));
 
-    println!("{separator}");
-    println!(
-        " {:>4}  {:<aw$}  {:>8}  {:>7}  {:>10}",
+    let _ = writeln!(out, "{separator}");
+    let _ = writeln!(
+        out,
+        " {:>4}  {:<aw$}  {:>5}  {:>8}  {:>7}  {:>8}",
         "Rank",
         "Author",
+        "Files",
         "Lines",
         "Share",
-        "Cumulative",
+        "Orphaned",
         aw = max_author_len,
     );
-    println!("{separator}");
+    let _ = writeln!(out, "{separator}");
 
-    for (i, entry) in bf.contributors.iter().enumerate() {
-        let marker = if entry.cumulative_pct >= bf.threshold
-            && (i == 0 || bf.contributors[i - 1].cumulative_pct < bf.threshold)
-        {
-            format!("  ← {:.0}% threshold", bf.threshold)
-        } else {
-            String::new()
-        };
-
-        println!(
-            " {:>4}  {:<aw$}  {:>8}  {:>6.2}%  {:>9.2}%{}",
+    for (i, entry) in rows.iter().enumerate() {
+        let orphaned = entry
+            .orphaned_pct
+            .map_or(String::new(), |pct| format!("{pct:>7.1}%"));
+        let name = author(entry);
+        let pad = max_author_len.saturating_sub(report_helpers::display_width(&name));
+        let _ = writeln!(
+            out,
+            " {:>4}  {name}{:pad$}  {:>5}  {:>8}  {:>6.2}%  {:>8}",
             i + 1,
-            entry.author,
+            "",
+            entry.files,
             entry.lines,
             entry.pct,
-            entry.cumulative_pct,
-            marker,
-            aw = max_author_len,
+            orphaned,
         );
     }
 
-    println!("{separator}");
+    let _ = writeln!(out, "{separator}");
+    let hidden = bf.contributors.len() - rows.len();
+    if hidden > 0 {
+        let _ = writeln!(out, " {hidden} more contributors (see --top)");
+    }
+    out
+}
+
+/// Print the bus factor report as a human-readable table.
+pub fn print_bus_factor_report(bf: &BusFactor, top: usize, since: Option<&str>) {
+    print!("{}", render_bus_factor_report(bf, top, since));
 }
 
 /// Print bus factor as a single compact line.
 pub fn print_bus_factor_short(bf: &BusFactor) {
+    let inactive = bf.orphaned_by_inactivity.map_or(String::new(), |pct| {
+        format!(" orphaned_by_inactivity:{pct:.1}")
+    });
     println!(
-        "bus-factor factor:{} contributors:{} lines:{}",
+        "bus-factor factor:{} threshold:{:.0} files:{} lines:{} contributors:{}{inactive}",
         bf.factor,
+        bf.threshold,
+        bf.total_files,
+        bf.total_lines,
         bf.contributors.len(),
-        bf.total_lines
     );
 }
 
@@ -332,43 +380,60 @@ pub fn print_bus_factor_terse(bf: &BusFactor) {
 
 /// JSON-serializable bus factor output.
 pub fn print_bus_factor_json(bf: &BusFactor) -> Result<(), Box<dyn std::error::Error>> {
-    use serde::Serialize;
+    report_helpers::print_json_stdout(&bus_factor_json(bf))
+}
 
-    #[derive(Serialize)]
-    struct JsonBusFactorEntry {
-        author: String,
-        lines: usize,
-        pct: f64,
-        cumulative_pct: f64,
-        is_critical: bool,
-    }
+fn round2(x: f64) -> f64 {
+    (x * 100.0).round() / 100.0
+}
 
-    #[derive(Serialize)]
-    struct JsonBusFactor {
-        factor: usize,
-        threshold: f64,
-        total_lines: usize,
-        contributors: Vec<JsonBusFactorEntry>,
-    }
+#[derive(Serialize)]
+struct JsonBusFactorEntry {
+    author: String,
+    files: usize,
+    lines: usize,
+    pct: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    orphaned_pct: Option<f64>,
+    is_critical: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    active: Option<bool>,
+}
 
-    let out = JsonBusFactor {
+#[derive(Serialize)]
+struct JsonBusFactor {
+    factor: usize,
+    threshold: f64,
+    author_share: f64,
+    total_files: usize,
+    total_lines: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    orphaned_by_inactivity: Option<f64>,
+    contributors: Vec<JsonBusFactorEntry>,
+}
+
+fn bus_factor_json(bf: &BusFactor) -> JsonBusFactor {
+    JsonBusFactor {
         factor: bf.factor,
         threshold: bf.threshold,
+        author_share: AUTHOR_SHARE,
+        total_files: bf.total_files,
         total_lines: bf.total_lines,
+        orphaned_by_inactivity: bf.orphaned_by_inactivity.map(round2),
         contributors: bf
             .contributors
             .iter()
             .map(|e| JsonBusFactorEntry {
                 author: e.author.clone(),
+                files: e.files,
                 lines: e.lines,
-                pct: (e.pct * 100.0).round() / 100.0,
-                cumulative_pct: (e.cumulative_pct * 100.0).round() / 100.0,
+                pct: round2(e.pct),
+                orphaned_pct: e.orphaned_pct.map(round2),
                 is_critical: e.is_critical,
+                active: e.active,
             })
             .collect(),
-    };
-
-    report_helpers::print_json_stdout(&out)
+    }
 }
 
 #[cfg(test)]

@@ -515,7 +515,8 @@ Options:
 | `--since DURATION` | Define recent activity window for knowledge loss (e.g. `6m`, `1y`, `30d`) |
 | `--risk-only` | Show only files with knowledge loss risk |
 | `--summary` | Aggregate by author: files owned, lines, languages, worst risk |
-| `--bus-factor` | Show project bus factor (minimum contributors covering 80% of code) |
+| `--bus-factor` | Show the project bus factor: how many contributors have to leave before most of the code has no author left |
+| `--bus-factor-threshold PCT` | Share of the code, in lines, the bus factor counts to (default: 50) |
 | `--author NAME` | Show only files owned by this author (case-insensitive substring match) |
 
 Example output:
@@ -534,23 +535,33 @@ Files with knowledge loss risk (primary owner inactive): 1
   src/legacy.rs (Former Dev)
 ```
 
-Use `--bus-factor` to compute how many contributors you can afford to lose:
+Use `--bus-factor` to compute how many contributors have to leave before most of the code has nobody who wrote it (the *truck factor* of Avelino et al., "A novel approach for estimating truck factors", ICPC 2016):
+
+- The **authors of a file** are those blame gives at least 75% of the lines of its main author. A contributor with a few lines in a file is not one of its authors.
+- Contributors leave one at a time, first the one who is an author of the most lines, until more than 50% of the code is in files with no author left. The bus factor is how many left. Files weigh by their lines, so a one-line file does not count as much as the core of the project, and a long tail of occasional contributors does not raise the number.
+- With `--since`, authors with no commits in that window have already left: the code only they wrote is orphaned before anyone is counted. When that is already more than the threshold, the bus factor is 0.
+- People are told apart by email, read through `.mailmap`, so one address under several names, or several addresses the mailmap joins, is one person. This also holds for `--summary`, `km authors` and `km loc --by-author`.
 
 ```
-$ km knowledge --bus-factor
+$ km knowledge --bus-factor --since 1y
 Project Bus Factor: 2
 
- Losing 2 key contributors would put 80% of the project's knowledge at risk.
+ 12% of the code is already in files whose authors have not committed in 1y.
+ If these 2 contributors leave, 71% of the code is in files with no author left.
  Risk: HIGH — two people hold critical knowledge
+ Authors of a file hold at least 75% of the lines of its main author; files weigh by lines; threshold 50%.
 
-──────────────────────────────────────────────
- Rank  Author        Lines    Share  Cumulative
-──────────────────────────────────────────────
-    1  E. Diaz        8420   68.12%     68.12%
-    2  A. Torres      1490   12.06%     80.18%  ← 80% threshold
-    3  R. Soto         940    7.61%     87.79%
-──────────────────────────────────────────────
+──────────────────────────────────────────────────────────────────────
+ Rank  Author                Files     Lines    Share  Orphaned
+──────────────────────────────────────────────────────────────────────
+    1  E. Diaz                  41      8420   68.12%     48.3%
+    2  A. Torres                 9      1490   12.06%     71.0%
+    3  R. Soto                   6       940    7.61%
+    4  M. Rojas (inactive)       3       610    4.94%
+──────────────────────────────────────────────────────────────────────
 ```
+
+`Orphaned` is the share of the code left with no author once that contributor and those above have left.
 
 ### `km tc` -- Temporal coupling analysis
 

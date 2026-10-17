@@ -154,7 +154,7 @@ pub fn run_by_author(
         let file_key = rel.display().to_string();
 
         for hunk in hunks {
-            let key = hunk.email.clone();
+            let key = crate::git::identity(&hunk.author, &hunk.email);
             let entry = by_author
                 .entry(key)
                 .or_insert_with(|| (hunk.author.clone(), FileStats::default(), HashSet::new()));

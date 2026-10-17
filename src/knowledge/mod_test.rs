@@ -22,6 +22,7 @@ fn opts<'a>(
         risk_only,
         summary,
         bus_factor: false,
+        bus_factor_threshold: 50.0,
         author: None,
     }
 }
@@ -332,6 +333,7 @@ fn integration_author_filter_match() {
             risk_only: false,
             summary: false,
             bus_factor: false,
+            bus_factor_threshold: 50.0,
             author: Some("Fresia"),
         },
     );
@@ -356,6 +358,7 @@ fn integration_author_filter_no_match() {
             risk_only: false,
             summary: false,
             bus_factor: false,
+            bus_factor_threshold: 50.0,
             author: Some("nonexistent"),
         },
     );
@@ -386,6 +389,7 @@ fn integration_bus_factor_table() {
             risk_only: false,
             summary: false,
             bus_factor: true,
+            bus_factor_threshold: 50.0,
             author: None,
         },
     );
@@ -416,6 +420,7 @@ fn integration_bus_factor_json() {
             risk_only: false,
             summary: false,
             bus_factor: true,
+            bus_factor_threshold: 50.0,
             author: None,
         },
     );
@@ -446,6 +451,7 @@ fn integration_summary_sort_by_diffusion() {
             risk_only: false,
             summary: true,
             bus_factor: false,
+            bus_factor_threshold: 50.0,
             author: None,
         },
     );
@@ -476,6 +482,7 @@ fn integration_summary_sort_by_risk() {
             risk_only: false,
             summary: true,
             bus_factor: false,
+            bus_factor_threshold: 50.0,
             author: None,
         },
     );
