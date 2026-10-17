@@ -49,7 +49,7 @@ pub fn run(
 
     let (walk_root, walk_prefix) = git.walk_prefix(cfg.path)?;
 
-    let mut files: Vec<FileChurn> = walk::source_files(&walk_root, cfg.exclude_tests(), cfg.filter)
+    let mut files: Vec<FileChurn> = walk::code_files(&walk_root, cfg.exclude_tests(), cfg.filter)
         .into_iter()
         .filter_map(|(file_path, spec)| {
             let rel = GitRepo::to_git_path(&walk_root, &walk_prefix, &file_path);

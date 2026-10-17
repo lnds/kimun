@@ -31,6 +31,9 @@ pub fn run(
     let mut file_blames: Vec<(String, Vec<crate::git::BlameInfo>)> = Vec::new();
 
     for (file_path, spec) in walk::source_files(&walk_root, cfg.exclude_tests(), cfg.filter) {
+        if crate::util::is_generated_file(&file_path) {
+            continue;
+        }
         let rel = GitRepo::to_git_path(&walk_root, &prefix, &file_path);
         let mut blames = match git.blame_file(&rel) {
             Ok(b) => b,

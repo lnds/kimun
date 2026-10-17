@@ -12,7 +12,7 @@ use std::cmp::Reverse;
 use std::error::Error;
 
 use crate::git::GitRepo;
-use crate::util::{is_generated, parse_since};
+use crate::util::{is_generated_file, parse_since};
 use crate::walk::{self, WalkConfig};
 
 use crate::cli::OutputMode;
@@ -84,7 +84,7 @@ pub fn run(cfg: &WalkConfig<'_>, opts: &KnowledgeOptions<'_>) -> Result<(), Box<
         std::collections::HashMap::new();
 
     for (file_path, spec) in walk::source_files(&walk_root, cfg.exclude_tests(), cfg.filter) {
-        if is_generated(&file_path) {
+        if is_generated_file(&file_path) {
             continue;
         }
 

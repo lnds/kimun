@@ -267,7 +267,7 @@ fn compute_snapshot(
     let mut dup_files: Vec<dups::detector::NormalizedFile> = Vec::new();
     let mut total_code_lines: usize = 0;
 
-    for (file_path, spec) in cfg.source_files() {
+    for (file_path, spec) in cfg.code_files() {
         if let Some(result) = analyze_single_file(&file_path, spec, exclude_tests, model) {
             total_code_lines += result.normalized_count;
             dup_files.push(result.dup_file);

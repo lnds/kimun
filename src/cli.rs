@@ -140,7 +140,7 @@ pub struct CommonArgs {
     #[arg(long, value_enum, default_value_t)]
     pub format: OutputMode,
 
-    /// Include test files and directories in analysis (excluded by default)
+    /// Include tests, examples and benchmarks in analysis (excluded by default)
     #[arg(long)]
     pub include_tests: bool,
 
@@ -676,7 +676,7 @@ pub enum ScoreCommands {
         #[arg(long, value_enum, default_value_t)]
         format: OutputMode,
 
-        /// Include test files and directories in analysis (excluded by default)
+        /// Include tests, examples and benchmarks in analysis (excluded by default)
         #[arg(long)]
         include_tests: bool,
 

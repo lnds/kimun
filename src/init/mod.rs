@@ -122,7 +122,7 @@ fn collect_stats(cfg: &WalkConfig<'_>) -> Result<ProjectStats, Box<dyn Error>> {
     let mut all_lengths: Vec<usize> = Vec::new();
     let mut all_params: Vec<usize> = Vec::new();
 
-    for (file_path, spec) in cfg.source_files() {
+    for (file_path, spec) in cfg.code_files() {
         let Some(markers) = markers_for(spec.name) else {
             continue;
         };

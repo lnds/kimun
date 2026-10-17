@@ -3,6 +3,9 @@
 //! An analysis that leaves tests out skips those items and nothing else:
 //! the code that follows a test module is production code.
 
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
+
 use crate::deps::rust_literals::code_and_strings;
 use crate::loc::counter::LineKind;
 use crate::loc::language::LanguageSpec;
@@ -14,11 +17,21 @@ const ATTRIBUTE: &str = "#[cfg(test)]";
 /// brace inside one counts for nothing.
 pub fn test_block_mask(lines: &[String]) -> Vec<bool> {
     let mut mask = vec![false; lines.len()];
+    for (_, from, to) in test_items(lines) {
+        mask[from..=to].fill(true);
+    }
+    mask
+}
+
+/// Each item under `#[cfg(test)]`: its code without comments and literals,
+/// and its first and last lines.
+fn test_items(lines: &[String]) -> Vec<(String, usize, usize)> {
     if !lines.iter().any(|line| line.contains(ATTRIBUTE)) {
-        return mask;
+        return Vec::new();
     }
     let (code, _) = code_and_strings(&lines.join("\n"));
     let code: Vec<&str> = code.split('\n').collect();
+    let mut items = Vec::new();
     let mut i = 0;
     while i < code.len() {
         if !code[i].trim_start().starts_with(ATTRIBUTE) {
@@ -26,10 +39,90 @@ pub fn test_block_mask(lines: &[String]) -> Vec<bool> {
             continue;
         }
         let end = item_end(&code, i);
-        mask[i..=end].fill(true);
+        items.push((code[i..=end].join("\n"), i, end));
         i = end + 1;
     }
-    mask
+    items
+}
+
+/// The files of the Rust modules declared under `#[cfg(test)]` without a
+/// body (`#[cfg(test)] mod testutil;`), among `files`. Their code is test
+/// support, though their names do not say so.
+pub fn rust_test_modules(files: &[(PathBuf, &LanguageSpec)]) -> HashSet<PathBuf> {
+    let known: HashSet<&Path> = files.iter().map(|(path, _)| path.as_path()).collect();
+    let mut modules = HashSet::new();
+    for (path, spec) in files {
+        if spec.name != "Rust" {
+            continue;
+        }
+        let Ok(text) = std::fs::read_to_string(path) else {
+            continue;
+        };
+        if !text.contains(ATTRIBUTE) {
+            continue;
+        }
+        let lines: Vec<String> = text.lines().map(str::to_string).collect();
+        for (code, from, to) in test_items(&lines) {
+            let Some(name) = declared_module(&code) else {
+                continue;
+            };
+            let candidates = match path_attribute(&lines[from..=to]) {
+                Some(target) => vec![path.parent().unwrap_or(Path::new("")).join(target)],
+                None => {
+                    let dir = module_dir(path);
+                    vec![
+                        dir.join(format!("{name}.rs")),
+                        dir.join(&name).join("mod.rs"),
+                    ]
+                }
+            };
+            modules.extend(
+                candidates
+                    .into_iter()
+                    .filter(|c| known.contains(c.as_path())),
+            );
+        }
+    }
+    modules
+}
+
+/// The name of the module an item declares without a body: `mod name;`,
+/// with any visibility.
+fn declared_module(code: &str) -> Option<String> {
+    let code = code.trim_end();
+    let decl = code.strip_suffix(';')?;
+    let at = decl.rfind("mod ")?;
+    let before = decl[..at].chars().last();
+    if before.is_some_and(|c| c.is_alphanumeric() || c == '_') {
+        return None;
+    }
+    let name = decl[at + 4..].trim();
+    let ident = name.chars().all(|c| c.is_alphanumeric() || c == '_');
+    (ident && !name.is_empty()).then(|| name.to_string())
+}
+
+/// The target of a `#[path = "…"]` attribute among the lines of an item.
+fn path_attribute(lines: &[String]) -> Option<String> {
+    lines.iter().find_map(|line| {
+        let rest = line.trim_start().strip_prefix("#[path")?;
+        let start = rest.find('"')? + 1;
+        let end = start + rest[start..].find('"')?;
+        Some(rest[start..end].to_string())
+    })
+}
+
+/// The directory where the submodules of a Rust file live: beside a crate
+/// root or a `mod.rs`, under a directory named after any other file.
+fn module_dir(path: &Path) -> PathBuf {
+    let parent = path.parent().unwrap_or(Path::new(""));
+    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+    let is_root = matches!(stem, "lib" | "main" | "mod")
+        || parent.file_name().is_some_and(|dir| dir == "bin");
+    if is_root {
+        parent.to_path_buf()
+    } else {
+        parent.join(stem)
+    }
 }
 
 /// The last line of the item that starts at `from`: where its braces
