@@ -50,40 +50,46 @@ fn test_items(lines: &[String]) -> Vec<(String, usize, usize)> {
 /// support, though their names do not say so.
 pub fn rust_test_modules(files: &[(PathBuf, &LanguageSpec)]) -> HashSet<PathBuf> {
     let known: HashSet<&Path> = files.iter().map(|(path, _)| path.as_path()).collect();
-    let mut modules = HashSet::new();
-    for (path, spec) in files {
-        if spec.name != "Rust" {
-            continue;
-        }
-        let Ok(text) = std::fs::read_to_string(path) else {
+    files
+        .iter()
+        .filter(|(_, spec)| spec.name == "Rust")
+        .flat_map(|(path, _)| declared_test_modules(path))
+        .filter(|candidate| known.contains(candidate.as_path()))
+        .collect()
+}
+
+/// The files a Rust file may load for the modules it declares under
+/// `#[cfg(test)]` without a body: each module in either layout, or where
+/// its `#[path]` says.
+fn declared_test_modules(path: &Path) -> Vec<PathBuf> {
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    if !text.contains(ATTRIBUTE) {
+        return Vec::new();
+    }
+    let lines: Vec<String> = text.lines().map(str::to_string).collect();
+    let mut candidates = Vec::new();
+    for (code, from, to) in test_items(&lines) {
+        let Some(name) = declared_module(&code) else {
             continue;
         };
-        if !text.contains(ATTRIBUTE) {
-            continue;
-        }
-        let lines: Vec<String> = text.lines().map(str::to_string).collect();
-        for (code, from, to) in test_items(&lines) {
-            let Some(name) = declared_module(&code) else {
-                continue;
-            };
-            let candidates = match path_attribute(&lines[from..=to]) {
-                Some(target) => vec![path.parent().unwrap_or(Path::new("")).join(target)],
-                None => {
-                    let dir = module_dir(path);
-                    vec![
-                        dir.join(format!("{name}.rs")),
-                        dir.join(&name).join("mod.rs"),
-                    ]
-                }
-            };
-            modules.extend(
-                candidates
-                    .into_iter()
-                    .filter(|c| known.contains(c.as_path())),
-            );
-        }
+        candidates.extend(module_files(path, &name, &lines[from..=to]));
     }
-    modules
+    candidates
+}
+
+/// Where the module `name`, declared in `path` by the item of `item_lines`,
+/// may live.
+fn module_files(path: &Path, name: &str, item_lines: &[String]) -> Vec<PathBuf> {
+    if let Some(target) = path_attribute(item_lines) {
+        return vec![path.parent().unwrap_or(Path::new("")).join(target)];
+    }
+    let dir = module_dir(path);
+    vec![
+        dir.join(format!("{name}.rs")),
+        dir.join(name).join("mod.rs"),
+    ]
 }
 
 /// The name of the module an item declares without a body: `mod name;`,
