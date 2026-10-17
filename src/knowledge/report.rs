@@ -253,88 +253,83 @@ fn bus_factor_risk(factor: usize) -> &'static str {
 /// beyond those counted in the factor. `since` is the activity window, if
 /// one was given.
 pub fn render_bus_factor_report(bf: &BusFactor, top: usize, since: Option<&str>) -> String {
-    use std::fmt::Write;
-
-    let mut out = String::new();
     if bf.total_lines == 0 {
-        out.push_str("No blame data found for bus factor analysis.\n");
-        return out;
+        return "No blame data found for bus factor analysis.\n".to_string();
     }
+    let mut out = bus_factor_summary(bf, since);
+    out.push('\n');
+    out.push_str(&bus_factor_table(bf, top));
+    out
+}
 
-    let _ = writeln!(out, "Project Bus Factor: {}", bf.factor);
-    let _ = writeln!(out);
+/// The lines above the table: the number, what it means, and how it is
+/// computed.
+fn bus_factor_summary(bf: &BusFactor, since: Option<&str>) -> String {
+    let mut lines = vec![format!("Project Bus Factor: {}", bf.factor), String::new()];
     if let (Some(pct), Some(since)) = (bf.orphaned_by_inactivity, since)
         && pct > 0.0
     {
-        let _ = writeln!(
-            out,
+        lines.push(format!(
             " {pct:.0}% of the code is already in files whose authors have not committed in {since}."
-        );
+        ));
     }
-    if bf.factor > 0 {
-        let orphaned = bf
-            .contributors
-            .iter()
-            .filter_map(|e| e.orphaned_pct)
-            .next_back()
-            .unwrap_or(0.0);
-        let _ = writeln!(
-            out,
-            " If {}, {orphaned:.0}% of the code is in files with no author left.",
-            if bf.factor == 1 {
-                "this contributor leaves".to_string()
-            } else {
-                format!("these {} contributors leave", bf.factor)
-            },
-        );
+    let orphaned = bf
+        .contributors
+        .iter()
+        .filter_map(|e| e.orphaned_pct)
+        .next_back();
+    if let Some(orphaned) = orphaned {
+        let who = match bf.factor {
+            1 => "this contributor leaves".to_string(),
+            n => format!("these {n} contributors leave"),
+        };
+        lines.push(format!(
+            " If {who}, {orphaned:.0}% of the code is in files with no author left."
+        ));
     }
-    let _ = writeln!(out, " Risk: {}", bus_factor_risk(bf.factor));
-    let _ = writeln!(
-        out,
+    lines.push(format!(" Risk: {}", bus_factor_risk(bf.factor)));
+    lines.push(format!(
         " Authors of a file hold at least {:.0}% of the lines of its main author; files weigh by lines; threshold {:.0}%.",
         AUTHOR_SHARE * 100.0,
         bf.threshold,
-    );
-    let _ = writeln!(out);
+    ));
+    lines.join("\n") + "\n"
+}
 
-    let shown = bf.factor + top;
-    let rows = &bf.contributors[..shown.min(bf.contributors.len())];
-    let author = |e: &BusFactorEntry| match e.active {
+/// The name a contributor is listed under.
+fn listed_name(e: &BusFactorEntry) -> String {
+    match e.active {
         Some(false) => format!("{} (inactive)", e.author),
         _ => e.author.clone(),
-    };
-    let max_author_len = rows
+    }
+}
+
+/// The table of contributors: those counted in the factor, then `top` more.
+fn bus_factor_table(bf: &BusFactor, top: usize) -> String {
+    let rows = &bf.contributors[..(bf.factor + top).min(bf.contributors.len())];
+    let names: Vec<String> = rows.iter().map(listed_name).collect();
+    let aw = names
         .iter()
-        .map(|e| report_helpers::display_width(&author(e)))
+        .map(|n| report_helpers::display_width(n))
         .max()
         .unwrap_or(6)
         .max(6);
+    let separator = report_helpers::separator((aw + 40).max(70));
 
-    let header_width = 6 + max_author_len + 7 + 8 + 9 + 10;
-    let separator = report_helpers::separator(header_width.max(70));
-
-    let _ = writeln!(out, "{separator}");
-    let _ = writeln!(
-        out,
-        " {:>4}  {:<aw$}  {:>5}  {:>8}  {:>7}  {:>8}",
-        "Rank",
-        "Author",
-        "Files",
-        "Lines",
-        "Share",
-        "Orphaned",
-        aw = max_author_len,
-    );
-    let _ = writeln!(out, "{separator}");
-
-    for (i, entry) in rows.iter().enumerate() {
+    let mut lines = vec![
+        separator.clone(),
+        format!(
+            " {:>4}  {:<aw$}  {:>5}  {:>8}  {:>7}  {:>8}",
+            "Rank", "Author", "Files", "Lines", "Share", "Orphaned"
+        ),
+        separator.clone(),
+    ];
+    for (i, (entry, name)) in rows.iter().zip(&names).enumerate() {
         let orphaned = entry
             .orphaned_pct
             .map_or(String::new(), |pct| format!("{pct:>7.1}%"));
-        let name = author(entry);
-        let pad = max_author_len.saturating_sub(report_helpers::display_width(&name));
-        let _ = writeln!(
-            out,
+        let pad = aw.saturating_sub(report_helpers::display_width(name));
+        lines.push(format!(
             " {:>4}  {name}{:pad$}  {:>5}  {:>8}  {:>6.2}%  {:>8}",
             i + 1,
             "",
@@ -342,15 +337,14 @@ pub fn render_bus_factor_report(bf: &BusFactor, top: usize, since: Option<&str>)
             entry.lines,
             entry.pct,
             orphaned,
-        );
+        ));
     }
-
-    let _ = writeln!(out, "{separator}");
+    lines.push(separator);
     let hidden = bf.contributors.len() - rows.len();
     if hidden > 0 {
-        let _ = writeln!(out, " {hidden} more contributors (see --top)");
+        lines.push(format!(" {hidden} more contributors (see --top)"));
     }
-    out
+    lines.join("\n") + "\n"
 }
 
 /// Print the bus factor report as a human-readable table.

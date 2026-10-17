@@ -270,6 +270,96 @@ impl Person {
     }
 }
 
+/// Who wrote what: each person, and each file with its lines and the
+/// identities of its authors.
+#[derive(Default)]
+struct Authorship {
+    people: HashMap<String, Person>,
+    files: Vec<(usize, Vec<String>)>,
+    total_lines: usize,
+}
+
+impl Authorship {
+    fn read(files: &[Vec<BlameInfo>]) -> Self {
+        let mut authorship = Self::default();
+        for blames in files {
+            authorship.add_file(blames);
+        }
+        authorship
+    }
+
+    fn add_file(&mut self, blames: &[BlameInfo]) {
+        let size: usize = blames.iter().map(|b| b.lines).sum();
+        let authors = file_authors(blames);
+        for b in blames {
+            let person = self.people.entry(b.identity()).or_default();
+            *person.names.entry(b.author.clone()).or_default() += b.lines;
+            person.lines += b.lines;
+        }
+        for key in &authors {
+            let person = self.people.entry(key.clone()).or_default();
+            person.files += 1;
+            person.authored_lines += size;
+        }
+        self.files.push((size, authors));
+        self.total_lines += size;
+    }
+
+    /// Share of lines in files whose authors are all in `gone`.
+    fn orphaned_pct(&self, gone: &HashSet<&str>) -> f64 {
+        let lines: usize = self
+            .files
+            .iter()
+            .filter(|(_, authors)| authors.iter().all(|a| gone.contains(a.as_str())))
+            .map(|(size, _)| size)
+            .sum();
+        lines as f64 / self.total_lines as f64 * 100.0
+    }
+
+    /// Everyone, the author of the most lines first.
+    fn ranked(&self) -> Vec<&str> {
+        let mut ranked: Vec<&str> = self.people.keys().map(String::as_str).collect();
+        ranked.sort_by(|a, b| {
+            let (pa, pb) = (&self.people[*a], &self.people[*b]);
+            pb.authored_lines
+                .cmp(&pa.authored_lines)
+                .then_with(|| pb.lines.cmp(&pa.lines))
+                .then_with(|| a.cmp(b))
+        });
+        ranked
+    }
+
+    fn entry(&self, key: &str, orphaned_pct: Option<f64>, active: Option<bool>) -> BusFactorEntry {
+        let person = &self.people[key];
+        BusFactorEntry {
+            author: person.name(),
+            lines: person.lines,
+            pct: person.lines as f64 / self.total_lines as f64 * 100.0,
+            files: person.files,
+            orphaned_pct,
+            is_critical: orphaned_pct.is_some(),
+            active,
+        }
+    }
+}
+
+/// The identities of the authors of a file: those with at least
+/// [`AUTHOR_SHARE`] of the lines of its main author.
+fn file_authors(blames: &[BlameInfo]) -> Vec<String> {
+    let top = blames.iter().map(|b| b.lines).max().unwrap_or(0);
+    let mut authors: Vec<String> = Vec::new();
+    if top == 0 {
+        return authors;
+    }
+    for b in blames {
+        let key = b.identity();
+        if b.lines as f64 >= top as f64 * AUTHOR_SHARE && !authors.contains(&key) {
+            authors.push(key);
+        }
+    }
+    authors
+}
+
 /// Compute the bus factor (truck factor) from the blame of each file.
 ///
 /// The authors of a file are those with at least [`AUTHOR_SHARE`] of the
@@ -286,30 +376,8 @@ pub fn compute_bus_factor(
     active: Option<&HashSet<String>>,
     threshold: f64,
 ) -> BusFactor {
-    let mut people: HashMap<String, Person> = HashMap::new();
-    // (lines of the file, identities of its authors)
-    let mut authored: Vec<(usize, Vec<String>)> = Vec::new();
-
-    for blames in files {
-        let size: usize = blames.iter().map(|b| b.lines).sum();
-        let top = blames.iter().map(|b| b.lines).max().unwrap_or(0);
-        let mut authors: Vec<String> = Vec::new();
-        for b in blames {
-            let key = b.identity();
-            let person = people.entry(key.clone()).or_default();
-            *person.names.entry(b.author.clone()).or_default() += b.lines;
-            person.lines += b.lines;
-            if top > 0 && b.lines as f64 >= top as f64 * AUTHOR_SHARE && !authors.contains(&key) {
-                person.files += 1;
-                person.authored_lines += size;
-                authors.push(key);
-            }
-        }
-        authored.push((size, authors));
-    }
-
-    let total_lines: usize = authored.iter().map(|(size, _)| size).sum();
-    if total_lines == 0 {
+    let authorship = Authorship::read(files);
+    if authorship.total_lines == 0 {
         return BusFactor {
             factor: 0,
             threshold,
@@ -320,71 +388,37 @@ pub fn compute_bus_factor(
         };
     }
 
-    let orphaned_pct = |gone: &HashSet<&str>| -> f64 {
-        let lines: usize = authored
-            .iter()
-            .filter(|(_, authors)| authors.iter().all(|a| gone.contains(a.as_str())))
-            .map(|(size, _)| size)
-            .sum();
-        lines as f64 / total_lines as f64 * 100.0
-    };
-
     let is_active = |key: &str| active.is_none_or(|a| a.contains(key));
-    let mut gone: HashSet<&str> = people
-        .keys()
-        .map(String::as_str)
-        .filter(|k| !is_active(k))
-        .collect();
-    let orphaned_by_inactivity = active.map(|_| orphaned_pct(&gone));
+    let ranked = authorship.ranked();
+    let mut gone: HashSet<&str> = ranked.iter().copied().filter(|k| !is_active(k)).collect();
+    let orphaned_by_inactivity = active.map(|_| authorship.orphaned_pct(&gone));
 
-    let mut ranked: Vec<&str> = people.keys().map(String::as_str).collect();
-    ranked.sort_by(|a, b| {
-        let (pa, pb) = (&people[*a], &people[*b]);
-        pb.authored_lines
-            .cmp(&pa.authored_lines)
-            .then_with(|| pb.lines.cmp(&pa.lines))
-            .then_with(|| a.cmp(b))
-    });
-
-    let mut orphaned = orphaned_pct(&gone);
     let mut leaving: Vec<(&str, f64)> = Vec::new();
+    let mut orphaned = authorship.orphaned_pct(&gone);
     for &key in ranked.iter().filter(|k| is_active(k)) {
         if orphaned > threshold {
             break;
         }
         gone.insert(key);
-        orphaned = orphaned_pct(&gone);
+        orphaned = authorship.orphaned_pct(&gone);
         leaving.push((key, orphaned));
     }
 
-    let entry = |key: &str, orphaned_pct: Option<f64>| {
-        let person = &people[key];
-        BusFactorEntry {
-            author: person.name(),
-            lines: person.lines,
-            pct: person.lines as f64 / total_lines as f64 * 100.0,
-            files: person.files,
-            orphaned_pct,
-            is_critical: orphaned_pct.is_some(),
-            active: active.map(|_| is_active(key)),
-        }
-    };
-    let mut contributors: Vec<BusFactorEntry> = leaving
+    let activity = |key: &str| active.map(|_| is_active(key));
+    let staying = ranked
         .iter()
-        .map(|&(key, pct)| entry(key, Some(pct)))
+        .filter(|k| !leaving.iter().any(|(l, _)| l == *k));
+    let contributors = leaving
+        .iter()
+        .map(|&(key, pct)| authorship.entry(key, Some(pct), activity(key)))
+        .chain(staying.map(|&key| authorship.entry(key, None, activity(key))))
         .collect();
-    contributors.extend(
-        ranked
-            .iter()
-            .filter(|k| !leaving.iter().any(|(l, _)| l == *k))
-            .map(|k| entry(k, None)),
-    );
 
     BusFactor {
         factor: leaving.len(),
         threshold,
         total_files: files.len(),
-        total_lines,
+        total_lines: authorship.total_lines,
         orphaned_by_inactivity,
         contributors,
     }
