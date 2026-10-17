@@ -172,95 +172,138 @@ pub fn count_cognitive_for_lines(
     }
 }
 
-/// Process all braces on a single line, updating the brace stack and nesting depth.
-///
-/// Returns `(new_is_first_line, new_opens_flow)` after processing.
-/// `is_first_line` transitions to `false` once the function-body opening brace is seen.
-/// `opens_flow` tracks whether the next `{` on this line opens a flow-control block.
-fn process_line_braces(
-    stripped: &str,
-    mut is_first_line: bool,
-    mut opens_flow: bool,
-    brace_stack: &mut Vec<BraceContext>,
-    nesting_depth: &mut usize,
-) -> (bool, bool) {
-    for ch in stripped.bytes() {
-        if ch == b'{' {
-            if is_first_line {
-                // First opening brace is the function body — don't increment nesting
-                brace_stack.push(BraceContext::Other);
-                is_first_line = false;
-            } else if opens_flow {
-                brace_stack.push(BraceContext::FlowControl);
-                *nesting_depth += 1;
-                opens_flow = false; // consumed — remaining { on this line are closures/structs
-            } else {
-                brace_stack.push(BraceContext::Other);
-            }
-        } else if ch == b'}'
-            && let Some(ctx) = brace_stack.pop()
-            && ctx == BraceContext::FlowControl
-        {
-            *nesting_depth = nesting_depth.saturating_sub(1);
-        }
-    }
-    (is_first_line, opens_flow)
+/// What the brace-scoped count knows between one token and the next.
+#[derive(Default)]
+struct BraceScan {
+    complexity: usize,
+    brace_stack: Vec<BraceContext>,
+    nesting_depth: usize,
+    /// The function body has opened: its brace is no nesting.
+    in_body: bool,
+    /// A control-flow keyword was read and its block has not opened yet:
+    /// the next `{` opens it, on this line or, Allman style, the next.
+    pending_flow: bool,
 }
 
-/// Count cognitive complexity for brace-scoped languages.
-/// Tracks nesting via a stack of brace contexts.
-fn count_brace_scoped(func_lines: &[(usize, &str)], markers: &CognitiveMarkers) -> usize {
-    let mut complexity: usize = 0;
-    let mut brace_stack: Vec<BraceContext> = Vec::new();
-    let mut nesting_depth: usize = 0;
-    // Track if first line (function declaration) — skip its braces for nesting
-    let mut is_first_line = true;
-
-    for &(_, line) in func_lines {
-        let trimmed = line.trim();
-        let stripped = mask_strings(trimmed, markers.line_comments);
-
-        // Detect keywords BEFORE counting braces on this line
-        let line_result = classify_line(&stripped, markers);
-
-        match line_result {
-            LineClassification::Structural => {
-                complexity += 1 + nesting_depth;
-            }
-            LineClassification::Hybrid => {
-                // else if / elif: +1 only, no nesting change
-                // But we need to handle the closing brace from the if-block
-                // that just ended on this line too.
-                complexity += 1;
-            }
-            LineClassification::Fundamental => {
-                complexity += 1;
-            }
-            LineClassification::None => {}
-        }
-
-        // Count boolean operator sequences
-        complexity += count_boolean_sequences(&stripped, markers);
-
-        // Track braces for nesting depth
-        // `opens_flow` is consumed by the first `{` on a control-flow line so
-        // that subsequent braces on the same line (closures, struct literals)
-        // are not counted as flow-control nesting.
-        let line_opens_flow = matches!(
-            line_result,
-            LineClassification::Structural | LineClassification::Fundamental
-        );
-
-        (is_first_line, _) = process_line_braces(
-            &stripped,
-            is_first_line,
-            line_opens_flow,
-            &mut brace_stack,
-            &mut nesting_depth,
-        );
+impl BraceScan {
+    /// A keyword of control flow: its increment, and the block it opens.
+    fn keyword(&mut self, kind: LineClassification) {
+        self.complexity += match kind {
+            LineClassification::Structural => 1 + self.nesting_depth,
+            _ => 1,
+        };
+        self.pending_flow = true;
     }
 
-    complexity
+    fn open_brace(&mut self) {
+        let context = if !self.in_body {
+            self.in_body = true;
+            BraceContext::Other
+        } else if self.pending_flow {
+            self.nesting_depth += 1;
+            BraceContext::FlowControl
+        } else {
+            BraceContext::Other
+        };
+        // Only the first brace after a keyword is its block; later ones on
+        // the line are closures or literals.
+        self.pending_flow = false;
+        self.brace_stack.push(context);
+    }
+
+    fn close_brace(&mut self) {
+        if self.brace_stack.pop() == Some(BraceContext::FlowControl) {
+            self.nesting_depth = self.nesting_depth.saturating_sub(1);
+        }
+    }
+
+    /// The end of a line: a keyword whose body ended on it, as
+    /// `if (x) return;`, opens no block on the next.
+    fn end_line(&mut self, stripped: &str) {
+        if stripped.trim_end().ends_with([';', '}']) {
+            self.pending_flow = false;
+        }
+    }
+}
+
+/// Count cognitive complexity for brace-scoped languages. Keywords and
+/// braces are read in order along each line, so that code written on one
+/// line counts as it does on several.
+fn count_brace_scoped(func_lines: &[(usize, &str)], markers: &CognitiveMarkers) -> usize {
+    let mut scan = BraceScan::default();
+    for &(_, line) in func_lines {
+        let stripped = mask_strings(line.trim(), markers.line_comments);
+        for token in line_tokens(&stripped, markers) {
+            match token {
+                Token::Keyword(kind) => scan.keyword(kind),
+                Token::Open => scan.open_brace(),
+                Token::Close => scan.close_brace(),
+            }
+        }
+        scan.complexity += count_boolean_sequences(&stripped, markers);
+        scan.end_line(&stripped);
+    }
+    scan.complexity
+}
+
+/// A token of a line that the brace-scoped count reads.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Token {
+    Keyword(LineClassification),
+    Open,
+    Close,
+}
+
+/// The keywords and braces of a line, in order. A hybrid keyword (`else
+/// if`) is one token, not an `else` and an `if`.
+fn line_tokens(stripped: &str, markers: &CognitiveMarkers) -> Vec<Token> {
+    let mut tokens = Vec::new();
+    let mut i = 0;
+    while i < stripped.len() {
+        match stripped.as_bytes()[i] {
+            b'{' => tokens.push(Token::Open),
+            b'}' => tokens.push(Token::Close),
+            _ => {
+                if let Some((kind, len)) = keyword_at(stripped, i, markers) {
+                    tokens.push(Token::Keyword(kind));
+                    i += len;
+                    continue;
+                }
+            }
+        }
+        i += 1;
+    }
+    tokens
+}
+
+/// The keyword that starts at byte `i`, as a whole word, with its length.
+fn keyword_at(
+    stripped: &str,
+    i: usize,
+    markers: &CognitiveMarkers,
+) -> Option<(LineClassification, usize)> {
+    let kinds = [
+        (markers.hybrid_keywords, LineClassification::Hybrid),
+        (markers.structural_keywords, LineClassification::Structural),
+        (
+            markers.fundamental_keywords,
+            LineClassification::Fundamental,
+        ),
+    ];
+    let bytes = stripped.as_bytes();
+    let starts_word = i == 0 || !is_word_char(bytes[i - 1]);
+    if !starts_word {
+        return None;
+    }
+    kinds.iter().find_map(|(keywords, kind)| {
+        keywords
+            .iter()
+            .find(|kw| {
+                bytes[i..].starts_with(kw.as_bytes())
+                    && !bytes.get(i + kw.len()).is_some_and(|b| is_word_char(*b))
+            })
+            .map(|kw| (*kind, kw.len()))
+    })
 }
 
 /// Count cognitive complexity for indent-scoped languages.
@@ -382,66 +425,40 @@ fn is_word_char(b: u8) -> bool {
 /// `a && b || c` = 2 (first && = +1, change to || = +1)
 /// `a || b || c && d` = 2 (first || = +1, change to && = +1)
 fn count_boolean_sequences(stripped: &str, markers: &CognitiveMarkers) -> usize {
-    if markers.boolean_operators.is_empty() {
-        return 0;
-    }
-
     let mut count = 0;
     let mut last_op: Option<&str> = None;
     let bytes = stripped.as_bytes();
-    let len = bytes.len();
     let mut i = 0;
-
-    while i < len {
-        let mut matched_op: Option<&str> = None;
-
-        for &op in markers.boolean_operators {
-            let op_bytes = op.as_bytes();
-            let op_len = op_bytes.len();
-            if i + op_len <= len && &bytes[i..i + op_len] == op_bytes {
-                // For word-based operators (and, or), check word boundaries
-                if op.chars().next().is_some_and(|c| c.is_alphabetic()) {
-                    let before_ok = i == 0 || !is_word_char(bytes[i - 1]);
-                    let after_ok = i + op_len >= len || !is_word_char(bytes[i + op_len]);
-                    if before_ok && after_ok {
-                        matched_op = Some(op);
-                    }
-                } else {
-                    matched_op = Some(op);
-                }
-                break;
-            }
-        }
-
-        if let Some(op) = matched_op {
-            match last_op {
-                None => {
-                    // First operator in a sequence
-                    count += 1;
-                    last_op = Some(op);
-                }
-                Some(prev) if prev != op => {
-                    // Operator type changed
-                    count += 1;
-                    last_op = Some(op);
-                }
-                _ => {
-                    // Same operator, no increment
-                }
-            }
-            i += op.len();
-        } else {
-            // Reset sequence when we encounter non-operator, non-whitespace,
-            // non-identifier content that breaks the boolean expression
-            let ch = bytes[i];
-            if ch == b'(' || ch == b')' || ch == b';' || ch == b'{' || ch == b'}' || ch == b',' {
+    while i < bytes.len() {
+        let Some(op) = operator_at(bytes, i, markers) else {
+            // A bracket, `;` or `,` ends the boolean expression.
+            if b"(){};,".contains(&bytes[i]) {
                 last_op = None;
             }
             i += 1;
+            continue;
+        };
+        // The first operator of a sequence, or a change of operator.
+        if last_op != Some(op) {
+            count += 1;
+            last_op = Some(op);
         }
+        i += op.len();
     }
-
     count
+}
+
+/// The boolean operator that starts at byte `i`, if any; a word operator
+/// (`and`, `or`) only as a whole word.
+fn operator_at(bytes: &[u8], i: usize, markers: &CognitiveMarkers) -> Option<&'static str> {
+    let op = *markers
+        .boolean_operators
+        .iter()
+        .find(|op| bytes[i..].starts_with(op.as_bytes()))?;
+    let is_word = op.starts_with(|c: char| c.is_alphabetic());
+    let bounded = (i == 0 || !is_word_char(bytes[i - 1]))
+        && !bytes.get(i + op.len()).is_some_and(|b| is_word_char(*b));
+    (!is_word || bounded).then_some(op)
 }
 
 #[cfg(test)]

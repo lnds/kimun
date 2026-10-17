@@ -342,6 +342,10 @@ Opciones:
 
 En los lenguajes de llaves una función termina donde sus llaves se balancean. Un cuerpo introducido por `=` (`fn f(x) = expr`, como en Kaikai, Kotlin o Scala) no tiene una llave de cierre propia: sigue mientras sus llaves estén abiertas y las líneas siguientes tengan más indentación que la declaración. `km cycom` encuentra las funciones de la misma manera.
 
+Las palabras clave y las llaves se leen en orden a lo largo de cada línea, así que el código escrito en una línea obtiene el mismo puntaje que en varias: `if (a) { return 1 } else { return 2 }` es 2, y `for (v of xs) { if (y) { return v } }` es 3. El bloque de una palabra clave de control se abre en la siguiente `{`, en su misma línea o, en estilo Allman, en la siguiente; `else if` anida su bloque igual que `if` y `else`.
+
+En Elixir, `with`, `unless` y `receive` son incrementos estructurales como `case`, y `and`, `or`, `&&` y `||` cuentan como secuencias booleanas. Para `km cycom`, cada cláusula (`->`) de un `case`, `cond`, `receive` o `fn` de varias cláusulas es una rama, igual que cada etiqueta `case` de C, y `with`, `unless`, `and`, `or`, `&&` y `||` suman uno cada uno.
+
 ### `km mi` -- Índice de mantenibilidad (variante de Visual Studio)
 
 Calcula el [índice de mantenibilidad](https://learn.microsoft.com/en-us/visualstudio/code-quality/code-metrics-maintainability-index-range-and-meaning) por archivo con la fórmula de Visual Studio. El MI se normaliza a una escala de 0 a 100, sin el término de peso de los comentarios.

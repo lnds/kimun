@@ -342,6 +342,10 @@ Options:
 
 In brace languages a function ends where its braces balance. A body introduced by `=` (`fn f(x) = expr`, as in Kaikai, Kotlin or Scala) has no closing brace of its own: it runs while its braces are open and the following lines are indented deeper than the declaration. `km cycom` finds functions the same way.
 
+Keywords and braces are read in order along each line, so code written on one line scores as it does on several: `if (a) { return 1 } else { return 2 }` is 2, and `for (v of xs) { if (y) { return v } }` is 3. The block of a control keyword opens at the next `{`, on its line or, Allman style, on the next one; `else if` nests its block like `if` and `else`.
+
+In Elixir, `with`, `unless` and `receive` are structural increments like `case`, and `and`, `or`, `&&` and `||` count as boolean sequences. For `km cycom`, each clause (`->`) of a `case`, `cond`, `receive` or multi-clause `fn` is a branch, as each `case` label of C, and `with`, `unless`, `and`, `or`, `&&` and `||` add one each.
+
 ### `km mi` -- Maintainability Index (Visual Studio variant)
 
 Computes the [Maintainability Index](https://learn.microsoft.com/en-us/visualstudio/code-quality/code-metrics-maintainability-index-range-and-meaning) per file using the Visual Studio formula. MI is normalized to a 0–100 scale with no comment-weight term.
