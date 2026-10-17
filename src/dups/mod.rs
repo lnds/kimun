@@ -61,7 +61,7 @@ pub(crate) fn compute_metrics(cfg: &WalkConfig<'_>, min_lines: usize) -> Duplica
     let mut files: Vec<NormalizedFile> = Vec::new();
     let mut total_code_lines: usize = 0;
 
-    for (file_path, spec) in cfg.source_files() {
+    for (file_path, spec) in cfg.code_files() {
         match normalize_file(&file_path, spec, exclude_tests) {
             Ok(Some(nf)) => {
                 total_code_lines += nf.lines.len();
@@ -198,7 +198,7 @@ pub fn run(
     let mut files: Vec<NormalizedFile> = Vec::new();
     let mut total_code_lines: usize = 0;
 
-    for (file_path, spec) in cfg.source_files() {
+    for (file_path, spec) in cfg.code_files() {
         match normalize_file(&file_path, spec, exclude_tests) {
             Ok(Some(nf)) => {
                 total_code_lines += nf.lines.len();

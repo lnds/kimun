@@ -206,3 +206,76 @@ fn production_kinds_touch_no_other_language() {
         code_lines_of("lib.kt", false)
     );
 }
+
+fn rust_files(dir: &Path, files: &[(&str, &str)]) -> Vec<(PathBuf, &'static LanguageSpec)> {
+    let rust = crate::loc::language::detect(Path::new("a.rs")).unwrap();
+    files
+        .iter()
+        .map(|(name, text)| {
+            let path = dir.join(name);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, text).unwrap();
+            (path, rust)
+        })
+        .collect()
+}
+
+#[test]
+fn test_modules_declared_without_a_body() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = rust_files(
+        dir.path(),
+        &[
+            (
+                "src/lib.rs",
+                "pub fn f() {}\n\n#[cfg(test)]\nmod testutil;\n\nmod real;\n",
+            ),
+            ("src/testutil.rs", "pub fn helper() {}\n"),
+            ("src/real.rs", "#[cfg(test)]\npub(crate) mod fixtures;\n"),
+            ("src/real/fixtures/mod.rs", "pub fn data() {}\n"),
+        ],
+    );
+    let modules = rust_test_modules(&files);
+    let expected: HashSet<PathBuf> = [
+        dir.path().join("src/testutil.rs"),
+        dir.path().join("src/real/fixtures/mod.rs"),
+    ]
+    .into_iter()
+    .collect();
+    assert_eq!(modules, expected);
+}
+
+#[test]
+fn test_module_through_a_path_attribute() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = rust_files(
+        dir.path(),
+        &[
+            (
+                "src/walk.rs",
+                "#[cfg(test)]\n#[path = \"walk_test.rs\"]\nmod tests;\n",
+            ),
+            ("src/walk_test.rs", "fn t() {}\n"),
+        ],
+    );
+    assert_eq!(
+        rust_test_modules(&files),
+        HashSet::from([dir.path().join("src/walk_test.rs")])
+    );
+}
+
+#[test]
+fn inline_test_module_names_no_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = rust_files(
+        dir.path(),
+        &[
+            (
+                "src/lib.rs",
+                "#[cfg(test)]\nmod tests {\n    mod inner;\n}\n",
+            ),
+            ("src/tests.rs", "fn t() {}\n"),
+        ],
+    );
+    assert!(rust_test_modules(&files).is_empty());
+}

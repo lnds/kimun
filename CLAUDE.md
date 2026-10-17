@@ -40,6 +40,10 @@ CLI tool for code metrics: lines of code (like `cloc`), duplicate detection, Hal
 
 - **`mod.rs`** — Orchestrates: walks directory tree (via `ignore` crate, respects `.gitignore`), detects language, deduplicates files by content hash (streaming), counts lines, aggregates by language.
 
+### Shared: `src/walk.rs`
+
+`source_files` is every recognized file; with tests excluded it also leaves out `EXAMPLE_DIRS` (examples, benchmarks) and the Rust modules declared under `#[cfg(test)]` (`test_blocks::rust_test_modules`). `code_files` is what metrics of code read: no data or prose (`LanguageSpec::is_code`) and no generated files (`util::is_generated_file`, by name, header marker or source map). `collect_analysis`, `score`, `report`, `dups`, `init`, `hotspots` and `churn` use it; `loc` and `deps` read `source_files`; `tc` filters history paths with `is_code_path`.
+
 ### Adding a new language
 
 Use the `lang!` macro in `language.rs`. For most languages:

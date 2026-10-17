@@ -1,5 +1,6 @@
 use super::*;
 use crate::cli::OutputMode;
+use crate::util::is_generated;
 use crate::walk::{ExcludeFilter, WalkConfig};
 use std::fs;
 use std::path::Path as StdPath;

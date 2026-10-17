@@ -6,6 +6,7 @@
 //! Based on Adam Thornhill's approach in "Your Code as a Crime Scene".
 pub(crate) mod analyzer;
 pub(crate) mod report;
+mod structure;
 
 use std::error::Error;
 use std::path::Path;
