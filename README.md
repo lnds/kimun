@@ -960,7 +960,7 @@ Analyzes internal module dependencies by parsing import/use/require statements. 
 km deps [path]
 ```
 
-Supports Elixir (every module referred to in the code, with `alias` undone; see the notes below), Rust (every path that names a module of the workspace: `use`, `crate::`, `super::`, a child module; see the notes below), Python (`import` and `from … import`, absolute and relative; see the notes below), JavaScript/TypeScript (relative `import`/`require`), Go (imports of the packages of the repository, by the module path of each `go.mod`; see the notes below), and Kaikai (`import a.b.c`, including the `as` and `.{…}` forms). External dependencies (crates, npm packages, the Kaikai stdlib) are ignored.
+Supports Elixir (every module referred to in the code, with `alias` undone; see the notes below), Rust (every path that names a module of the workspace: `use`, `crate::`, `super::`, a child module; see the notes below), Python (`import` and `from … import`, absolute and relative; see the notes below), JavaScript/TypeScript (`import`, `export … from`, `require` and `import()`, relative or through the aliases of `tsconfig.json` and the packages of the workspace; see the notes below), Go (imports of the packages of the repository, by the module path of each `go.mod`; see the notes below), and Kaikai (`import a.b.c`, including the `as` and `.{…}` forms). External dependencies (crates, npm packages, the Kaikai stdlib) are ignored.
 
 Files in any other language are left out of the graph instead of being listed with zero dependencies. The table footer, the `unsupported` array of the JSON output and the `unsupported:N` field of the short format say how many files were skipped, so "not measured" is never shown as "no dependencies".
 
@@ -1001,6 +1001,15 @@ Go notes:
 - Every `go.mod` under the analysed directory is read, so the modules of a repository with several resolve each from its own directory, with or without a `go.work`. An import of the module path itself is the package at the root of the module.
 - The files of one package use each other without importing, so there are no edges between them. The import graph is therefore a lower bound on the real dependencies.
 - Not seen: build constraints (`//go:build`, file names such as `x_linux.go`), so a file left out of a build still counts, and packages under `vendor/`.
+
+JavaScript/TypeScript notes:
+
+- Only the import forms are read: `import … from`, a bare `import '…'`, `export … from`, `require('…')`, `import('…')` and `import x = require('…')`, several to a line or over several lines. Any other string is no import, so a path given to `fs.readFile` or `path.resolve` is not a dependency.
+- A relative specifier resolves from the importing file, trying the extensions of JavaScript and TypeScript and the `index` of a directory. A `.js` that does not exist names its TypeScript source (`./a.js` is `a.ts`), and a query such as Vite's `?raw` names the same file.
+- Any other specifier goes first through the `paths` of the nearest `tsconfig.json` or `jsconfig.json` above the importing file, the most specific pattern winning, then through its `baseUrl`. `extends` is followed within the repository, and a directory whose main config has no aliases takes those of the others beside it (`tsconfig.app.json`). Comments and trailing commas are allowed.
+- Then a specifier may name a package of the repository, by the `name` of its `package.json`: `@acme/ui` leads to its entry point (`source`, `module`, `main`, `types`, `exports`, read from `src` when they point to a build directory, or else `src/index`), and `@acme/ui/button` to that file of the package or of its `src`. Packages under `node_modules` are not read. What resolves to none of these is external.
+- A barrel (`index.ts`) is a file like any other: its importers depend on it, and it on what it re-exports.
+- Not seen: the aliases of a bundler config (`resolve.alias` of Vite or webpack), `imports` of `package.json` (`#internal`), specifiers built at run time, and `.vue` and `.svelte` files.
 
 Kaikai notes:
 

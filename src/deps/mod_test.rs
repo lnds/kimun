@@ -381,3 +381,46 @@ fn jsx_and_tsx_files_enter_the_graph() {
     assert_eq!(metrics(&result, "src/label.ts"), (2, 0, false));
     assert!(result.unsupported.is_empty());
 }
+
+#[test]
+fn typescript_aliases_and_workspace_packages_add_edges() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        "apps/web/tsconfig.json",
+        "{\n  // aliases\n  \"compilerOptions\": { \"paths\": { \"@/*\": [\"./src/*\"] } },\n}\n",
+    );
+    write(
+        dir.path(),
+        "apps/web/src/app.tsx",
+        "import { Button } from '@/components/Button';\nimport { slug } from '@acme/utils';\nimport React from 'react';\n",
+    );
+    write(
+        dir.path(),
+        "apps/web/src/components/Button.tsx",
+        "export const Button = 1;\n",
+    );
+    write(
+        dir.path(),
+        "packages/utils/package.json",
+        "{\"name\": \"@acme/utils\", \"main\": \"dist/index.js\"}\n",
+    );
+    write(
+        dir.path(),
+        "packages/utils/src/index.ts",
+        "export const slug = 1;\n",
+    );
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = analyze(&cfg);
+
+    assert_eq!(metrics(&result, "apps/web/src/app.tsx"), (0, 2, false));
+    assert_eq!(
+        metrics(&result, "apps/web/src/components/Button.tsx"),
+        (1, 0, false)
+    );
+    assert_eq!(
+        metrics(&result, "packages/utils/src/index.ts"),
+        (1, 0, false)
+    );
+}

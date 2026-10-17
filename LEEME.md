@@ -960,7 +960,7 @@ Analiza las dependencias internas entre módulos leyendo las sentencias import/u
 km deps [path]
 ```
 
-Soporta Elixir (cada módulo al que el código se refiere, con el `alias` deshecho; mira las notas más abajo), Rust (cada ruta que nombra un módulo del workspace: `use`, `crate::`, `super::`, un módulo hijo; mira las notas más abajo), Python (`import` y `from … import`, absolutos y relativos; mira las notas más abajo), JavaScript/TypeScript (`import`/`require` relativos), Go (imports de los paquetes del repositorio, según la ruta de módulo de cada `go.mod`; mira las notas más abajo) y Kaikai (`import a.b.c`, incluidas las formas `as` y `.{…}`). Las dependencias externas (crates, paquetes de npm, la biblioteca estándar de Kaikai) se ignoran.
+Soporta Elixir (cada módulo al que el código se refiere, con el `alias` deshecho; mira las notas más abajo), Rust (cada ruta que nombra un módulo del workspace: `use`, `crate::`, `super::`, un módulo hijo; mira las notas más abajo), Python (`import` y `from … import`, absolutos y relativos; mira las notas más abajo), JavaScript/TypeScript (`import`, `export … from`, `require` e `import()`, relativos o a través de los alias de `tsconfig.json` y de los paquetes del workspace; mira las notas más abajo), Go (imports de los paquetes del repositorio, según la ruta de módulo de cada `go.mod`; mira las notas más abajo) y Kaikai (`import a.b.c`, incluidas las formas `as` y `.{…}`). Las dependencias externas (crates, paquetes de npm, la biblioteca estándar de Kaikai) se ignoran.
 
 Los archivos en cualquier otro lenguaje quedan fuera del grafo, en vez de listarse con cero dependencias. El pie de la tabla, el arreglo `unsupported` de la salida JSON y el campo `unsupported:N` del formato short dicen cuántos archivos se omitieron, así que "no medido" nunca se muestra como "sin dependencias".
 
@@ -1001,6 +1001,15 @@ Notas sobre Go:
 - Se lee cada `go.mod` bajo el directorio analizado, así que los módulos de un repositorio con varios se resuelven cada uno desde su propio directorio, con o sin `go.work`. Un import de la ruta del módulo misma es el paquete en la raíz del módulo.
 - Los archivos de un mismo paquete se usan entre sí sin importarse, así que no hay aristas entre ellos. El grafo de imports es, por lo tanto, una cota inferior de las dependencias reales.
 - No se ven: las restricciones de compilación (`//go:build`, nombres de archivo como `x_linux.go`), así que un archivo que queda fuera de una compilación cuenta igual, ni los paquetes bajo `vendor/`.
+
+Notas sobre JavaScript/TypeScript:
+
+- Solo se leen las formas de import: `import … from`, un `import '…'` solo, `export … from`, `require('…')`, `import('…')` e `import x = require('…')`, varias en una línea o en varias líneas. Cualquier otro string no es un import, así que una ruta que se pasa a `fs.readFile` o a `path.resolve` no es una dependencia.
+- Un especificador relativo se resuelve desde el archivo que importa, probando las extensiones de JavaScript y TypeScript y el `index` de un directorio. Un `.js` que no existe nombra su fuente en TypeScript (`./a.js` es `a.ts`), y una query como el `?raw` de Vite nombra el mismo archivo.
+- Cualquier otro especificador pasa primero por los `paths` del `tsconfig.json` o `jsconfig.json` más cercano por encima del archivo que importa, y gana el patrón más específico; después, por su `baseUrl`. Se sigue `extends` dentro del repositorio, y un directorio cuyo config principal no tiene alias toma los de los otros que están a su lado (`tsconfig.app.json`). Se aceptan comentarios y comas finales.
+- Después, un especificador puede nombrar un paquete del repositorio, por el `name` de su `package.json`: `@acme/ui` lleva a su punto de entrada (`source`, `module`, `main`, `types`, `exports`, leídos desde `src` cuando apuntan a un directorio de build, o si no `src/index`), y `@acme/ui/button` a ese archivo del paquete o de su `src`. Los paquetes bajo `node_modules` no se leen. Lo que no se resuelve por ninguno de estos caminos es externo.
+- Un barrel (`index.ts`) es un archivo como cualquier otro: quienes lo importan dependen de él, y él de lo que reexporta.
+- No se ve: los alias de la configuración de un bundler (`resolve.alias` de Vite o webpack), los `imports` de `package.json` (`#internal`), los especificadores que se arman en tiempo de ejecución, ni los archivos `.vue` y `.svelte`.
 
 Notas sobre Kaikai:
 

@@ -8,6 +8,7 @@ use super::analyzer::resolve_import;
 use super::elixir::{self, ElixirFile};
 use super::extractor::extract_imports;
 use super::golang;
+use super::javascript;
 use super::layout::Layout;
 use super::rust_crates;
 use super::{python_names, python_uses};
@@ -103,9 +104,15 @@ fn imports(
         return uses;
     }
     let known = &layout.known;
+    let resolve = |import: &String| match source.language.as_str() {
+        "JavaScript" | "TypeScript" | "JSX" => javascript::resolve(&source.path, import, layout)
+            .into_iter()
+            .collect(),
+        language => resolve_import(&source.path, import, language, known),
+    };
     extract_imports(&source.language, &source.text)
         .iter()
-        .flat_map(|import| resolve_import(&source.path, import, &source.language, known))
+        .flat_map(resolve)
         .filter_map(|path| by_path.get(path.as_path()).copied())
         .map(no_calls)
         .collect()

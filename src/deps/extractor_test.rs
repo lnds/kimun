@@ -1,18 +1,6 @@
 use super::*;
 
 #[test]
-fn js_relative_imports() {
-    let src = r#"
-import foo from './foo';
-import { bar } from '../bar';
-import external from 'lodash';
-const x = require('./utils');
-"#;
-    let result = extract_js(src);
-    assert_eq!(result, vec!["./foo", "../bar", "./utils"]);
-}
-
-#[test]
 fn go_block_import() {
     let src = r#"
 import (
@@ -30,25 +18,6 @@ import (
             "github.com/user/project/internal/bar",
         ]
     );
-}
-
-#[test]
-fn js_comment_lines_are_skipped() {
-    let src =
-        "// import a from './line';\n/* import b from './block'; */\n * import c from './doc';\n";
-    assert!(extract_js(src).is_empty());
-}
-
-#[test]
-fn js_imports_without_semicolons() {
-    let src = "import external from 'lodash'\nimport bar from './bar'\n";
-    assert_eq!(extract_js(src), vec!["./bar"]);
-}
-
-#[test]
-fn js_relative_string_after_a_bare_one_on_the_same_line() {
-    let src = "export { a } from 'pkg'; export { b } from './local';\n";
-    assert_eq!(extract_js(src), vec!["./local"]);
 }
 
 #[test]

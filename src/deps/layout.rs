@@ -3,6 +3,8 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
+use super::javascript_config::{self, Modules};
+
 /// What a graph is built with besides the sources.
 #[derive(Default)]
 pub struct Layout {
@@ -15,37 +17,44 @@ pub struct Layout {
     /// The directories each Python project says its packages are imported
     /// from, by the directory of the project.
     pub python_roots: Vec<(PathBuf, Vec<PathBuf>)>,
+    /// The aliases and packages of JavaScript.
+    pub javascript: Modules,
 }
 
-fn is_named(path: &Path, file_name: &str) -> bool {
-    path.file_name().is_some_and(|name| name == file_name)
+/// The manifests a layout reads by name, besides those of JavaScript: of a
+/// Cargo package, a Python project and a Go module.
+const MANIFESTS: [&str; 3] = ["Cargo.toml", "pyproject.toml", "go.mod"];
+
+fn file_name(path: &Path) -> &str {
+    path.file_name().and_then(|n| n.to_str()).unwrap_or("")
 }
 
-/// Whether `path` is a manifest a layout reads: that of a Cargo package,
-/// of a Python project or of a Go module.
+/// Whether `path` is a manifest a layout reads, or a config with import
+/// aliases.
 pub fn is_manifest(path: &Path) -> bool {
-    ["Cargo.toml", "pyproject.toml", "go.mod"]
-        .iter()
-        .any(|name| is_named(path, name))
+    MANIFESTS.contains(&file_name(path)) || javascript_config::is_manifest(path)
 }
 
 impl Layout {
     /// Note what each of the `manifests` declares, given as path and text:
-    /// the package of a Cargo one, the import roots of a Python one, the
-    /// module path of a Go one.
+    /// the package of a Cargo or JavaScript one, the import roots of a
+    /// Python one, the module path of a Go one, the aliases of a config.
     pub fn with_manifests<'t>(
         mut self,
         manifests: impl IntoIterator<Item = (&'t Path, &'t str)>,
     ) -> Self {
+        let (javascript, manifests): (Vec<_>, Vec<_>) = manifests
+            .into_iter()
+            .partition(|(path, _)| javascript_config::is_manifest(path));
         for (path, text) in manifests {
             let dir = path.parent().unwrap_or(Path::new("")).to_path_buf();
-            match path.file_name().and_then(|name| name.to_str()) {
-                Some("pyproject.toml") => {
+            match file_name(path) {
+                "pyproject.toml" => {
                     let roots = crate::projects::python_roots(path, text);
                     let declared = !roots.is_empty();
                     self.python_roots.extend(declared.then_some((dir, roots)));
                 }
-                Some("go.mod") => {
+                "go.mod" => {
                     let module = crate::projects::go_module(text);
                     self.go_modules.extend(module.map(|module| (dir, module)));
                 }
@@ -55,6 +64,7 @@ impl Layout {
                 }
             }
         }
+        self.javascript = javascript_config::read(javascript);
         self
     }
 }
