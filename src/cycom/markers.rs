@@ -12,6 +12,11 @@ pub struct ComplexityMarkers {
     pub keywords: &'static [&'static str],
     /// Boolean operators that add decision points (e.g. "&&", "||").
     pub operators: &'static [&'static str],
+    /// The arrow of a clause, where each clause of a construct is a branch,
+    /// as each `case` label of C: Elixir's `->` in `case`, `cond`, `receive`
+    /// and an `fn` of several clauses. An arrow after `fn` on its own line is
+    /// the one clause of an anonymous function, not a branch.
+    pub clause_arrow: Option<&'static str>,
     /// Tokens that mark function definitions (e.g. "fn ", "def ").
     /// Each function starts with a base complexity of 1.
     pub function_markers: &'static [&'static str],
@@ -32,6 +37,7 @@ pub struct ComplexityMarkers {
 static RUST: ComplexityMarkers = ComplexityMarkers {
     keywords: &["else if", "if", "for", "while", "loop", "match"],
     operators: &["&&", "||"],
+    clause_arrow: None,
     function_markers: &["fn "],
     brace_scoped: true,
     function_syntax: FunctionSyntax::KeywordWithLifetimes,
@@ -46,6 +52,7 @@ static RUST: ComplexityMarkers = ComplexityMarkers {
 static PYTHON: ComplexityMarkers = ComplexityMarkers {
     keywords: &["elif", "if", "for", "while", "except", "and", "or"],
     operators: &[],
+    clause_arrow: None,
     function_markers: &["async def ", "def "],
     brace_scoped: false,
     function_syntax: FunctionSyntax::Loose,
@@ -61,6 +68,7 @@ static JAVASCRIPT: ComplexityMarkers = ComplexityMarkers {
         "else if", "if", "for", "while", "do", "switch", "case", "catch",
     ],
     operators: &["&&", "||", "??"],
+    clause_arrow: None,
     function_markers: &["function ", "function("],
     brace_scoped: true,
     function_syntax: FunctionSyntax::Script,
@@ -76,6 +84,7 @@ static C_FAMILY: ComplexityMarkers = ComplexityMarkers {
         "else if", "if", "for", "while", "do", "switch", "case", "catch",
     ],
     operators: &["&&", "||"],
+    clause_arrow: None,
     function_markers: &[],
     brace_scoped: true,
     function_syntax: FunctionSyntax::Loose,
@@ -88,6 +97,7 @@ static C_FAMILY: ComplexityMarkers = ComplexityMarkers {
 static GO: ComplexityMarkers = ComplexityMarkers {
     keywords: &["else if", "if", "for", "switch", "case", "select"],
     operators: &["&&", "||"],
+    clause_arrow: None,
     function_markers: &["func "],
     brace_scoped: true,
     function_syntax: FunctionSyntax::Keyword,
@@ -103,6 +113,7 @@ static RUBY: ComplexityMarkers = ComplexityMarkers {
         "elsif", "if", "unless", "for", "while", "until", "when", "rescue",
     ],
     operators: &["&&", "||"],
+    clause_arrow: None,
     function_markers: &["def "],
     brace_scoped: false,
     function_syntax: FunctionSyntax::Loose,
@@ -112,6 +123,7 @@ static RUBY: ComplexityMarkers = ComplexityMarkers {
 static KOTLIN: ComplexityMarkers = ComplexityMarkers {
     keywords: &["else if", "if", "for", "while", "when", "catch"],
     operators: &["&&", "||"],
+    clause_arrow: None,
     function_markers: &["fun "],
     brace_scoped: true,
     function_syntax: FunctionSyntax::Loose,
@@ -123,6 +135,7 @@ static SWIFT: ComplexityMarkers = ComplexityMarkers {
         "else if", "if", "for", "while", "switch", "case", "catch", "guard",
     ],
     operators: &["&&", "||"],
+    clause_arrow: None,
     function_markers: &["func "],
     brace_scoped: true,
     function_syntax: FunctionSyntax::Loose,
@@ -132,6 +145,7 @@ static SWIFT: ComplexityMarkers = ComplexityMarkers {
 static SCALA: ComplexityMarkers = ComplexityMarkers {
     keywords: &["else if", "if", "for", "while", "match", "case", "catch"],
     operators: &["&&", "||"],
+    clause_arrow: None,
     function_markers: &["def "],
     brace_scoped: true,
     function_syntax: FunctionSyntax::Keyword,
@@ -156,6 +170,7 @@ static SCALA: ComplexityMarkers = ComplexityMarkers {
 static SHELL: ComplexityMarkers = ComplexityMarkers {
     keywords: &["elif", "if", "for", "while", "until", "case"],
     operators: &["&&", "||"],
+    clause_arrow: None,
     function_markers: &["function "],
     brace_scoped: true,
     function_syntax: FunctionSyntax::Loose,
@@ -170,6 +185,7 @@ static SHELL: ComplexityMarkers = ComplexityMarkers {
 static HASKELL: ComplexityMarkers = ComplexityMarkers {
     keywords: &["if", "case"],
     operators: &[],
+    clause_arrow: None,
     function_markers: &[],
     brace_scoped: false,
     function_syntax: FunctionSyntax::Loose,
@@ -178,12 +194,15 @@ static HASKELL: ComplexityMarkers = ComplexityMarkers {
 
 /// Elixir: `cond` is a multi-way conditional (like chained if-else).
 /// `defp` (private function) must appear before `def` in function_markers
-/// to match first. No boolean operators — Elixir uses `and`/`or` which
-/// are already covered as keywords would be, but these are less common
-/// than pattern matching for branching.
+/// to match first. `case`, `cond` and `receive` branch by their clauses
+/// (`clause_arrow`), not by their keyword; `and`/`or` are words, so they are
+/// keywords rather than operators.
 static ELIXIR: ComplexityMarkers = ComplexityMarkers {
-    keywords: &["if", "cond", "case", "for", "rescue"],
-    operators: &[],
+    keywords: &[
+        "if", "unless", "with", "for", "rescue", "catch", "and", "or",
+    ],
+    operators: &["&&", "||"],
+    clause_arrow: Some("->"),
     function_markers: &["defmacrop ", "defmacro ", "defp ", "def "],
     brace_scoped: false,
     function_syntax: FunctionSyntax::Loose,
@@ -193,6 +212,7 @@ static ELIXIR: ComplexityMarkers = ComplexityMarkers {
 static LUA: ComplexityMarkers = ComplexityMarkers {
     keywords: &["elseif", "if", "for", "while"],
     operators: &[],
+    clause_arrow: None,
     function_markers: &["function "],
     brace_scoped: false,
     function_syntax: FunctionSyntax::Loose,
@@ -202,6 +222,7 @@ static LUA: ComplexityMarkers = ComplexityMarkers {
 static PERL: ComplexityMarkers = ComplexityMarkers {
     keywords: &["elsif", "if", "for", "foreach", "while", "unless"],
     operators: &["&&", "||"],
+    clause_arrow: None,
     function_markers: &["sub "],
     brace_scoped: true,
     function_syntax: FunctionSyntax::Keyword,
@@ -211,6 +232,7 @@ static PERL: ComplexityMarkers = ComplexityMarkers {
 static ERLANG: ComplexityMarkers = ComplexityMarkers {
     keywords: &["if", "case", "receive"],
     operators: &[],
+    clause_arrow: None,
     function_markers: &[],
     brace_scoped: false,
     function_syntax: FunctionSyntax::Loose,
@@ -220,6 +242,7 @@ static ERLANG: ComplexityMarkers = ComplexityMarkers {
 static OCAML: ComplexityMarkers = ComplexityMarkers {
     keywords: &["if", "match", "with"],
     operators: &[],
+    clause_arrow: None,
     function_markers: &["let "],
     brace_scoped: false,
     function_syntax: FunctionSyntax::Loose,
@@ -229,6 +252,7 @@ static OCAML: ComplexityMarkers = ComplexityMarkers {
 static R: ComplexityMarkers = ComplexityMarkers {
     keywords: &["else if", "if", "for", "while", "repeat"],
     operators: &["&&", "||"],
+    clause_arrow: None,
     function_markers: &[],
     brace_scoped: true,
     function_syntax: FunctionSyntax::Loose,
@@ -238,6 +262,7 @@ static R: ComplexityMarkers = ComplexityMarkers {
 static JULIA: ComplexityMarkers = ComplexityMarkers {
     keywords: &["elseif", "if", "for", "while"],
     operators: &["&&", "||"],
+    clause_arrow: None,
     function_markers: &["function "],
     brace_scoped: false,
     function_syntax: FunctionSyntax::Loose,
@@ -247,6 +272,7 @@ static JULIA: ComplexityMarkers = ComplexityMarkers {
 static NIM: ComplexityMarkers = ComplexityMarkers {
     keywords: &["elif", "if", "for", "while", "case", "except"],
     operators: &[],
+    clause_arrow: None,
     function_markers: &["proc ", "func "],
     brace_scoped: false,
     function_syntax: FunctionSyntax::Loose,
@@ -256,6 +282,7 @@ static NIM: ComplexityMarkers = ComplexityMarkers {
 static ZIG: ComplexityMarkers = ComplexityMarkers {
     keywords: &["else", "if", "for", "while", "switch"],
     operators: &[],
+    clause_arrow: None,
     function_markers: &["fn "],
     brace_scoped: true,
     function_syntax: FunctionSyntax::Keyword,
@@ -265,6 +292,7 @@ static ZIG: ComplexityMarkers = ComplexityMarkers {
 static CLOJURE: ComplexityMarkers = ComplexityMarkers {
     keywords: &["if", "cond", "case", "when"],
     operators: &[],
+    clause_arrow: None,
     function_markers: &["defn "],
     brace_scoped: false,
     function_syntax: FunctionSyntax::Loose,
@@ -278,6 +306,7 @@ static CLOJURE: ComplexityMarkers = ComplexityMarkers {
 static KAIKAI: ComplexityMarkers = ComplexityMarkers {
     keywords: &["if", "match", "case", "when", "handle", "with", "and", "or"],
     operators: &[],
+    clause_arrow: None,
     function_markers: &["fn "],
     brace_scoped: true,
     function_syntax: FunctionSyntax::Keyword,

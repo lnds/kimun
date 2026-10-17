@@ -86,7 +86,7 @@ Maintainability Index (verifysoft variant with comment weight). Invoked via `km 
 
 Cognitive complexity (SonarSource method). Invoked via `km cogcom`.
 
-- **`analyzer.rs`** — Core computation: penalizes nesting increments and non-linear control structures. Resets `opens_flow` after consuming the first `{` on a control-flow line so closure/struct braces on the same line are not double-counted.
+- **`analyzer.rs`** — Core computation: penalizes nesting increments and non-linear control structures. Brace-scoped code is read token by token along each line (`line_tokens`: keywords and braces in order), through `BraceScan`: a control keyword leaves its block pending until the next `{`, on its line or the next (Allman), and only that first brace nests, so closure/struct braces on the same line are not double-counted.
 - **`detection.rs`** — Language-aware function boundary detection.
 - **`markers.rs`** — Per-language complexity markers (keywords that trigger nesting increments).
 - **`report.rs`** — Table and JSON output formatters.
