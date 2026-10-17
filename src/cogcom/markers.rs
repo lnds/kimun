@@ -1,4 +1,5 @@
 use crate::detection::{FunctionSyntax, detection_markers};
+use crate::loc::language::is_fortran;
 
 /// Language-specific tokens used to compute cognitive complexity.
 ///
@@ -282,6 +283,32 @@ static KAIKAI: CognitiveMarkers = CognitiveMarkers {
     line_comments: &["#"],
 };
 
+/// Fortran: `if`, `do` and `select` nest; nesting is read from the
+/// constructs they open and the `end` that closes each, not from
+/// indentation, which fixed form lacks.
+static FORTRAN: CognitiveMarkers = CognitiveMarkers {
+    structural_keywords: &["if", "do", "select"],
+    hybrid_keywords: &["else if", "elseif"],
+    fundamental_keywords: &["else"],
+    boolean_operators: &[".and.", ".or."],
+    function_markers: &[],
+    brace_scoped: false,
+    function_syntax: FunctionSyntax::Fortran,
+    line_comments: &["!"],
+};
+
+/// Pascal: nesting is read from indentation, two columns a level.
+static PASCAL: CognitiveMarkers = CognitiveMarkers {
+    structural_keywords: &["if", "for", "while", "repeat", "case", "except"],
+    hybrid_keywords: &["else if"],
+    fundamental_keywords: &["else"],
+    boolean_operators: &["and", "or"],
+    function_markers: &[],
+    brace_scoped: false,
+    function_syntax: FunctionSyntax::Pascal,
+    line_comments: &["//"],
+};
+
 /// Look up the cognitive complexity markers for a given language name.
 ///
 /// Returns `None` for languages without cognitive complexity support
@@ -310,6 +337,8 @@ pub fn cognitive_markers_for(language_name: &str) -> Option<&'static CognitiveMa
         "Zig" => Some(&ZIG),
         "Clojure" => Some(&CLOJURE),
         "Kaikai" => Some(&KAIKAI),
+        name if is_fortran(name) => Some(&FORTRAN),
+        "Pascal" => Some(&PASCAL),
         _ => None,
     }
 }

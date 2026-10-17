@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 
+use crate::case_fold::folded;
 use crate::loc::counter::{LineKind, RawSpan, raw_string_spans};
 use crate::loc::language::LanguageSpec;
 
@@ -70,13 +71,20 @@ pub fn demote_multi_line_strings(
 /// The lines and kinds an analysis of code reads: without the text of
 /// literals that span lines or hold quotes, which is no code whatever it
 /// looks like. The interior lines of multi-line strings become blanks, and
-/// each raw string is left as `""`.
+/// each raw string is left as `""`. A language that ignores case is read
+/// in lower case (`case_fold`), and one without backslash escapes without
+/// its backslashes.
 pub fn code_view<'a>(
     lines: &'a [String],
     kinds: &[LineKind],
     spec: &LanguageSpec,
 ) -> (Cow<'a, [String]>, Vec<LineKind>) {
     let mut kinds = demote_multi_line_strings(lines, kinds, spec);
+    if spec.case_insensitive || !spec.backslash_escapes {
+        let view = folded(lines, spec).into_iter();
+        let view = view.map(|line| as_escapes_read(line, spec)).collect();
+        return (Cow::Owned(view), kinds);
+    }
     let may_hold_one = |line: &String| line.contains("r\"") || line.contains("r#");
     if !spec.raw_strings || !lines.iter().any(may_hold_one) {
         return (Cow::Borrowed(lines), kinds);
@@ -92,6 +100,18 @@ pub fn code_view<'a>(
         }
     }
     (Cow::Owned(view), kinds)
+}
+
+/// A line of a language where a backslash escapes nothing, without its
+/// backslashes, so that readers that take one for an escape do not run a
+/// string such as `'\'` past its end. Neither Fortran nor Pascal has a
+/// backslash outside strings.
+fn as_escapes_read(line: String, spec: &LanguageSpec) -> String {
+    if spec.backslash_escapes {
+        line
+    } else {
+        line.replace('\\', " ")
+    }
 }
 
 /// `line` with each raw string blanked, and `""` where one opens.

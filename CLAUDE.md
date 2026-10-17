@@ -26,11 +26,13 @@ CLI tool for code metrics: lines of code (like `cloc`), duplicate detection, Hal
 
 - **`language.rs`** — `LanguageSpec` struct + `lang!` macro defining 40+ languages. Detection by filename, extension, or shebang. Each spec declares: line comment markers, block comment delimiters, nesting support, string delimiter rules, pragma syntax, and exception characters for comment detection.
 
-- **`counter.rs`** — FSM with states `Normal`, `InString(StringKind)`, `InBlockComment(depth)`, `InDocAttribute(Option<StringKind>)`. Processes files line-by-line via `BufReader`, classifying each line as blank/comment/code. Mixed lines (code + comment) count as code. Key design decisions:
+- **`counter.rs`** — FSM with states `Normal`, `InString(StringKind)`, `InBlockComment(block, depth)`, `InDocAttribute(Option<StringKind>)`. Processes files line-by-line via `BufReader`, classifying each line as blank/comment/code. Bytes that are not UTF-8 are replaced, so a Latin-1 or Windows-1252 source is read whole. Mixed lines (code + comment) count as code. Key design decisions:
   - Only `"` triggers string mode (not `'`) unless `single_quote_strings` is set — avoids Rust lifetime false positives
   - `InString` resets at line end for single/double quotes but persists for triple-quotes (Python) and raw strings
   - `raw_strings` (Rust): `r"…"`, `r#"…"#`, with a `b` or `c` prefix too, end at a quote followed by as many `#` as opened them (`raw.rs`). `raw_string_spans` tells where they are on each line
-  - Block comments track nesting depth when `nested_block_comments` is true
+  - Block comments track nesting depth when `nested_block_comments` is true. A language may have a second kind (`other_block_comment`, Pascal's `(* *)` besides `{ }`); each is closed only by its own delimiter
+  - `column_one_comments` (Fortran's fixed form: `C`, `c`, `*`) make a comment of the whole line; `directives` (`$omp`, `$acc`, `$ `) right after a comment marker make it code
+  - `backslash_escapes` is false in Fortran and Pascal, where `'\'` is a one-character string
   - Pragmas (Haskell `{-# ... #-}`) are checked before block comments and counted as code
   - Shebang lines (`#!`) are always counted as code
   - `line_comment_not_before` field prevents `-->` from matching `--` in Haskell, and `#[` from matching `#` in Kaikai
@@ -49,7 +51,7 @@ lang!("LangName", ext: ["ext1", "ext2"],
       shebangs: ["interpreter"]),
 ```
 
-Optional flags: `nested: true`, `sq: true` (single-quote strings), `tq: true` (triple-quote strings), `pragma: "{-#", "#-}"`. Use `lines: ["marker1", "marker2"]` for multiple line comment markers. For languages needing `line_comment_not_before`, `doc_attribute` or `raw_strings`, write the `LanguageSpec` struct directly (see Rust, Haskell and Kaikai).
+Optional flags: `nested: true`, `sq: true` (single-quote strings), `tq: true` (triple-quote strings), `pragma: "{-#", "#-}"`. Use `lines: ["marker1", "marker2"]` for multiple line comment markers. For languages needing `line_comment_not_before`, `doc_attribute`, `raw_strings`, `other_block_comment`, `column_one_comments`, `directives`, `case_insensitive` or no `backslash_escapes`, write the `LanguageSpec` struct directly (see Rust, Haskell, Kaikai, Fortran and Pascal).
 
 ## Conventions
 
@@ -190,7 +192,31 @@ analyzers that select `LineKind::Code` skip them. Used by `hal`, `cycom`,
 count as control flow. `loc` is deliberately left alone: those lines are still
 code for line counting. `code_view` is what those analyzers read: the same
 demotion, and each raw string left as `""`, with the lines wholly inside one
-turned into blanks.
+turned into blanks. Code of a language that ignores case comes in
+lower case (`case_fold`), and one without backslash escapes without its
+backslashes.
+
+### Shared: `src/case_fold.rs`
+
+Languages that ignore case (`LanguageSpec::case_insensitive`: Fortran, Pascal)
+are read in lower case by every analyzer that goes through `code_view`. In
+Fortran the end of a construct written apart is joined (`end if` reads
+`endif`), so it never reads as the construct it closes. Lines keep their
+length, so `name_at` gives back a function name as written: `cycom`, `cogcom`
+and `smells` report names that way.
+
+### Shared: `src/unit_bodies.rs`
+
+Functions closed by words, for `FunctionSyntax::Fortran` and
+`FunctionSyntax::Pascal` (`detection::detect_function_bodies` hands them
+over). Fortran: program units to the `end` that closes them, contained units
+included, interface blocks skipped. Pascal: routines of the implementation to
+the `end` of their `begin` block, after their local routines; the `interface`
+section, class types, `forward` and `external` have no body. Unindented
+sections and routines bound what conditional compilation leaves unbalanced,
+and headers repeated under it with the routine's own name are one routine.
+`cogcom` reads Fortran nesting from constructs (`fortran_statement`), Pascal
+nesting from indentation, two columns a level.
 
 ### Shared: `src/test_blocks.rs`
 

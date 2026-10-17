@@ -15,6 +15,8 @@ mod age;
 mod ai;
 /// Author summary: per-author ownership, lines, languages, last active date.
 mod authors;
+/// Code of languages that ignore case, read in lower case.
+mod case_fold;
 /// Code churn analysis: pure change frequency per file from git history.
 mod churn;
 /// CLI argument definitions using `clap` derive macros.
@@ -69,6 +71,8 @@ mod string_mask;
 mod tc;
 /// Inline test blocks of Rust (`#[cfg(test)]`), left out with the tests.
 mod test_blocks;
+/// Functions closed by words: Fortran program units and Pascal routines.
+mod unit_bodies;
 /// Shared utilities (string masking, file reading, since parsing).
 mod util;
 /// Filesystem walking with .gitignore support and test exclusion.
