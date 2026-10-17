@@ -8,7 +8,7 @@ use crate::git::BlameInfo;
 pub struct AuthorSummary {
     /// Author display name from git signature.
     pub name: String,
-    /// Author email (used as identity key).
+    /// Author email; authors are told apart by [`crate::git::identity`].
     pub email: String,
     /// Number of files where this author is the primary owner.
     pub owned_files: usize,
@@ -23,6 +23,7 @@ pub struct AuthorSummary {
 /// Accumulator used while walking files before finalizing summaries.
 struct AuthorAccum {
     name: String,
+    email: String,
     lines: usize,
     languages: HashSet<String>,
     last_active: i64,
@@ -36,38 +37,39 @@ pub fn compute_authors(file_blames: &[(&str, &[BlameInfo])]) -> Vec<AuthorSummar
     let mut accum: HashMap<String, AuthorAccum> = HashMap::new();
 
     for (language, blames) in file_blames {
-        let primary_email = blames.first().map(|b| b.email.as_str()).unwrap_or("");
+        let primary = blames.first().map(BlameInfo::identity);
 
         for blame in *blames {
-            let entry = accum
-                .entry(blame.email.clone())
-                .or_insert_with(|| AuthorAccum {
-                    name: blame.author.clone(),
-                    lines: 0,
-                    languages: HashSet::new(),
-                    last_active: 0,
-                    owned_files: 0,
-                });
+            let identity = blame.identity();
+            let owns_file = primary.as_ref() == Some(&identity);
+            let entry = accum.entry(identity).or_insert_with(|| AuthorAccum {
+                name: blame.author.clone(),
+                email: blame.email.clone(),
+                lines: 0,
+                languages: HashSet::new(),
+                last_active: 0,
+                owned_files: 0,
+            });
 
             entry.lines += blame.lines;
             entry.languages.insert(language.to_string());
             if blame.last_commit_time > entry.last_active {
                 entry.last_active = blame.last_commit_time;
             }
-            if blame.email.as_str() == primary_email {
+            if owns_file {
                 entry.owned_files += 1;
             }
         }
     }
 
     let mut result: Vec<AuthorSummary> = accum
-        .into_iter()
-        .map(|(email, a)| {
+        .into_values()
+        .map(|a| {
             let mut langs: Vec<String> = a.languages.into_iter().collect();
             langs.sort();
             AuthorSummary {
                 name: a.name,
-                email,
+                email: a.email,
                 owned_files: a.owned_files,
                 lines: a.lines,
                 languages: langs,

@@ -69,6 +69,19 @@ fn name_and_email(sig: Option<&git2::Signature<'_>>) -> (String, String) {
     (text(sig.map(|s| s.name())), text(sig.map(|s| s.email())))
 }
 
+/// The person behind a name and an email: the email without case, or the
+/// name when there is no email. Signatures are read through `.mailmap`
+/// first, so this joins what the mailmap leaves apart: one address under
+/// several names.
+pub fn identity(name: &str, email: &str) -> String {
+    let email = email.trim();
+    if email.is_empty() || email == "unknown" {
+        name.to_string()
+    } else {
+        email.to_lowercase()
+    }
+}
+
 /// Per-author blame contribution for a single file.
 pub struct BlameInfo {
     /// Author display name from git signature.
@@ -79,6 +92,13 @@ pub struct BlameInfo {
     pub lines: usize,
     /// Unix timestamp of this author's most recent commit to the file.
     pub last_commit_time: i64,
+}
+
+impl BlameInfo {
+    /// The person these lines belong to (see [`identity`]).
+    pub fn identity(&self) -> String {
+        identity(&self.author, &self.email)
+    }
 }
 
 impl GitRepo {
@@ -219,8 +239,7 @@ impl GitRepo {
     /// Run git blame on a file and return per-author contributions.
     /// `rel_path` is relative to the git root.
     pub fn blame_file(&self, rel_path: &Path) -> Result<Vec<BlameInfo>, Box<dyn Error>> {
-        let mut opts = BlameOptions::new();
-        let blame = self.repo.blame_file(rel_path, Some(&mut opts))?;
+        let blame = self.blame(rel_path)?;
 
         let mut map: HashMap<String, BlameInfo> = HashMap::new();
 
@@ -232,10 +251,7 @@ impl GitRepo {
             let commit_time = sig.map_or(0, |s| s.when().seconds());
             let lines = hunk.lines_in_hunk();
 
-            // Use name+email as key to avoid collisions when multiple
-            // authors share the same "unknown" email.
-            let key = format!("{author} <{email}>");
-            map.entry(key)
+            map.entry(identity(&author, &email))
                 .and_modify(|info| {
                     info.lines += lines;
                     if commit_time > info.last_commit_time {
@@ -258,8 +274,7 @@ impl GitRepo {
     /// Run git blame on a file and return per-hunk data preserving line ranges.
     /// Used to join blame attribution with per-line FSM classification.
     pub fn blame_hunks(&self, rel_path: &Path) -> Result<Vec<BlameHunkInfo>, Box<dyn Error>> {
-        let mut opts = BlameOptions::new();
-        let blame = self.repo.blame_file(rel_path, Some(&mut opts))?;
+        let blame = self.blame(rel_path)?;
 
         let result = blame
             .iter()
@@ -277,14 +292,23 @@ impl GitRepo {
         Ok(result)
     }
 
-    /// Collect authors who have commits since the given timestamp.
+    /// Blame of a file, with authors read through `.mailmap`.
+    fn blame(&self, rel_path: &Path) -> Result<git2::Blame<'_>, git2::Error> {
+        let mut opts = BlameOptions::new();
+        opts.use_mailmap(true);
+        self.repo.blame_file(rel_path, Some(&mut opts))
+    }
+
+    /// The [`identity`] of every author with commits since the given
+    /// timestamp, read through `.mailmap`.
     pub fn recent_authors(&self, since: Option<i64>) -> Result<HashSet<String>, Box<dyn Error>> {
+        let mailmap = self.repo.mailmap()?;
         let mut authors = HashSet::new();
 
         self.walk_commits(since, |commit| {
-            if let Ok(email) = commit.author().email() {
-                authors.insert(email.to_string());
-            }
+            let author = commit.author_with_mailmap(&mailmap)?;
+            let (name, email) = name_and_email(Some(&author));
+            authors.insert(identity(&name, &email));
             Ok(ControlFlow::Continue(()))
         })?;
 
