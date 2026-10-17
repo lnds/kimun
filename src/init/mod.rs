@@ -13,7 +13,6 @@ use crate::config::{DupsConfig, SmellsConfig};
 use crate::cycom::markers::markers_for;
 use crate::detection::{FunctionDetectionMarkers as _, detect_function_bodies};
 use crate::dups;
-use crate::loc::counter::LineKind;
 use crate::score::{self, ScoringModel, analyzer::Grade};
 use crate::util::read_and_classify;
 use crate::walk::{ExcludeFilter, WalkConfig};
@@ -131,12 +130,7 @@ fn collect_stats(cfg: &WalkConfig<'_>) -> Result<ProjectStats, Box<dyn Error>> {
             continue;
         };
 
-        let code_lines: Vec<(usize, &str)> = lines
-            .iter()
-            .enumerate()
-            .filter(|(i, _)| kinds.get(*i) == Some(&LineKind::Code))
-            .map(|(i, l)| (i, l.as_str()))
-            .collect();
+        let code_lines = crate::detection::code_lines(&lines, &kinds, markers);
 
         let functions = detect_function_bodies(&lines, &code_lines, markers);
         let overhead = if markers.brace_scoped() { 2 } else { 1 };
