@@ -232,7 +232,7 @@ fn unsupported_languages_are_left_out_of_the_graph() {
     write(dir.path(), "foo.rs", "pub fn f() {}\n");
     write(dir.path(), "build.sh", "echo hi\n");
     write(dir.path(), "deploy.sh", "echo bye\n");
-    write(dir.path(), "Main.java", "class Main {}\n");
+    write(dir.path(), "Main.kt", "class Main\n");
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     let result = analyze(&cfg);
@@ -247,7 +247,7 @@ fn unsupported_languages_are_left_out_of_the_graph() {
                 files: 2,
             },
             UnsupportedLanguage {
-                language: "Java".to_string(),
+                language: "Kotlin".to_string(),
                 files: 1,
             },
         ]
