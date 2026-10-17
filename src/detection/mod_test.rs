@@ -152,43 +152,48 @@ fn comparison_and_arrow_are_not_assignments() {
 
 #[test]
 fn is_c_family_function_no_paren_returns_false() {
-    assert!(!is_c_family_function("let x = 1;"));
-    assert!(!is_c_family_function("int x = 1;"));
-    assert!(!is_c_family_function("struct Foo"));
+    assert!(!is_c_family_function("let x = 1;", true));
+    assert!(!is_c_family_function("int x = 1;", true));
+    assert!(!is_c_family_function("struct Foo", true));
 }
 
 #[test]
 fn is_c_family_function_no_open_brace_or_closing_paren() {
     // Has '(' but doesn't end with '{' or ')'
-    assert!(!is_c_family_function("foo(x, y,"));
-    assert!(!is_c_family_function("bar(x, y;"));
+    assert!(!is_c_family_function("foo(x, y,", true));
+    assert!(!is_c_family_function("bar(x, y;", true));
 }
 
 #[test]
 fn is_c_family_function_control_keyword_returns_false() {
-    assert!(!is_c_family_function("if (condition) {"));
-    assert!(!is_c_family_function("while (x > 0) {"));
-    assert!(!is_c_family_function("for (int i = 0; i < n; i++) {"));
+    assert!(!is_c_family_function("if (condition) {", true));
+    assert!(!is_c_family_function("while (x > 0) {", true));
+    assert!(!is_c_family_function("for (int i = 0; i < n; i++) {", true));
 }
 
 #[test]
 fn is_c_family_function_valid_function() {
-    assert!(is_c_family_function("int foo(int x) {"));
-    assert!(is_c_family_function("void bar()"));
-    assert!(is_c_family_function("static void baz(int a, int b) {"));
+    assert!(is_c_family_function("int foo(int x) {", true));
+    assert!(is_c_family_function("void bar()", true));
+    assert!(is_c_family_function(
+        "static void baz(int a, int b) {",
+        true
+    ));
 }
 
 #[test]
 fn is_c_family_function_preprocessor_directive_returns_false() {
     // Function-like #define looks like a C function but is not one.
     assert!(!is_c_family_function(
-        "#define TRACE_ALLOC(name) trace_record(name)"
+        "#define TRACE_ALLOC(name) trace_record(name)",
+        true
     ));
     assert!(!is_c_family_function(
-        "#define MAX(a, b) ((a) > (b) ? (a) : (b))"
+        "#define MAX(a, b) ((a) > (b) ? (a) : (b))",
+        true
     ));
-    assert!(!is_c_family_function("#if defined(FOO)"));
-    assert!(!is_c_family_function("#include <stdio.h>"));
+    assert!(!is_c_family_function("#if defined(FOO)", true));
+    assert!(!is_c_family_function("#include <stdio.h>", true));
 }
 
 #[test]
@@ -198,8 +203,8 @@ fn is_c_family_function_matches_bash_posix_form() {
     // per-function decomposition — SHELL markers include `"function "`
     // for the `function foo { ... }` shape, but the more common POSIX
     // `foo() {` shape has no keyword prefix and relies on this fallback.
-    assert!(is_c_family_function("foo() {"));
-    assert!(is_c_family_function("_private_helper() {"));
+    assert!(is_c_family_function("foo() {", true));
+    assert!(is_c_family_function("_private_helper() {", true));
 }
 
 #[test]
@@ -209,19 +214,20 @@ fn is_c_family_function_rejects_shell_command_substitution() {
     // assignment, not a function definition. Same for local/readonly
     // assignments with command substitution.
     assert!(!is_c_family_function(
-        "SRC_FINGERPRINT=$(cd \"$SCRIPT_DIR\" && cat file | sha256sum | cut -c1-16)"
+        "SRC_FINGERPRINT=$(cd \"$SCRIPT_DIR\" && cat file | sha256sum | cut -c1-16)",
+        true
     ));
-    assert!(!is_c_family_function("OUT_SIZE=$(wc -c < \"$OUT\")"));
-    assert!(!is_c_family_function("local pid=$(pgrep vault)"));
-    assert!(!is_c_family_function("readonly FOO=$(date +%s)"));
+    assert!(!is_c_family_function("OUT_SIZE=$(wc -c < \"$OUT\")", true));
+    assert!(!is_c_family_function("local pid=$(pgrep vault)", true));
+    assert!(!is_c_family_function("readonly FOO=$(date +%s)", true));
 }
 
 #[test]
 fn is_c_family_function_rejects_c_family_assignment() {
     // `x = foo(bar)` — same category as bash assignments: an assignment,
     // not a function definition.
-    assert!(!is_c_family_function("x = foo(bar)"));
-    assert!(!is_c_family_function("let x = compute(a, b)"));
+    assert!(!is_c_family_function("x = foo(bar)", true));
+    assert!(!is_c_family_function("let x = compute(a, b)", true));
 }
 
 #[test]
@@ -417,4 +423,258 @@ def second():
         .map(|b| (b.name, b.code_lines.len()))
         .collect();
     assert_eq!(found, named(&[("first", 3), ("second", 2)]));
+}
+
+/// Name and first line of each function detected in `src`, written in
+/// `language`, through the markers and code lines the analyzers use.
+fn functions_in(language: &str, src: &str) -> Vec<(String, usize)> {
+    let markers = crate::cycom::markers::markers_for(language).unwrap();
+    let lines: Vec<String> = src.lines().map(String::from).collect();
+    let kinds: Vec<LineKind> = lines
+        .iter()
+        .map(|l| match l.trim() {
+            "" => LineKind::Blank,
+            t if t.starts_with("//") => LineKind::Comment,
+            _ => LineKind::Code,
+        })
+        .collect();
+    let code = code_lines(&lines, &kinds, markers);
+    detect_function_bodies(&lines, &code, markers)
+        .into_iter()
+        .map(|b| (b.name, b.start_line))
+        .collect()
+}
+
+fn at(pairs: &[(&str, usize)]) -> Vec<(String, usize)> {
+    named(pairs)
+}
+
+#[test]
+fn go_method_is_named_after_the_receiver() {
+    let src = "\
+func (n *node) getValue(x int) int {
+	return n.n
+}
+func (n node) size() int {
+	return n.n
+}";
+    assert_eq!(functions_in("Go", src), at(&[("getValue", 1), ("size", 4)]));
+}
+
+#[test]
+fn c_parameters_over_several_lines() {
+    let src = "\
+static int g(int a,
+             int b) {
+  return a;
+}
+int add(int x,
+        int y)
+{
+    return x + y;
+}";
+    assert_eq!(functions_in("C", src), at(&[("g", 1), ("add", 5)]));
+}
+
+#[test]
+fn c_name_on_its_own_line() {
+    let src = "\
+double
+jvp_strtod
+  (struct dtoa_context *C, const char *s00)
+{
+  return 1;
+}";
+    assert_eq!(functions_in("C", src), at(&[("jvp_strtod", 2)]));
+}
+
+#[test]
+fn preprocessor_lines_and_their_continuations_are_not_code() {
+    let src = "\
+#define Bcopy(x,y) memcpy((char *)&x->sign, \\
+y->wds*sizeof(Long) + 2*sizeof(int))
+#if FMT_HAS_INCLUDE(<filesystem>) && \\
+    (!defined(FMT_CPP_LIB_FILESYSTEM) || FMT_CPP_LIB_FILESYSTEM != 0)
+#  include <filesystem>
+#endif
+static int first(int x) {
+  return x;
+}";
+    assert_eq!(functions_in("C++", src), at(&[("first", 7)]));
+    let lines: Vec<String> = src.lines().map(String::from).collect();
+    let kinds = vec![LineKind::Code; lines.len()];
+    let markers = crate::cycom::markers::markers_for("C").unwrap();
+    assert_eq!(code_lines(&lines, &kinds, markers).len(), 3);
+}
+
+#[test]
+fn csharp_continuation_lines_are_not_declarations() {
+    let src = "\
+class Reader
+{
+    private bool Calculate(
+        object target,
+        [NotNullWhen(true)] out Type? found)
+    {
+        if ((tokenType == 1)
+            && IsReadable(target))
+        {
+            current = target;
+        }
+        return true;
+    }
+}";
+    assert_eq!(functions_in("C#", src), at(&[("Calculate", 3)]));
+}
+
+#[test]
+fn java_annotations_and_anonymous_classes_are_not_declarations() {
+    let src = "\
+@SuppressWarnings(\"ExposedPrivateType\")
+public final class Adapters {
+  @SuppressWarnings(\"fallthrough\")
+  int doPeek(int c) {
+    return c;
+  }
+  public static final TypeAdapter<Number> BYTE =
+      new TypeAdapter<Number>() {
+        @Override
+        public Number read(JsonReader in) throws IOException {
+          return in.nextInt();
+        }
+      };
+}";
+    assert_eq!(
+        functions_in("Java", src),
+        at(&[("doPeek", 4), ("read", 10)])
+    );
+}
+
+#[test]
+fn javascript_functions_assigned_to_a_property() {
+    let src = "\
+res.format = function(obj){
+  var keys = Object.keys(obj)
+    .filter(function (v) { return v !== 'default' })
+  if (keys.length) {
+    obj.send(keys);
+  } else if (obj.default) {
+    obj.default(keys);
+  }
+  return this;
+};
+res.cookie = function (name, value) {
+  return value;
+};
+defineGetter(req, 'fresh', function(){
+  return true;
+});";
+    assert_eq!(
+        functions_in("JavaScript", src),
+        at(&[("res.format", 1), ("res.cookie", 11), ("<anonymous>", 14)])
+    );
+}
+
+#[test]
+fn typescript_arrow_functions_and_multi_line_signatures() {
+    let src = "\
+export const equal = (a: ArrayBuffer, b: ArrayBuffer): boolean => {
+  return a === b
+}
+const buildMatcher = (
+  rules: string[]
+): ((addr: { addr: string }) => boolean) => {
+  return () => false
+}
+export const handle = <
+  E extends Env = Env
+>(
+  app: Hono<E>
+) => {
+  return app
+}
+class Client {
+  async fetch(
+    body: string,
+    opt?: { headers?: Record<string, string> }
+  ): Promise<Response> {
+    form.append('a', body)
+    return send(body)
+  }
+  basePath<SubPath extends string>(path: SubPath): string {
+    return path
+  }
+}
+const handlers: Record<string, () => T> = {
+  a: 1,
+}";
+    assert_eq!(
+        functions_in("TypeScript", src),
+        at(&[
+            ("equal", 1),
+            ("buildMatcher", 4),
+            ("handle", 9),
+            ("fetch", 17),
+            ("basePath", 24),
+        ])
+    );
+}
+
+#[test]
+fn regex_literal_braces_are_not_blocks() {
+    let src = "\
+function wildcard(path: string): RegExp {
+  return new RegExp(path.replace(/(?=[/{]|$)/g, '.'))
+}
+function second(x: number): number {
+  return x / 2 / 3
+}";
+    assert_eq!(
+        functions_in("TypeScript", src),
+        at(&[("wildcard", 1), ("second", 4)])
+    );
+}
+
+#[test]
+fn elixir_macros_and_functions_inside_quote() {
+    let src = "\
+defmodule Helpers do
+  defmacro pipeline(name) do
+    name
+  end
+  defmacrop build(x) do
+    x
+  end
+  def define(routes) do
+    quote do
+      def path(conn) do
+        conn
+      end
+    end
+  end
+end";
+    let markers = crate::cycom::markers::markers_for("Elixir").unwrap();
+    let lines: Vec<String> = src.lines().map(String::from).collect();
+    let kinds = vec![LineKind::Code; lines.len()];
+    let code = code_lines(&lines, &kinds, markers);
+    let found: Vec<(String, usize)> = detect_function_bodies(&lines, &code, markers)
+        .into_iter()
+        .map(|b| (b.name, b.code_lines.len()))
+        .collect();
+    // `define` keeps its `quote do` and the `end` of the quote, not the
+    // generated `path`, which is measured on its own.
+    assert_eq!(
+        found,
+        named(&[("pipeline", 2), ("build", 2), ("define", 3), ("path", 2)])
+    );
+}
+
+#[test]
+fn marker_must_start_a_word() {
+    let src = "\
+callmyfunction(a, b)
+function real() {
+  return 1
+}";
+    assert_eq!(functions_in("JavaScript", src), at(&[("real", 2)]));
 }

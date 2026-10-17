@@ -90,13 +90,7 @@ pub fn analyze(
         return None;
     }
 
-    let code_lines: Vec<(usize, &str)> = lines
-        .iter()
-        .zip(kinds)
-        .enumerate()
-        .filter(|(_, (_, k))| **k == LineKind::Code)
-        .map(|(i, (line, _))| (i, line.as_str()))
-        .collect();
+    let code_lines = crate::detection::code_lines(lines, kinds, markers);
 
     if code_lines.is_empty() {
         return None;

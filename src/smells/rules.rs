@@ -16,12 +16,7 @@ pub fn detect_long_functions(
     markers: &dyn FunctionDetectionMarkers,
     max_lines: usize,
 ) -> Vec<SmellInstance> {
-    let code_lines: Vec<(usize, &str)> = lines
-        .iter()
-        .enumerate()
-        .filter(|(i, _)| kinds.get(*i) == Some(&LineKind::Code))
-        .map(|(i, l)| (i, l.as_str()))
-        .collect();
+    let code_lines = crate::detection::code_lines(lines, kinds, markers);
 
     let functions = detect_function_bodies(lines, &code_lines, markers);
     let mut smells = Vec::new();
@@ -62,12 +57,7 @@ pub fn detect_long_params(
     markers: &dyn FunctionDetectionMarkers,
     max_params: usize,
 ) -> Vec<SmellInstance> {
-    let code_lines: Vec<(usize, &str)> = lines
-        .iter()
-        .enumerate()
-        .filter(|(i, _)| kinds.get(*i) == Some(&LineKind::Code))
-        .map(|(i, l)| (i, l.as_str()))
-        .collect();
+    let code_lines = crate::detection::code_lines(lines, kinds, markers);
 
     let functions = detect_function_bodies(lines, &code_lines, markers);
     let mut smells = Vec::new();

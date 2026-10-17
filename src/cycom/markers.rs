@@ -61,9 +61,9 @@ static JAVASCRIPT: ComplexityMarkers = ComplexityMarkers {
         "else if", "if", "for", "while", "do", "switch", "case", "catch",
     ],
     operators: &["&&", "||", "??"],
-    function_markers: &["function "],
+    function_markers: &["function ", "function("],
     brace_scoped: true,
-    function_syntax: FunctionSyntax::Loose,
+    function_syntax: FunctionSyntax::Script,
     line_comments: &["//"],
 };
 
@@ -184,7 +184,7 @@ static HASKELL: ComplexityMarkers = ComplexityMarkers {
 static ELIXIR: ComplexityMarkers = ComplexityMarkers {
     keywords: &["if", "cond", "case", "for", "rescue"],
     operators: &[],
-    function_markers: &["defp ", "def "],
+    function_markers: &["defmacrop ", "defmacro ", "defp ", "def "],
     brace_scoped: false,
     function_syntax: FunctionSyntax::Loose,
     line_comments: &["#"],

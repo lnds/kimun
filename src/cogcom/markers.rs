@@ -59,9 +59,9 @@ static JAVASCRIPT: CognitiveMarkers = CognitiveMarkers {
     hybrid_keywords: &["else if"],
     fundamental_keywords: &["else"],
     boolean_operators: &["&&", "||", "??"],
-    function_markers: &["function "],
+    function_markers: &["function ", "function("],
     brace_scoped: true,
-    function_syntax: FunctionSyntax::Loose,
+    function_syntax: FunctionSyntax::Script,
     line_comments: &["//"],
 };
 
@@ -162,7 +162,7 @@ static ELIXIR: CognitiveMarkers = CognitiveMarkers {
     hybrid_keywords: &[],
     fundamental_keywords: &["else"],
     boolean_operators: &[],
-    function_markers: &["defp ", "def "],
+    function_markers: &["defmacrop ", "defmacro ", "defp ", "def "],
     brace_scoped: false,
     function_syntax: FunctionSyntax::Loose,
     line_comments: &["#"],

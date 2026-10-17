@@ -187,6 +187,10 @@ Dependency graph (file-level coupling from imports, cycles via Tarjan SCC). Invo
 - **`report.rs`** — `render_report` builds the table as a `String` and `print_report` prints it, so tests assert on the text. JSON, short and terse formatters.
 - **`mod.rs`** — Orchestration: walks files, leaves unsupported languages out of the graph and counts them, extracts and resolves imports. `sort_entries` and `visible_entries` hold the `--sort-by` and `--cycles-only`/`--top` logic apart from `run`, which only prints.
 
+### Shared: `src/detection/`
+
+Function detection for `cycom`, `cogcom`, `smells` and `init`. `code_lines` gives the code lines they read, without preprocessor directives and their `\` continuations in the C family. `mod.rs` walks brace-scoped code: a line is a declaration by marker, or by shape over the signature it spans (`shape::signature`, `shape::is_c_family_function`), unless it starts inside open parentheses (`shape::continuation_lines`) or is an annotation or attribute. `body.rs` reads the body by braces (`BodyScan`; braces of a type in the parameter list are not the body). `script.rs` holds what `FunctionSyntax::Script` (JavaScript, TypeScript) adds: functions bound to a name and regex literals. `indented.rs` reads indent-scoped bodies and leaves `quote` blocks out of them.
+
 ### Shared: `src/string_mask.rs`
 
 `multi_line_string_mask` marks the interior lines of triple-quoted strings (`starts_in_string_mask` also marks the line that closes one, for readers of statements such as `deps/python.rs`);
