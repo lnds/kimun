@@ -65,10 +65,20 @@ fn kaikai_is_extracted_through_the_dispatcher() {
 
 #[test]
 fn supported_languages() {
-    for lang in ["Rust", "Python", "TypeScript", "JSX", "Go", "Kaikai"] {
+    for lang in [
+        "Rust",
+        "Python",
+        "TypeScript",
+        "JSX",
+        "Go",
+        "Kaikai",
+        "C",
+        "C++",
+        "Java",
+    ] {
         assert!(is_supported(lang), "{lang} should be supported");
     }
-    for lang in ["Bash", "TOML", "Java"] {
+    for lang in ["Bash", "TOML", "Kotlin"] {
         assert!(!is_supported(lang), "{lang} should not be supported");
     }
 }

@@ -641,3 +641,18 @@ fn try_detect_shebang_nonexistent_file_returns_none() {
     let spec = try_detect_shebang(Path::new("/nonexistent/path/file"));
     assert!(spec.is_none(), "nonexistent file should return None");
 }
+
+#[test]
+fn dotnet_test_projects_are_test_directories() {
+    for name in [
+        "App.Tests",
+        "Ordering.UnitTests",
+        "Api.IntegrationTest",
+        "tests",
+    ] {
+        assert!(is_test_dir(name), "{name}");
+    }
+    for name in ["App.Testing", "Tests.Helpers", "Contest", "src"] {
+        assert!(!is_test_dir(name), "{name}");
+    }
+}

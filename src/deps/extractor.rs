@@ -24,6 +24,8 @@ pub fn is_supported(language: &str) -> bool {
             | "Elixir Script"
             | "C"
             | "C++"
+            | "Java"
+            | "C#"
     )
 }
 
