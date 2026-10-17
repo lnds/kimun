@@ -11,6 +11,7 @@ use std::cmp::Reverse;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
+use crate::case_fold;
 use crate::cli::OutputMode;
 use crate::cycom::markers::markers_for;
 use crate::loc::language::{LanguageSpec, detect};
@@ -23,6 +24,19 @@ use report::{
     FileSmellMetrics, print_codeclimate, print_github, print_json, print_report, print_short,
     print_terse,
 };
+
+/// `detail` with the function it names between backticks as `lines` write
+/// it at `line`.
+fn named_as_written(detail: &str, lines: &[String], line: usize) -> String {
+    let mut parts = detail.splitn(3, '`');
+    match (parts.next(), parts.next(), parts.next()) {
+        (Some(before), Some(name), Some(after)) => {
+            let name = case_fold::name_at(name, lines, line);
+            format!("{before}`{name}`{after}")
+        }
+        _ => detail.to_string(),
+    }
+}
 
 /// Read a file, classify lines, and detect smells.
 fn analyze_file(
@@ -42,11 +56,16 @@ fn analyze_file(
         None => return Ok(None),
     };
 
-    let (lines, kinds) = code_view(&lines, &kinds, spec);
-    let smells = match detect_smells(&lines, &kinds, markers, max_lines, max_params) {
+    let (view, view_kinds) = code_view(&lines, &kinds, spec);
+    let mut smells = match detect_smells(&view, &view_kinds, markers, max_lines, max_params) {
         Some(s) => s,
         None => return Ok(None),
     };
+    if spec.case_insensitive {
+        for smell in &mut smells.smells {
+            smell.detail = named_as_written(&smell.detail, &lines, smell.line);
+        }
+    }
 
     let total = smells.smells.len();
     Ok(Some(FileSmellMetrics {

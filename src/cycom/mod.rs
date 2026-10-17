@@ -12,6 +12,7 @@ use std::cmp::Reverse;
 use std::error::Error;
 use std::path::Path;
 
+use crate::case_fold;
 use crate::cli::OutputMode;
 use crate::loc::counter::LineKind;
 use crate::loc::language::LanguageSpec;
@@ -32,8 +33,16 @@ pub(crate) fn analyze_content(
     spec: &LanguageSpec,
 ) -> Option<analyzer::FileComplexity> {
     let cm = markers_for(spec.name)?;
-    let (lines, kinds) = code_view(lines, kinds, spec);
-    analyze(&lines, &kinds, cm)
+    let (view, kinds) = code_view(lines, kinds, spec);
+    let mut fc = analyze(&view, &kinds, cm)?;
+    as_written(&mut fc, lines, spec);
+    Some(fc)
+}
+
+/// The names of the functions of `fc` as `lines` write them.
+fn as_written(fc: &mut analyzer::FileComplexity, lines: &[String], spec: &LanguageSpec) {
+    let functions = fc.functions.iter_mut().map(|f| (&mut f.name, f.start_line));
+    case_fold::names_as_written(functions, lines, spec);
 }
 
 /// Read a file from disk, classify lines, detect functions, and compute
@@ -43,20 +52,14 @@ pub(crate) fn analyze_file(
     spec: &LanguageSpec,
     exclude_tests: bool,
 ) -> Result<Option<FileCycomMetrics>, Box<dyn Error>> {
-    let cm = match markers_for(spec.name) {
-        Some(m) => m,
-        None => return Ok(None),
+    if markers_for(spec.name).is_none() {
+        return Ok(None);
+    }
+    let Some((lines, kinds)) = read_and_classify(path, spec, exclude_tests)? else {
+        return Ok(None);
     };
-
-    let (lines, kinds) = match read_and_classify(path, spec, exclude_tests)? {
-        Some(v) => v,
-        None => return Ok(None),
-    };
-
-    let (lines, kinds) = code_view(&lines, &kinds, spec);
-    let fc = match analyze(&lines, &kinds, cm) {
-        Some(fc) => fc,
-        None => return Ok(None),
+    let Some(fc) = analyze_content(&lines, &kinds, spec) else {
+        return Ok(None);
     };
 
     Ok(Some(FileCycomMetrics {

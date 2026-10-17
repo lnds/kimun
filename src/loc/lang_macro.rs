@@ -129,6 +129,7 @@ macro_rules! lang_spec {
             pragma: $pragma,
             doc_attributes: &[],
             shebangs: &[$($($sh),*)?],
+            ..LanguageSpec::PLAIN
         }
     };
 }

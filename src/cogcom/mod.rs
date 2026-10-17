@@ -5,6 +5,7 @@
 /// Levels: Simple, Moderate, Complex, VeryComplex, Extreme.
 mod analyzer;
 mod detection;
+mod fortran;
 mod markers;
 pub(crate) mod report;
 
@@ -12,6 +13,7 @@ use std::cmp::Reverse;
 use std::error::Error;
 use std::path::Path;
 
+use crate::case_fold;
 use crate::cli::OutputMode;
 use crate::loc::counter::LineKind;
 use crate::loc::language::LanguageSpec;
@@ -32,8 +34,16 @@ pub(crate) fn analyze_content(
     spec: &LanguageSpec,
 ) -> Option<analyzer::FileCognitive> {
     let cm = cognitive_markers_for(spec.name)?;
-    let (lines, kinds) = code_view(lines, kinds, spec);
-    analyze(&lines, &kinds, cm)
+    let (view, kinds) = code_view(lines, kinds, spec);
+    let mut fc = analyze(&view, &kinds, cm)?;
+    as_written(&mut fc, lines, spec);
+    Some(fc)
+}
+
+/// The names of the functions of `fc` as `lines` write them.
+fn as_written(fc: &mut analyzer::FileCognitive, lines: &[String], spec: &LanguageSpec) {
+    let functions = fc.functions.iter_mut().map(|f| (&mut f.name, f.start_line));
+    case_fold::names_as_written(functions, lines, spec);
 }
 
 /// Read a file from disk, classify lines, and compute cognitive complexity.
@@ -42,20 +52,14 @@ pub(crate) fn analyze_file(
     spec: &LanguageSpec,
     exclude_tests: bool,
 ) -> Result<Option<FileCogcomMetrics>, Box<dyn Error>> {
-    let cm = match cognitive_markers_for(spec.name) {
-        Some(m) => m,
-        None => return Ok(None),
+    if cognitive_markers_for(spec.name).is_none() {
+        return Ok(None);
+    }
+    let Some((lines, kinds)) = read_and_classify(path, spec, exclude_tests)? else {
+        return Ok(None);
     };
-
-    let (lines, kinds) = match read_and_classify(path, spec, exclude_tests)? {
-        Some(v) => v,
-        None => return Ok(None),
-    };
-
-    let (lines, kinds) = code_view(&lines, &kinds, spec);
-    let fc = match analyze(&lines, &kinds, cm) {
-        Some(fc) => fc,
-        None => return Ok(None),
+    let Some(fc) = analyze_content(&lines, &kinds, spec) else {
+        return Ok(None);
     };
 
     Ok(Some(FileCogcomMetrics {

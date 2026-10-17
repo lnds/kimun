@@ -273,7 +273,7 @@ Halstead Complexity Metrics
 
 #### Lenguajes soportados
 
-Rust, Python, JavaScript, JSX, TypeScript, Go, C, C++, C#, Java, Objective-C, PHP, Dart, Ruby, Kotlin, Swift, Shell (Bash/Zsh).
+Rust, Python, JavaScript, JSX, TypeScript, Go, C, C++, C#, Java, Objective-C, PHP, Dart, Ruby, Kotlin, Swift, Shell (Bash/Zsh), Elixir, Kaikai, Fortran, Pascal (Delphi).
 
 ### `km cycom` -- Complejidad ciclomática
 
@@ -1308,6 +1308,7 @@ Todas las secciones y todos los campos son opcionales: omite los que no necesite
 - Soporta comentarios de bloque anidados (Rust, Haskell, OCaml, etc.)
 - Trata los pragmas (p. ej., `{-# LANGUAGE ... #-}` de Haskell) como código
 - Las líneas mixtas (código + comentario) se cuentan como código, igual que en `cloc`
+- Lee enteras las fuentes en cualquier codificación de 8 bits (Latin-1, Windows-1252): los bytes que no son UTF-8 se reemplazan, no se toman por el fin del archivo
 
 ## Lenguajes soportados
 
@@ -1327,6 +1328,11 @@ Todas las secciones y todos los campos son opcionales: omite los que no necesite
 | Elixir Script | `.exs` |
 | Erlang | `.erl`, `.hrl` |
 | F# | `.fs`, `.fsi`, `.fsx` |
+| Fortran 77 | `.f`, `.for`, `.ftn`, `.f77`, `.pfo` (y en mayúsculas) |
+| Fortran 90 | `.f90`, `.F90` |
+| Fortran 95 | `.f95`, `.F95` |
+| Fortran 2003 | `.f03`, `.F03` |
+| Fortran 2008 | `.f08`, `.F08` |
 | Go | `.go` |
 | Gradle | `.gradle` |
 | Groovy | `.groovy` |
@@ -1345,6 +1351,7 @@ Todas las secciones y todos los campos son opcionales: omite los que no necesite
 | Nim | `.nim` |
 | Objective-C | `.m`, `.mm` |
 | OCaml | `.ml`, `.mli` |
+| Pascal | `.pas`, `.dpr`, `.dpk`, `.lpr`, `.pp`, `.pascal` |
 | Perl | `.pl`, `.pm` |
 | PHP | `.php` |
 | Properties | `.properties` |
@@ -1374,6 +1381,33 @@ Todas las secciones y todos los campos son opcionales: omite los que no necesite
   `~S"""` y `~s"""`) cuentan como comentarios, como los cuenta cloc, y se excluyen
   de los análisis de complejidad, de Halstead y de smells. Un `@doc "..."` de una
   línea y cualquier otro heredoc cuentan como código.
+- **Fortran**: la forma libre (`.f90` y posteriores) comenta con `!`; la forma
+  fija (`.f`, `.for`, `.f77`) además hace comentario de una línea con `C`, `c` o
+  `*` en la primera columna. Las directivas de OpenMP y OpenACC (`!$omp`,
+  `C$OMP`, `!$acc`) y la compilación condicional (`!$ `) cuentan como código,
+  porque son directivas; cloc las cuenta como comentarios, y en forma libre
+  también toma por comentario una línea que empieza con `c` en la primera
+  columna (`contains`, `call`). En un string la barra invertida no escapa nada.
+  Fortran no distingue mayúsculas de minúsculas, y tampoco lo hacen los análisis
+  de complejidad, de Halstead y de smells, aunque los reportes nombran las
+  funciones como están escritas. Las funciones son las unidades de programa
+  (`subroutine`, `function`, `program`) hasta el `end` que las cierra, con las
+  unidades que contienen; las de un bloque `interface` no declaran funciones. La
+  anidación cognitiva se lee de las construcciones (`if … then`, `do`, `select`,
+  `where`) y del `end` de cada una, no de la sangría, que la forma fija no tiene.
+- **Pascal (Delphi, Free Pascal)**: tres clases de comentario: `//`, `{ … }` y
+  `(* … *)`; los dos últimos se cierran solo con su propio delimitador. `{$…}` es
+  una directiva del compilador y cuenta como código. Los strings van entre
+  comillas simples, sin escapes con barra invertida; un delimitador dentro de uno
+  no abre comentario (cloc no los distingue, así que suele contar código como
+  comentario después de un `'{'` o de un `COUNT(*)`). Pascal no distingue
+  mayúsculas de minúsculas, igual que Fortran. Las funciones son las rutinas de la
+  implementación (`procedure`, `function`, `constructor`, `destructor`,
+  `operator`, métodos de clase), desde su encabezado hasta el `end` de su bloque,
+  con sus rutinas locales; las declaraciones de la sección `interface` y de los
+  tipos de clase, y las `forward` o `external`, no tienen cuerpo. Los encabezados
+  repetidos bajo compilación condicional son una sola rutina. La anidación
+  cognitiva se lee de la sangría, dos columnas por nivel.
 - **Las líneas interiores de los strings de varias líneas** (los literales con
   triple comilla de Kaikai y Python, los heredocs de Elixir) cuentan como código
   para `km loc`, pero se excluyen de los análisis ciclomático, cognitivo, de

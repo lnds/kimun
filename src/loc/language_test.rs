@@ -117,3 +117,28 @@ fn react_components_are_detected() {
     assert_eq!(detect(Path::new("App.jsx")).unwrap().name, "JSX");
     assert_eq!(detect(Path::new("App.tsx")).unwrap().name, "TypeScript");
 }
+
+#[test]
+fn fortran_extensions_name_cloc_languages() {
+    for (file, name) in [
+        ("a.f", "Fortran 77"),
+        ("a.FOR", "Fortran 77"),
+        ("a.f77", "Fortran 77"),
+        ("a.f90", "Fortran 90"),
+        ("a.F90", "Fortran 90"),
+        ("a.f95", "Fortran 95"),
+        ("a.f03", "Fortran 2003"),
+        ("a.f08", "Fortran 2008"),
+    ] {
+        assert_eq!(detect(Path::new(file)).unwrap().name, name, "{file}");
+    }
+}
+
+#[test]
+fn pascal_extensions() {
+    for file in ["a.pas", "a.dpr", "a.dpk", "a.lpr", "a.pp"] {
+        let spec = detect(Path::new(file)).unwrap();
+        assert_eq!(spec.name, "Pascal", "{file}");
+        assert!(spec.case_insensitive);
+    }
+}

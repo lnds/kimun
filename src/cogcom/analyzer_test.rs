@@ -276,3 +276,38 @@ fn closure_inline_not_counted_as_flow_nesting() {
         "closure brace on same line as for should not add nesting penalty"
     );
 }
+
+fn lower(code: &str) -> (Vec<String>, Vec<LineKind>) {
+    make_lines(&code.to_ascii_lowercase())
+}
+
+#[test]
+fn fortran_nesting_follows_constructs_not_indentation() {
+    let markers = super::super::markers::cognitive_markers_for("Fortran 77").unwrap();
+    // Fixed form: every statement in column 7, so indentation tells nothing
+    let src = "      subroutine s(n)\n      do 10 i = 1, n\n      if (i .gt. 2 .and. i .lt. 5) then\n      print *, i\n      else if (i .eq. 7) then\n      print *, 7\n      endif\n   10 continue\n      if (n .gt. 0) print *, n\n      end\n";
+    let (lines, kinds) = lower(src);
+    let result = analyze(&lines, &kinds, markers).unwrap();
+    // do +1, nested if +2, .and. +1, else if +1, if after the loop +1
+    assert_eq!(result.functions[0].complexity, 6);
+}
+
+#[test]
+fn fortran_named_constructs_open_and_else_if_does_not() {
+    let markers = super::super::markers::cognitive_markers_for("Fortran 90").unwrap();
+    let src = "subroutine s(n)\n  outer: do i = 1, n\n    if (i > 1) then\n    else if (i > 2) then\n    endif\n  enddo outer\n  select case (n)\n  case (1)\n  endselect\nend subroutine\n";
+    let (lines, kinds) = lower(src);
+    let result = analyze(&lines, &kinds, markers).unwrap();
+    // do +1, nested if +2, else if +1, select after the loop +1
+    assert_eq!(result.functions[0].complexity, 5);
+}
+
+#[test]
+fn pascal_nesting_is_two_columns_a_level() {
+    let markers = super::super::markers::cognitive_markers_for("Pascal").unwrap();
+    let src = "procedure p;\nbegin\n  for i := 1 to n do\n  begin\n    if (i > 2) and (i < 5) then\n      x\n    else\n      y;\n  end;\nend;\n";
+    let (lines, kinds) = lower(src);
+    let result = analyze(&lines, &kinds, markers).unwrap();
+    // for +1, nested if +2, and +1, else +1
+    assert_eq!(result.functions[0].complexity, 5);
+}
