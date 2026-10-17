@@ -249,6 +249,38 @@ fn nothing_to_measure_without_a_changed_source() {
 }
 
 #[test]
+fn a_change_to_a_c_source_reaches_the_includers_of_its_header() {
+    let sources = [
+        ("src/list.h", "void push(int x);\n"),
+        ("src/list.c", "#include \"list.h\"\nvoid push(int x) {}\n"),
+        (
+            "src/queue.c",
+            "#include \"list.h\"\nvoid enqueue(int x) { push(x); }\n",
+        ),
+        ("src/queue.h", "void enqueue(int x);\n"),
+        (
+            "src/main.c",
+            "#include \"queue.h\"\nint main(void) { enqueue(1); }\n",
+        ),
+        ("tests/list_test.c", "#include \"../src/list.h\"\n"),
+    ]
+    .iter()
+    .map(|(path, text)| (PathBuf::from(path), text.to_string()))
+    .collect();
+    let radius = radius(sources, &[change("src/list.c", &[2])]);
+
+    let files: Vec<&str> = radius
+        .direct
+        .iter()
+        .map(|d| d.file.to_str().unwrap())
+        .collect();
+    // `list.c` is included by nobody: `queue.c` includes its header
+    assert_eq!(files, ["src/queue.c"]);
+    // `main.c` uses `queue.c` through `queue.h`
+    assert_eq!(radius.by_distance, [1, 1]);
+}
+
+#[test]
 fn a_go_change_reaches_every_importer_of_its_package() {
     let sources = [
         ("go.mod", "module example.com/shop\n\ngo 1.22\n"),

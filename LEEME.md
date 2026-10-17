@@ -762,7 +762,7 @@ Cómo se mide:
 - En Elixir, lo que un framework relaciona por convención cuenta como un uso. Un controlador de Phoenix usa las vistas que llevan su nombre (`PageController` y `PageJSON`, `PageHTML`, `PageView`), así que el test del controlador las protege. Un módulo usa los componentes que renderizan sus plantillas, ya sea que estén escritas en él con `~H`, guardadas en un archivo `.html.heex` a su lado (`page/index.ex` y `page/index.html.heex`) o en un directorio que lleva su nombre (`page_html.ex` y `page_html/home.html.heex`).
 
 
-Se mide para los lenguajes cuyo grafo refleja el uso: Elixir, Go, JavaScript/TypeScript, Kaikai, Python y Rust. En Go la unidad es el paquete: un cambio en cualquiera de sus archivos alcanza a cada archivo que lo importa. Solo se leen los proyectos que el cambio afecta; el repositorio completo cuando el alcance sobre los proyectos es desconocido.
+Se mide para los lenguajes cuyo grafo refleja el uso: C, C++, Elixir, Go, JavaScript/TypeScript, Kaikai, Python y Rust. En Go la unidad es el paquete: un cambio en cualquiera de sus archivos alcanza a cada archivo que lo importa. En C y C++ un cambio en un archivo fuente alcanza a los archivos que incluyen su header. Solo se leen los proyectos que el cambio afecta; el repositorio completo cuando el alcance sobre los proyectos es desconocido.
 
 Límites: un test en el mismo lugar, o que lleva el nombre de un archivo, puede no ejercitar la llamada que cambió, y uno que se refiere a un archivo puede simular con mocks lo que este llama: la columna dice que existe un test, no que cubre. `users` es más débil todavía: dice que algo que usa el archivo tiene tests. Los nombres de función se comparan sin aridad. Los módulos nombrados en tiempo de ejecución (`apply/3`, configuración) o generados por macros no se ven. Una petición se lee cuando su ruta está escrita en la llamada (`live(conn, ~p"/orders")`), no cuando viene de una variable o de un helper, y una ruta cuando está declarada en una sola línea.
 
@@ -960,7 +960,7 @@ Analiza las dependencias internas entre módulos leyendo las sentencias import/u
 km deps [path]
 ```
 
-Soporta Elixir (cada módulo al que el código se refiere, con el `alias` deshecho; mira las notas más abajo), Rust (cada ruta que nombra un módulo del workspace: `use`, `crate::`, `super::`, un módulo hijo; mira las notas más abajo), Python (`import` y `from … import`, absolutos y relativos; mira las notas más abajo), JavaScript/TypeScript (`import`, `export … from`, `require` e `import()`, relativos o a través de los alias de `tsconfig.json` y de los paquetes del workspace; mira las notas más abajo), Go (imports de los paquetes del repositorio, según la ruta de módulo de cada `go.mod`; mira las notas más abajo) y Kaikai (`import a.b.c`, incluidas las formas `as` y `.{…}`). Las dependencias externas (crates, paquetes de npm, la biblioteca estándar de Kaikai) se ignoran.
+Soporta Elixir (cada módulo al que el código se refiere, con el `alias` deshecho; mira las notas más abajo), Rust (cada ruta que nombra un módulo del workspace: `use`, `crate::`, `super::`, un módulo hijo; mira las notas más abajo), Python (`import` y `from … import`, absolutos y relativos; mira las notas más abajo), JavaScript/TypeScript (`import`, `export … from`, `require` e `import()`, relativos o a través de los alias de `tsconfig.json` y de los paquetes del workspace; mira las notas más abajo), Go (imports de los paquetes del repositorio, según la ruta de módulo de cada `go.mod`; mira las notas más abajo), C y C++ (`#include`, como lo encuentra un compilador; mira las notas más abajo) y Kaikai (`import a.b.c`, incluidas las formas `as` y `.{…}`). Las dependencias externas (crates, paquetes de npm, headers del sistema, la biblioteca estándar de Kaikai) se ignoran.
 
 Los archivos en cualquier otro lenguaje quedan fuera del grafo, en vez de listarse con cero dependencias. El pie de la tabla, el arreglo `unsupported` de la salida JSON y el campo `unsupported:N` del formato short dicen cuántos archivos se omitieron, así que "no medido" nunca se muestra como "sin dependencias".
 
@@ -1010,6 +1010,13 @@ Notas sobre JavaScript/TypeScript:
 - Después, un especificador puede nombrar un paquete del repositorio, por el `name` de su `package.json`: `@acme/ui` lleva a su punto de entrada (`source`, `module`, `main`, `types`, `exports`, leídos desde `src` cuando apuntan a un directorio de build, o si no `src/index`), y `@acme/ui/button` a ese archivo del paquete o de su `src`. Los paquetes bajo `node_modules` no se leen. Lo que no se resuelve por ninguno de estos caminos es externo.
 - Un barrel (`index.ts`) es un archivo como cualquier otro: quienes lo importan dependen de él, y él de lo que reexporta.
 - No se ve: los alias de la configuración de un bundler (`resolve.alias` de Vite o webpack), los `imports` de `package.json` (`#internal`), los especificadores que se arman en tiempo de ejecución, ni los archivos `.vue` y `.svelte`.
+
+Notas sobre C y C++:
+
+- No se leen los directorios de include del build (`-I`, `include_directories` de CMake). Un `#include "a/b.h"` entre comillas se busca primero junto al archivo que lo incluye; después, con comillas o sin ellas, en cada directorio por encima y en el directorio `include` de cada uno; y por último dondequiera que un archivo del repositorio termine con esa ruta, cuando uno es el más cercano al que incluye.
+- `#include <stdio.h>` y cualquier otro nombre suelto entre ángulos que no esté en esos directorios es un header del sistema: no agrega arista, aunque el repositorio tenga en otra parte un archivo con ese nombre.
+- Un archivo que incluye un header usa también lo que define su archivo fuente: `foo.h` y el `foo.c` junto a él, o `include/x/foo.h` y `src/x/foo.c`. `km deps` muestra solo los includes que escribe el código, así que un archivo fuente y un header que incluyen la contraparte del otro no forman un ciclo; `km impact` sigue ambos, así que un cambio en `foo.c` alcanza a quien incluye `foo.h`.
+- Las condiciones del preprocesador (`#ifdef`) no se evalúan: cuenta cada include.
 
 Notas sobre Kaikai:
 

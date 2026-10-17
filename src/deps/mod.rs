@@ -6,6 +6,8 @@
 //! imports), and detects dependency cycles using Tarjan's SCC algorithm.
 
 mod analyzer;
+mod apart;
+mod c_family;
 mod elixir;
 mod elixir_functions;
 mod elixir_literals;
