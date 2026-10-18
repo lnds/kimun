@@ -121,7 +121,7 @@ Temporal coupling analysis (Thornhill, files that change together). Invoked via 
 
 ### Shared: `src/git/`
 
-`GitRepo` wraps `git2::Repository`. Blame and the commit walk read authors through `.mailmap`, and `identity` (email without case, or the name when there is none) is how every command tells people apart. `mod.rs` holds history walks, blame and tree extraction. `changeset.rs` holds what concerns a change set: `diff_stats_since` (ref → working tree), `diff_stats_between` (two refs), `patch_stats` (a patch in git format), all through one `stats_of`, plus `co_change_history` and the merge base they start from. `FileDiffStat` carries the lines touched on both sides and a probe of added lines, so `lines_in` picks the side that matches a text: a patch need not be applied where it is measured. `tree.rs` reads files from the tree of a commit without checking it out (`files_at`, `has_file_at`).
+`GitRepo` wraps `git2::Repository`. `blame.rs` runs `git blame --line-porcelain -w -M -C HEAD` (with `.git-blame-ignore-revs` when present) and falls back to libgit2 when the program is missing or fails; `parse_porcelain` joins its lines into runs. Blame and the commit walk read authors through `.mailmap`, and `identity` (email without case, or the name when there is none) is how every command tells people apart. `mod.rs` holds history walks, blame and tree extraction. `changeset.rs` holds what concerns a change set: `diff_stats_since` (ref → working tree), `diff_stats_between` (two refs), `patch_stats` (a patch in git format), all through one `stats_of`, plus `co_change_history` and the merge base they start from. `FileDiffStat` carries the lines touched on both sides and a probe of added lines, so `lines_in` picks the side that matches a text: a patch need not be applied where it is measured. `tree.rs` reads files from the tree of a commit without checking it out (`files_at`, `has_file_at`).
 
 ### Shared: `src/projects/`
 
@@ -271,7 +271,7 @@ File age classification. Invoked via `km age`.
 
 Per-author ownership summary. Invoked via `km authors`.
 
-- **`analyzer.rs`** — Aggregates `git blame` data across all files to produce per-author totals: files owned, lines, languages, last active date.
+- **`analyzer.rs`** — Aggregates `git blame` data across all files to produce per-author totals: files owned, lines, languages; `set_last_commits` dates each author by their last commit (`GitRepo::last_commit_times`).
 - **`report.rs`** — Table and JSON output formatters.
 - **`mod.rs`** — Orchestration: opens git repo, runs blame per file, aggregates by author. Uses `util::parse_since` for `--since` flag.
 

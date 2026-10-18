@@ -11,7 +11,7 @@ use crate::cli::OutputMode;
 use crate::git::GitRepo;
 use crate::util::parse_since;
 use crate::walk::{self, WalkConfig};
-use analyzer::compute_authors;
+use analyzer::{compute_authors, set_last_commits};
 use report::{print_json, print_report, print_short, print_terse};
 
 /// Run author summary analysis and print results.
@@ -68,7 +68,8 @@ pub fn run(
         .map(|(lang, blames)| (lang.as_str(), blames.as_slice()))
         .collect();
 
-    let authors = compute_authors(&refs);
+    let mut authors = compute_authors(&refs);
+    set_last_commits(&mut authors, &git.last_commit_times()?);
 
     match output {
         OutputMode::Json => print_json(&authors),
