@@ -1233,11 +1233,13 @@ Hasta la v0.35 el tamaño de archivo pesaba 15%, y las demás dimensiones 30%, 2
 
 #### Modelo experimental (--experimental)
 
-`km score --experimental` calcula con el Maintainability Index (variante de Visual Studio, 0–100) en lugar del esfuerzo de Halstead, con su mismo peso (21%), y muestra al lado el puntaje del modelo por defecto, a partir de la misma medición. El MI pondera juntos el volumen de Halstead, la complejidad ciclomática y el tamaño; un archivo obtiene 0 con MI 0, 40 con 10, 70 con 20 (donde Visual Studio pasa a verde), 85 con 30, 95 con 45 y 100 desde 60. Sirve para probar la dimensión, no para compuertas: no se puede combinar con `--model` ni con `--trend`.
+`km score --experimental` calcula con el Maintainability Index (variante de Visual Studio, 0–100) en lugar del esfuerzo de Halstead, con su mismo peso (21%), y muestra al lado el puntaje del modelo por defecto, a partir de la misma medición. El MI pondera juntos el volumen de Halstead, la complejidad ciclomática y el tamaño; un archivo obtiene 0 con MI 0, 40 con 5, 60 con 10, 80 con 20 (donde Visual Studio pasa a verde), 90 con 30, 97 con 45 y 100 desde 60. A diferencia de las demás dimensiones, el MI del proyecto es el promedio simple de sus archivos, sin ponderar por líneas: el MI ya baja con el tamaño de un archivo, y ponderarlo contaría el tamaño dos veces. Sirve para probar la dimensión, no para compuertas: no se puede combinar con `--model` ni con `--trend`.
+
+En los proyectos donde se probó, el puntaje experimental queda a unos 1,5 puntos del normal, en el mismo orden: el MI sigue de cerca a Halstead, del que en buena parte se calcula. Un proyecto cuyo peor código está en unos pocos archivos grandes entre muchos chicos obtiene más que con el modelo por defecto (jq: F 51,3 contra D 60,5), porque cada archivo cuenta una vez.
 
 ```
  Experimental: Maintainability Index (Visual Studio) in place of Halstead Effort.
- Default model: B+ (83.2)  →  experimental: C+ (74.0), -9.2
+ Default model: B+ (83.2)  →  experimental: B (81.8), -1.5
 ```
 
 `--format json` agrega un objeto `baseline` con el puntaje y la nota del modelo por defecto; `--format short` agrega una línea `baseline`.

@@ -251,28 +251,32 @@ pub fn normalize_mi(mi_score: f64) -> f64 {
 
 /// Maintainability Index curve, Visual Studio variant (experimental model):
 /// MI on its 0–100 scale to a score. Visual Studio calls 20 and above
-/// green; the median file of real projects sits between 25 and 50.
-/// 0→0, 10→40, 20→70, 30→85, 45→95, ≥60→100.
+/// green; the median file of real projects sits between 25 and 50, which
+/// scores 85 to 97. 0→0, 5→40, 10→60, 20→80, 30→90, 45→97, ≥60→100.
 const MI_VS_CURVE: &[Breakpoint] = &[
     Breakpoint {
         input: 0.0,
         score: 0.0,
     },
     Breakpoint {
-        input: 10.0,
+        input: 5.0,
         score: 40.0,
     },
     Breakpoint {
+        input: 10.0,
+        score: 60.0,
+    },
+    Breakpoint {
         input: 20.0,
-        score: 70.0,
+        score: 80.0,
     },
     Breakpoint {
         input: 30.0,
-        score: 85.0,
+        score: 90.0,
     },
     Breakpoint {
         input: 45.0,
-        score: 95.0,
+        score: 97.0,
     },
     Breakpoint {
         input: 60.0,

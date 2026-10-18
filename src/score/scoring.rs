@@ -139,6 +139,25 @@ impl Effort {
         }
     }
 
+    /// The project's score on this dimension: the mean of the files weighted
+    /// by their code lines for Halstead, as for every other dimension, and
+    /// the plain mean of the files for the MI. The MI already falls with the
+    /// size of a file, so weighting it by lines would count size twice, on
+    /// top of the File Size dimension.
+    fn aggregate(self, file_metrics: &[FileMetrics], total_loc: usize) -> f64 {
+        match self {
+            Self::Halstead => weighted_mean(file_metrics, total_loc, |f| self.score(f)),
+            Self::MaintainabilityIndex => {
+                let scores: Vec<f64> = file_metrics.iter().filter_map(|f| self.score(f)).collect();
+                if scores.is_empty() {
+                    0.0
+                } else {
+                    scores.iter().sum::<f64>() / scores.len() as f64
+                }
+            }
+        }
+    }
+
     /// The file's score on this dimension, 0–100.
     fn score(self, f: &FileMetrics) -> Option<f64> {
         match self {
@@ -165,7 +184,7 @@ fn build_cognitive_dimensions(
     let indent_dim = weighted_mean(file_metrics, total_loc, |f| {
         f.indent_stddev.map(normalize_indent)
     });
-    let hal_dim = weighted_mean(file_metrics, total_loc, |f| effort.score(f));
+    let hal_dim = effort.aggregate(file_metrics, total_loc);
     let size_dim = weighted_mean(file_metrics, total_loc, |f| {
         Some(normalize_file_size(f.code_lines))
     });
