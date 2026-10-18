@@ -6,6 +6,11 @@
 //! imports), and detects dependency cycles using Tarjan's SCC algorithm.
 
 mod analyzer;
+mod apart;
+mod c_family;
+mod c_like;
+mod c_like_reader;
+mod csharp;
 mod elixir;
 mod elixir_functions;
 mod elixir_literals;
@@ -13,6 +18,7 @@ mod extractor;
 mod golang;
 pub mod graph;
 pub mod heex;
+mod java;
 mod javascript;
 mod javascript_config;
 mod kaikai;
@@ -26,6 +32,7 @@ pub mod routes;
 mod rust;
 mod rust_crates;
 pub(crate) mod rust_literals;
+mod types;
 
 use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};

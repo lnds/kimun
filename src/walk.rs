@@ -205,6 +205,16 @@ impl<'a> WalkConfig<'a> {
 /// Test directory names to exclude when `--exclude-tests` is active.
 pub const TEST_DIRS: &[&str] = &["tests", "test", "__tests__", "spec"];
 
+/// Whether a directory holds tests: one of `TEST_DIRS`, or a .NET test
+/// project, named after what it tests (`App.Tests`, `Orders.UnitTests`,
+/// `Api.IntegrationTest`).
+pub fn is_test_dir(name: &str) -> bool {
+    let dotnet = name
+        .rsplit_once('.')
+        .is_some_and(|(_, last)| last.ends_with("Tests") || last.ends_with("Test"));
+    TEST_DIRS.contains(&name) || dotnet
+}
+
 /// Directories of examples and benchmarks: code that is run to show or to
 /// time the project, not shipped with it. Left out along with tests.
 pub const EXAMPLE_DIRS: &[&str] = &[
@@ -218,7 +228,7 @@ pub const EXAMPLE_DIRS: &[&str] = &[
 
 /// Whether a directory name holds tests, examples or benchmarks.
 pub fn is_non_production_dir(name: &str) -> bool {
-    TEST_DIRS.contains(&name) || EXAMPLE_DIRS.contains(&name)
+    is_test_dir(name) || EXAMPLE_DIRS.contains(&name)
 }
 
 /// Mapping from file extension to test-file naming patterns.
@@ -488,7 +498,7 @@ fn ancestor_exclusion_reason(
             if filter.excludes_dir(name_str) {
                 return Some("directory");
             }
-            if exclude_tests && TEST_DIRS.contains(&name_str) {
+            if exclude_tests && is_test_dir(name_str) {
                 return Some("test directory");
             }
             if exclude_tests && EXAMPLE_DIRS.contains(&name_str) {

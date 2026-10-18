@@ -164,7 +164,7 @@ pub fn languages() -> &'static [LanguageSpec] {
               line: "//", block: "/*", "*/"),
         lang_spec!("C", ext: ["c", "h"],
               line: "//", block: "/*", "*/"),
-        lang_spec!("C++", ext: ["cpp", "cxx", "cc", "hpp", "hxx"],
+        lang_spec!("C++", ext: ["cpp", "cxx", "cc", "c++", "hpp", "hxx", "hh", "h++", "inl", "ipp", "tpp"],
               line: "//", block: "/*", "*/"),
         lang_spec!("C#", ext: ["cs"],
               line: "//", block: "/*", "*/"),
