@@ -55,20 +55,22 @@ fn is_word(c: u8) -> bool {
     is_word_start(c) || c.is_ascii_digit()
 }
 
-fn line_len(bytes: &[u8]) -> usize {
+/// The length of a line, without its newline.
+pub(super) fn line_len(bytes: &[u8]) -> usize {
     bytes
         .iter()
         .position(|&c| c == b'\n')
         .unwrap_or(bytes.len())
 }
 
-fn find(bytes: &[u8], needle: &[u8]) -> Option<usize> {
+/// Where `needle` first is in `bytes`.
+pub(super) fn find(bytes: &[u8], needle: &[u8]) -> Option<usize> {
     bytes.windows(needle.len()).position(|w| w == needle)
 }
 
 /// The length of a literal closed by `quote`, with backslash escapes; it
 /// ends with its line when it is not closed.
-fn quoted_len(rest: &[u8], quote: u8) -> usize {
+pub(super) fn quoted_len(rest: &[u8], quote: u8) -> usize {
     let mut i = 1;
     while let Some(&c) = rest.get(i) {
         match c {

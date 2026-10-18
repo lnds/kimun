@@ -19,6 +19,7 @@ mod elixir_literals;
 mod elixir_using;
 mod extractor;
 mod golang;
+mod golang_source;
 pub mod graph;
 pub mod heex;
 mod java;

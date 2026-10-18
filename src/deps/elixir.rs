@@ -9,6 +9,7 @@
 //! apart, in `routes`.
 
 use std::collections::HashMap;
+use std::path::Path;
 
 use super::elixir_directives::{Using, bare_calls, directives};
 use super::elixir_literals::code_only;
@@ -40,6 +41,19 @@ pub struct ElixirFile {
     /// Functions it calls without a module, and defines none of: what an
     /// `import` may answer.
     pub bare: Vec<String>,
+}
+
+/// Whether a file configures the build rather than belongs to the code:
+/// `mix.exs`, `.formatter.exs` or a script of a `config` directory. Their
+/// module names are data (docs groups, `config :app, App.Endpoint`), and
+/// the module a `mix.exs` defines is no part of the application.
+pub fn is_build_config(path: &Path) -> bool {
+    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    let in_config = path
+        .parent()
+        .and_then(Path::file_name)
+        .is_some_and(|dir| dir == "config");
+    matches!(name, "mix.exs" | ".formatter.exs") || (in_config && name.ends_with(".exs"))
 }
 
 pub(super) fn is_ident(c: char) -> bool {

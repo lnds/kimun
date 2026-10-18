@@ -80,8 +80,9 @@ struct Crates<'a> {
     files: &'a [PathBuf],
     parsed: &'a [Option<RustFile>],
     by_path: HashMap<&'a Path, usize>,
-    /// The file of each module.
-    modules: HashMap<ModuleId, usize>,
+    /// The files of each module: more than one when declarations under
+    /// opposite `#[cfg]`s name a file each, since either may be compiled.
+    modules: HashMap<ModuleId, Vec<usize>>,
     /// The module each file is, in the first crate that reaches it.
     identity: Vec<Option<ModuleId>>,
     /// The library crate each name stands for, as others write it.
@@ -149,7 +150,7 @@ impl<'a> Crates<'a> {
         let mut seen = HashSet::from([root]);
         let mut queue = VecDeque::from([(root, Vec::new(), true)]);
         while let Some((file, path, beside)) = queue.pop_front() {
-            self.modules.insert((krate, path.clone()), file);
+            self.place((krate, path.clone()), file);
             self.identity[file].get_or_insert((krate, path.clone()));
             let below = children_dir(&self.files[file], beside);
             for decl in self.parsed[file].iter().flat_map(|p| &p.mods) {
@@ -157,13 +158,21 @@ impl<'a> Crates<'a> {
                 module.extend(decl.scope.iter().cloned());
                 module.push(decl.name.clone());
                 if decl.inline {
-                    self.modules.insert((krate, module), file);
+                    self.place((krate, module), file);
                 } else if let Some(child) = self.file_of(file, &below, decl)
                     && seen.insert(child)
                 {
                     queue.push_back((child, module, decl.path.is_some()));
                 }
             }
+        }
+    }
+
+    /// Note `file` as one of those of `module`.
+    fn place(&mut self, module: ModuleId, file: usize) {
+        let files = self.modules.entry(module).or_default();
+        if !files.contains(&file) {
+            files.push(file);
         }
     }
 
@@ -191,9 +200,13 @@ impl<'a> Crates<'a> {
             .map(|(_, path)| path)
     }
 
-    /// The file a path written in `file` leads to. `hops` bounds how many
+    /// The files a path written in `file` leads to. `hops` bounds how many
     /// imports are followed, since one may name itself.
-    fn target(&self, file: usize, path: &PathRef, hops: usize) -> Option<usize> {
+    fn target(&self, file: usize, path: &PathRef, hops: usize) -> Vec<usize> {
+        self.resolve(file, path, hops).unwrap_or_default()
+    }
+
+    fn resolve(&self, file: usize, path: &PathRef, hops: usize) -> Option<Vec<usize>> {
         let (krate, here) = self.identity[file].as_ref()?;
         let mut base = here.clone();
         base.extend(path.scope.iter().cloned());
@@ -217,15 +230,48 @@ impl<'a> Crates<'a> {
                         scope: import.scope.clone(),
                         segments: [&import.segments[..], &segments[1..]].concat(),
                     };
-                    return self.target(file, &through, hops - 1);
+                    return Some(self.target(file, &through, hops - 1));
                 } else {
                     (*self.names.get(first)?, segments[1..].to_vec())
                 }
             }
         };
-        (0..=absolute.len())
-            .rev()
-            .find_map(|n| self.modules.get(&(krate, absolute[..n].to_vec())).copied())
+        let (n, found) = (0..=absolute.len()).rev().find_map(|n| {
+            let files = self.modules.get(&(krate, absolute[..n].to_vec()))?;
+            Some((n, files))
+        })?;
+        let rest = &absolute[n..];
+        let led = found
+            .iter()
+            .flat_map(|&f| match self.re_export(f, rest, hops) {
+                Some(through) => through,
+                None => vec![f],
+            });
+        Some(led.collect())
+    }
+
+    /// Where a path that goes on past the module in `file` leads, when
+    /// what it names next is a crate `file` re-exports under a name:
+    /// `facade::printer::Stats`, with `pub extern crate grep_printer as
+    /// printer` or `pub use grep_printer as printer` in the facade. An item
+    /// re-exported stays here, as it does when the path ends at it.
+    fn re_export(&self, file: usize, rest: &[String], hops: usize) -> Option<Vec<usize>> {
+        if rest.len() < 2 || hops == 0 {
+            return None;
+        }
+        let import = self.import(file, &rest[0])?;
+        let [krate] = &import.segments[..] else {
+            return None;
+        };
+        if matches!(krate.as_str(), "crate" | "self" | "super") {
+            return None;
+        }
+        let through = PathRef {
+            scope: import.scope.clone(),
+            segments: [&import.segments[..], &rest[1..]].concat(),
+        };
+        let led = self.target(file, &through, hops - 1);
+        (!led.is_empty()).then_some(led)
     }
 }
 
@@ -239,7 +285,7 @@ pub fn uses(
 ) -> Vec<BTreeSet<usize>> {
     let crates = Crates::new(files, parsed, packages);
     let led = |file: usize, paths: &[PathRef]| -> BTreeSet<usize> {
-        let targets = paths.iter().filter_map(|path| crates.target(file, path, 3));
+        let targets = paths.iter().flat_map(|path| crates.target(file, path, 3));
         targets.collect()
     };
     let read = |file: usize| parsed[file].as_ref();

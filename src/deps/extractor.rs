@@ -6,7 +6,7 @@
 /// returned for the resolver to filter: by module path (Go) or by what
 /// exists in the project (Kaikai, Python). Elixir and Rust are read apart:
 /// their dependencies are names to resolve over the whole graph.
-use super::{kaikai, python};
+use super::{golang_source, kaikai, python};
 
 /// Whether imports can be extracted and resolved for this language.
 /// Files in any other language have no measured dependencies.
@@ -36,52 +36,10 @@ pub fn extract_imports(language: &str, source: &str) -> Vec<String> {
     match language {
         "Python" => python::extract(source),
         "JavaScript" | "TypeScript" | "JSX" => super::javascript::extract(source),
-        "Go" => extract_go(source),
+        "Go" => golang_source::read(source).imports,
         "Kaikai" => kaikai::extract(source),
         _ => vec![],
     }
-}
-
-/// Go: extract all quoted import paths (both single-line and block imports).
-/// The resolver filters to project-internal paths using the go.mod module name.
-fn extract_go(source: &str) -> Vec<String> {
-    let mut imports = Vec::new();
-    let mut in_block = false;
-
-    for line in source.lines() {
-        let trimmed = line.trim();
-
-        if trimmed == "import (" {
-            in_block = true;
-            continue;
-        }
-        if in_block && trimmed == ")" {
-            in_block = false;
-            continue;
-        }
-
-        let candidate = if in_block {
-            Some(trimmed)
-        } else {
-            trimmed.strip_prefix("import ").map(str::trim)
-        };
-
-        if let Some(s) = candidate {
-            // Handle optional alias: `alias "path"` or just `"path"`
-            if let Some(path) = extract_quoted(s).filter(|p| !p.is_empty()) {
-                imports.push(path);
-            }
-        }
-    }
-    imports
-}
-
-/// Extract the content of the last `"…"` on a line (handles alias prefix).
-fn extract_quoted(s: &str) -> Option<String> {
-    let start = s.rfind('"')?;
-    let before = &s[..start];
-    let start2 = before.rfind('"')? + 1;
-    Some(before[start2..].to_string())
 }
 
 #[cfg(test)]

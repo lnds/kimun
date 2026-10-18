@@ -212,8 +212,11 @@ fn imports(
         .collect()
 }
 
-fn is_elixir(language: &str) -> bool {
-    matches!(language, "Elixir" | "Elixir Script")
+/// Whether a source enters the graph of Elixir modules: build
+/// configuration neither defines nor uses any of them.
+fn is_elixir_code(source: &Source) -> bool {
+    matches!(source.language.as_str(), "Elixir" | "Elixir Script")
+        && !elixir::is_build_config(&source.path)
 }
 
 /// How many leading directories two paths share.
@@ -287,7 +290,7 @@ fn read_elixir(
 ) -> (Vec<Option<ElixirFile>>, ModuleIndex) {
     let mut parsed: Vec<Option<ElixirFile>> = sources
         .iter()
-        .map(|s| is_elixir(&s.language).then(|| elixir::parse_with(&s.text, &s.templates)))
+        .map(|s| is_elixir_code(s).then(|| elixir::parse_with(&s.text, &s.templates)))
         .collect();
     let mut modules = ModuleIndex::default();
     for (file, parsed) in parsed.iter().enumerate() {

@@ -160,3 +160,20 @@ fn files_of_one_package_have_no_edges_between_them() {
     ];
     assert!(used(&sources, &layout(MODULE), "store/store.go").is_empty());
 }
+
+#[test]
+fn an_import_in_the_package_comment_or_of_its_own_package_is_no_edge() {
+    let sources = [
+        go(
+            "doc.go",
+            "/*\nPackage proj does things.\n\n\timport \"example.com/proj/render\"\n*/\npackage proj\n",
+        ),
+        go(
+            "main.go",
+            "package proj\n\nimport \"example.com/proj\"\n\nfunc Run() {}\n",
+        ),
+        go("render/render.go", "package render\n"),
+    ];
+    assert!(used(&sources, &layout(MODULE), "doc.go").is_empty());
+    assert!(used(&sources, &layout(MODULE), "main.go").is_empty());
+}

@@ -9,7 +9,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use super::extractor::extract_imports;
+use super::golang_source;
 use super::graph::{EdgeKind, Found, Source};
 use super::layout::Layout;
 
@@ -57,12 +57,19 @@ impl Packages {
 
     /// The files `source` imports: those of each package it names, and the
     /// imports within a module of the repository that name no package.
-    /// `None` when it is not Go.
+    /// `None` when it is not Go. A package cannot import itself, so an
+    /// import of its own directory is left out, unless the file is an
+    /// external test.
     pub fn uses(&self, source: &Source) -> Option<Found> {
         (source.language == "Go").then(|| {
+            let file = golang_source::read(&source.text);
+            let own = source.path.parent().unwrap_or(Path::new(""));
             let mut found = Found::default();
-            for import in extract_imports(&source.language, &source.text) {
-                self.note(import, &mut found);
+            for import in file.imports.iter() {
+                let itself = self.directory(import).is_some_and(|dir| dir == own);
+                if file.is_external_test() || !itself {
+                    self.note(import.clone(), &mut found);
+                }
             }
             found
         })
