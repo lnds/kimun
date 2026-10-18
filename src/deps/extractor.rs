@@ -26,6 +26,7 @@ pub fn is_supported(language: &str) -> bool {
             | "C++"
             | "Java"
             | "C#"
+            | "Ruby"
     )
 }
 

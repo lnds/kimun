@@ -346,6 +346,7 @@ impl FileGraph {
                 .unresolved
                 .push(found.unresolved.into_iter().collect());
         }
+        graph.ambiguous += apart.ambiguous();
         graph.implied = apart.implied(sources, &graph.uses);
         graph.modules = modules;
         graph
