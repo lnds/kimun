@@ -1043,6 +1043,8 @@ Algunos imports no cargan un módulo cuando se carga el que importa: un `import 
 
 Un import que tiene la forma de un archivo del proyecto pero no resuelve a ninguno se reporta, para que una arista que falta no se lea como ausencia de dependencia: un `#include` entre comillas que no es un header del sistema (a menudo un archivo generado al compilar), un especificador relativo de JavaScript o TypeScript que nombra un script, un import relativo de Python, un import de Go dentro de un módulo del repositorio. Los paquetes externos nunca se listan. El pie de la tabla los cuenta (`Unresolved internal imports: N in M files`), el JSON los lista por archivo en `unresolved` y los cuenta en `unresolved_count`, y el formato short da `unresolved:N`. Rust, Elixir, Java, C# y Kaikai nombran módulos y tipos en vez de archivos, donde nada distingue un nombre interno de uno externo, así que no reportan ninguno.
 
+El JSON lista las aristas en `edges`, cada una como `{"from", "to", "kind"}`, con `kind` igual a `load`, `compile`, `deferred` o `type`: las que salen de los archivos listados, así que `--top` y `--cycles-only` las acotan igual que a `files`.
+
 Notas sobre Elixir:
 
 - Las dependencias son entre módulos, y la mayoría no necesita import, así que cada nombre de módulo en el código cuenta como una referencia: llamadas, structs, `use`, `import`, `require`, `@behaviour`, `defimpl`. Los comentarios, strings, heredocs y sigils se apartan primero, así que un doctest no es una dependencia.
