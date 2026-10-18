@@ -80,10 +80,25 @@ fn find(chars: &[char], from: usize, closer: &[char]) -> usize {
         .unwrap_or(chars.len())
 }
 
+/// The component a tag calls, given the text after its `<`, and how long
+/// its name is: `Card.header` as written, `.button` as `button(`.
+fn component(tag: &[char]) -> (Vec<char>, usize) {
+    let len = tag
+        .iter()
+        .skip(1)
+        .take_while(|c| super::elixir::is_ident(**c) || **c == '.')
+        .count()
+        + 1;
+    match tag[0] {
+        '.' => (tag[1..len].iter().chain(&['(']).copied().collect(), len),
+        _ => (tag[..len].to_vec(), len),
+    }
+}
+
 /// The Elixir of a template, one piece a line: what is between `{` and `}`,
-/// between `<%` and `%>`, and the names of the components called as tags
-/// (`<Card.header`). Markup and text are left out: a word of prose must not
-/// read as a module.
+/// between `<%` and `%>`, and the components called as tags, as a module
+/// name (`<Card.header`) or as a local call (`<.button` is `button(`).
+/// Markup and text are left out: a word of prose must not read as a module.
 pub fn code(template: &str) -> String {
     let chars: Vec<char> = template.chars().collect();
     let mut out = String::new();
@@ -102,12 +117,9 @@ pub fn code(template: &str) -> String {
                 keep(&chars[start.min(end)..end]);
                 i = end;
             }
-            ['<', c, ..] if c.is_ascii_uppercase() => {
-                let len = chars[i + 1..]
-                    .iter()
-                    .take_while(|c| super::elixir::is_ident(**c) || **c == '.')
-                    .count();
-                keep(&chars[i + 1..i + 1 + len]);
+            ['<', c, ..] if c.is_ascii_uppercase() || c == '.' => {
+                let (piece, len) = component(&chars[i + 1..]);
+                keep(&piece);
                 i += len;
             }
             ['{', ..] => {

@@ -70,10 +70,7 @@ impl<'s> Apart<'s> {
                     .filter(|to| *to != file && !written.contains(to))
                     .collect::<BTreeSet<usize>>()
                     .into_iter()
-                    .map(|to| Use {
-                        to,
-                        calls: Vec::new(),
-                    })
+                    .map(Use::plain)
                     .collect()
             })
             .collect()

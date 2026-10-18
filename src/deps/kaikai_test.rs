@@ -147,13 +147,25 @@ fn resolve_package_directory() {
         "mid/notes.md",
         "mid/internal/deep.kai",
     ]);
+    // The compiler searches the package directory for `mid.kai`; the other
+    // files are reached through its own imports.
+    let result = resolve_kai("consumer/main.kai", "mid", &file_set);
+    assert_eq!(result, vec![PathBuf::from("mid/mid.kai")]);
+}
+
+#[test]
+fn resolve_package_without_a_file_of_its_name_reaches_every_file() {
+    let file_set = kai_files(&[
+        "consumer/main.kai",
+        "mid/kai.toml",
+        "mid/one.kai",
+        "mid/two.kai",
+        "mid/internal/deep.kai",
+    ]);
     let result = resolve_kai("consumer/main.kai", "mid", &file_set);
     assert_eq!(
         result,
-        vec![
-            PathBuf::from("mid/helpers.kai"),
-            PathBuf::from("mid/mid.kai")
-        ]
+        vec![PathBuf::from("mid/one.kai"), PathBuf::from("mid/two.kai")]
     );
 }
 

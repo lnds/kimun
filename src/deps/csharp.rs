@@ -8,13 +8,15 @@
 //! an alias (`using X = A.B;`) names a type or a namespace; `using static`
 //! uses the type it names. `[Name]` also names the attribute `NameAttribute`.
 //! A partial type is declared by each of its files, and a use of it uses
-//! them all. Types of the framework and of packages are external.
+//! them all. Types of the framework and of packages are external. A call
+//! after a dot may be to an extension method (`csharp_extensions`).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use super::c_like::{Token, tokens};
 use super::c_like_reader::{Cursor, Reader, chain_at};
+use super::csharp_extensions::{Extensions, Members};
 use super::graph::Source;
 use super::types::{Scope, Types, nearest_all, qualified};
 
@@ -33,6 +35,8 @@ pub struct CSharpFile {
     pub aliases: Vec<(String, String)>,
     /// The chains of names its code writes.
     pub names: Vec<Vec<String>>,
+    /// The extension methods it declares and the methods it calls.
+    pub members: Members,
 }
 
 const DECLARATIONS: &[&str] = &["class", "struct", "interface", "enum", "record"];
@@ -82,6 +86,7 @@ impl<'t> Reader<'t> for CSharpReader<'t> {
     /// declaration that has none.
     fn punct(&mut self, mark: u8) {
         match mark {
+            b'(' => self.parenthesis(),
             b'{' => {
                 let frame = self.pending.take().unwrap_or(Frame::Block);
                 self.frames.push(frame);
@@ -138,6 +143,16 @@ impl CSharpReader<'_> {
             Some(Token::Word(word)) => Some(word),
             _ => None,
         }
+    }
+
+    /// A call or the parameters of a method. Types are declared only among
+    /// namespaces, so a type frame is a top-level type, where extension
+    /// methods are declared.
+    fn parenthesis(&mut self) {
+        let in_type = self.frames.last() == Some(&Frame::Type);
+        let namespace = in_type.then(|| self.namespace());
+        let Cursor { tokens, at } = self.cursor;
+        self.file.members.read(tokens, at, namespace);
     }
 
     /// The namespace declarations are in here.
@@ -231,6 +246,7 @@ pub struct Namespaces {
     paths: Vec<PathBuf>,
     files: Vec<Option<CSharpFile>>,
     types: Types,
+    extensions: Extensions,
     /// Each `global using`, with the directory it holds for.
     global: Vec<(PathBuf, String)>,
 }
@@ -255,11 +271,13 @@ impl Namespaces {
                     .map(|u| (dir.to_path_buf(), u.clone())),
             );
         }
+        let extensions = Extensions::of(files.iter().map(|f| f.as_ref().map(|f| &f.members)));
         let paths = sources.iter().map(|s| s.path.clone()).collect();
         Namespaces {
             paths,
             files,
             types,
+            extensions,
             global,
         }
     }
@@ -295,9 +313,13 @@ impl Namespaces {
             self.types.resolve(&chain, &scope)
         });
         let from = &self.paths[at];
+        let called = self
+            .extensions
+            .used_by(&file.members, &scope.whole, from, &self.paths);
         let used = statics
             .chain(named)
-            .flat_map(|files| nearest_all(files, from, &self.paths));
+            .flat_map(|files| nearest_all(files, from, &self.paths))
+            .chain(called);
         Some(used.map(|to| (to, BTreeSet::new())).collect())
     }
 }
