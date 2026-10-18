@@ -51,13 +51,13 @@ pub(crate) fn format_time(seconds: f64) -> String {
 /// N₁ (total operators), N₂ (total operands), Volume, Effort, Bugs, Time.
 /// The totals row sums N₁, N₂, Volume, Effort, Bugs, and Time across files
 /// (η₁/η₂ are omitted since distinct counts don't sum meaningfully).
-pub fn print_report(files: &[FileHalsteadMetrics]) {
+pub fn print_report(files: &[FileHalsteadMetrics], shown: usize) {
     if files.is_empty() {
         println!("No recognized source files found.");
         return;
     }
 
-    let max_path_len = report_helpers::max_path_width(files.iter().map(|f| f.path.as_path()), 4);
+    let max_path_len = report_helpers::path_column(files.iter().map(|f| f.path.as_path()), shown);
     let header_width = max_path_len + 72;
     let separator = report_helpers::separator(header_width.max(88));
 
@@ -78,11 +78,11 @@ pub fn print_report(files: &[FileHalsteadMetrics]) {
     );
     println!("{separator}");
 
-    for f in files {
+    for f in files.iter().take(shown) {
         let m = &f.metrics;
         println!(
             " {:<width$}  {:>4} {:>4} {:>5} {:>5} {:>9.1} {:>10.0} {:>6.2} {:>8}",
-            f.path.display(),
+            crate::report_helpers::shown(&f.path),
             m.distinct_operators,
             m.distinct_operands,
             m.total_operators,
@@ -104,7 +104,7 @@ pub fn print_report(files: &[FileHalsteadMetrics]) {
     let total_bugs: f64 = files.iter().map(|f| f.metrics.bugs).sum();
     let total_time: f64 = files.iter().map(|f| f.metrics.time).sum();
 
-    let total_label = format!(" Total ({} files)", files.len());
+    let total_label = report_helpers::total_label(files.len(), shown);
     println!(
         "{:<width$}  {:>4} {:>4} {:>5} {:>5} {:>9.1} {:>10.0} {:>6.2} {:>8}",
         total_label,
@@ -145,7 +145,7 @@ pub fn print_json(files: &[FileHalsteadMetrics]) -> Result<(), Box<dyn std::erro
         .map(|f| {
             let m = &f.metrics;
             JsonEntry {
-                path: f.path.display().to_string(),
+                path: crate::report_helpers::shown(&f.path),
                 language: f.language.clone(),
                 distinct_operators: m.distinct_operators,
                 distinct_operands: m.distinct_operands,

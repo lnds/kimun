@@ -290,9 +290,9 @@ pub enum Commands {
         #[command(flatten)]
         common: CommonArgs,
 
-        /// Show only the top N files (default: 20)
-        #[arg(long, default_value = "20")]
-        top: usize,
+        /// Rows of the table (default: 20); JSON lists every one of the files unless given
+        #[arg(long)]
+        top: Option<usize>,
 
         /// Sort by metric: effort, volume, or bugs (default: effort)
         #[arg(long, default_value = "effort", value_parser = ["effort", "volume", "bugs"])]
@@ -308,9 +308,9 @@ pub enum Commands {
         #[arg(long, default_value = "1")]
         min_complexity: usize,
 
-        /// Show only the top N files (default: 20)
-        #[arg(long, default_value = "20")]
-        top: usize,
+        /// Rows of the table (default: 20); JSON lists every one of the files unless given
+        #[arg(long)]
+        top: Option<usize>,
 
         /// Show per-function breakdown
         #[arg(long)]
@@ -331,9 +331,9 @@ pub enum Commands {
         #[arg(long, default_value = "1")]
         min_complexity: usize,
 
-        /// Show only the top N files (default: 20)
-        #[arg(long, default_value = "20")]
-        top: usize,
+        /// Rows of the table (default: 20); JSON lists every one of the files unless given
+        #[arg(long)]
+        top: Option<usize>,
 
         /// Show per-function breakdown
         #[arg(long)]
@@ -350,9 +350,9 @@ pub enum Commands {
         #[command(flatten)]
         common: CommonArgs,
 
-        /// Show only the top N files (default: 20)
-        #[arg(long, default_value = "20")]
-        top: usize,
+        /// Rows of the table (default: 20); JSON lists every one of the files unless given
+        #[arg(long)]
+        top: Option<usize>,
 
         /// Sort by metric: mi, volume, complexity, or loc (default: mi)
         #[arg(long, default_value = "mi", value_parser = ["mi", "volume", "complexity", "loc"])]
@@ -383,9 +383,9 @@ pub enum Commands {
         #[command(flatten)]
         common: CommonArgs,
 
-        /// Show only the top N files (default: 20)
-        #[arg(long, default_value = "20")]
-        top: usize,
+        /// Rows of the table (default: 20); JSON lists every one of the files unless given
+        #[arg(long)]
+        top: Option<usize>,
 
         /// Sort by metric: mi, volume, complexity, or loc (default: mi)
         #[arg(long, default_value = "mi", value_parser = ["mi", "volume", "complexity", "loc"])]
@@ -397,9 +397,9 @@ pub enum Commands {
         #[command(flatten)]
         common: CommonArgs,
 
-        /// Show only the top N files (default: 20)
-        #[arg(long, default_value = "20")]
-        top: usize,
+        /// Rows of the table (default: 20); JSON lists every one of the files unless given
+        #[arg(long)]
+        top: Option<usize>,
 
         /// Sort by: commits (default), rate (commits/month), or file
         #[arg(long, default_value = "commits", value_parser = ["commits", "rate", "file"])]
@@ -416,9 +416,9 @@ pub enum Commands {
         #[command(flatten)]
         common: CommonArgs,
 
-        /// Show only the top N files (default: 20)
-        #[arg(long, default_value = "20")]
-        top: usize,
+        /// Rows of the table (default: 20); JSON lists every one of the files unless given
+        #[arg(long)]
+        top: Option<usize>,
 
         /// Sort by metric: score, commits, or complexity (default: score)
         #[arg(long, default_value = "score", value_parser = ["score", "commits", "complexity"])]
@@ -440,9 +440,9 @@ pub enum Commands {
         #[command(flatten)]
         common: CommonArgs,
 
-        /// Show only the top N files (default: 20)
-        #[arg(long, default_value = "20")]
-        top: usize,
+        /// Rows of the table (default: 20); JSON lists every one of the files unless given
+        #[arg(long)]
+        top: Option<usize>,
 
         /// Sort by: concentration, diffusion, or risk (default: concentration)
         #[arg(long, default_value = "concentration", value_parser = ["concentration", "diffusion", "risk"])]
@@ -481,9 +481,9 @@ pub enum Commands {
         #[command(flatten)]
         common: CommonArgs,
 
-        /// Show only the top N file pairs (default: 20)
-        #[arg(long, default_value = "20")]
-        top: usize,
+        /// Rows of the table (default: 20); JSON lists every one of the file pairs unless given
+        #[arg(long)]
+        top: Option<usize>,
 
         /// Sort by: strength or shared (default: strength)
         #[arg(long, default_value = "strength", value_parser = ["strength", "shared"])]
@@ -521,9 +521,9 @@ pub enum Commands {
         #[command(flatten)]
         common: CommonArgs,
 
-        /// Show only the top N files (default: 20)
-        #[arg(long, default_value = "20")]
-        top: usize,
+        /// Rows of the table (default: 20); JSON lists every one of the files unless given
+        #[arg(long)]
+        top: Option<usize>,
 
         /// Maximum function length before flagging (default: 50, overridable via .kimun.toml)
         #[arg(long)]
@@ -641,9 +641,9 @@ pub enum Commands {
         #[arg(long, default_value = "fan-out", value_parser = ["fan-out", "fan-in"])]
         sort_by: String,
 
-        /// Show only the top N files (default: 20)
-        #[arg(long, default_value = "20")]
-        top: usize,
+        /// Rows of the table (default: 20); JSON lists every one of the files unless given
+        #[arg(long)]
+        top: Option<usize>,
     },
 
     /// Summarize code ownership by author: files owned, lines, languages, last active date

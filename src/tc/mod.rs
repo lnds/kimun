@@ -36,7 +36,7 @@ fn is_test_path(path: &Path) -> bool {
 pub struct TcOptions<'a> {
     pub output: OutputMode,
     pub include_tests: bool,
-    pub top: usize,
+    pub top: Option<usize>,
     pub sort_by: &'a str,
     pub since: Option<&'a str>,
     /// Commits a file needs to be paired.
@@ -128,7 +128,11 @@ pub fn run(path: &Path, opts: &TcOptions<'_>) -> Result<(), Box<dyn Error>> {
         }),
     }
 
-    results.truncate(opts.top);
+    results.truncate(crate::report_helpers::shown_count(
+        opts.output,
+        opts.top,
+        total,
+    ));
 
     match opts.output {
         OutputMode::Json => print_json(&results)?,

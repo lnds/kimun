@@ -81,3 +81,47 @@ fn weighted_mi_weighs_by_lines_and_floors_at_zero() {
     assert!((mi - 72.0).abs() < 1e-9);
     assert_eq!(weighted_mi(std::iter::empty()), 0.0);
 }
+
+#[test]
+fn tables_show_top_rows_json_every_entry_unless_asked() {
+    use crate::cli::OutputMode;
+    assert_eq!(shown_count(OutputMode::Table, None, 30), DEFAULT_TOP);
+    assert_eq!(shown_count(OutputMode::Table, Some(5), 30), 5);
+    assert_eq!(shown_count(OutputMode::Table, None, 3), 3);
+    assert_eq!(shown_count(OutputMode::Json, None, 30), 30);
+    assert_eq!(shown_count(OutputMode::Json, Some(5), 30), 5);
+    assert_eq!(shown_count(OutputMode::Short, Some(5), 30), 30);
+    assert_eq!(shown_count(OutputMode::Github, None, 30), 30);
+}
+
+#[test]
+fn total_label_says_how_many_are_shown() {
+    assert_eq!(total_label(30, 20), " Total (30 files, 20 shown)");
+    assert_eq!(total_label(3, 3), " Total (3 files)");
+}
+
+#[test]
+fn shown_paths_have_no_leading_dot() {
+    assert_eq!(shown(std::path::Path::new("./src/a.js")), "src/a.js");
+    assert_eq!(
+        shown(std::path::Path::new("src/missing.js")),
+        "src/missing.js"
+    );
+}
+
+#[test]
+fn output_results_totals_every_entry_and_shows_the_top() {
+    let rows: Vec<u32> = (0..30).collect();
+    let mut seen = (0, 0);
+    output_results(
+        &rows,
+        None,
+        crate::cli::OutputMode::Table,
+        |_| Ok(()),
+        |all, shown| seen = (all.len(), shown),
+        |_| {},
+        |_| {},
+    )
+    .unwrap();
+    assert_eq!(seen, (30, DEFAULT_TOP));
+}

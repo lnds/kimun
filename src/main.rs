@@ -93,6 +93,7 @@ fn run_command(
     f: impl FnOnce(&std::path::Path) -> Result<(), Box<dyn std::error::Error>>,
 ) {
     let target = path.unwrap_or_else(|| PathBuf::from("."));
+    report_helpers::set_path_base(&target);
     if let Err(err) = f(&target) {
         eprintln!("error: {err}");
         std::process::exit(1);
@@ -138,11 +139,9 @@ macro_rules! dispatch {
     }};
 }
 
-/// Dispatch the `tc` subcommand. Temporal coupling works entirely from git
-/// history, so filesystem exclude flags have no effect — warn the user.
 /// What `km tc` was given besides the common arguments.
 struct TcArgs {
-    top: usize,
+    top: Option<usize>,
     sort_by: String,
     since: Option<String>,
     min_degree: Option<usize>,
@@ -177,7 +176,7 @@ fn dispatch_tc(common: cli::CommonArgs, args: TcArgs) {
 /// explicit `--files`, or a full directory walk.
 fn dispatch_smells(
     common: cli::CommonArgs,
-    top: usize,
+    top: Option<usize>,
     max_lines: Option<usize>,
     max_params: Option<usize>,
     files: Vec<PathBuf>,

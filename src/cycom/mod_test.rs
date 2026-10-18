@@ -8,7 +8,7 @@ fn run_on_empty_dir() {
     let dir = tempfile::tempdir().unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, 1, 20, false, "total").unwrap();
+    run(&cfg, OutputMode::Table, 1, Some(20), false, "total").unwrap();
 }
 
 #[test]
@@ -21,7 +21,7 @@ fn run_on_rust_file() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, 1, 20, false, "total").unwrap();
+    run(&cfg, OutputMode::Table, 1, Some(20), false, "total").unwrap();
 }
 
 #[test]
@@ -34,7 +34,7 @@ fn run_on_python_file() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, 1, 20, false, "total").unwrap();
+    run(&cfg, OutputMode::Table, 1, Some(20), false, "total").unwrap();
 }
 
 #[test]
@@ -43,7 +43,7 @@ fn run_skips_binary() {
     fs::write(dir.path().join("data.c"), b"hello\x00world").unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, 1, 20, false, "total").unwrap();
+    run(&cfg, OutputMode::Table, 1, Some(20), false, "total").unwrap();
 }
 
 #[test]
@@ -57,7 +57,7 @@ fn run_excludes_tests_by_default() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, 1, 20, false, "total").unwrap();
+    run(&cfg, OutputMode::Table, 1, Some(20), false, "total").unwrap();
 }
 
 #[test]
@@ -70,7 +70,7 @@ fn run_json_output() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Json, 1, 20, false, "total").unwrap();
+    run(&cfg, OutputMode::Json, 1, Some(20), false, "total").unwrap();
 }
 
 #[test]
@@ -83,7 +83,7 @@ fn run_per_function_output() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, 1, 20, true, "total").unwrap();
+    run(&cfg, OutputMode::Table, 1, Some(20), true, "total").unwrap();
 }
 
 #[test]
@@ -97,7 +97,7 @@ fn run_min_complexity_filter() {
     // min_complexity=5 should filter out simple functions
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, 5, 20, false, "total").unwrap();
+    run(&cfg, OutputMode::Table, 5, Some(20), false, "total").unwrap();
 }
 
 #[test]
@@ -115,7 +115,7 @@ fn run_top_limit() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, 1, 1, false, "total").unwrap();
+    run(&cfg, OutputMode::Table, 1, Some(1), false, "total").unwrap();
 }
 
 #[test]
@@ -129,7 +129,7 @@ fn run_includes_tests_with_flag() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), true, &filter);
-    run(&cfg, OutputMode::Table, 1, 20, false, "total").unwrap();
+    run(&cfg, OutputMode::Table, 1, Some(20), false, "total").unwrap();
 }
 
 #[test]
@@ -140,7 +140,7 @@ fn run_skips_non_code_languages() {
     // Should produce no results (JSON/CSS have no markers)
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, 1, 20, false, "total").unwrap();
+    run(&cfg, OutputMode::Table, 1, Some(20), false, "total").unwrap();
 }
 
 #[test]
@@ -153,7 +153,7 @@ fn run_short_format() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Short, 0, 20, false, "total").unwrap();
+    run(&cfg, OutputMode::Short, 0, Some(20), false, "total").unwrap();
 }
 
 #[test]
@@ -166,7 +166,7 @@ fn run_terse_format() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Terse, 0, 20, false, "total").unwrap();
+    run(&cfg, OutputMode::Terse, 0, Some(20), false, "total").unwrap();
 }
 
 #[test]
@@ -179,7 +179,7 @@ fn run_codeclimate_format() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Codeclimate, 1, 20, false, "total").unwrap();
+    run(&cfg, OutputMode::Codeclimate, 1, Some(20), false, "total").unwrap();
 }
 
 #[test]
@@ -192,7 +192,7 @@ fn run_github_format() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Github, 1, 20, false, "total").unwrap();
+    run(&cfg, OutputMode::Github, 1, Some(20), false, "total").unwrap();
 }
 
 #[test]

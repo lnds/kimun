@@ -80,7 +80,7 @@ pub fn run(
     cfg: &WalkConfig<'_>,
     output: OutputMode,
     min_complexity: usize,
-    top: usize,
+    top: Option<usize>,
     per_function: bool,
     sort_by: &str,
 ) -> Result<(), Box<dyn Error>> {
@@ -105,17 +105,16 @@ pub fn run(
         _ => results.sort_by_key(|r| Reverse(r.total_complexity)),
     }
 
-    // Limit to top N
-    results.truncate(top);
+    let shown = crate::report_helpers::shown_count(output, top, results.len());
 
     match output {
-        OutputMode::Json => print_json(&results)?,
+        OutputMode::Json => print_json(&results[..shown])?,
         OutputMode::Short => print_short(&results),
         OutputMode::Terse => print_terse(&results),
         OutputMode::Github => print_github(&results, min_complexity),
         OutputMode::Codeclimate => print_codeclimate(&results, min_complexity)?,
-        OutputMode::Table if per_function => print_per_function(&results, threshold),
-        OutputMode::Table => print_report(&results),
+        OutputMode::Table if per_function => print_per_function(&results[..shown], threshold),
+        OutputMode::Table => print_report(&results, shown),
     }
 
     Ok(())

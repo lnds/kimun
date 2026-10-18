@@ -59,7 +59,7 @@ pub fn print_report(score: &ProjectScore, bottom: usize, target: Option<&str>) {
 
     let max_path = score.needs_attention[..show]
         .iter()
-        .map(|f| f.path.display().to_string().len())
+        .map(|f| crate::report_helpers::shown(&f.path).len())
         .max()
         .unwrap() // safe: show > 0 because needs_attention is non-empty
         .clamp(4, 40);
@@ -74,7 +74,7 @@ pub fn print_report(score: &ProjectScore, bottom: usize, target: Option<&str>) {
     println!("{separator}");
 
     for f in &score.needs_attention[..show] {
-        let path_str = f.path.display().to_string();
+        let path_str = crate::report_helpers::shown(&f.path);
         let truncated = if path_str.len() > max_path {
             format!("...{}", &path_str[path_str.len() - max_path + 3..])
         } else {
@@ -226,7 +226,7 @@ pub fn print_json_against(
             .needs_attention
             .iter()
             .map(|f| JsonFileScore {
-                path: f.path.display().to_string(),
+                path: crate::report_helpers::shown(&f.path),
                 score: f.score,
                 grade: f.grade,
                 issues: f.issues.clone(),

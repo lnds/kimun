@@ -17,7 +17,7 @@ fn opts<'a>(
 ) -> KnowledgeOptions<'a> {
     KnowledgeOptions {
         output,
-        top,
+        top: Some(top),
         sort_by,
         since,
         risk_only,
@@ -338,7 +338,7 @@ fn integration_author_filter_match() {
         &cfg,
         &KnowledgeOptions {
             output: OutputMode::Table,
-            top: 20,
+            top: Some(20),
             sort_by: "concentration",
             since: None,
             risk_only: false,
@@ -363,7 +363,7 @@ fn integration_author_filter_no_match() {
         &cfg,
         &KnowledgeOptions {
             output: OutputMode::Table,
-            top: 20,
+            top: Some(20),
             sort_by: "concentration",
             since: None,
             risk_only: false,
@@ -394,7 +394,7 @@ fn integration_bus_factor_table() {
         &cfg,
         &KnowledgeOptions {
             output: OutputMode::Table,
-            top: 20,
+            top: Some(20),
             sort_by: "concentration",
             since: None,
             risk_only: false,
@@ -425,7 +425,7 @@ fn integration_bus_factor_json() {
         &cfg,
         &KnowledgeOptions {
             output: OutputMode::Json,
-            top: 20,
+            top: Some(20),
             sort_by: "concentration",
             since: None,
             risk_only: false,
@@ -456,7 +456,7 @@ fn integration_summary_sort_by_diffusion() {
         &cfg,
         &KnowledgeOptions {
             output: OutputMode::Table,
-            top: 20,
+            top: Some(20),
             sort_by: "diffusion",
             since: None,
             risk_only: false,
@@ -487,7 +487,7 @@ fn integration_summary_sort_by_risk() {
         &cfg,
         &KnowledgeOptions {
             output: OutputMode::Table,
-            top: 20,
+            top: Some(20),
             sort_by: "risk",
             since: None,
             risk_only: false,

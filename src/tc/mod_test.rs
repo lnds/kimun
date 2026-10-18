@@ -21,7 +21,7 @@ fn opts<'a>(
     TcOptions {
         output,
         include_tests,
-        top,
+        top: Some(top),
         sort_by,
         since,
         min_degree,

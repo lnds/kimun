@@ -24,13 +24,13 @@ fn format_date(ts: i64) -> String {
 }
 
 /// Print a table of files sorted by the chosen metric with a summary footer.
-pub fn print_report(files: &[FileChurn]) {
+pub fn print_report(files: &[FileChurn], shown: usize) {
     if files.is_empty() {
         println!("No source files found in git history.");
         return;
     }
 
-    let col_path = report_helpers::max_path_width(files.iter().map(|f| f.path.as_path()), 4);
+    let col_path = report_helpers::path_column(files.iter().map(|f| f.path.as_path()), shown);
     let sep_width = col_path + FIXED_WIDTH;
     let separator = report_helpers::separator(sep_width);
 
@@ -42,7 +42,7 @@ pub fn print_report(files: &[FileChurn]) {
     );
     println!("{separator}");
 
-    for f in files {
+    for f in files.iter().take(shown) {
         println!(
             " {:<col_path$}  {:>COL_LANG$} {:>COL_COMMITS$} {:>COL_RATE$.2} {:>COL_DATE$} {:>COL_LEVEL$}",
             f.path.display(),

@@ -44,7 +44,7 @@ pub fn print_report(files: &[FileIndentMetrics]) {
     for f in files {
         println!(
             " {:<width$} {:>8} {:>6.2} {:>5}  {}",
-            f.path.display(),
+            crate::report_helpers::shown(&f.path),
             f.code_lines,
             f.stddev,
             f.max_depth,
@@ -74,7 +74,7 @@ pub fn print_json(files: &[FileIndentMetrics]) -> Result<(), Box<dyn std::error:
     let entries: Vec<JsonFileEntry> = files
         .iter()
         .map(|f| JsonFileEntry {
-            path: f.path.display().to_string(),
+            path: crate::report_helpers::shown(&f.path),
             code_lines: f.code_lines,
             indent_stddev: f.stddev,
             indent_max: f.max_depth,

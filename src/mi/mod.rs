@@ -76,7 +76,7 @@ fn analyze_file(
 pub fn run(
     cfg: &WalkConfig<'_>,
     output: crate::cli::OutputMode,
-    top: usize,
+    top: Option<usize>,
     sort_by: &str,
 ) -> Result<(), Box<dyn Error>> {
     let mut results = cfg.collect_analysis(analyze_file);
@@ -96,7 +96,7 @@ pub fn run(
     }
 
     report_helpers::output_results(
-        &mut results,
+        &results,
         top,
         output,
         print_json,

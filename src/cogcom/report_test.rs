@@ -20,13 +20,13 @@ fn make_metrics(path: &str, max: usize, total: usize) -> FileCogcomMetrics {
 
 #[test]
 fn print_report_empty() {
-    print_report(&[]);
+    print_report(&[], usize::MAX);
 }
 
 #[test]
 fn print_report_with_files() {
     let files = vec![make_metrics("src/main.rs", 5, 10)];
-    print_report(&files);
+    print_report(&files, usize::MAX);
 }
 
 #[test]

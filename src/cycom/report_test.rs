@@ -45,12 +45,12 @@ fn sample_files() -> Vec<FileCycomMetrics> {
 
 #[test]
 fn print_report_does_not_panic() {
-    print_report(&sample_files());
+    print_report(&sample_files(), usize::MAX);
 }
 
 #[test]
 fn print_report_empty() {
-    print_report(&[]);
+    print_report(&[], usize::MAX);
 }
 
 #[test]

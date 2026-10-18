@@ -77,6 +77,11 @@ km completions fish > ~/.config/fish/completions/km.fish
 
 ## Commands
 
+Two conventions hold for every command:
+
+- **`--top N`** limits the rows of a table (20 by default), and JSON only when given; the totals of a table, the `short` and `terse` summaries and the CI annotations (`github`, `codeclimate`) always cover every file. A totals row over more files than it shows says so: `Total (30 files, 20 shown)`.
+- **Paths** are shown relative to the root of the git repository, or to the analyzed directory outside one, without a leading `./`, whatever directory km runs from and however the path argument is written, so the output of two commands can be joined.
+
 ### `km loc` -- Count lines of code
 
 ```bash
@@ -276,7 +281,7 @@ Options:
 |------|-------------|
 | `--format {table,json,short,terse}` | Output format (default: table) |
 | `--include-tests` | Include tests, examples and benchmarks in analysis (excluded by default) |
-| `--top N` | Show only the top N files (default: 20) |
+| `--top N` | Rows of the table (default: 20); JSON lists every file unless `--top` is given |
 | `--sort-by METRIC` | Sort by `effort`, `volume`, or `bugs` (default: `effort`) |
 
 Example output:
@@ -310,7 +315,7 @@ Options:
 |------|-------------|
 | `--format {table,json,short,terse,github,codeclimate}` | Output format (default: table). `github` emits GitHub Actions annotations; `codeclimate` (alias: `gitlab`) emits CodeClimate JSON for GitLab Code Quality |
 | `--include-tests` | Include tests, examples and benchmarks in analysis (excluded by default) |
-| `--top N` | Show only the top N files (default: 20) |
+| `--top N` | Rows of the table (default: 20); JSON lists every file unless `--top` is given |
 | `--min-complexity N` | Skip files whose most complex function is below N; with `--per-function`, also hide functions below N (default: 1) |
 | `--per-function` | Show per-function breakdown |
 
@@ -339,7 +344,7 @@ Options:
 |------|-------------|
 | `--format {table,json,short,terse,github,codeclimate}` | Output format (default: table). `github` emits GitHub Actions annotations; `codeclimate` (alias: `gitlab`) emits CodeClimate JSON for GitLab Code Quality |
 | `--include-tests` | Include tests, examples and benchmarks in analysis (excluded by default) |
-| `--top N` | Show only the top N files (default: 20) |
+| `--top N` | Rows of the table (default: 20); JSON lists every file unless `--top` is given |
 | `--min-complexity N` | Skip files whose most complex function is below N; with `--per-function`, also hide functions below N (default: 1) |
 | `--per-function` | Show per-function breakdown |
 | `--sort-by METRIC` | Sort by `total`, `max`, or `avg` (default: `total`) |
@@ -380,7 +385,7 @@ Options:
 |------|-------------|
 | `--format {table,json,short,terse}` | Output format (default: table) |
 | `--include-tests` | Include tests, examples and benchmarks in analysis (excluded by default) |
-| `--top N` | Show only the top N files (default: 20) |
+| `--top N` | Rows of the table (default: 20); JSON lists every file unless `--top` is given |
 | `--sort-by METRIC` | Sort by `mi` (ascending), `volume`, `complexity`, or `loc` (default: `mi`) |
 
 Example output:
@@ -435,7 +440,7 @@ Options:
 |------|-------------|
 | `--format {table,json,short,terse}` | Output format (default: table) |
 | `--include-tests` | Include tests, examples and benchmarks in analysis (excluded by default) |
-| `--top N` | Show only the top N files (default: 20) |
+| `--top N` | Rows of the table (default: 20); JSON lists every file unless `--top` is given |
 | `--sort-by METRIC` | Sort by `mi` (ascending), `volume`, `complexity`, or `loc` (default: `mi`) |
 
 Example output:
@@ -480,7 +485,7 @@ Options:
 |------|-------------|
 | `--format {table,json,short,terse}` | Output format (default: table) |
 | `--include-tests` | Include tests, examples and benchmarks in analysis (excluded by default) |
-| `--top N` | Show only the top N files (default: 20) |
+| `--top N` | Rows of the table (default: 20); JSON lists every file unless `--top` is given |
 | `--sort-by METRIC` | Sort by `score`, `commits`, or `complexity` (default: `score`) |
 | `--since DURATION` | Only consider commits since this time (e.g. `30d`, `6m`, `1y`) |
 | `--complexity METRIC` | `indent` (default, Thornhill) or `cycom` (cyclomatic) |
@@ -558,7 +563,7 @@ Options:
 |------|-------------|
 | `--format {table,json,short,terse}` | Output format (default: table) |
 | `--include-tests` | Include tests, examples and benchmarks in analysis (excluded by default) |
-| `--top N` | Show only the top N files (default: 20) |
+| `--top N` | Rows of the table (default: 20); JSON lists every file unless `--top` is given |
 | `--sort-by METRIC` | Sort by `concentration`, `diffusion`, or `risk` (default: `concentration`) |
 | `--since DURATION` | Define recent activity window for knowledge loss (e.g. `6m`, `1y`, `30d`) |
 | `--risk-only` | Show only files with knowledge loss risk |
@@ -640,7 +645,7 @@ Options:
 | Flag | Description |
 |------|-------------|
 | `--format {table,json,short,terse}` | Output format (default: table) |
-| `--top N` | Show only the top N file pairs (default: 20) |
+| `--top N` | Rows of the table (default: 20); JSON lists every pair unless `--top` is given |
 | `--sort-by METRIC` | Sort by `strength` or `shared` (default: `strength`) |
 | `--since DURATION` | Only consider commits since this time (e.g. `6m`, `1y`, `30d`) |
 | `--min-degree N` | Minimum commits per file to be included (default: 3) |
@@ -955,7 +960,7 @@ Options:
 
 | Flag | Description |
 |------|-------------|
-| `--top N` | Show only the top N files (default: 20) |
+| `--top N` | Rows of the table (default: 20); JSON lists every file unless `--top` is given |
 | `--sort-by METRIC` | Sort by `commits` (default), `rate` (commits/month), or `file` |
 | `--since DURATION` | Only consider commits since this time (e.g. `6m`, `1y`, `30d`) |
 | `--format {table,json,short,terse}` | Output format (default: table) |
@@ -999,7 +1004,7 @@ Options:
 
 | Flag | Description |
 |------|-------------|
-| `--top N` | Show only the top N files by smell count (default: 20) |
+| `--top N` | Rows of the table (default: 20); JSON lists every file unless `--top` is given |
 | `--max-lines N` | Maximum function body lines before flagging (default: 50) |
 | `--max-params N` | Maximum parameter count before flagging (default: 4) |
 | `--files FILE` | Analyze only these specific files (repeatable). Useful for scripting |
@@ -1116,7 +1121,7 @@ Kaikai notes:
 | `--format {table,json,short,terse}` | Output format (default: table) |
 | `--cycles-only` | Show only files that participate in a dependency cycle |
 | `--sort-by METRIC` | Sort by `fan-out` (default) or `fan-in` |
-| `--top N` | Show only top N files (default: 20) |
+| `--top N` | Rows of the table (default: 20); JSON lists every file unless `--top` is given |
 
 Example output:
 

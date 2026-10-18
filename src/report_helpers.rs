@@ -1,4 +1,5 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use serde::Serialize;
 use unicode_width::UnicodeWidthStr;
@@ -195,10 +196,16 @@ where
 /// Compute the max display width for paths, with a minimum of `min`.
 pub fn max_path_width<'a>(paths: impl Iterator<Item = &'a Path>, min: usize) -> usize {
     paths
-        .map(|p| display_width(&p.display().to_string()))
+        .map(|p| display_width(&shown(p)))
         .max()
         .unwrap_or(min)
         .max(min)
+}
+
+/// The width of the path column of a table that shows the first `shown`
+/// of `paths`.
+pub fn path_column<'a>(paths: impl Iterator<Item = &'a Path>, shown: usize) -> usize {
+    max_path_width(paths.take(shown), 4)
 }
 
 /// Print a horizontal separator of box-drawing chars.
@@ -212,22 +219,79 @@ pub fn print_json_stdout(value: &impl Serialize) -> Result<(), Box<dyn std::erro
     Ok(())
 }
 
-/// Truncate results to `top` and dispatch to the appropriate output function
-/// based on `OutputMode`.
-///
-/// For `OutputMode::Github` and `OutputMode::Codeclimate`, returns an error —
-/// modules that support CI formats (cycom, cogcom, smells) handle them before
-/// calling this helper.
+/// Where reports show paths from (`set_path_base`).
+static PATH_BASE: OnceLock<PathBuf> = OnceLock::new();
+
+/// Set where reports show paths from, for the command about to run on
+/// `path`: the root of the git repository that holds it, or `path` itself
+/// outside one. Then every command shows a file the same way, wherever it
+/// is run from and however the path is written.
+pub fn set_path_base(path: &Path) {
+    let repo_root = git2::Repository::discover(path)
+        .ok()
+        .and_then(|repo| repo.workdir().map(Path::to_path_buf));
+    if let Ok(base) = repo_root
+        .unwrap_or_else(|| path.to_path_buf())
+        .canonicalize()
+    {
+        let _ = PATH_BASE.set(base);
+    }
+}
+
+/// A path as reports show it: relative to the path base, without a leading
+/// `./`. A path that cannot be resolved from here, such as a path of the
+/// repository read from history, is shown as it is.
+pub fn shown(path: &Path) -> String {
+    let relative = PATH_BASE.get().and_then(|base| {
+        let full = path.canonicalize().ok()?;
+        full.strip_prefix(base).ok().map(Path::to_path_buf)
+    });
+    let text = relative.as_deref().unwrap_or(path).display().to_string();
+    match text.strip_prefix("./") {
+        Some(rest) => rest.to_string(),
+        None => text,
+    }
+}
+
+/// Rows a table shows when `--top` is not given.
+pub const DEFAULT_TOP: usize = 20;
+
+/// How many of `total` entries an output lists: a table `--top` rows
+/// (`DEFAULT_TOP` when not given), JSON every entry unless `--top` is given,
+/// and the summaries (`short`, `terse`) and CI annotations every entry.
+pub fn shown_count(output: crate::cli::OutputMode, top: Option<usize>, total: usize) -> usize {
+    use crate::cli::OutputMode;
+    let limit = match output {
+        OutputMode::Table => top.unwrap_or(DEFAULT_TOP),
+        OutputMode::Json => top.unwrap_or(usize::MAX),
+        _ => usize::MAX,
+    };
+    limit.min(total)
+}
+
+/// The label of a totals row computed over `total` files of which a table
+/// shows `shown`.
+pub fn total_label(total: usize, shown: usize) -> String {
+    if shown < total {
+        format!(" Total ({total} files, {shown} shown)")
+    } else {
+        format!(" Total ({total} files)")
+    }
+}
+
+/// Print `results` in `output`: JSON lists the entries `shown_count`
+/// allows; a table gets every entry, to total them, and how many to show;
+/// the summaries get every entry.
 pub fn output_results<T>(
-    results: &mut Vec<T>,
-    top: usize,
+    results: &[T],
+    top: Option<usize>,
     output: crate::cli::OutputMode,
     print_json_fn: impl FnOnce(&[T]) -> Result<(), Box<dyn std::error::Error>>,
-    print_report_fn: impl FnOnce(&[T]),
+    print_report_fn: impl FnOnce(&[T], usize),
     print_short_fn: impl FnOnce(&[T]),
     print_terse_fn: impl FnOnce(&[T]),
 ) -> Result<(), Box<dyn std::error::Error>> {
-    results.truncate(top);
+    let shown = shown_count(output, top, results.len());
     match output {
         crate::cli::OutputMode::Terse => {
             print_terse_fn(results);
@@ -237,12 +301,12 @@ pub fn output_results<T>(
             print_short_fn(results);
             Ok(())
         }
-        crate::cli::OutputMode::Json => print_json_fn(results),
+        crate::cli::OutputMode::Json => print_json_fn(&results[..shown]),
         crate::cli::OutputMode::Github | crate::cli::OutputMode::Codeclimate => {
             Err(crate::cli::ERR_CI_FORMAT_ONLY.into())
         }
         crate::cli::OutputMode::Table => {
-            print_report_fn(results);
+            print_report_fn(results, shown);
             Ok(())
         }
     }

@@ -29,13 +29,13 @@ pub struct FileCycomMetrics {
 /// Columns: File, Functions (count), Avg (average complexity per function),
 /// Max (highest single function), Total (sum), Level (classification of max).
 /// The totals row aggregates across all files.
-pub fn print_report(files: &[FileCycomMetrics]) {
+pub fn print_report(files: &[FileCycomMetrics], shown: usize) {
     if files.is_empty() {
         println!("No recognized source files found.");
         return;
     }
 
-    let max_path_len = report_helpers::max_path_width(files.iter().map(|f| f.path.as_path()), 4);
+    let max_path_len = report_helpers::path_column(files.iter().map(|f| f.path.as_path()), shown);
     let header_width = max_path_len + 55;
     let separator = report_helpers::separator(header_width.max(78));
 
@@ -52,10 +52,10 @@ pub fn print_report(files: &[FileCycomMetrics]) {
     );
     println!("{separator}");
 
-    for f in files {
+    for f in files.iter().take(shown) {
         println!(
             " {:<width$}  {:>9} {:>5.1} {:>5} {:>7}  {}",
-            f.path.display(),
+            crate::report_helpers::shown(&f.path),
             f.function_count,
             f.avg_complexity,
             f.max_complexity,
@@ -76,7 +76,7 @@ pub fn print_report(files: &[FileCycomMetrics]) {
         0.0
     };
 
-    let total_label = format!(" Total ({} files)", files.len());
+    let total_label = report_helpers::total_label(files.len(), shown);
     println!(
         "{:<width$}  {:>9} {:>5.1} {:>5} {:>7}",
         total_label,
@@ -106,7 +106,7 @@ impl PerFunctionRow for FunctionComplexity {
 impl PerFunctionFile for FileCycomMetrics {
     type Row = FunctionComplexity;
     fn path_str(&self) -> String {
-        self.path.display().to_string()
+        crate::report_helpers::shown(&self.path)
     }
     fn rows(&self) -> &[FunctionComplexity] {
         &self.functions
@@ -163,7 +163,7 @@ pub fn print_codeclimate(
 /// the complexity threshold. Uses `start_line` for precise line linking.
 pub fn print_github(files: &[FileCycomMetrics], min_complexity: usize) {
     for f in files {
-        let path = f.path.display().to_string();
+        let path = crate::report_helpers::shown(&f.path);
         for func in &f.functions {
             if func.complexity >= min_complexity {
                 let message = format!(
@@ -188,7 +188,7 @@ pub fn print_json(files: &[FileCycomMetrics]) -> Result<(), Box<dyn std::error::
     let entries: Vec<JsonFileEntry> = files
         .iter()
         .map(|f| JsonFileEntry {
-            path: f.path.display().to_string(),
+            path: crate::report_helpers::shown(&f.path),
             language: f.language.clone(),
             function_count: f.function_count,
             avg_complexity: f.avg_complexity,

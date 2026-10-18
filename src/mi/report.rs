@@ -22,13 +22,13 @@ pub struct FileMIMetrics {
 /// Columns: File, Volume, Cyclomatic, LOC, MI score, Level.
 /// The totals row shows total LOC and the MI of the files weighted by their
 /// code lines (`report_helpers::weighted_mi`).
-pub fn print_report(files: &[FileMIMetrics]) {
+pub fn print_report(files: &[FileMIMetrics], shown: usize) {
     if files.is_empty() {
         println!("No recognized source files found.");
         return;
     }
 
-    let max_path_len = report_helpers::max_path_width(files.iter().map(|f| f.path.as_path()), 4);
+    let max_path_len = report_helpers::path_column(files.iter().map(|f| f.path.as_path()), shown);
     // Width derived from the header format string below:
     // " {path}  {Volume:>9} {Cyclo:>5} {LOC:>5} {MI:>6}  Level"
     let header_width = 1 + max_path_len + 2 + 9 + 1 + 5 + 1 + 5 + 1 + 6 + 2 + 5;
@@ -47,11 +47,11 @@ pub fn print_report(files: &[FileMIMetrics]) {
     );
     println!("{separator}");
 
-    for f in files {
+    for f in files.iter().take(shown) {
         let m = &f.metrics;
         println!(
             " {:<width$}  {:>9.1} {:>5} {:>5} {:>6.1}  {}",
-            f.path.display(),
+            crate::report_helpers::shown(&f.path),
             m.halstead_volume,
             m.cyclomatic_complexity,
             m.loc,
@@ -67,7 +67,7 @@ pub fn print_report(files: &[FileMIMetrics]) {
     let avg_mi =
         report_helpers::weighted_mi(files.iter().map(|f| (f.metrics.mi_score, f.metrics.loc)));
     let total_loc: usize = files.iter().map(|f| f.metrics.loc).sum();
-    let total_label = format!(" Total ({count} files)");
+    let total_label = report_helpers::total_label(count, shown);
     println!(
         "{:<width$}  {:>9} {:>5} {:>5} {:>6.1}",
         total_label,
@@ -98,7 +98,7 @@ pub fn print_json(files: &[FileMIMetrics]) -> Result<(), Box<dyn std::error::Err
         .map(|f| {
             let m = &f.metrics;
             JsonEntry {
-                path: f.path.display().to_string(),
+                path: crate::report_helpers::shown(&f.path),
                 language: f.language.clone(),
                 halstead_volume: m.halstead_volume,
                 cyclomatic_complexity: m.cyclomatic_complexity,

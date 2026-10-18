@@ -85,7 +85,7 @@ fn analyze_file(
 pub fn run_on_files(
     paths: &[PathBuf],
     output: OutputMode,
-    top: usize,
+    top: Option<usize>,
     max_lines: usize,
     max_params: usize,
     exclude_tests: bool,
@@ -113,16 +113,14 @@ pub fn run_on_files(
     }
 
     results.sort_by_key(|r| Reverse(r.total));
-    results.truncate(top);
-
-    dispatch_output(output, &results)
+    dispatch_output(output, &results, top)
 }
 
 /// Walk source files, detect smells, sort by count, and output.
 pub fn run(
     cfg: &WalkConfig<'_>,
     output: OutputMode,
-    top: usize,
+    top: Option<usize>,
     max_lines: usize,
     max_params: usize,
 ) -> Result<(), Box<dyn Error>> {
@@ -132,19 +130,22 @@ pub fn run(
 
     // Sort by smell count descending
     results.sort_by_key(|r| Reverse(r.total));
-    results.truncate(top);
-
-    dispatch_output(output, &results)
+    dispatch_output(output, &results, top)
 }
 
-fn dispatch_output(output: OutputMode, results: &[FileSmellMetrics]) -> Result<(), Box<dyn Error>> {
+fn dispatch_output(
+    output: OutputMode,
+    results: &[FileSmellMetrics],
+    top: Option<usize>,
+) -> Result<(), Box<dyn Error>> {
+    let shown = crate::report_helpers::shown_count(output, top, results.len());
     match output {
-        OutputMode::Json => print_json(results)?,
+        OutputMode::Json => print_json(&results[..shown])?,
         OutputMode::Github => print_github(results),
         OutputMode::Codeclimate => print_codeclimate(results)?,
         OutputMode::Short => print_short(results),
         OutputMode::Terse => print_terse(results),
-        OutputMode::Table => print_report(results),
+        OutputMode::Table => print_report(results, shown),
     }
     Ok(())
 }
