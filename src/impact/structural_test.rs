@@ -667,6 +667,23 @@ fn a_language_without_functions_says_so() {
     assert_eq!(direct(&radius), [("app.ts", Exposure::Calls, 0, vec![])]);
 }
 
+#[test]
+fn a_type_import_reaches_a_source_but_does_not_make_a_test() {
+    let file = |path: &str, text: &str| (PathBuf::from(path), text.to_string());
+    let sources = vec![
+        file("src/app.ts", "import type { Shape } from './util';\n"),
+        file("src/util.ts", "export type Shape = { n: number };\n"),
+        file(
+            "spec/check.test.ts",
+            "import type { App } from '../src/app';\n",
+        ),
+    ];
+    let radius = radius(sources, &[change("src/util.ts", &[1])]);
+
+    assert_eq!(direct(&radius), [("app.ts", Exposure::Calls, 0, vec![])]);
+    assert_eq!(protection_of(&radius, "app.ts"), Protection::None);
+}
+
 /// A context whose function changes, called by a live view, a helper the
 /// view uses, a task nobody tests, and a view tested through a namesake.
 fn views() -> Vec<(PathBuf, String)> {

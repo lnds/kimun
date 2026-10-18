@@ -805,7 +805,7 @@ No test in the change exercises a file that uses what changed.
 
 How it is measured:
 
-- The dependency graph of `km deps` is read backwards from the changed source files.
+- The dependency graph of `km deps` is read backwards from the changed source files. Every import counts for the radius, `type` and `deferred` ones included: a change to a type breaks those that check against it, and a deferred import runs. A test that imports a file only for its types runs none of it, so it does not protect it.
 - In Elixir the change is **narrowed to functions**: the lines the diff touches tell which functions changed, and a change to a private function is carried to the public ones that reach it through local calls. A file that uses the module is then one of three: it **calls** a function that changed, it **refers** to the module without calling it (a struct, an `import`, a `use` with nothing to read), or it only calls functions the change leaves alone, and is not listed. A file that imports the whole module may reach a function through a call the reading does not see, so it refers to the module even when the calls seen are left alone. Each changed file is narrowed on its own. Outside the functions, a touched `alias` or `require` changes none (it only names what the touched functions use), and a touched module attribute changes the functions that read it. A `use`, an `import`, a `defstruct`, or an attribute no function reads may concern every function: that file is not narrowed, every use of it counts, and the report says which line it was. A new file is never narrowed.
 - In Python the change is narrowed to the **top-level names** of the module: its functions, classes and assignments. A touched method changes its class; a decorator belongs to what it decorates; a name that uses a changed one changes too, private or not, since nothing keeps another file from importing it. A file that uses the module calls what changed when it takes one of those names: `from m import name`, `m.name` on a module it imports (under its alias too), or, after `from m import *`, a name it goes on to mention. A module handed over as a value may give any of its names. One imported with nothing read on it only refers to the module. Imports, the docstring, an `if` or a `try` that only chooses imports, and the `if __name__ == "__main__":` block change no name. Any other code at the left margin runs when the module is imported and may concern every name: the file is not narrowed. Not seen: names reached at run time (`getattr`, a registry filled by decorators, `mock.patch("m.name")`), and which callers use the method that changed. A name a package re-exports is followed through its `__init__.py`, one distance further.
 - The **radius** starts at the files that call what changed and follows who uses them, file by file. A file that only refers to the module, without a call that tells, is listed but does not carry the radius on: a schema is named by half a project, and following all of that says nothing. Files that only pass through a dependent the change leaves alone are not counted either. Past the first step the radius is still by file, not by function, so it stays an estimate from above. The **upper bound** is what the radius would be if every use of a changed file counted, whatever the function: in a codebase where everything goes through a few contexts it is most of the project, which is why the radius is the number to read.
@@ -1039,6 +1039,10 @@ Supports Elixir (every module referred to in the code, with `alias` undone; see 
 
 Files in any other language are left out of the graph instead of being listed with zero dependencies. The table footer, the `unsupported` array of the JSON output and the `unsupported:N` field of the short format say how many files were skipped, so "not measured" is never shown as "no dependencies".
 
+Some imports do not load a module when the importer loads: a TypeScript `import type` (and `import { type A }` when every name is a type, and `export type … from`) and a Python import under `if TYPE_CHECKING:` take only types, and a Python import inside a function or a dynamic `import()` runs later. They stay in the graph, marked `type` or `deferred`, and count in fan-in and fan-out, since they are still coupling, but they are left out of cycle detection: a cycle is a set of files that need each other to load. The table footer counts them (`Imports left out of cycles: …`), and the JSON gives `type_fan_out` and `deferred_fan_out` per file, which are part of `fan_out`, and `type_edges` and `deferred_edges` in total.
+
+An import that has the form of a project file but resolves to none is reported, so that a missing edge is not read as no dependency: a quoted `#include` that is no header of the system (often a file generated at build time), a relative JavaScript or TypeScript specifier of a script, a relative Python import, a Go import within a module of the repository. External packages are never listed. The table footer counts them (`Unresolved internal imports: N in M files`), the JSON lists them per file in `unresolved` and counts them in `unresolved_count`, and the short format gives `unresolved:N`. Rust, Elixir, Java, C# and Kaikai name modules and types rather than files, where nothing tells an internal name from an external one, so they report none.
+
 Elixir notes:
 
 - Dependencies are between modules, and most need no import, so every module name in the code counts as a reference: calls, structs, `use`, `import`, `require`, `@behaviour`, `defimpl`. Comments, strings, heredocs and sigils are set aside first, so a doctest is not a dependency.
@@ -1063,7 +1067,7 @@ Rust notes:
 
 Python notes:
 
-- Every `import a.b` and `from a.b import c` is read, wherever it is written: in a function, under `if TYPE_CHECKING:`, over several lines in parentheses or with a backslash. One written in a docstring or a comment is not an import.
+- Every `import a.b` and `from a.b import c` is read, wherever it is written: in a function, under `if TYPE_CHECKING:`, over several lines in parentheses or with a backslash. One written in a docstring or a comment is not an import. Where it is written is read by indentation: under `if TYPE_CHECKING:` (or `if typing.TYPE_CHECKING:`) it is `type`, in a function (`def`, `async def`, a method) it is `deferred`, anywhere else it loads, a class body and the `else:` of `if TYPE_CHECKING:` included. Neither of the first two makes a cycle.
 - A dotted path names `a/b.py` or the package `a/b/__init__.py`; a stub (`.pyi`) stands for a module with no source. Only the deepest module is used: `import a.b.c` adds no edge to `a/__init__.py`.
 - In `from a.b import c`, `c` is the submodule `a/b/c.py` when that file exists, and a name `a.b` defines otherwise.
 - A relative import starts at the package of the importing file, one level up per extra dot.
@@ -1078,6 +1082,7 @@ Go notes:
 - Every `go.mod` under the analysed directory is read, so the modules of a repository with several resolve each from its own directory, with or without a `go.work`. An import of the module path itself is the package at the root of the module.
 - The files of one package use each other without importing, so there are no edges between them. The import graph is therefore a lower bound on the real dependencies.
 - Not seen: build constraints (`//go:build`, file names such as `x_linux.go`), so a file left out of a build still counts, and packages under `vendor/`.
+- An import under the path of a module of the repository that names no directory with a package is reported as unresolved.
 
 JavaScript/TypeScript notes:
 
@@ -1086,6 +1091,8 @@ JavaScript/TypeScript notes:
 - Any other specifier goes first through the `paths` of the nearest `tsconfig.json` or `jsconfig.json` above the importing file, the most specific pattern winning, then through its `baseUrl`. `extends` is followed within the repository, and a directory whose main config has no aliases takes those of the others beside it (`tsconfig.app.json`). Comments and trailing commas are allowed.
 - Then a specifier may name a package of the repository, by the `name` of its `package.json`: `@acme/ui` leads to its entry point (`source`, `module`, `main`, `types`, `exports`, read from `src` when they point to a build directory, or else `src/index`), and `@acme/ui/button` to that file of the package or of its `src`. Packages under `node_modules` are not read. What resolves to none of these is external.
 - A barrel (`index.ts`) is a file like any other: its importers depend on it, and it on what it re-exports.
+- `import type`, `export type … from`, and an import or re-export whose names are all marked `type` (`import { type A, type B }`) take only types: the compiler erases them, so they are `type` and make no cycle. One name that is a value, or a default import beside them, makes the import load. `import()` is `deferred`: the module loads when the call runs.
+- A relative specifier that resolves to no file is reported as unresolved when it names a script: no extension or one of JavaScript or TypeScript. A stylesheet or an image is no file of the graph.
 - Not seen: the aliases of a bundler config (`resolve.alias` of Vite or webpack), `imports` of `package.json` (`#internal`), specifiers built at run time, and `.vue` and `.svelte` files.
 
 C and C++ notes:
@@ -1094,6 +1101,7 @@ C and C++ notes:
 - `#include <stdio.h>` and any other bare name in angle brackets that is in none of those directories is a system header: no edge, even if the repository holds a file of that name somewhere else.
 - A file that includes a header uses what its source defines too: `foo.h` and the `foo.c` beside it, or `include/x/foo.h` and `src/x/foo.c`. `km deps` shows only the includes the code writes, so a source and a header that include each other's counterpart make no cycle; `km impact` follows both, so a change to `foo.c` reaches whoever includes `foo.h`.
 - Preprocessor conditions (`#ifdef`) are not evaluated: every include counts.
+- A quoted include that resolves to no file of the repository is reported as unresolved, unless it names a header of the C library or of POSIX (`"stdio.h"`, `"sys/types.h"`), which a quoted include may also reach. An include in angle brackets is never reported.
 
 Java notes:
 
