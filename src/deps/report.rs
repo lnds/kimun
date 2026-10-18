@@ -108,7 +108,7 @@ fn totals_lines(totals: &Totals) -> Vec<String> {
     }
     if totals.compile_edges > 0 {
         lines.push(format!(
-            "Compile-time uses (use, require, import, macros): {}",
+            "Compile-time uses (use, macros): {}",
             totals.compile_edges
         ));
     }

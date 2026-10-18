@@ -202,7 +202,7 @@ fn render_report_counts_imports_left_out_of_cycles_and_unresolved() {
     };
     let text = render_report(&entries, &result);
     assert!(text.contains("Imports left out of cycles: 3 type-only, 1 deferred\n"));
-    assert!(text.contains("Compile-time uses (use, require, import, macros): 4\n"));
+    assert!(text.contains("Compile-time uses (use, macros): 4\n"));
     assert!(
         text.contains("Unresolved internal imports: 2 in 1 file (listed with --format json)\n")
     );
