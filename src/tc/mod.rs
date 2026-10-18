@@ -13,9 +13,9 @@ use std::error::Error;
 use std::path::{Path, PathBuf};
 
 use crate::cli::OutputMode;
-use crate::git::GitRepo;
+use crate::git::{FileFrequency, GitRepo};
 use crate::util::parse_since;
-use crate::walk;
+use crate::walk::{self, ExcludeFilter};
 use analyzer::compute_coupling;
 use report::{print_json, print_report, print_short, print_terse};
 
@@ -32,68 +32,94 @@ fn is_test_path(path: &Path) -> bool {
     walk::is_test_file(path)
 }
 
-#[allow(clippy::too_many_arguments)]
-pub fn run(
-    path: &Path,
-    output: OutputMode,
-    include_tests: bool,
-    top: usize,
-    sort_by: &str,
-    since: Option<&str>,
-    min_degree: usize,
-    min_strength: Option<f64>,
-) -> Result<(), Box<dyn Error>> {
-    if min_degree == 0 {
+/// Options for temporal coupling analysis.
+pub struct TcOptions<'a> {
+    pub output: OutputMode,
+    pub include_tests: bool,
+    pub top: usize,
+    pub sort_by: &'a str,
+    pub since: Option<&'a str>,
+    /// Commits a file needs to be paired.
+    pub min_degree: usize,
+    pub min_strength: Option<f64>,
+    /// Commits a pair of files needs to share.
+    pub min_shared: usize,
+    /// Commits touching more files than this are no evidence of coupling.
+    pub max_changeset: usize,
+    /// The path filters of the command line, applied to the paths of history.
+    pub filter: &'a ExcludeFilter,
+}
+
+/// Whether the filters keep a path of history: no excluded directory on
+/// the way, and the file itself not excluded by extension or glob.
+fn kept_by(filter: &ExcludeFilter, path: &Path) -> bool {
+    let dirs = path.parent().into_iter().flat_map(Path::components);
+    let excluded_dir = dirs
+        .filter_map(|c| c.as_os_str().to_str())
+        .any(|name| filter.excludes_dir(name));
+    !excluded_dir && !filter.excludes_file(path, Path::new(""))
+}
+
+/// The commits of each file that may be paired: one that still exists, is
+/// code, has `min_degree` commits, passes the filters and, unless asked
+/// for, is no test.
+fn eligible_files(
+    freqs: Vec<FileFrequency>,
+    git_repo: &GitRepo,
+    opts: &TcOptions<'_>,
+) -> HashMap<PathBuf, usize> {
+    freqs
+        .into_iter()
+        .filter(|f| f.commits >= opts.min_degree)
+        .filter(|f| walk::is_code_path(&f.path) && git_repo.has_file(&f.path))
+        .filter(|f| kept_by(opts.filter, &f.path))
+        .filter(|f| opts.include_tests || !is_test_path(&f.path))
+        .map(|f| (f.path, f.commits))
+        .collect()
+}
+
+pub fn run(path: &Path, opts: &TcOptions<'_>) -> Result<(), Box<dyn Error>> {
+    if opts.min_degree == 0 {
         return Err("--min-degree must be at least 1".into());
     }
 
     let git_repo =
         GitRepo::open(path).map_err(|e| format!("not a git repository (or any parent): {e}"))?;
 
-    let since_ts = since.map(parse_since).transpose()?;
+    let since_ts = opts.since.map(parse_since).transpose()?;
 
-    // Build freq_map: path → commits, filtering by min_degree and optionally test files
     let freqs = git_repo.file_frequencies(since_ts)?;
     if freqs.is_empty() {
-        if since.is_some() {
+        if opts.since.is_some() {
             eprintln!("No commits found in the specified time range.");
         } else {
             eprintln!("No commits found in the repository.");
         }
         return Ok(());
     }
-    let exclude_tests = !include_tests;
-    let freq_map: HashMap<PathBuf, usize> = freqs
-        .into_iter()
-        .filter(|f| f.commits >= min_degree)
-        .filter(|f| walk::is_code_path(&f.path))
-        .filter(|f| !exclude_tests || !is_test_path(&f.path))
-        .map(|f| (f.path, f.commits))
-        .collect();
+    let freq_map = eligible_files(freqs, &git_repo, opts);
 
     if freq_map.is_empty() {
+        let min_degree = opts.min_degree;
         eprintln!("No files with >= {min_degree} commits found. Try a lower --min-degree value.");
         return Ok(());
     }
 
-    // Get co-changing commit groups
-    let co_changes = git_repo.co_changing_commits(since_ts)?;
+    let co_changes = git_repo.co_changing_commits(since_ts, opts.max_changeset)?;
     if co_changes.is_empty() {
         eprintln!("No commits with multiple files found.");
         return Ok(());
     }
 
-    let mut results = compute_coupling(&co_changes, &freq_map, min_degree);
+    let mut results = compute_coupling(&co_changes, &freq_map, opts.min_degree, opts.min_shared);
 
-    // Filter by min_strength if specified
-    if let Some(min_s) = min_strength {
+    if let Some(min_s) = opts.min_strength {
         results.retain(|r| r.strength >= min_s);
     }
 
     let total = results.len();
 
-    // Sort by chosen metric
-    match sort_by {
+    match opts.sort_by {
         "shared" => results.sort_by_key(|r| Reverse(r.shared_commits)),
         _ => results.sort_by(|a, b| {
             b.strength
@@ -102,9 +128,9 @@ pub fn run(
         }),
     }
 
-    results.truncate(top);
+    results.truncate(opts.top);
 
-    match output {
+    match opts.output {
         OutputMode::Json => print_json(&results)?,
         OutputMode::Short => print_short(&results, total),
         OutputMode::Terse => print_terse(total),

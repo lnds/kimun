@@ -34,6 +34,9 @@ pub fn run(
         .map_err(|e| format!("not a git repository (or any parent): {e}"))?;
 
     let since_ts = since.map(parse_since).transpose()?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_secs() as i64;
     let freqs = git.file_frequencies(since_ts)?;
 
     if freqs.is_empty() {
@@ -54,12 +57,13 @@ pub fn run(
         .filter_map(|(file_path, spec)| {
             let rel = GitRepo::to_git_path(&walk_root, &walk_prefix, &file_path);
             freq_map.get(&rel).map(|freq| {
+                let start = since_ts.unwrap_or(freq.first_commit);
                 classify(
                     rel,
                     spec.name,
                     freq.commits,
-                    freq.first_commit,
-                    freq.last_commit,
+                    (freq.first_commit, freq.last_commit),
+                    (start, now),
                 )
             })
         })

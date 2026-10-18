@@ -540,7 +540,9 @@ Identifies bus factor risk and knowledge concentration per file. Generated files
 
 #### Knowledge loss detection
 
-Use `--since` to define "recent activity". If the primary owner of a file has no commits in that period, the file is flagged with **knowledge loss** risk. Use `--risk-only` to show only those files.
+Use `--since` to define "recent activity". If the primary owner of a file has no commits in that period, the file is flagged with **knowledge loss** risk; when nobody committed in the period, every file is. Use `--risk-only` to show only those files; it needs `--since`. The closing count is of every file at risk, with how many `--top` shows.
+
+Bot accounts (`dependabot[bot]`, `github-actions[bot]`) hold no knowledge: their lines are left out, and a file only bots wrote is not listed. Generated files and data or prose (JSON, YAML, Markdown, text) are left out too.
 
 Options:
 
@@ -634,7 +636,12 @@ Options:
 | `--sort-by METRIC` | Sort by `strength` or `shared` (default: `strength`) |
 | `--since DURATION` | Only consider commits since this time (e.g. `6m`, `1y`, `30d`) |
 | `--min-degree N` | Minimum commits per file to be included (default: 3) |
+| `--min-shared N` | Minimum commits two files must share to be a pair (default: 3) |
+| `--max-changeset N` | Ignore commits touching more than N files as evidence of coupling (default: 30) |
 | `--min-strength F` | Minimum coupling strength to show (e.g. `0.5` for strong only) |
+| `--include-ext`, `--exclude-ext`, `--exclude-dir`, `--exclude` | Path filters, applied to the paths of history |
+
+Only files that still exist in the working tree are paired, and only code: lock files, manifests, CI YAML and documentation are left out. A sweeping commit (more than `--max-changeset` files) relates files by accident and is skipped, as is a revert together with the commit it reverts (a message opening with `Revert "` that names the commit): together they changed nothing. Renames are not followed: a file is paired under the path it has now.
 
 Example output:
 
@@ -929,6 +936,8 @@ km impact --since-ref origin/main --format json
 ### `km churn` -- Code churn analysis
 
 Measures pure change frequency per file from git history (commit count only, no complexity weight). Identifies the most frequently modified files — high churn without a corresponding quality improvement is a maintenance signal.
+
+The rate is commits per month from the file's first commit to now, or from the start of the `--since` window to now, at least one month. A burst of commits long ago is spread over the time since, so it does not outrank a file that keeps changing. HIGH is above 4 a month, MEDIUM from 1, LOW below.
 
 ```bash
 km churn [path]

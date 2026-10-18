@@ -11,22 +11,22 @@ fn sample() -> Vec<FileChurn> {
             PathBuf::from("src/hot.rs"),
             "Rust",
             20,
-            NOW - 2 * MONTH,
-            NOW,
+            (NOW - 2 * MONTH, NOW),
+            (NOW - 2 * MONTH, NOW),
         ),
         classify(
             PathBuf::from("src/active.rs"),
             "Rust",
             3,
-            NOW - 3 * MONTH,
-            NOW,
+            (NOW - 3 * MONTH, NOW),
+            (NOW - 3 * MONTH, NOW),
         ),
         classify(
             PathBuf::from("src/stable.rs"),
             "Rust",
             1,
-            NOW - 12 * MONTH,
-            NOW,
+            (NOW - 12 * MONTH, NOW),
+            (NOW - 12 * MONTH, NOW),
         ),
     ]
 }

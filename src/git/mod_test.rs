@@ -114,7 +114,7 @@ fn test_co_changing_commits() {
     make_commit(&repo, &[("b.rs", "v1"), ("c.rs", "v1")], "two files");
 
     let git_repo = GitRepo::open(dir.path()).unwrap();
-    let co = git_repo.co_changing_commits(None).unwrap();
+    let co = git_repo.co_changing_commits(None, 30).unwrap();
 
     assert_eq!(co.len(), 1);
     assert_eq!(co[0].len(), 2);
@@ -220,7 +220,7 @@ fn test_empty_repo() {
     let freqs = git_repo.file_frequencies(None);
     assert!(freqs.is_err() || freqs.unwrap().is_empty());
 
-    let co = git_repo.co_changing_commits(None);
+    let co = git_repo.co_changing_commits(None, 30);
     assert!(co.is_err() || co.unwrap().is_empty());
 }
 
@@ -780,4 +780,73 @@ fn blame_and_recent_authors_read_the_mailmap() {
 
     let authors = git_repo.recent_authors(None).unwrap();
     assert_eq!(authors, HashSet::from(["victor@work.org".to_string()]));
+}
+
+/// Commit `files` with `message` on top of HEAD.
+fn commit_with(repo: &Repository, message: &str, files: &[(&str, &str)]) -> git2::Oid {
+    let sig = git2::Signature::new("Ana", "ana@x.org", &git2::Time::new(1_700_000_000, 0)).unwrap();
+    let mut index = repo.index().unwrap();
+    for (path, content) in files {
+        fs::write(repo.workdir().unwrap().join(path), content).unwrap();
+        index.add_path(Path::new(path)).unwrap();
+    }
+    index.write().unwrap();
+    let tree = repo.find_tree(index.write_tree().unwrap()).unwrap();
+    let parent = repo.head().ok().and_then(|h| h.peel_to_commit().ok());
+    let parents: Vec<&git2::Commit> = parent.iter().collect();
+    repo.commit(Some("HEAD"), &sig, &sig, message, &tree, &parents)
+        .unwrap()
+}
+
+#[test]
+fn co_changes_skip_sweeping_commits() {
+    let (dir, repo) = create_test_repo();
+    commit_with(&repo, "pair", &[("a.rs", "1"), ("b.rs", "1")]);
+    commit_with(
+        &repo,
+        "sweep",
+        &[("a.rs", "2"), ("b.rs", "2"), ("c.rs", "2"), ("d.rs", "2")],
+    );
+    let git_repo = GitRepo::open(dir.path()).unwrap();
+    assert_eq!(git_repo.co_changing_commits(None, 3).unwrap().len(), 1);
+    assert_eq!(git_repo.co_changing_commits(None, 4).unwrap().len(), 2);
+}
+
+#[test]
+fn co_changes_skip_a_revert_and_the_commit_it_undoes() {
+    let (dir, repo) = create_test_repo();
+    commit_with(&repo, "kept", &[("a.rs", "1"), ("b.rs", "1")]);
+    let fix = commit_with(&repo, "fix", &[("a.rs", "2"), ("b.rs", "2")]);
+    commit_with(
+        &repo,
+        &format!("Revert \"fix\"\n\nThis reverts commit {fix}.\n"),
+        &[("a.rs", "1"), ("b.rs", "1")],
+    );
+    let git_repo = GitRepo::open(dir.path()).unwrap();
+    assert_eq!(git_repo.co_changing_commits(None, 30).unwrap().len(), 1);
+}
+
+#[test]
+fn bot_accounts_are_told_apart() {
+    let blame = |author: &str, email: &str| BlameInfo {
+        author: author.to_string(),
+        email: email.to_string(),
+        lines: 1,
+        last_commit_time: 0,
+    };
+    assert!(
+        blame(
+            "dependabot[bot]",
+            "49699333+dependabot[bot]@users.noreply.github.com"
+        )
+        .is_bot()
+    );
+    assert!(
+        blame(
+            "ci",
+            "41898282+github-actions[bot]@users.noreply.github.com"
+        )
+        .is_bot()
+    );
+    assert!(!blame("Ana", "123+ana@users.noreply.github.com").is_bot());
 }

@@ -140,33 +140,35 @@ macro_rules! dispatch {
 
 /// Dispatch the `tc` subcommand. Temporal coupling works entirely from git
 /// history, so filesystem exclude flags have no effect — warn the user.
-fn dispatch_tc(
-    common: cli::CommonArgs,
+/// What `km tc` was given besides the common arguments.
+struct TcArgs {
     top: usize,
     sort_by: String,
     since: Option<String>,
     min_degree: Option<usize>,
     min_strength: Option<f64>,
-) {
+    min_shared: usize,
+    max_changeset: usize,
+}
+
+fn dispatch_tc(common: cli::CommonArgs, args: TcArgs) {
     let cfg = config::KimunConfig::load();
-    let min_degree = cfg.tc.resolve_min_degree(min_degree);
-    let min_strength = cfg.tc.resolve_min_strength(min_strength);
-    if !common.exclude_args.is_empty() {
-        eprintln!(
-            "warning: --exclude-ext/--exclude-dir/--exclude have no effect on `tc` \
-             (temporal coupling works from git history, not the filesystem)"
-        );
-    }
+    let filter = common.exclude_args.exclude_filter();
     run_command(common.path, |t| {
         tc::run(
             t,
-            common.format,
-            common.include_tests,
-            top,
-            &sort_by,
-            since.as_deref(),
-            min_degree,
-            min_strength,
+            &tc::TcOptions {
+                output: common.format,
+                include_tests: common.include_tests,
+                top: args.top,
+                sort_by: &args.sort_by,
+                since: args.since.as_deref(),
+                min_degree: cfg.tc.resolve_min_degree(args.min_degree),
+                min_strength: cfg.tc.resolve_min_strength(args.min_strength),
+                min_shared: args.min_shared,
+                max_changeset: args.max_changeset,
+                filter: &filter,
+            },
         )
     });
 }
@@ -480,7 +482,20 @@ fn main() {
             since,
             min_degree,
             min_strength,
-        } => dispatch_tc(common, top, sort_by, since, min_degree, min_strength),
+            min_shared,
+            max_changeset,
+        } => dispatch_tc(
+            common,
+            TcArgs {
+                top,
+                sort_by,
+                since,
+                min_degree,
+                min_strength,
+                min_shared,
+                max_changeset,
+            },
+        ),
         Commands::Impact(args) => {
             let options = impact::options(&args);
             run_command(args.path, |t| impact::run(t, &options))

@@ -34,7 +34,7 @@ pub struct FileChurn {
     pub language: String,
     /// Total number of non-merge commits that touched this file.
     pub commits: usize,
-    /// Commits per month over the file's active period.
+    /// Commits per month from the start of its window to now.
     pub rate: f64,
     /// Unix timestamp of the earliest commit.
     pub first_commit: i64,
@@ -45,15 +45,18 @@ pub struct FileChurn {
 
 const SECS_PER_MONTH: f64 = 30.0 * 24.0 * 3600.0;
 
-/// Classify a file by its commit frequency.
+/// Classify a file by its commit frequency: commits per month from `start`
+/// (the file's first commit, or the start of the `--since` window) to
+/// `now`, at least one month. A burst long ago is spread over the time
+/// since, so it does not outrank steady change.
 pub fn classify(
     path: PathBuf,
     language: &str,
     commits: usize,
-    first_commit: i64,
-    last_commit: i64,
+    (first_commit, last_commit): (i64, i64),
+    (start, now): (i64, i64),
 ) -> FileChurn {
-    let span_secs = (last_commit - first_commit).max(0) as f64;
+    let span_secs = (now - start).max(0) as f64;
     let months = (span_secs / SECS_PER_MONTH).max(1.0);
     let rate = commits as f64 / months;
 

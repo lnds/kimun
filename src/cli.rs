@@ -126,14 +126,6 @@ impl ExcludeArgs {
             &self.exclude,
         )
     }
-
-    /// Returns `true` if no exclude/include flags were specified.
-    pub fn is_empty(&self) -> bool {
-        self.include_ext.is_empty()
-            && self.exclude_ext.is_empty()
-            && self.exclude_dir.is_empty()
-            && self.exclude.is_empty()
-    }
 }
 
 /// Common arguments shared by most analysis commands.
@@ -509,6 +501,14 @@ pub enum Commands {
         /// Overridable via .kimun.toml [tc] min_strength.
         #[arg(long)]
         min_strength: Option<f64>,
+
+        /// Minimum commits two files must share to be a pair
+        #[arg(long, default_value = "3")]
+        min_shared: usize,
+
+        /// Ignore commits touching more than N files as evidence of coupling
+        #[arg(long, default_value = "30", value_name = "N")]
+        max_changeset: usize,
     },
 
     /// Measure the impact of a diff: how spread it is and which files usually change with it

@@ -117,7 +117,7 @@ Temporal coupling analysis (Thornhill, files that change together). Invoked via 
 
 - **`analyzer.rs`** — `CouplingLevel` enum (Strong/Moderate/Weak), `FileCoupling` struct, `compute_coupling()` function that pairs co-changing files, calculates strength = shared_commits / min(commits_a, commits_b), and classifies by threshold (0.5 strong, 0.3 moderate).
 - **`report.rs`** — Table and JSON output formatters.
-- **`mod.rs`** — Orchestration: opens git repo, calls `file_frequencies()` (filtered by `min_degree`), `co_changing_commits()`, `compute_coupling()`, sorts/filters results. Uses `util::parse_since` for `--since` flag. No filesystem walk needed — works entirely from git data.
+- **`mod.rs`** — Orchestration: opens git repo, calls `file_frequencies()` (`eligible_files`: `min_degree`, still in the working tree, code, the path filters through `kept_by`), `co_changing_commits()` (skips commits over `--max-changeset` and reverts with the commit they undo), `compute_coupling()` (pairs sharing at least `--min-shared`), sorts/filters results. Uses `util::parse_since` for `--since` flag. No filesystem walk needed — works entirely from git data.
 
 ### Shared: `src/git/`
 
@@ -162,7 +162,7 @@ Impact of a change: projects reached, diffusion and logical radius. Invoked via 
 
 Code churn — pure change frequency per source file. Invoked via `km churn`.
 
-- **`analyzer.rs`** — `ChurnLevel` enum (High/Medium/Low), `FileChurn` struct, rate computed as commits ÷ active months (minimum 1 month).
+- **`analyzer.rs`** — `ChurnLevel` enum (High/Medium/Low), `FileChurn` struct, rate computed as commits ÷ months from the file's first commit, or the start of the `--since` window, to now (minimum 1 month).
 - **`report.rs`** — Table and JSON output formatters.
 - **`mod.rs`** — Orchestration: opens git repo, counts commits per file, computes rate, sorts/filters. Uses `util::parse_since` for `--since` flag.
 

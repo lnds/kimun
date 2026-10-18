@@ -18,8 +18,9 @@ const FIXED_WIDTH: usize =
     COL_SPACING + COL_LANG + COL_LINES + COL_OWN_PCT + COL_CONTRIB + COL_RISK;
 
 /// Print a table of per-file ownership with risk assessment and
-/// a summary of files at risk of knowledge loss (inactive primary owner).
-pub fn print_report(files: &[FileOwnership]) {
+/// a summary of files at risk of knowledge loss (inactive primary owner):
+/// `at_risk` of them in all, before `--top` cut the rows.
+pub fn print_report(files: &[FileOwnership], at_risk: usize) {
     if files.is_empty() {
         println!("No files found for knowledge map analysis.");
         return;
@@ -67,13 +68,25 @@ pub fn print_report(files: &[FileOwnership]) {
 
     println!("{separator}");
 
-    let loss_count = files.iter().filter(|f| f.knowledge_loss).count();
-    if loss_count > 0 {
-        println!();
-        println!("Files with knowledge loss risk (primary owner inactive): {loss_count}");
-        for f in files.iter().filter(|f| f.knowledge_loss) {
-            println!("  {} ({})", f.path.display(), f.primary_owner);
-        }
+    print_loss_summary(files, at_risk);
+}
+
+/// The files at risk of knowledge loss among those shown, after how many
+/// there are in all.
+fn print_loss_summary(files: &[FileOwnership], at_risk: usize) {
+    if at_risk == 0 {
+        return;
+    }
+    let lost: Vec<&FileOwnership> = files.iter().filter(|f| f.knowledge_loss).collect();
+    let more = if at_risk > lost.len() {
+        format!(" ({} shown)", lost.len())
+    } else {
+        String::new()
+    };
+    println!();
+    println!("Files with knowledge loss risk (primary owner inactive): {at_risk}{more}");
+    for f in lost {
+        println!("  {} ({})", f.path.display(), f.primary_owner);
     }
 }
 

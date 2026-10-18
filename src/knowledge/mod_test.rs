@@ -141,11 +141,21 @@ fn integration_risk_only() {
 
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let result = run(
+    let err = run(
         &cfg,
         &opts(OutputMode::Table, 20, "risk", None, true, false),
+    )
+    .unwrap_err();
+    assert!(
+        err.to_string().contains("--risk-only needs --since"),
+        "{err}"
     );
-    assert!(result.is_ok(), "risk-only filter should work");
+
+    let result = run(
+        &cfg,
+        &opts(OutputMode::Table, 20, "risk", Some("1y"), true, false),
+    );
+    assert!(result.is_ok(), "risk-only filter should work with a window");
 }
 
 #[test]
