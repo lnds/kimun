@@ -13,6 +13,8 @@ use globset::{Glob, GlobSet, GlobSetBuilder};
 use ignore::WalkBuilder;
 
 use crate::loc::language::{LanguageSpec, detect, detect_by_shebang};
+use crate::test_blocks::rust_test_modules;
+use crate::util::is_generated_file;
 
 /// Filter that excludes files by extension, directory name, or glob pattern.
 ///
@@ -182,6 +184,11 @@ impl<'a> WalkConfig<'a> {
         source_files(self.path, self.exclude_tests(), self.filter)
     }
 
+    /// Walk the source files that metrics of code read (see [`code_files`]).
+    pub fn code_files(&self) -> Vec<(PathBuf, &'static LanguageSpec)> {
+        code_files(self.path, self.exclude_tests(), self.filter)
+    }
+
     /// Walk and analyze source files using this config. `f` is also told
     /// whether tests are left out, for those a file keeps inside it.
     pub fn collect_analysis<T>(
@@ -206,6 +213,22 @@ pub fn is_test_dir(name: &str) -> bool {
         .rsplit_once('.')
         .is_some_and(|(_, last)| last.ends_with("Tests") || last.ends_with("Test"));
     TEST_DIRS.contains(&name) || dotnet
+}
+
+/// Directories of examples and benchmarks: code that is run to show or to
+/// time the project, not shipped with it. Left out along with tests.
+pub const EXAMPLE_DIRS: &[&str] = &[
+    "examples",
+    "example",
+    "benches",
+    "bench",
+    "benchmarks",
+    "benchsuite",
+];
+
+/// Whether a directory name holds tests, examples or benchmarks.
+pub fn is_non_production_dir(name: &str) -> bool {
+    is_test_dir(name) || EXAMPLE_DIRS.contains(&name)
 }
 
 /// Mapping from file extension to test-file naming patterns.
@@ -345,11 +368,56 @@ pub fn source_files(
         };
         result.push((file_path.to_path_buf(), spec));
     }
+    if exclude_tests {
+        without_test_modules(&mut result);
+    }
     result
 }
 
-/// Walk source files, analyze each with `f`, and collect successful results.
-/// Handles the common Ok(Some)/Ok(None)/Err pattern used across modules.
+/// `files` without the Rust modules declared under `#[cfg(test)]`.
+fn without_test_modules(files: &mut Vec<(PathBuf, &'static LanguageSpec)>) {
+    let test_modules = rust_test_modules(files);
+    if !test_modules.is_empty() {
+        files.retain(|(path, _)| !in_test_module(path, &test_modules));
+    }
+}
+
+/// Whether a file is one of the Rust modules declared under `#[cfg(test)]`
+/// or sits in the directory of one, where its submodules live.
+fn in_test_module(path: &Path, test_modules: &HashSet<PathBuf>) -> bool {
+    test_modules.iter().any(|module| {
+        let dir = if module.file_name().is_some_and(|name| name == "mod.rs") {
+            module.parent().unwrap_or(Path::new("")).to_path_buf()
+        } else {
+            module.with_extension("")
+        };
+        path == module || path.starts_with(dir)
+    })
+}
+
+/// Whether a path, which may no longer exist, is code by its name alone:
+/// not data or prose and not generated. For the paths of git history.
+pub fn is_code_path(path: &Path) -> bool {
+    !crate::util::is_generated(path) && detect(path).is_none_or(LanguageSpec::is_code)
+}
+
+/// The source files that metrics of code read: [`source_files`] without
+/// data and prose ([`LanguageSpec::is_code`]) or generated files
+/// ([`is_generated_file`]). Line counts and the dependency graph read
+/// every source file instead.
+pub fn code_files(
+    path: &Path,
+    exclude_tests: bool,
+    filter: &ExcludeFilter,
+) -> Vec<(PathBuf, &'static LanguageSpec)> {
+    let mut files = source_files(path, exclude_tests, filter);
+    files.retain(|(path, spec)| spec.is_code() && !is_generated_file(path));
+    files
+}
+
+/// Walk the code files ([`code_files`]), analyze each with `f`, and collect
+/// successful results. Handles the common Ok(Some)/Ok(None)/Err pattern
+/// used across modules.
 pub fn collect_analysis<T>(
     path: &Path,
     exclude_tests: bool,
@@ -357,7 +425,7 @@ pub fn collect_analysis<T>(
     f: impl Fn(&Path, &LanguageSpec) -> Result<Option<T>, Box<dyn std::error::Error>>,
 ) -> Vec<T> {
     let mut results = Vec::new();
-    for (file_path, spec) in source_files(path, exclude_tests, filter) {
+    for (file_path, spec) in code_files(path, exclude_tests, filter) {
         match f(&file_path, spec) {
             Ok(Some(m)) => results.push(m),
             Ok(None) => {}
@@ -381,32 +449,38 @@ pub(crate) fn walk(path: &Path, exclude_tests: bool, filter: &ExcludeFilter) -> 
     WalkBuilder::new(path)
         .hidden(false)
         .follow_links(false)
-        .filter_entry(move |entry| {
-            let ft = entry.file_type();
-            if ft.is_some_and(|ft| ft.is_dir()) {
-                if entry.file_name() == ".git" {
-                    return false;
-                }
-                if let Some(name) = entry.file_name().to_str() {
-                    if filter.excludes_dir(name) {
-                        return false;
-                    }
-                    if exclude_tests && is_test_dir(name) {
-                        return false;
-                    }
-                }
-            } else if ft.is_some_and(|ft| ft.is_file()) {
-                let file_path = entry.path();
-                if exclude_tests && is_test_file(file_path) {
-                    return false;
-                }
-                if filter.excludes_file(file_path, &walk_root) {
-                    return false;
-                }
-            }
-            true
-        })
+        .filter_entry(move |entry| keeps_entry(entry, &walk_root, exclude_tests, &filter))
         .build()
+}
+
+/// Whether the walk goes into a directory or yields a file.
+fn keeps_entry(
+    entry: &ignore::DirEntry,
+    walk_root: &Path,
+    exclude_tests: bool,
+    filter: &ExcludeFilter,
+) -> bool {
+    let Some(ft) = entry.file_type() else {
+        return true;
+    };
+    if ft.is_dir() {
+        return keeps_dir(entry.file_name(), exclude_tests, filter);
+    }
+    let file_path = entry.path();
+    !ft.is_file()
+        || !((exclude_tests && is_test_file(file_path))
+            || filter.excludes_file(file_path, walk_root))
+}
+
+/// Whether the walk goes into a directory of this name.
+fn keeps_dir(name: &std::ffi::OsStr, exclude_tests: bool, filter: &ExcludeFilter) -> bool {
+    if name == ".git" {
+        return false;
+    }
+    let Some(name) = name.to_str() else {
+        return true;
+    };
+    !filter.excludes_dir(name) && !(exclude_tests && is_non_production_dir(name))
 }
 
 /// Return the exclusion reason for an ancestor directory, if any.
@@ -427,6 +501,9 @@ fn ancestor_exclusion_reason(
             if exclude_tests && is_test_dir(name_str) {
                 return Some("test directory");
             }
+            if exclude_tests && EXAMPLE_DIRS.contains(&name_str) {
+                return Some("example or benchmark directory");
+            }
         }
     }
     None
@@ -441,30 +518,18 @@ pub fn print_excluded_files(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Walk with filter applied only for dirs; check files manually to report excluded ones
     let no_filter = ExcludeFilter::default();
+    let test_modules = if exclude_tests {
+        rust_test_modules(&source_files(path, false, &no_filter))
+    } else {
+        HashSet::new()
+    };
     let mut count = 0;
-    for entry in walk(path, false, &no_filter) {
-        let entry = match entry {
-            Ok(e) => e,
-            Err(_) => continue,
-        };
-        if !entry.file_type().is_some_and(|ft| ft.is_file()) {
-            continue;
-        }
+    let files = walk(path, false, &no_filter)
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_type().is_some_and(|ft| ft.is_file()));
+    for entry in files {
         let file_path = entry.path();
-        let mut reasons = Vec::new();
-
-        if exclude_tests && is_test_file(file_path) {
-            reasons.push("test file");
-        }
-        if filter.excludes_by_extension(file_path) {
-            reasons.push("extension");
-        }
-        if let Some(reason) = ancestor_exclusion_reason(file_path, exclude_tests, filter) {
-            reasons.push(reason);
-        }
-        if filter.excludes_by_glob(file_path, path) {
-            reasons.push("glob");
-        }
+        let reasons = exclusion_reasons(file_path, path, exclude_tests, filter, &test_modules);
         if !reasons.is_empty() {
             let relative = file_path.strip_prefix(path).unwrap_or(file_path);
             println!("{} ({})", relative.display(), reasons.join(", "));
@@ -473,6 +538,33 @@ pub fn print_excluded_files(
     }
     println!("\n{count} file(s) excluded");
     Ok(())
+}
+
+/// Why a file under `root` is left out, if it is.
+fn exclusion_reasons(
+    file_path: &Path,
+    root: &Path,
+    exclude_tests: bool,
+    filter: &ExcludeFilter,
+    test_modules: &HashSet<PathBuf>,
+) -> Vec<&'static str> {
+    let mut reasons = Vec::new();
+    if exclude_tests && is_test_file(file_path) {
+        reasons.push("test file");
+    }
+    if filter.excludes_by_extension(file_path) {
+        reasons.push("extension");
+    }
+    if let Some(reason) = ancestor_exclusion_reason(file_path, exclude_tests, filter) {
+        reasons.push(reason);
+    }
+    if filter.excludes_by_glob(file_path, root) {
+        reasons.push("glob");
+    }
+    if in_test_module(file_path, test_modules) {
+        reasons.push("test module");
+    }
+    reasons
 }
 
 #[cfg(test)]

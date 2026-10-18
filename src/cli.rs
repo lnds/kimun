@@ -22,6 +22,16 @@ fn parse_non_negative_f64(s: &str) -> Result<f64, String> {
     }
 }
 
+/// A share strictly between 0 and 100: at 100 no departure could ever
+/// orphan more than all of the code.
+fn parse_bus_factor_threshold(s: &str) -> Result<f64, String> {
+    match s.parse::<f64>() {
+        Ok(v) if v > 0.0 && v < 100.0 => Ok(v),
+        Ok(_) => Err("must be greater than 0 and less than 100".to_string()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
 /// Output format for analysis commands.
 ///
 /// Driven by `--format` on `CommonArgs`. `Github` and `Codeclimate` emit CI
@@ -140,7 +150,7 @@ pub struct CommonArgs {
     #[arg(long, value_enum, default_value_t)]
     pub format: OutputMode,
 
-    /// Include test files and directories in analysis (excluded by default)
+    /// Include tests, examples and benchmarks in analysis (excluded by default)
     #[arg(long)]
     pub include_tests: bool,
 
@@ -458,11 +468,15 @@ pub enum Commands {
         #[arg(long)]
         summary: bool,
 
-        /// Compute the project bus factor: the minimum number of contributors
-        /// whose combined ownership covers 80% of the code. A bus factor of 1
-        /// means one person holds most knowledge — extremely high risk.
+        /// Compute the project bus factor: how many contributors have to leave
+        /// before most of the code is in files with no author left. With
+        /// --since, authors inactive in that window have already left.
         #[arg(long)]
         bus_factor: bool,
+
+        /// Share of the code, in lines, the bus factor counts to (default: 50)
+        #[arg(long, value_name = "PCT", default_value = "50", value_parser = parse_bus_factor_threshold)]
+        bus_factor_threshold: f64,
 
         /// Show only files owned by this author (substring match, case-insensitive)
         #[arg(long, value_name = "NAME")]
@@ -676,7 +690,7 @@ pub enum ScoreCommands {
         #[arg(long, value_enum, default_value_t)]
         format: OutputMode,
 
-        /// Include test files and directories in analysis (excluded by default)
+        /// Include tests, examples and benchmarks in analysis (excluded by default)
         #[arg(long)]
         include_tests: bool,
 

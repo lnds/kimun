@@ -40,6 +40,10 @@ CLI tool for code metrics: lines of code (like `cloc`), duplicate detection, Hal
 
 - **`mod.rs`** — Orchestrates: walks directory tree (via `ignore` crate, respects `.gitignore`), detects language, deduplicates files by content hash (streaming), counts lines, aggregates by language.
 
+### Shared: `src/walk.rs`
+
+`source_files` is every recognized file; with tests excluded it also leaves out `EXAMPLE_DIRS` (examples, benchmarks) and the Rust modules declared under `#[cfg(test)]` (`test_blocks::rust_test_modules`). `code_files` is what metrics of code read: no data or prose (`LanguageSpec::is_code`) and no generated files (`util::is_generated_file`, by name, header marker or source map). `collect_analysis`, `score`, `report`, `dups`, `init`, `hotspots` and `churn` use it; `loc` and `deps` read `source_files`; `tc` filters history paths with `is_code_path`.
+
 ### Adding a new language
 
 Use the `lang!` macro in `language.rs`. For most languages:
@@ -82,7 +86,7 @@ Maintainability Index (verifysoft variant with comment weight). Invoked via `km 
 
 Cognitive complexity (SonarSource method). Invoked via `km cogcom`.
 
-- **`analyzer.rs`** — Core computation: penalizes nesting increments and non-linear control structures. Resets `opens_flow` after consuming the first `{` on a control-flow line so closure/struct braces on the same line are not double-counted.
+- **`analyzer.rs`** — Core computation: penalizes nesting increments and non-linear control structures. Brace-scoped code is read token by token along each line (`line_tokens`: keywords and braces in order), through `BraceScan`: a control keyword leaves its block pending until the next `{`, on its line or the next (Allman), and only that first brace nests, so closure/struct braces on the same line are not double-counted.
 - **`detection.rs`** — Language-aware function boundary detection.
 - **`markers.rs`** — Per-language complexity markers (keywords that trigger nesting increments).
 - **`report.rs`** — Table and JSON output formatters.
@@ -99,7 +103,7 @@ Hotspot analysis (Thornhill, change frequency × complexity). Invoked via `km ho
 
 Knowledge maps (Thornhill, code ownership via git blame). Invoked via `km knowledge`.
 
-- **`analyzer.rs`** — `RiskLevel` enum (Critical/High/Medium/Low), `FileOwnership` struct, `compute_ownership()` function that calculates primary owner, concentration, and knowledge loss risk.
+- **`analyzer.rs`** — `RiskLevel` enum (Critical/High/Medium/Low), `FileOwnership` struct, `compute_ownership()` function that calculates primary owner, concentration, and knowledge loss risk. `compute_bus_factor()` is the truck factor: a file's authors hold at least `AUTHOR_SHARE` (0.75) of its main author's lines, and the authors of the most lines leave first until more than the threshold of the code, weighed by lines, has no author; with `--since`, inactive authors have left before counting.
 - **`report.rs`** — Table and JSON output formatters. `--summary` mode aggregates by author (files owned, lines, languages, worst risk) as an alternative to the per-file view.
 - **`mod.rs`** — Orchestration: opens git repo, walks files (filtering generated files), runs `blame_file()` per file, computes ownership, sorts/filters results. Uses `util::parse_since` for `--since` flag. `--summary` flag switches to author-level aggregation.
 
@@ -113,7 +117,7 @@ Temporal coupling analysis (Thornhill, files that change together). Invoked via 
 
 ### Shared: `src/git/`
 
-`GitRepo` wraps `git2::Repository`. `mod.rs` holds history walks, blame and tree extraction. `changeset.rs` holds what concerns a change set: `diff_stats_since` (ref → working tree), `diff_stats_between` (two refs), `patch_stats` (a patch in git format), all through one `stats_of`, plus `co_change_history` and the merge base they start from. `FileDiffStat` carries the lines touched on both sides and a probe of added lines, so `lines_in` picks the side that matches a text: a patch need not be applied where it is measured. `tree.rs` reads files from the tree of a commit without checking it out (`files_at`, `has_file_at`).
+`GitRepo` wraps `git2::Repository`. Blame and the commit walk read authors through `.mailmap`, and `identity` (email without case, or the name when there is none) is how every command tells people apart. `mod.rs` holds history walks, blame and tree extraction. `changeset.rs` holds what concerns a change set: `diff_stats_since` (ref → working tree), `diff_stats_between` (two refs), `patch_stats` (a patch in git format), all through one `stats_of`, plus `co_change_history` and the merge base they start from. `FileDiffStat` carries the lines touched on both sides and a probe of added lines, so `lines_in` picks the side that matches a text: a patch need not be applied where it is measured. `tree.rs` reads files from the tree of a commit without checking it out (`files_at`, `has_file_at`).
 
 ### Shared: `src/projects/`
 
@@ -188,6 +192,10 @@ Dependency graph (file-level coupling from imports, cycles via Tarjan SCC). Invo
 - **`analyzer.rs`** — `resolve_import` maps a raw import to project files per language (JavaScript and TypeScript resolve through `javascript::resolve` in the graph, since they need the layout); `build_graph` computes fan-in, fan-out and cycles (`tarjan_scc`, iterative).
 - **`report.rs`** — `render_report` builds the table as a `String` and `print_report` prints it, so tests assert on the text. JSON, short and terse formatters.
 - **`mod.rs`** — Orchestration: walks files, leaves unsupported languages out of the graph and counts them, extracts and resolves imports. `sort_entries` and `visible_entries` hold the `--sort-by` and `--cycles-only`/`--top` logic apart from `run`, which only prints.
+
+### Shared: `src/detection/`
+
+Function detection for `cycom`, `cogcom`, `smells` and `init`. `code_lines` gives the code lines they read, without preprocessor directives and their `\` continuations in the C family. `mod.rs` walks brace-scoped code: a line is a declaration by marker, or by shape over the signature it spans (`shape::signature`, `shape::is_c_family_function`), unless it starts inside open parentheses (`shape::continuation_lines`) or is an annotation or attribute. `body.rs` reads the body by braces (`BodyScan`; braces of a type in the parameter list are not the body). `script.rs` holds what `FunctionSyntax::Script` (JavaScript, TypeScript) adds: functions bound to a name and regex literals. `indented.rs` reads indent-scoped bodies and leaves `quote` blocks out of them.
 
 ### Shared: `src/string_mask.rs`
 

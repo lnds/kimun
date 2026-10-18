@@ -252,6 +252,27 @@ pub fn languages() -> &'static [LanguageSpec] {
     LANGUAGES
 }
 
+/// Languages that hold data or prose rather than code. The metrics of
+/// code (complexity, indentation, change-proneness, duplication) leave
+/// them out; line counts keep them.
+const DATA_AND_PROSE: &[&str] = &[
+    "JSON",
+    "YAML",
+    "TOML",
+    "XML",
+    "Markdown",
+    "Text",
+    "Properties",
+    "PO File",
+];
+
+impl LanguageSpec {
+    /// Whether files of this language are code, not data or prose.
+    pub fn is_code(&self) -> bool {
+        !DATA_AND_PROSE.contains(&self.name)
+    }
+}
+
 /// Detect the language of a file by matching its filename or extension
 /// against the language registry. Returns `None` for unrecognized files.
 pub fn detect(path: &Path) -> Option<&'static LanguageSpec> {

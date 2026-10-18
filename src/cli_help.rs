@@ -152,6 +152,9 @@ Risk levels:
 Use --since to detect knowledge loss: files where the primary owner
 has not committed recently. Use --risk-only to show only those files.
 
+--bus-factor: how many contributors have to leave before most of the code
+has no author left. With --since, inactive authors have already left.
+
 Requires a git repository. Generated files (lock files, minified JS, etc.)
 are automatically excluded.
 

@@ -81,7 +81,7 @@ pub fn run(
         |path: &Path, spec| compute_complexity(path, spec, complexity_metric, exclude_tests);
     let mut results: Vec<FileHotspot> = Vec::new();
 
-    for (file_path, spec) in walk::source_files(&walk_root, cfg.exclude_tests(), cfg.filter) {
+    for (file_path, spec) in walk::code_files(&walk_root, cfg.exclude_tests(), cfg.filter) {
         let rel_path = GitRepo::to_git_path(&walk_root, &walk_prefix, &file_path);
 
         // Look up commits from git history (before expensive analysis)

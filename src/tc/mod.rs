@@ -19,11 +19,12 @@ use crate::walk;
 use analyzer::compute_coupling;
 use report::{print_json, print_report, print_short, print_terse};
 
-/// Check whether a git-relative path is inside a test directory or is a test file.
+/// Check whether a git-relative path is inside a test, example or benchmark
+/// directory, or is a test file.
 fn is_test_path(path: &Path) -> bool {
     for component in path.components() {
         if let Some(name) = component.as_os_str().to_str()
-            && walk::is_test_dir(name)
+            && walk::is_non_production_dir(name)
         {
             return true;
         }
@@ -65,6 +66,7 @@ pub fn run(
     let freq_map: HashMap<PathBuf, usize> = freqs
         .into_iter()
         .filter(|f| f.commits >= min_degree)
+        .filter(|f| walk::is_code_path(&f.path))
         .filter(|f| !exclude_tests || !is_test_path(&f.path))
         .map(|f| (f.path, f.commits))
         .collect();

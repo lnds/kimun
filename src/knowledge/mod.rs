@@ -4,6 +4,8 @@
 //! Risk levels: Critical (one person >80%), High (60-80%), Medium
 //! (2-3 people >80% combined), Low (well-distributed). Generated
 //! files (lock files, minified JS) are automatically excluded.
+//! `--bus-factor` counts how many authors have to leave before most of
+//! the code has nobody who wrote it (`analyzer::compute_bus_factor`).
 
 pub mod analyzer;
 mod report;
@@ -12,7 +14,7 @@ use std::cmp::Reverse;
 use std::error::Error;
 
 use crate::git::GitRepo;
-use crate::util::{is_generated, parse_since};
+use crate::util::{is_generated_file, parse_since};
 use crate::walk::{self, WalkConfig};
 
 use crate::cli::OutputMode;
@@ -33,6 +35,9 @@ pub struct KnowledgeOptions<'a> {
     pub risk_only: bool,
     pub summary: bool,
     pub bus_factor: bool,
+    /// Share of the code, in lines, left without an author that the bus
+    /// factor counts to.
+    pub bus_factor_threshold: f64,
     /// Filter to files owned by this author (case-insensitive substring match).
     pub author: Option<&'a str>,
 }
@@ -79,12 +84,10 @@ pub fn run(cfg: &WalkConfig<'_>, opts: &KnowledgeOptions<'_>) -> Result<(), Box<
     let (walk_root, walk_prefix) = git_repo.walk_prefix(cfg.path)?;
 
     let mut results: Vec<FileOwnership> = Vec::new();
-    // author name → total blame lines across all files (for bus factor)
-    let mut author_lines: std::collections::HashMap<String, usize> =
-        std::collections::HashMap::new();
+    let mut file_blames = Vec::new();
 
     for (file_path, spec) in walk::source_files(&walk_root, cfg.exclude_tests(), cfg.filter) {
-        if is_generated(&file_path) {
+        if is_generated_file(&file_path) {
             continue;
         }
 
@@ -99,13 +102,9 @@ pub fn run(cfg: &WalkConfig<'_>, opts: &KnowledgeOptions<'_>) -> Result<(), Box<
             }
         };
 
-        // Accumulate raw blame lines for bus factor computation.
-        for b in &blames {
-            *author_lines.entry(b.author.clone()).or_insert(0) += b.lines;
-        }
-
         let ownership = compute_ownership(rel_path, spec.name, &blames, &recent_authors);
         results.push(ownership);
+        file_blames.push(blames);
     }
 
     // Filter by author if requested (case-insensitive substring match on name or email)
@@ -125,7 +124,8 @@ pub fn run(cfg: &WalkConfig<'_>, opts: &KnowledgeOptions<'_>) -> Result<(), Box<
     sort_results(&mut results, opts.sort_by);
 
     if opts.bus_factor {
-        let bf = compute_bus_factor(&author_lines, 80.0);
+        let active = since_ts.is_some().then_some(&recent_authors);
+        let bf = compute_bus_factor(&file_blames, active, opts.bus_factor_threshold);
         return match opts.output {
             OutputMode::Json => print_bus_factor_json(&bf),
             OutputMode::Short => {
@@ -140,7 +140,7 @@ pub fn run(cfg: &WalkConfig<'_>, opts: &KnowledgeOptions<'_>) -> Result<(), Box<
                 Err(crate::cli::ERR_CI_FORMAT_ONLY.into())
             }
             OutputMode::Table => {
-                print_bus_factor_report(&bf);
+                print_bus_factor_report(&bf, opts.top, opts.since);
                 Ok(())
             }
         };
