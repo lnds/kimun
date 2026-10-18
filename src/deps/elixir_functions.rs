@@ -4,6 +4,7 @@
 use std::collections::BTreeSet;
 
 use super::elixir::{Aliases, is_ident};
+use super::elixir_directives::ident_of;
 use super::elixir_literals::code_only;
 
 /// Keywords that define something callable, and whether it is public.
@@ -38,14 +39,6 @@ fn definition(line: &str) -> Option<(&str, bool)> {
         let name = ident_of(content.strip_prefix(keyword)?.trim_start());
         (!name.is_empty()).then_some((name, public))
     })
-}
-
-/// The function name at the start of `text`, with its `?` or `!`.
-fn ident_of(text: &str) -> &str {
-    let end = text
-        .find(|c| !is_ident(c) && c != '?' && c != '!')
-        .unwrap_or(text.len());
-    &text[..end]
 }
 
 /// Keywords that, at the indentation of a definition, carry its body on.

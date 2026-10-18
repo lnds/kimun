@@ -9,7 +9,8 @@ fn keeps_what_is_between_braces() {
 #[test]
 fn keeps_nested_braces_whole() {
     let code = code("<.table rows={%{a: Row.of(%{b: 1})}} />");
-    assert_eq!(code.trim(), "%{a: Row.of(%{b: 1})}");
+    let pieces: Vec<&str> = code.lines().collect();
+    assert_eq!(pieces, ["table(", "%{a: Row.of(%{b: 1})}"]);
 }
 
 #[test]
@@ -67,4 +68,10 @@ fn the_owner_is_beside_the_template_or_beside_its_directory() {
             PathBuf::from("lib/page_html.ex"),
         ]
     );
+}
+
+#[test]
+fn a_local_component_is_a_local_call() {
+    let code = code("<.button phx-click=\"go\">Go</.button>");
+    assert_eq!(code.trim(), "button(");
 }
