@@ -2,25 +2,37 @@
 ///
 /// Builds a directed graph of internal file dependencies, computes per-file
 /// fan-in (importers) and fan-out (imports), and detects cycles using
-/// Tarjan's strongly-connected components (SCC) algorithm.
+/// Tarjan's strongly-connected components (SCC) algorithm. Fan-in and
+/// fan-out count every import; cycles only those that load the module with
+/// the importer, since a type-only or deferred import never makes one
+/// module wait for another to load.
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
+use super::graph::EdgeKind;
 use super::{javascript, kaikai};
 
 /// A single file's dependency metrics.
-#[derive(Clone)]
+#[derive(Clone, Default, Serialize)]
 pub struct DepEntry {
+    /// Shown in JSON as `JsonDepEntry` writes it.
+    #[serde(skip)]
     pub path: PathBuf,
     pub language: String,
     /// Number of project files that import this file.
     pub fan_in: usize,
     /// Number of project files this file imports.
     pub fan_out: usize,
+    /// Of `fan_out`, the files imported only for their types.
+    pub type_fan_out: usize,
+    /// Of `fan_out`, the files imported only where the code runs later.
+    pub deferred_fan_out: usize,
     /// True if this file participates in a dependency cycle.
     pub in_cycle: bool,
+    /// Imports that look internal but name no file of the project.
+    pub unresolved: Vec<String>,
 }
 
 /// Files left out of the graph because imports are not extracted for their language.
@@ -31,12 +43,40 @@ pub struct UnsupportedLanguage {
 }
 
 /// Full dependency analysis result.
+#[derive(Default)]
 pub struct DepResult {
     pub entries: Vec<DepEntry>,
     /// Each inner Vec is a set of files forming a cycle (SCC size > 1).
     pub cycles: Vec<Vec<PathBuf>>,
     /// Languages found in the project whose files were not analysed.
     pub unsupported: Vec<UnsupportedLanguage>,
+    /// Totals over every file, shown or not.
+    pub totals: Totals,
+}
+
+/// What the whole graph holds besides its files and cycles.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize)]
+pub struct Totals {
+    /// Imports that take only types, left out of cycles.
+    pub type_edges: usize,
+    /// Imports that load their module later, left out of cycles.
+    pub deferred_edges: usize,
+    /// Imports that look internal but name no file.
+    pub unresolved: usize,
+    /// Files with at least one of those.
+    pub files_with_unresolved: usize,
+}
+
+impl Totals {
+    pub fn of(entries: &[DepEntry]) -> Self {
+        let sum = |f: fn(&DepEntry) -> usize| entries.iter().map(f).sum();
+        Totals {
+            type_edges: sum(|e| e.type_fan_out),
+            deferred_edges: sum(|e| e.deferred_fan_out),
+            unresolved: sum(|e| e.unresolved.len()),
+            files_with_unresolved: sum(|e| usize::from(!e.unresolved.is_empty())),
+        }
+    }
 }
 
 /// Build the dependency graph from raw edges and compute metrics.
@@ -46,7 +86,7 @@ pub struct DepResult {
 /// have no outgoing edges, they must be keyed with an empty vec).
 pub fn build_graph(
     files: &[(PathBuf, String)], // (path, language) for all project files
-    edges: &HashMap<PathBuf, Vec<PathBuf>>,
+    edges: &HashMap<PathBuf, Vec<(PathBuf, EdgeKind)>>,
 ) -> DepResult {
     // Index files: path → index
     let index: HashMap<&PathBuf, usize> =
@@ -54,21 +94,17 @@ pub fn build_graph(
 
     let n = files.len();
 
-    // Adjacency list by index, over the edges between known files.
-    let mut adj: Vec<Vec<usize>> = vec![vec![]; n];
-    for (src, dsts) in edges {
-        let Some(&si) = index.get(src) else { continue };
-        adj[si].extend(dsts.iter().filter_map(|dst| index.get(dst).copied()));
-    }
+    let adj = adjacency(n, &index, edges);
+    let loading: Vec<Vec<usize>> = adj.iter().map(|out| of_kind(out, EdgeKind::Load)).collect();
+    let count = |i: usize, kind: EdgeKind| of_kind(&adj[i], kind).len();
 
-    let fan_out: Vec<usize> = adj.iter().map(Vec::len).collect();
     let mut fan_in = vec![0usize; n];
-    for &dst in adj.iter().flatten() {
+    for &(dst, _) in adj.iter().flatten() {
         fan_in[dst] += 1;
     }
 
     // A strongly connected component of more than one file is a cycle.
-    let sccs: Vec<Vec<usize>> = tarjan_scc(n, &adj)
+    let sccs: Vec<Vec<usize>> = tarjan_scc(n, &loading)
         .into_iter()
         .filter(|scc| scc.len() > 1)
         .collect();
@@ -93,16 +129,46 @@ pub fn build_graph(
             path: path.clone(),
             language: lang.clone(),
             fan_in: fan_in[i],
-            fan_out: fan_out[i],
+            fan_out: adj[i].len(),
+            type_fan_out: count(i, EdgeKind::Type),
+            deferred_fan_out: count(i, EdgeKind::Deferred),
             in_cycle: in_cycle[i],
+            unresolved: Vec::new(),
         })
-        .collect();
+        .collect::<Vec<_>>();
 
     DepResult {
+        totals: Totals::of(&entries),
         entries,
         cycles,
         unsupported: Vec::new(),
     }
+}
+
+/// For each of the `n` files by index, the known files it uses, with the
+/// kind of use.
+fn adjacency(
+    n: usize,
+    index: &HashMap<&PathBuf, usize>,
+    edges: &HashMap<PathBuf, Vec<(PathBuf, EdgeKind)>>,
+) -> Vec<Vec<(usize, EdgeKind)>> {
+    let mut adj = vec![vec![]; n];
+    for (src, dsts) in edges {
+        let Some(&si) = index.get(src) else { continue };
+        let known = dsts
+            .iter()
+            .filter_map(|(dst, kind)| Some((*index.get(dst)?, *kind)));
+        adj[si].extend(known);
+    }
+    adj
+}
+
+/// The files of `out` used with `kind`.
+fn of_kind(out: &[(usize, EdgeKind)], kind: EdgeKind) -> Vec<usize> {
+    out.iter()
+        .filter(|(_, k)| *k == kind)
+        .map(|(to, _)| *to)
+        .collect()
 }
 
 /// Tarjan's strongly-connected components algorithm (iterative to avoid stack overflow).
@@ -192,35 +258,33 @@ impl Tarjan<'_> {
 
 /// JSON-serializable dependency entry.
 #[derive(Serialize)]
-pub struct JsonDepEntry {
+pub struct JsonDepEntry<'a> {
     pub path: String,
-    pub language: String,
-    pub fan_in: usize,
-    pub fan_out: usize,
-    pub in_cycle: bool,
+    #[serde(flatten)]
+    pub entry: &'a DepEntry,
 }
 
 /// JSON-serializable full result.
 #[derive(Serialize)]
-pub struct JsonDepResult {
-    pub files: Vec<JsonDepEntry>,
+pub struct JsonDepResult<'a> {
+    pub files: Vec<JsonDepEntry<'a>>,
     pub cycles: Vec<Vec<String>>,
     pub cycle_count: usize,
+    pub type_edges: usize,
+    pub deferred_edges: usize,
+    pub unresolved_count: usize,
     pub unsupported: Vec<UnsupportedLanguage>,
 }
 
-impl From<&DepResult> for JsonDepResult {
-    fn from(r: &DepResult) -> Self {
+impl<'a> From<&'a DepResult> for JsonDepResult<'a> {
+    fn from(r: &'a DepResult) -> Self {
         JsonDepResult {
             files: r
                 .entries
                 .iter()
-                .map(|e| JsonDepEntry {
-                    path: e.path.display().to_string(),
-                    language: e.language.clone(),
-                    fan_in: e.fan_in,
-                    fan_out: e.fan_out,
-                    in_cycle: e.in_cycle,
+                .map(|entry| JsonDepEntry {
+                    path: entry.path.display().to_string(),
+                    entry,
                 })
                 .collect(),
             cycles: r
@@ -229,6 +293,9 @@ impl From<&DepResult> for JsonDepResult {
                 .map(|c| c.iter().map(|p| p.display().to_string()).collect())
                 .collect(),
             cycle_count: r.cycles.len(),
+            type_edges: r.totals.type_edges,
+            deferred_edges: r.totals.deferred_edges,
+            unresolved_count: r.totals.unresolved,
             unsupported: r.unsupported.clone(),
         }
     }
@@ -270,16 +337,44 @@ mod tests {
             .collect()
     }
 
-    fn edges_map(pairs: &[(&str, &[&str])]) -> HashMap<PathBuf, Vec<PathBuf>> {
+    fn edges_map(pairs: &[(&str, &[&str])]) -> HashMap<PathBuf, Vec<(PathBuf, EdgeKind)>> {
         pairs
             .iter()
             .map(|(k, vs)| {
                 (
                     PathBuf::from(k),
-                    vs.iter().map(|v| PathBuf::from(v)).collect(),
+                    vs.iter()
+                        .map(|v| (PathBuf::from(v), EdgeKind::Load))
+                        .collect(),
                 )
             })
             .collect()
+    }
+
+    #[test]
+    fn imports_that_do_not_load_make_no_cycle_but_count_in_fan_out() {
+        let files = paths(&["a.ts", "b.ts", "c.py"]);
+        let edges: HashMap<PathBuf, Vec<(PathBuf, EdgeKind)>> = [
+            (
+                "a.ts",
+                vec![("b.ts", EdgeKind::Type), ("c.py", EdgeKind::Deferred)],
+            ),
+            ("b.ts", vec![("a.ts", EdgeKind::Load)]),
+            ("c.py", vec![("a.ts", EdgeKind::Load)]),
+        ]
+        .into_iter()
+        .map(|(from, to)| {
+            let to = to.into_iter().map(|(p, k)| (PathBuf::from(p), k)).collect();
+            (PathBuf::from(from), to)
+        })
+        .collect();
+        let result = build_graph(&files, &edges);
+        assert!(result.cycles.is_empty());
+        let a = &result.entries[0];
+        assert_eq!((a.fan_out, a.type_fan_out, a.deferred_fan_out), (2, 1, 1));
+        assert_eq!(a.fan_in, 2);
+        assert_eq!(result.totals.type_edges, 1);
+        assert_eq!(result.totals.deferred_edges, 1);
     }
 
     #[test]
@@ -482,6 +577,6 @@ mod tests {
         let json: JsonDepResult = (&result).into();
         assert_eq!(json.cycle_count, 1);
         assert_eq!(json.cycles.len(), 1);
-        assert!(json.files.iter().all(|f| f.in_cycle));
+        assert!(json.files.iter().all(|f| f.entry.in_cycle));
     }
 }

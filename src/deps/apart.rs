@@ -7,7 +7,7 @@ use std::path::Path;
 use super::c_family;
 use super::csharp;
 use super::golang;
-use super::graph::{Source, Use};
+use super::graph::{Found, Source, Use};
 use super::java;
 use super::layout::Layout;
 use super::python_uses;
@@ -45,15 +45,18 @@ impl<'s> Apart<'s> {
     /// The files `source` uses, when its language is read here. Python
     /// tells the names taken too, a Go import leads to every file of a
     /// package, and a Java or C# file uses the types it names.
-    pub fn uses(&self, source: &Source) -> Option<BTreeMap<usize, BTreeSet<String>>> {
+    pub fn uses(&self, source: &Source) -> Option<Found> {
         self.python
             .uses(source, self.layout, self.by_path)
             .or_else(|| self.go.uses(source))
             .or_else(|| self.c.uses(source))
-            .or_else(|| {
-                let at = *self.by_path.get(source.path.as_path())?;
-                self.java.uses(at).or_else(|| self.csharp.uses(at))
-            })
+            .or_else(|| self.named(source).map(Found::from))
+    }
+
+    /// The files of the types a Java or C# source names.
+    fn named(&self, source: &Source) -> Option<BTreeMap<usize, BTreeSet<String>>> {
+        let at = *self.by_path.get(source.path.as_path())?;
+        self.java.uses(at).or_else(|| self.csharp.uses(at))
     }
 
     /// For each source, the files it uses without naming them, given the

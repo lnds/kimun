@@ -6,11 +6,11 @@
 //! package use each other without importing, so the graph has no edges
 //! between them. Build constraints are not read.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use super::golang_source;
-use super::graph::Source;
+use super::graph::{EdgeKind, Found, Source};
 use super::layout::Layout;
 
 /// The packages of a graph, by directory, and the modules that name them.
@@ -55,22 +55,39 @@ impl Packages {
         })
     }
 
-    /// The files `source` imports: those of each package it names. `None`
-    /// when it is not Go. A package cannot import itself, so an import of
-    /// its own directory is left out, unless the file is an external test.
-    pub fn uses(&self, source: &Source) -> Option<BTreeMap<usize, BTreeSet<String>>> {
+    /// The files `source` imports: those of each package it names, and the
+    /// imports within a module of the repository that name no package.
+    /// `None` when it is not Go. A package cannot import itself, so an
+    /// import of its own directory is left out, unless the file is an
+    /// external test.
+    pub fn uses(&self, source: &Source) -> Option<Found> {
         (source.language == "Go").then(|| {
             let file = golang_source::read(&source.text);
             let own = source.path.parent().unwrap_or(Path::new(""));
-            file.imports
-                .iter()
-                .filter_map(|import| self.directory(import))
-                .filter(|dir| file.is_external_test() || dir != own)
-                .filter_map(|dir| self.by_dir.get(&dir))
-                .flatten()
-                .map(|&file| (file, BTreeSet::new()))
-                .collect()
+            let mut found = Found::default();
+            for import in file.imports.iter() {
+                let itself = self.directory(import).is_some_and(|dir| dir == own);
+                if file.is_external_test() || !itself {
+                    self.note(import.clone(), &mut found);
+                }
+            }
+            found
         })
+    }
+
+    /// Note what an import uses, or that it names a package of no file.
+    /// An import outside the modules of the repository is external.
+    fn note(&self, import: String, found: &mut Found) {
+        let Some(dir) = self.directory(&import) else {
+            return;
+        };
+        let Some(files) = self.by_dir.get(&dir) else {
+            found.unresolved.insert(import);
+            return;
+        };
+        for &file in files {
+            found.add(file, EdgeKind::Load);
+        }
     }
 }
 

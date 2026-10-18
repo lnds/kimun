@@ -25,6 +25,27 @@ pub struct Source {
     pub templates: Vec<String>,
 }
 
+/// How an import makes one file depend on another when the program runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
+pub enum EdgeKind {
+    /// The importer loads the file when it loads itself.
+    #[default]
+    Load,
+    /// The file is loaded later, when the code that imports it runs: a
+    /// Python import inside a function, a dynamic `import()`.
+    Deferred,
+    /// Only types are taken, which the compiler erases: a TypeScript
+    /// `import type`, a Python import under `if TYPE_CHECKING:`.
+    Type,
+}
+
+impl EdgeKind {
+    /// The kind of two imports of the same file: the one that loads soonest.
+    pub fn strongest(self, other: Self) -> Self {
+        self.min(other)
+    }
+}
+
 /// One file's use of another.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Use {
@@ -35,6 +56,59 @@ pub struct Use {
     /// Whether it may reach any function of the file without naming it:
     /// an Elixir `import` without `only:`, a `use`, a protocol implemented.
     pub whole: bool,
+    pub kind: EdgeKind,
+}
+
+/// What the imports of a source were found to name.
+#[derive(Debug, Default)]
+pub struct Found {
+    /// The files used, each with the functions called there.
+    pub uses: BTreeMap<usize, BTreeSet<String>>,
+    /// The kind of each use, when the language tells; a load otherwise.
+    pub kinds: BTreeMap<usize, EdgeKind>,
+    /// Imports that name a file of the project by their form, but resolve
+    /// to none: a quoted include, a relative specifier.
+    pub unresolved: BTreeSet<String>,
+    /// The files used whole, as `Use.whole` tells.
+    pub whole: BTreeSet<usize>,
+}
+
+impl Found {
+    /// Note a use of `to` of the given kind, and give the calls made there.
+    pub fn add(&mut self, to: usize, kind: EdgeKind) -> &mut BTreeSet<String> {
+        self.kinds
+            .entry(to)
+            .and_modify(|k| *k = k.strongest(kind))
+            .or_insert(kind);
+        self.uses.entry(to).or_default()
+    }
+
+    /// The uses `file` makes, without those of itself.
+    fn uses_from(&self, file: usize) -> Vec<Use> {
+        let made = self.uses.iter().filter(|(to, _)| **to != file);
+        made.map(|(&to, calls)| Use {
+            to,
+            calls: calls.iter().cloned().collect(),
+            whole: self.whole.contains(&to),
+            kind: self.kinds.get(&to).copied().unwrap_or_default(),
+        })
+        .collect()
+    }
+}
+
+impl FromIterator<(usize, BTreeSet<String>)> for Found {
+    fn from_iter<I: IntoIterator<Item = (usize, BTreeSet<String>)>>(uses: I) -> Self {
+        Found::from(uses.into_iter().collect::<BTreeMap<_, _>>())
+    }
+}
+
+impl From<BTreeMap<usize, BTreeSet<String>>> for Found {
+    fn from(uses: BTreeMap<usize, BTreeSet<String>>) -> Self {
+        Found {
+            uses,
+            ..Self::default()
+        }
+    }
 }
 
 /// Why a change to a file cannot be narrowed to functions, so that every
@@ -83,6 +157,9 @@ pub struct FileGraph {
     /// behind the headers it includes. Not in `edges`, which is what the
     /// code writes, nor so in its cycles.
     pub implied: Vec<Vec<Use>>,
+    /// For each file, the imports that look internal but resolve to no
+    /// file.
+    pub unresolved: Vec<Vec<String>>,
     /// References left out because several files define the module named
     /// and none is nearer than the others.
     pub ambiguous: usize,
@@ -99,6 +176,7 @@ impl Use {
             to,
             calls: Vec::new(),
             whole: false,
+            kind: EdgeKind::Load,
         }
     }
 }
@@ -115,20 +193,20 @@ fn imports(
     layout: &Layout,
     by_path: &HashMap<&Path, usize>,
     apart: &Apart,
-) -> BTreeMap<usize, BTreeSet<String>> {
-    if let Some(uses) = apart.uses(source) {
-        return uses;
+) -> Found {
+    if let Some(found) = apart.uses(source) {
+        return found;
+    }
+    if matches!(
+        source.language.as_str(),
+        "JavaScript" | "TypeScript" | "JSX"
+    ) {
+        return javascript::found(source, layout, by_path);
     }
     let known = &layout.known;
-    let resolve = |import: &String| match source.language.as_str() {
-        "JavaScript" | "TypeScript" | "JSX" => javascript::resolve(&source.path, import, layout)
-            .into_iter()
-            .collect(),
-        language => resolve_import(&source.path, import, language, known),
-    };
     extract_imports(&source.language, &source.text)
         .iter()
-        .flat_map(resolve)
+        .flat_map(|import| resolve_import(&source.path, import, &source.language, known))
         .filter_map(|path| by_path.get(path.as_path()).copied())
         .map(no_calls)
         .collect()
@@ -255,21 +333,21 @@ impl FileGraph {
         };
         let modules = std::mem::take(&mut graph.modules);
         for (file, source) in sources.iter().enumerate() {
-            let (uses, whole) = match (&parsed[file], rust_uses[file].take()) {
-                (Some(parsed), _) => graph.elixir_uses(file, parsed, &modules, related),
-                (None, Some(used)) => (used.into_iter().map(no_calls).collect(), BTreeSet::new()),
-                (None, None) => (imports(source, layout, &by_path, &apart), BTreeSet::new()),
+            let found = match (&parsed[file], rust_uses[file].take()) {
+                (Some(parsed), _) => {
+                    let (uses, whole) = graph.elixir_uses(file, parsed, &modules, related);
+                    Found {
+                        whole,
+                        ..Found::from(uses)
+                    }
+                }
+                (None, Some(used)) => used.into_iter().map(no_calls).collect(),
+                (None, None) => imports(source, layout, &by_path, &apart),
             };
-            graph.uses.push(
-                uses.into_iter()
-                    .filter(|(to, _)| *to != file)
-                    .map(|(to, calls)| Use {
-                        to,
-                        calls: calls.into_iter().collect(),
-                        whole: whole.contains(&to),
-                    })
-                    .collect(),
-            );
+            graph.uses.push(found.uses_from(file));
+            graph
+                .unresolved
+                .push(found.unresolved.into_iter().collect());
         }
         graph.implied = apart.implied(sources, &graph.uses);
         graph.modules = modules;
@@ -336,12 +414,24 @@ impl FileGraph {
     }
 
     /// The graph as the paths each file uses.
+    #[cfg(test)]
     pub fn edges(&self) -> HashMap<PathBuf, Vec<PathBuf>> {
+        self.kinded_edges()
+            .into_iter()
+            .map(|(file, used)| (file, used.into_iter().map(|(to, _)| to).collect()))
+            .collect()
+    }
+
+    /// The graph as the paths each file uses, each with the kind of use.
+    pub fn kinded_edges(&self) -> HashMap<PathBuf, Vec<(PathBuf, EdgeKind)>> {
         self.files
             .iter()
             .zip(&self.uses)
             .map(|(file, uses)| {
-                let used = uses.iter().map(|u| self.files[u.to].clone()).collect();
+                let used = uses
+                    .iter()
+                    .map(|u| (self.files[u.to].clone(), u.kind))
+                    .collect();
                 (file.clone(), used)
             })
             .collect()
