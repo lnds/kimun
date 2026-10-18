@@ -58,42 +58,54 @@ fn import_path(line: &str) -> Option<&str> {
 /// every ancestor directory of the importer is tried, nearest first.
 ///
 /// When no ancestor holds that file, the import may name a package directory
-/// `a/b/c/` instead; its files merge into one module, so the import resolves
-/// to all the `.kai` files directly inside it. Only a directory with a
-/// `kai.toml` manifest counts: a plain directory that happens to share its
-/// name with an external module (`import loop` next to `loop/`) is not one.
+/// `a/b/c/` instead, whose directory the compiler searches: the import names
+/// `a/b/c/c.kai`, the file that carries the package's name. A package
+/// without one resolves to all the `.kai` files directly inside it. Only a
+/// directory with a `kai.toml` manifest counts: a plain directory that
+/// happens to share its name with an external module (`import loop` next to
+/// `loop/`) is not one.
+///
+/// Each file is a module of its own, and the files of a package import each
+/// other as any other module, so they have no edges besides their imports.
 pub fn resolve(importer: &Path, module: &str, file_set: &HashSet<PathBuf>) -> Vec<PathBuf> {
     let dir = importer.parent().unwrap_or(Path::new(""));
     let rel = module.replace('.', "/");
-
-    for root in dir.ancestors() {
-        let as_file = root.join(format!("{rel}.kai"));
-        if file_set.contains(&as_file) {
-            return vec![as_file];
-        }
+    let as_file = dir
+        .ancestors()
+        .map(|root| root.join(format!("{rel}.kai")))
+        .find(|file| file_set.contains(file));
+    if let Some(file) = as_file {
+        return vec![file];
     }
+    let last = module.rsplit('.').next().unwrap_or(module);
+    let packages = dir.ancestors().map(|root| root.join(&rel));
+    packages
+        .filter(|package| file_set.contains(&package.join("kai.toml")))
+        .map(|package| package_files(&package, last, importer, file_set))
+        .find(|files| !files.is_empty())
+        .unwrap_or_default()
+}
 
-    for root in dir.ancestors() {
-        let package = root.join(&rel);
-        if !file_set.contains(&package.join("kai.toml")) {
-            continue;
-        }
-        let mut members: Vec<PathBuf> = file_set
-            .iter()
-            .filter(|p| {
-                p.parent() == Some(package.as_path())
-                    && p.extension().is_some_and(|e| e == "kai")
-                    && p.as_path() != importer
-            })
-            .cloned()
-            .collect();
-        if !members.is_empty() {
-            members.sort();
-            return members;
-        }
+/// The files an import of the package directory `package` names, besides
+/// the importer: the one named `last`, or else every one inside.
+fn package_files(
+    package: &Path,
+    last: &str,
+    importer: &Path,
+    file_set: &HashSet<PathBuf>,
+) -> Vec<PathBuf> {
+    let named = package.join(format!("{last}.kai"));
+    if file_set.contains(&named) {
+        return [named].into_iter().filter(|f| f != importer).collect();
     }
-
-    Vec::new()
+    let mut members: Vec<PathBuf> = file_set
+        .iter()
+        .filter(|p| p.parent() == Some(package) && p.extension().is_some_and(|e| e == "kai"))
+        .filter(|p| p.as_path() != importer)
+        .cloned()
+        .collect();
+    members.sort();
+    members
 }
 
 #[cfg(test)]
