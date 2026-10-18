@@ -14,8 +14,9 @@ use std::fs;
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 
-use git2::{BlameOptions, Delta, DiffOptions, ObjectType, Repository, Sort, Tree};
+use git2::{Delta, DiffOptions, ObjectType, Repository, Sort, Tree};
 
+mod blame;
 mod changeset;
 
 pub use changeset::{ChangeKind, CoChangeHistory, FileDiffStat, patch_stats};
@@ -267,67 +268,20 @@ impl GitRepo {
         Ok(result)
     }
 
-    /// Run git blame on a file and return per-author contributions.
-    /// `rel_path` is relative to the git root.
-    pub fn blame_file(&self, rel_path: &Path) -> Result<Vec<BlameInfo>, Box<dyn Error>> {
-        let blame = self.blame(rel_path)?;
-
-        let mut map: HashMap<String, BlameInfo> = HashMap::new();
-
-        for hunk in blame.iter() {
-            let sig = hunk.final_signature();
-            let (author, email) = name_and_email(sig.as_ref());
-            // Use the signature timestamp directly — avoids an O(1) git
-            // object lookup per hunk that would otherwise be O(N) total.
-            let commit_time = sig.map_or(0, |s| s.when().seconds());
-            let lines = hunk.lines_in_hunk();
-
-            map.entry(identity(&author, &email))
-                .and_modify(|info| {
-                    info.lines += lines;
-                    if commit_time > info.last_commit_time {
-                        info.last_commit_time = commit_time;
-                    }
-                })
-                .or_insert(BlameInfo {
-                    author,
-                    email,
-                    lines,
-                    last_commit_time: commit_time,
-                });
-        }
-
-        let mut result: Vec<BlameInfo> = map.into_values().collect();
-        result.sort_by_key(|r| Reverse(r.lines));
-        Ok(result)
-    }
-
-    /// Run git blame on a file and return per-hunk data preserving line ranges.
-    /// Used to join blame attribution with per-line FSM classification.
-    pub fn blame_hunks(&self, rel_path: &Path) -> Result<Vec<BlameHunkInfo>, Box<dyn Error>> {
-        let blame = self.blame(rel_path)?;
-
-        let result = blame
-            .iter()
-            .map(|hunk| {
-                let (author, email) = name_and_email(hunk.final_signature().as_ref());
-                BlameHunkInfo {
-                    author,
-                    email,
-                    start_line: hunk.final_start_line(),
-                    lines: hunk.lines_in_hunk(),
-                }
-            })
-            .collect();
-
-        Ok(result)
-    }
-
-    /// Blame of a file, with authors read through `.mailmap`.
-    fn blame(&self, rel_path: &Path) -> Result<git2::Blame<'_>, git2::Error> {
-        let mut opts = BlameOptions::new();
-        opts.use_mailmap(true);
-        self.repo.blame_file(rel_path, Some(&mut opts))
+    /// The time of the last commit of each author, by [`identity`], read
+    /// through `.mailmap`.
+    pub fn last_commit_times(&self) -> Result<HashMap<String, i64>, Box<dyn Error>> {
+        let mailmap = self.repo.mailmap()?;
+        let mut last = HashMap::new();
+        // Newest first: the first commit met of each author is the last.
+        self.walk_commits(None, |commit| {
+            let author = commit.author_with_mailmap(&mailmap)?;
+            let (name, email) = name_and_email(Some(&author));
+            last.entry(identity(&name, &email))
+                .or_insert(author.when().seconds());
+            Ok(ControlFlow::Continue(()))
+        })?;
+        Ok(last)
     }
 
     /// The [`identity`] of every author with commits since the given

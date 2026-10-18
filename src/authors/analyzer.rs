@@ -82,6 +82,17 @@ pub fn compute_authors(file_blames: &[(&str, &[BlameInfo])]) -> Vec<AuthorSummar
     result
 }
 
+/// Date each author by their last commit (`last`, by identity) rather than
+/// by the newest of their lines that blame still shows: lines get rewritten,
+/// and a last commit may touch only files that are not measured.
+pub fn set_last_commits(authors: &mut [AuthorSummary], last: &HashMap<String, i64>) {
+    for author in authors {
+        if let Some(&time) = last.get(&crate::git::identity(&author.name, &author.email)) {
+            author.last_active = time;
+        }
+    }
+}
+
 #[cfg(test)]
 #[path = "analyzer_test.rs"]
 mod tests;

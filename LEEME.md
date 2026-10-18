@@ -544,6 +544,10 @@ Usa `--since` para definir qué es "actividad reciente". Si el dueño principal 
 
 Las cuentas de bots (`dependabot[bot]`, `github-actions[bot]`) no tienen conocimiento: sus líneas quedan fuera, y un archivo que solo escribieron bots no se lista. También quedan fuera los archivos generados y los de datos o prosa (JSON, YAML, Markdown, texto).
 
+#### Quién escribió cada línea
+
+La propiedad sale del blame del archivo tal como está commiteado en `HEAD`. Cuando el programa `git` está instalado, kimun ejecuta `git blame -w -M -C`: un cambio de espacios conserva al autor de la línea, y también lo conserva el código movido dentro de un archivo o desde otro archivo que cambió el mismo commit. Las revisiones listadas en `.git-blame-ignore-revs` (o en el archivo que indica `blame.ignoreRevsFile`) se omiten, así que un reformateo masivo no se queda con las líneas. Sin `git`, el blame lo hace libgit2: omite los cambios de espacios, pero no sigue el código movido ni ignora revisiones. `km authors` y `km loc --by-author` leen el blame de la misma forma.
+
 Opciones:
 
 | Flag | Descripción |
@@ -1131,7 +1135,7 @@ Dependency cycles: 14
 
 ### `km authors` -- Resumen de propiedad por autor
 
-Resume la propiedad del código de todo el proyecto por autor. Agrupa los datos de `git blame` para responder "¿quién sabe qué?" a nivel de equipo: complementa a `km knowledge` (vista por archivo) con una vista del equipo.
+Resume la propiedad del código de todo el proyecto por autor. Agrupa los datos de `git blame` para responder "¿quién sabe qué?" a nivel de equipo: complementa a `km knowledge` (vista por archivo) con una vista del equipo. El blame se lee igual que en `km knowledge` (ver [Quién escribió cada línea](#quién-escribió-cada-línea)). "Last Active" es la fecha del último commit del autor, toque lo que toque.
 
 ```bash
 km authors [path]

@@ -544,6 +544,10 @@ Use `--since` to define "recent activity". If the primary owner of a file has no
 
 Bot accounts (`dependabot[bot]`, `github-actions[bot]`) hold no knowledge: their lines are left out, and a file only bots wrote is not listed. Generated files and data or prose (JSON, YAML, Markdown, text) are left out too.
 
+#### Who wrote each line
+
+Ownership comes from blame of the file as committed at `HEAD`. When the `git` program is installed, kimun runs `git blame -w -M -C`: a change of whitespace keeps the author of the line, and so does code moved within a file or from another file the same commit changed. Revisions listed in `.git-blame-ignore-revs` (or in the file `blame.ignoreRevsFile` names) are skipped, so a mass reformat does not take the lines. Without `git`, libgit2 blames the file: it skips whitespace changes but neither follows moved code nor ignores revisions. `km authors` and `km loc --by-author` read blame the same way.
+
 Options:
 
 | Flag | Description |
@@ -1131,7 +1135,7 @@ Dependency cycles: 14
 
 ### `km authors` -- Per-author ownership summary
 
-Summarizes code ownership across the project by author. Aggregates `git blame` data to answer "who knows what?" at the team level — complementing `km knowledge` (per-file view) with a team-level view.
+Summarizes code ownership across the project by author. Aggregates `git blame` data to answer "who knows what?" at the team level — complementing `km knowledge` (per-file view) with a team-level view. Blame is read as `km knowledge` reads it (see [Who wrote each line](#who-wrote-each-line)). "Last Active" is the date of the author's last commit, whatever it touched.
 
 ```bash
 km authors [path]

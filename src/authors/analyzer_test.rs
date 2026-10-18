@@ -83,3 +83,17 @@ fn empty_input_returns_empty() {
     let result = compute_authors(&[]);
     assert!(result.is_empty());
 }
+
+#[test]
+fn last_active_is_the_last_commit() {
+    let blames = [BlameInfo {
+        author: "Ana".to_string(),
+        email: "Ana@x.org".to_string(),
+        lines: 2,
+        last_commit_time: 100,
+    }];
+    let mut authors = compute_authors(&[("Rust", &blames[..])]);
+    let last = HashMap::from([("ana@x.org".to_string(), 500)]);
+    set_last_commits(&mut authors, &last);
+    assert_eq!(authors[0].last_active, 500);
+}
