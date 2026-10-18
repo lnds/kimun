@@ -180,12 +180,31 @@ struct JsonProjectScore {
     dimensions: Vec<JsonDimension>,
     /// Worst-scoring files that need attention.
     needs_attention: Vec<JsonFileScore>,
+    /// The score of the default model, when this one is experimental.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    baseline: Option<JsonBaseline>,
+}
+
+/// The score of the default model, next to an experimental one.
+#[derive(Serialize)]
+struct JsonBaseline {
+    score: f64,
+    grade: Grade,
 }
 
 /// Serialize the project score to pretty-printed JSON and print to stdout.
 pub fn print_json(
     score: &ProjectScore,
     target: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    print_json_against(score, target, None)
+}
+
+/// The same, with the score of the default model it is compared to.
+pub fn print_json_against(
+    score: &ProjectScore,
+    target: Option<&str>,
+    baseline: Option<&ProjectScore>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let json = JsonProjectScore {
         target: target.map(String::from),
@@ -213,6 +232,10 @@ pub fn print_json(
                 issues: f.issues.clone(),
             })
             .collect(),
+        baseline: baseline.map(|b| JsonBaseline {
+            score: b.score,
+            grade: b.grade,
+        }),
     };
     report_helpers::print_json_stdout(&json)
 }

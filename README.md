@@ -394,8 +394,10 @@ Maintainability Index (Visual Studio)
  src/main.rs               11189.6    16   241   17.5  yellow
  src/loc/report.rs          6257.0    13   185   22.2  green
 ──────────────────────────────────────────────────────────────────────
- Total (3 files)                         1157   13.2
+ Total (3 files)                         1157    7.2
 ```
+
+The Total row is the MI of the files weighted by their code lines, with any value below 0 taken as 0, as the legacy model of `km score` takes it: a few small files do not outweigh the bulk of the code.
 
 ### `km miv` -- Maintainability Index (verifysoft variant)
 
@@ -447,8 +449,10 @@ Maintainability Index
  src/main.rs                8686.7    14   204  14.6    34.5    68.2  moderate
  src/util.rs                2816.9    18    76   9.5    55.4    84.7  moderate
 ────────────────────────────────────────────────────────────────────────────────
- Total (3 files)                         1011                  51.9
+ Total (3 files)                         1011                  22.2
 ```
+
+The verifysoft MI has no lower bound: a large file can be far below 0 (ripgrep `defs.rs` is −206), and it weighs size more than complexity. That is the definition of the variant; `km mi` is the one bounded to 0–100. The Total row is weighted by code lines with values below 0 taken as 0, as in `km mi`.
 
 ### `km hotspots` -- Hotspot analysis
 
@@ -1223,6 +1227,17 @@ km score --model legacy [path]    # MI + cyclomatic model
 
 Up to v0.35 File Size weighed 15%, and the others 30%, 20%, 15% and 20%. It weighs less now because size already drives the other dimensions: a large file has more code to be complex, and the project score is a mean weighted by lines of code. Studies of modules find that defects grow less than proportionally with size, so splitting a file does not by itself make it less fault-prone; what size measures well is the cost of reading and changing it. The five points went to the other dimensions in proportion to their weights. `--model cogcom-0.35` scores with the former weights, to compare with earlier results or to keep a CI gate where it was.
 
+#### Experimental model (--experimental)
+
+`km score --experimental` scores with the Maintainability Index (Visual Studio variant, 0–100) in place of Halstead Effort, at its weight (21%), and prints the score of the default model next to it, from the same measurement. The MI weighs Halstead volume, cyclomatic complexity and size together; a file scores 0 at MI 0, 40 at 10, 70 at 20 (where Visual Studio turns green), 85 at 30, 95 at 45 and 100 from 60. It is for trying the dimension out, not for gates: it cannot be combined with `--model` or `--trend`.
+
+```
+ Experimental: Maintainability Index (Visual Studio) in place of Halstead Effort.
+ Default model: B+ (83.2)  →  experimental: C+ (74.0), -9.2
+```
+
+`--format json` adds a `baseline` object with the score and grade of the default model; `--format short` adds a `baseline` line.
+
 #### Dimensions and weights (--model legacy)
 
 | Dimension | Weight | What it measures |
@@ -1255,6 +1270,7 @@ Options:
 | Flag | Description |
 |------|-------------|
 | `--model MODEL` | Scoring model: `cogcom` (default), `cogcom-0.35` (the weights up to v0.35) or `legacy` (MI + cyclomatic) |
+| `--experimental` | Score with the Maintainability Index in place of Halstead Effort, against the default model |
 | `--trend [REF]` | Compare current score against a git ref (default: `HEAD`). Shows change: `B- → B (+2.3)`. Useful for PR review: `--trend origin/main` |
 | `--fail-if-worse` | With `--trend`: exit with code 1 if the score dropped by more than `--gate-tolerance` |
 | `--gate-tolerance POINTS` | Score drop `--fail-if-worse` allows before failing (default: `0.01` with `--gate-scope project`, `0.5` with `--gate-scope changed`). Compares unrounded scores |

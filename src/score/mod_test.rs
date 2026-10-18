@@ -406,6 +406,7 @@ fn the_weights_up_to_v0_35_give_the_former_score() {
         code_lines: 100,
         max_cognitive: Some(20),
         mi_score: None,
+        mi_vs: None,
         max_complexity: None,
         indent_stddev: Some(1.0),
         halstead_effort: Some(1000.0),

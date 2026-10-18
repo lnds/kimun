@@ -249,6 +249,43 @@ pub fn normalize_mi(mi_score: f64) -> f64 {
     piecewise(mi_score, MI_CURVE)
 }
 
+/// Maintainability Index curve, Visual Studio variant (experimental model):
+/// MI on its 0–100 scale to a score. Visual Studio calls 20 and above
+/// green; the median file of real projects sits between 25 and 50.
+/// 0→0, 10→40, 20→70, 30→85, 45→95, ≥60→100.
+const MI_VS_CURVE: &[Breakpoint] = &[
+    Breakpoint {
+        input: 0.0,
+        score: 0.0,
+    },
+    Breakpoint {
+        input: 10.0,
+        score: 40.0,
+    },
+    Breakpoint {
+        input: 20.0,
+        score: 70.0,
+    },
+    Breakpoint {
+        input: 30.0,
+        score: 85.0,
+    },
+    Breakpoint {
+        input: 45.0,
+        score: 95.0,
+    },
+    Breakpoint {
+        input: 60.0,
+        score: 100.0,
+    },
+];
+
+/// Normalize the Visual Studio Maintainability Index to a 0–100 score
+/// (experimental model).
+pub fn normalize_mi_vs(mi_score: f64) -> f64 {
+    piecewise(mi_score, MI_VS_CURVE)
+}
+
 /// Normalize max cyclomatic complexity to a 0–100 score (legacy model).
 pub fn normalize_complexity(max_complexity: usize) -> f64 {
     piecewise(max_complexity as f64, COMPLEXITY_CURVE)

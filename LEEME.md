@@ -394,8 +394,10 @@ Maintainability Index (Visual Studio)
  src/main.rs               11189.6    16   241   17.5  yellow
  src/loc/report.rs          6257.0    13   185   22.2  green
 ──────────────────────────────────────────────────────────────────────
- Total (3 files)                         1157   13.2
+ Total (3 files)                         1157    7.2
 ```
+
+La fila Total es el MI de los archivos ponderado por sus líneas de código, con todo valor bajo 0 tomado como 0, igual que lo toma el modelo legacy de `km score`: unos pocos archivos chicos no pesan más que el grueso del código.
 
 ### `km miv` -- Índice de mantenibilidad (variante de verifysoft)
 
@@ -447,8 +449,10 @@ Maintainability Index
  src/main.rs                8686.7    14   204  14.6    34.5    68.2  moderate
  src/util.rs                2816.9    18    76   9.5    55.4    84.7  moderate
 ────────────────────────────────────────────────────────────────────────────────
- Total (3 files)                         1011                  51.9
+ Total (3 files)                         1011                  22.2
 ```
+
+El MI de verifysoft no tiene cota inferior: un archivo grande puede quedar muy por debajo de 0 (`defs.rs` de ripgrep da −206), y pesa más el tamaño que la complejidad. Así está definida la variante; `km mi` es la acotada a 0–100. La fila Total se pondera por líneas de código con los valores bajo 0 tomados como 0, igual que en `km mi`.
 
 ### `km hotspots` -- Análisis de hotspots
 
@@ -1223,6 +1227,17 @@ km score --model legacy [path]    # modelo de MI + ciclomática
 
 Hasta la v0.35 el tamaño de archivo pesaba 15%, y las demás dimensiones 30%, 20%, 15% y 20%. Ahora pesa menos porque el tamaño ya influye en las otras dimensiones: un archivo grande tiene más código que puede ser complejo, y el puntaje del proyecto es un promedio ponderado por líneas de código. Los estudios sobre módulos encuentran que los defectos crecen menos que proporcionalmente con el tamaño, así que partir un archivo no lo hace por sí solo menos propenso a fallas; lo que el tamaño mide bien es el costo de leerlo y cambiarlo. Los cinco puntos pasaron a las demás dimensiones en proporción a sus pesos. `--model cogcom-0.35` calcula con los pesos anteriores, para comparar con resultados previos o para mantener una compuerta de CI donde estaba.
 
+#### Modelo experimental (--experimental)
+
+`km score --experimental` calcula con el Maintainability Index (variante de Visual Studio, 0–100) en lugar del esfuerzo de Halstead, con su mismo peso (21%), y muestra al lado el puntaje del modelo por defecto, a partir de la misma medición. El MI pondera juntos el volumen de Halstead, la complejidad ciclomática y el tamaño; un archivo obtiene 0 con MI 0, 40 con 10, 70 con 20 (donde Visual Studio pasa a verde), 85 con 30, 95 con 45 y 100 desde 60. Sirve para probar la dimensión, no para compuertas: no se puede combinar con `--model` ni con `--trend`.
+
+```
+ Experimental: Maintainability Index (Visual Studio) in place of Halstead Effort.
+ Default model: B+ (83.2)  →  experimental: C+ (74.0), -9.2
+```
+
+`--format json` agrega un objeto `baseline` con el puntaje y la nota del modelo por defecto; `--format short` agrega una línea `baseline`.
+
 #### Dimensiones y pesos (--model legacy)
 
 | Dimensión | Peso | Qué mide |
@@ -1255,6 +1270,7 @@ Opciones:
 | Flag | Descripción |
 |------|-------------|
 | `--model MODEL` | Modelo de puntaje: `cogcom` (por defecto), `cogcom-0.35` (los pesos hasta la v0.35) o `legacy` (MI + ciclomática) |
+| `--experimental` | Calcula con el Maintainability Index en lugar del esfuerzo de Halstead, comparado con el modelo por defecto |
 | `--trend [REF]` | Compara el puntaje actual con una ref de git (por defecto: `HEAD`). Muestra el cambio: `B- → B (+2.3)`. Útil para revisar un PR: `--trend origin/main` |
 | `--fail-if-worse` | Con `--trend`: termina con código 1 si el puntaje bajó más que `--gate-tolerance` |
 | `--gate-tolerance POINTS` | Caída de puntaje que `--fail-if-worse` permite antes de fallar (por defecto: `0.01` con `--gate-scope project`, `0.5` con `--gate-scope changed`). Compara los puntajes sin redondear |

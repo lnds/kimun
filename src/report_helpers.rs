@@ -248,6 +248,19 @@ pub fn output_results<T>(
     }
 }
 
+/// The Maintainability Index of a set of files: the mean of each file's
+/// MI weighted by its code lines, with values below 0 taken as 0, as the
+/// legacy model of `km score` takes them. A plain mean would let a few
+/// small files outweigh the bulk of the code, and an unbounded negative MI
+/// outweigh every other file.
+pub fn weighted_mi(files: impl Iterator<Item = (f64, usize)>) -> f64 {
+    let (sum, lines) = files.fold((0.0, 0usize), |(sum, lines), (mi, loc)| {
+        let loc = loc.max(1);
+        (sum + mi.max(0.0) * loc as f64, lines + loc)
+    });
+    if lines == 0 { 0.0 } else { sum / lines as f64 }
+}
+
 #[cfg(test)]
 #[path = "report_helpers_test.rs"]
 mod tests;

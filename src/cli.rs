@@ -568,6 +568,12 @@ pub enum Commands {
         #[arg(long, value_parser = ["cogcom", "cogcom-0.35", "legacy"])]
         model: Option<String>,
 
+        /// Score with the experimental model: the Maintainability Index
+        /// (Visual Studio variant) in place of Halstead Effort, shown against
+        /// the score of the default model.
+        #[arg(long, conflicts_with_all = ["model", "trend"])]
+        experimental: bool,
+
         /// Compare current score against a git ref (default: HEAD).
         /// Shows how the score changed: "B- → B (+2.3)".
         /// Useful for PR review: --trend origin/main
