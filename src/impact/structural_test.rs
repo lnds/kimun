@@ -1159,3 +1159,49 @@ fn a_change_without_known_lines_says_so() {
         Some("no changed line is known")
     );
 }
+
+#[test]
+fn an_import_tells_the_calls_it_names_and_otherwise_refers() {
+    let changes = [change(
+        "lib/booking/insights.ex",
+        &[line_of("record(insight, user, :arranged)")],
+    )];
+    let importers = [
+        (
+            "lib/booking/whole.ex",
+            "defmodule Booking.Whole do\n  import Booking.Insights\n  def run(i, u), do: arrange(i, u)\nend\n",
+        ),
+        (
+            "lib/booking/listing.ex",
+            "defmodule Booking.Listing do\n  import Booking.Insights\n  def run, do: {list(), Booking.Insights.list()}\nend\n",
+        ),
+        (
+            "lib/booking/named.ex",
+            "defmodule Booking.Named do\n  import Booking.Insights, only: [arrange: 2]\n  def run(i, u), do: arrange(i, u)\nend\n",
+        ),
+        (
+            "lib/booking/other.ex",
+            "defmodule Booking.Other do\n  import Booking.Insights, only: [list: 0]\n  def run, do: list()\nend\n",
+        ),
+    ];
+    let radius = radius(project(&importers), &changes);
+    let direct = direct(&radius);
+    let exposure = |name: &str| {
+        let found = direct.iter().find(|d| d.0 == name).unwrap();
+        (found.1, found.3.clone())
+    };
+
+    // A bare call is answered by the functions of the module imported.
+    assert_eq!(
+        exposure("whole.ex"),
+        (Exposure::Calls, vec!["Insights.arrange"])
+    );
+    // The calls seen are left alone, but an import of the whole module
+    // may reach `arrange` where no call is seen.
+    assert_eq!(exposure("listing.ex"), (Exposure::Refers, vec![]));
+    assert_eq!(
+        exposure("named.ex"),
+        (Exposure::Calls, vec!["Insights.arrange"])
+    );
+    assert_eq!(exposure("other.ex"), (Exposure::Elsewhere, vec![]));
+}

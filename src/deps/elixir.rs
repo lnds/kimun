@@ -10,8 +10,10 @@
 
 use std::collections::HashMap;
 
+use super::elixir_directives::{Using, bare_calls, directives};
 use super::elixir_literals::code_only;
 pub(super) use super::elixir_literals::{interpolation_end, literal_end};
+use super::elixir_using::Injection;
 use super::heex;
 use super::phoenix;
 
@@ -30,6 +32,14 @@ pub struct ElixirFile {
     /// Modules referred to, sorted, without repeats. Names are full: aliases
     /// are expanded. They may name modules of other projects or of libraries.
     pub refs: Vec<Reference>,
+    /// Modules any of whose functions the file may reach without naming
+    /// them: imported whole, or a protocol it implements.
+    pub whole: Vec<String>,
+    /// The modules it `use`s.
+    pub uses: Vec<Using>,
+    /// Functions it calls without a module, and defines none of: what an
+    /// `import` may answer.
+    pub bare: Vec<String>,
 }
 
 pub(super) fn is_ident(c: char) -> bool {
@@ -116,17 +126,24 @@ fn modules_of(code: &str) -> (Vec<String>, String) {
 
 /// Short names the file gives to modules: `alias Foo.Bar` makes `Bar`
 /// stand for `Foo.Bar`. They are taken as holding for the whole file.
-#[derive(Default)]
+#[derive(Debug, Default, Clone)]
 pub(super) struct Aliases(HashMap<String, String>);
 
 impl Aliases {
     /// A name as written, with its first segment replaced when it is an alias.
-    fn expand(&self, name: &str) -> String {
+    pub(super) fn expand(&self, name: &str) -> String {
         let (first, rest) = name.split_once('.').map_or((name, ""), |(f, r)| (f, r));
         match self.0.get(first) {
             Some(full) if rest.is_empty() => full.clone(),
             Some(full) => format!("{full}.{rest}"),
             None => name.to_string(),
+        }
+    }
+
+    /// Take the aliases of `other` this file does not declare itself.
+    pub(super) fn inherit(&mut self, other: &Aliases) {
+        for (short, full) in &other.0 {
+            self.0.entry(short.clone()).or_insert_with(|| full.clone());
         }
     }
 
@@ -221,7 +238,7 @@ fn called(after: &str) -> Option<&str> {
 }
 
 /// Every module name in `code`, with the function called on it if any.
-fn references(code: &str, aliases: &Aliases) -> Vec<Reference> {
+pub(super) fn references(code: &str, aliases: &Aliases) -> Vec<Reference> {
     let mut refs = Vec::new();
     let mut rest = code;
     let mut before = ' ';
@@ -260,16 +277,39 @@ pub fn parse(source: &str) -> ElixirFile {
 /// their own. What a template refers to, the file uses: those written in it
 /// as `~H` and those given, read with the aliases of the file.
 pub fn parse_with(source: &str, templates: &[String]) -> ElixirFile {
+    read(source, templates, &Injection::default())
+}
+
+/// Read an Elixir source file as `parse_with` does, with what the modules
+/// it `use`s inject into it: aliases its code is read with, references and
+/// imports.
+pub fn read(source: &str, templates: &[String], injected: &Injection) -> ElixirFile {
     let (defines, code) = modules_of(&code_only(source));
-    let (aliases, used) = Aliases::of(&code);
+    let (mut aliases, mut used) = Aliases::of(&code);
+    aliases.inherit(&injected.aliases);
     let mut refs = references(&used, &aliases);
+    let directives = directives(&used, &aliases);
+    refs.extend(directives.calls);
     for template in heex::embedded(source).iter().chain(templates) {
-        refs.extend(references(&code_only(&heex::code(template)), &aliases));
+        let template = code_only(&heex::code(template));
+        refs.extend(references(&template, &aliases));
+        used.push_str(&template);
     }
     refs.extend(phoenix::views_of(&defines));
+    refs.extend(injected.refs.iter().cloned());
     refs.sort();
     refs.dedup();
-    ElixirFile { refs, defines }
+    let mut whole = directives.whole;
+    whole.extend(injected.whole.iter().cloned());
+    whole.sort();
+    whole.dedup();
+    ElixirFile {
+        bare: bare_calls(&used, source),
+        defines,
+        refs,
+        whole,
+        uses: directives.uses,
+    }
 }
 
 #[cfg(test)]

@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-use crate::deps::graph::{FileGraph, Related, Unnarrowed};
+use crate::deps::graph::{FileGraph, Related, Unnarrowed, Use};
 use crate::git::{ChangeKind, FileDiffStat};
 
 use super::protection::{Protection, Tests};
@@ -242,8 +242,11 @@ fn function_of(call: &str) -> &str {
 }
 
 /// How one file's use of an origin stands to what changed in that origin,
-/// and the calls that tell.
-fn exposure_of(calls: &[String], changed: Option<&BTreeSet<String>>) -> (Exposure, Vec<String>) {
+/// and the calls that tell. A use that may reach any function, such as an
+/// `import`, refers to the module even when the calls it names are left
+/// alone.
+fn exposure_of(used: &Use, changed: Option<&BTreeSet<String>>) -> (Exposure, Vec<String>) {
+    let calls = &used.calls;
     let Some(changed) = changed else {
         return (Exposure::Calls, calls.to_vec());
     };
@@ -252,7 +255,7 @@ fn exposure_of(calls: &[String], changed: Option<&BTreeSet<String>>) -> (Exposur
         .filter(|call| changed.contains(function_of(call)))
         .cloned()
         .collect();
-    match (hits.is_empty(), calls.is_empty()) {
+    match (hits.is_empty(), calls.is_empty() || used.whole) {
         (false, _) => (Exposure::Calls, hits),
         (true, true) => (Exposure::Refers, Vec::new()),
         (true, false) => (Exposure::Elsewhere, Vec::new()),
@@ -290,7 +293,7 @@ pub fn compute(
             let Some(changed) = origins.get(&used.to) else {
                 continue;
             };
-            let (how, telling) = exposure_of(&used.calls, changed.as_ref().ok());
+            let (how, telling) = exposure_of(used, changed.as_ref().ok());
             exposure = exposure.min(how);
             calls.extend(telling.iter().map(|c| short_call(c)));
         }

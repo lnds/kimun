@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use super::analyzer::resolve_import;
 use super::apart::Apart;
 use super::elixir::{self, ElixirFile};
+use super::elixir_using;
 use super::extractor::extract_imports;
 use super::javascript;
 use super::layout::Layout;
@@ -31,6 +32,9 @@ pub struct Use {
     pub to: usize,
     /// Functions called on it, as `Module.function`, when the language tells.
     pub calls: Vec<String>,
+    /// Whether it may reach any function of the file without naming it:
+    /// an Elixir `import` without `only:`, a `use`, a protocol implemented.
+    pub whole: bool,
 }
 
 /// Why a change to a file cannot be narrowed to functions, so that every
@@ -86,6 +90,17 @@ pub struct FileGraph {
     /// keeps them beside the code.
     pub own_tests: Vec<bool>,
     modules: ModuleIndex,
+}
+
+impl Use {
+    /// A use that tells no calls.
+    pub fn plain(to: usize) -> Self {
+        Use {
+            to,
+            calls: Vec::new(),
+            whole: false,
+        }
+    }
 }
 
 /// A use that tells no calls.
@@ -185,6 +200,31 @@ impl ModuleIndex {
     }
 }
 
+/// The Elixir files of `sources`, read with what the modules they `use`
+/// inject, and where each module is defined.
+fn read_elixir(
+    sources: &[Source],
+    files: &[PathBuf],
+    related: Related,
+) -> (Vec<Option<ElixirFile>>, ModuleIndex) {
+    let mut parsed: Vec<Option<ElixirFile>> = sources
+        .iter()
+        .map(|s| is_elixir(&s.language).then(|| elixir::parse_with(&s.text, &s.templates)))
+        .collect();
+    let mut modules = ModuleIndex::default();
+    for (file, parsed) in parsed.iter().enumerate() {
+        for module in parsed.iter().flat_map(|p| &p.defines) {
+            modules.0.entry(module.clone()).or_default().push(file);
+        }
+    }
+    let resolve = |from: usize, module: &str| {
+        let found = modules.resolve(module, &files[from], files, related);
+        found.ok().flatten()
+    };
+    elixir_using::complete(&mut parsed, sources, &resolve);
+    (parsed, modules)
+}
+
 impl FileGraph {
     /// Build the graph of `sources`.
     pub fn build(sources: &[Source], layout: &Layout, related: Related) -> Self {
@@ -195,16 +235,7 @@ impl FileGraph {
             .map(|(i, s)| (s.path.as_path(), i))
             .collect();
 
-        let parsed: Vec<Option<ElixirFile>> = sources
-            .iter()
-            .map(|s| is_elixir(&s.language).then(|| elixir::parse_with(&s.text, &s.templates)))
-            .collect();
-        let mut modules = ModuleIndex::default();
-        for (file, parsed) in parsed.iter().enumerate() {
-            for module in parsed.iter().flat_map(|p| &p.defines) {
-                modules.0.entry(module.clone()).or_default().push(file);
-            }
-        }
+        let (parsed, modules) = read_elixir(sources, &files, related);
 
         let rust: Vec<Option<&str>> = sources
             .iter()
@@ -221,10 +252,10 @@ impl FileGraph {
         };
         let modules = std::mem::take(&mut graph.modules);
         for (file, source) in sources.iter().enumerate() {
-            let uses = match (&parsed[file], rust_uses[file].take()) {
+            let (uses, whole) = match (&parsed[file], rust_uses[file].take()) {
                 (Some(parsed), _) => graph.elixir_uses(file, parsed, &modules, related),
-                (None, Some(used)) => used.into_iter().map(no_calls).collect(),
-                (None, None) => imports(source, layout, &by_path, &apart),
+                (None, Some(used)) => (used.into_iter().map(no_calls).collect(), BTreeSet::new()),
+                (None, None) => (imports(source, layout, &by_path, &apart), BTreeSet::new()),
             };
             graph.uses.push(
                 uses.into_iter()
@@ -232,6 +263,7 @@ impl FileGraph {
                     .map(|(to, calls)| Use {
                         to,
                         calls: calls.into_iter().collect(),
+                        whole: whole.contains(&to),
                     })
                     .collect(),
             );
@@ -250,14 +282,15 @@ impl FileGraph {
         resolved.ok().flatten()
     }
 
-    /// The files an Elixir file uses, each with the functions it calls there.
+    /// The files an Elixir file uses, each with the functions it calls
+    /// there, and those it may reach whole.
     fn elixir_uses(
         &mut self,
         file: usize,
         parsed: &ElixirFile,
         modules: &ModuleIndex,
         related: Related,
-    ) -> BTreeMap<usize, BTreeSet<String>> {
+    ) -> (BTreeMap<usize, BTreeSet<String>>, BTreeSet<usize>) {
         let mut uses: BTreeMap<usize, BTreeSet<String>> = BTreeMap::new();
         let mut ambiguous = BTreeSet::new();
         for reference in &parsed.refs {
@@ -278,7 +311,18 @@ impl FileGraph {
             }
         }
         self.ambiguous += ambiguous.len();
-        uses
+        let from = &self.files[file];
+        let whole = parsed
+            .whole
+            .iter()
+            .filter_map(|m| {
+                modules
+                    .resolve(m, from, &self.files, related)
+                    .ok()
+                    .flatten()
+            })
+            .collect();
+        (uses, whole)
     }
 
     /// What `file` uses, named or implied.
