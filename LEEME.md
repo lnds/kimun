@@ -125,6 +125,8 @@ Encuentra bloques de código duplicado entre archivos con una ventana deslizante
 
 Los archivos y directorios de tests se excluyen por defecto, porque los tests suelen contener repetición intencional.
 
+Las ocurrencias de un grupo nunca se solapan dentro de un archivo, así que una racha de líneas repetidas (una tabla de `0xFF`) no es una copia de sí misma. Un bloque crece mientras todas sus ocurrencias sigan coincidiendo, aunque las líneas que siguen aparezcan también en otro lugar. Las líneas duplicadas de un proyecto se cuentan una vez cada una, en cuantos grupos estén, así que nunca superan las líneas de código.
+
 ```bash
 km dups [path]
 ```
@@ -265,6 +267,8 @@ km hal [path]
 | T | Tiempo | E / 18 segundos | Tiempo de desarrollo estimado |
 
 Un esfuerzo, un volumen y una cantidad de bugs más altos indican código más complejo y más propenso a errores.
+
+En TypeScript se dejan fuera las declaraciones que no ejecutan nada (`interface`, los alias `type`, `import type`, `export type { … }`, `declare`): un archivo que solo tiene tipos no tiene métricas de Halstead, así que no llega a `km miv` ni a la dimensión de Halstead de `km score`.
 
 Opciones:
 
@@ -412,6 +416,8 @@ MI    = MIwoc + MIcw
 ```
 
 Donde V = volumen de Halstead, G = complejidad ciclomática, LOC = líneas de código, PerCM = porcentaje de comentarios (convertido a radianes).
+
+La escala no tiene cota inferior, tal como la define verifysoft. El índice se calcula una vez por archivo, y los dos términos logarítmicos crecen con el tamaño del archivo, así que un archivo largo de funciones triviales puede quedar bajo cero mientras un archivo corto con una sola función enredada queda en moderate; la fila `Total` promedia los archivos. Para una escala acotada a 0–100 usa `km mi`; para encontrar funciones enredadas, `km cogcom`.
 
 #### Umbrales
 

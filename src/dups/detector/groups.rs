@@ -51,5 +51,6 @@ pub fn build_group(
         line_count: block_size,
         sample,
         severity,
+        starts: start_locs.to_vec(),
     }
 }

@@ -394,3 +394,65 @@ fn boilerplate_quiet_mode_no_output() {
         "boilerplate should be skipped in quiet mode too"
     );
 }
+
+/// A file of `lines`, numbered from 1.
+fn numbered(path: &str, lines: &[&str]) -> NormalizedFile {
+    let pairs: Vec<(usize, &str)> = lines.iter().enumerate().map(|(i, l)| (i + 1, *l)).collect();
+    make_file(path, &pairs)
+}
+
+#[test]
+fn a_run_of_repeated_lines_is_no_duplicate_of_itself() {
+    let mut lines = vec!["0xFF, 0xFF, 0xFF, 0xFF,"; 8];
+    lines.insert(0, "static const unsigned char T[] = {");
+    lines.push("62, 63,");
+    lines.push("};");
+    let groups = detect_duplicates(&[numbered("table.c", &lines)], 6, true);
+    assert!(groups.is_empty(), "{groups:?}");
+}
+
+#[test]
+fn occurrences_of_a_group_never_overlap() {
+    let x = ["x1();", "x2();", "x3();"];
+    // x x x in one file: a 6-line block (x x) can only be found once at
+    // offsets 0 and 3, never at 0 and 1.
+    let lines: Vec<&str> = x.iter().chain(&x).chain(&x).copied().collect();
+    let groups = detect_duplicates(&[numbered("a.c", &lines)], 3, true);
+    for g in &groups {
+        let mut starts = g.starts.clone();
+        starts.sort();
+        for pair in starts.windows(2) {
+            assert!(pair[1].1 >= pair[0].1 + g.line_count, "{g:?}");
+        }
+    }
+}
+
+#[test]
+fn a_block_extends_past_a_window_found_elsewhere_too() {
+    let a: Vec<String> = (1..=6).map(|i| format!("int a{i} = f({i});")).collect();
+    let b: Vec<String> = (1..=6).map(|i| format!("int b{i} = g({i});")).collect();
+    let both: Vec<&str> = a.iter().chain(&b).map(String::as_str).collect();
+    let only_b: Vec<&str> = b.iter().map(String::as_str).collect();
+    let files = [
+        numbered("one.c", &both),
+        numbered("two.c", &both),
+        numbered("three.c", &only_b),
+    ];
+    let groups = detect_duplicates(&files, 6, true);
+    let mut sizes: Vec<(usize, usize)> = groups
+        .iter()
+        .map(|g| (g.line_count, g.locations.len()))
+        .collect();
+    sizes.sort();
+    assert_eq!(sizes, [(6, 3), (12, 2)]);
+    // two.c whole (12) and one more copy of B (6), each line once.
+    assert_eq!(duplicated_line_count(&groups), 18);
+}
+
+#[test]
+fn duplicated_lines_never_exceed_the_code() {
+    let lines = vec!["same();"; 20];
+    let files = [numbered("a.c", &lines), numbered("b.c", &lines)];
+    let groups = detect_duplicates(&files, 6, true);
+    assert!(duplicated_line_count(&groups) <= 40);
+}

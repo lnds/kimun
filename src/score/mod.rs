@@ -281,7 +281,7 @@ fn compute_snapshot(
     } else {
         dups::detector::detect_duplicates(&dup_files, min_lines, true)
     };
-    let duplicated_lines: usize = dup_groups.iter().map(|g| g.duplicated_lines()).sum();
+    let duplicated_lines: usize = crate::dups::detector::duplicated_line_count(&dup_groups);
     let dup_percent = if total_code_lines == 0 {
         0.0
     } else {

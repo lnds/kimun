@@ -8,6 +8,7 @@ mod analyzer;
 pub(crate) mod report;
 mod rules;
 mod tokenizer;
+mod type_decls;
 
 use std::error::Error;
 use std::path::Path;
@@ -30,22 +31,38 @@ pub(crate) fn analyze_content(
 ) -> Option<analyzer::HalsteadMetrics> {
     let rules = rules_for(spec.name)?;
     let (lines, kinds) = code_view(lines, kinds, spec);
-    let string_mask = multi_line_string_mask(&lines, spec);
-
-    let code_lines: Vec<&str> = lines
-        .iter()
-        .zip(kinds.iter())
-        .zip(string_mask.iter())
-        .filter(|((_, k), in_string)| **k == LineKind::Code && !*in_string)
-        .map(|((line, _), _)| line.as_str())
-        .collect();
-
+    let code_lines = measured_lines(&lines, &kinds, spec);
     if code_lines.is_empty() {
         return None;
     }
-
     let counts = count_tokens(&code_lines, rules, spec.line_comments);
     compute(&counts)
+}
+
+/// The lines Halstead reads: code, outside multi-line strings, and in
+/// TypeScript outside type-level declarations, which run nothing.
+fn measured_lines<'a>(
+    lines: &'a [String],
+    kinds: &[LineKind],
+    spec: &LanguageSpec,
+) -> Vec<&'a str> {
+    let string_mask = multi_line_string_mask(lines, spec);
+    let code: Vec<&str> = lines
+        .iter()
+        .zip(kinds)
+        .zip(&string_mask)
+        .filter(|((_, k), in_string)| **k == LineKind::Code && !*in_string)
+        .map(|((line, _), _)| line.as_str())
+        .collect();
+    if spec.name != "TypeScript" {
+        return code;
+    }
+    let types = type_decls::type_declaration_mask(&code);
+    code.into_iter()
+        .zip(types)
+        .filter(|(_, is_type)| !is_type)
+        .map(|(line, _)| line)
+        .collect()
 }
 
 /// Read a file from disk, classify lines, tokenize code, and compute
@@ -65,17 +82,7 @@ pub(crate) fn analyze_file(
         None => return Ok(None),
     };
     let (lines, kinds) = code_view(&lines, &kinds, spec);
-    let string_mask = multi_line_string_mask(&lines, spec);
-
-    // Collect only code lines that are not inside multi-line strings
-    let code_lines: Vec<&str> = lines
-        .iter()
-        .zip(&kinds)
-        .zip(&string_mask)
-        .filter(|((_, k), in_string)| **k == LineKind::Code && !*in_string)
-        .map(|((line, _), _)| line.as_str())
-        .collect();
-
+    let code_lines = measured_lines(&lines, &kinds, spec);
     if code_lines.is_empty() {
         return Ok(None);
     }

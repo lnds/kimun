@@ -8,57 +8,59 @@ use std::collections::{HashMap, HashSet};
 use super::hashing::hash_location_set;
 use super::{LocationSet, NormalizedFile};
 
+/// Whether the windows at `locs` all hold the same text, by their hash:
+/// they may continue a duplicate block, whatever else holds that window.
+fn same_window(locs: &[(usize, usize)], window_hash: &HashMap<(usize, usize), u64>) -> bool {
+    let mut hashes = locs.iter().map(|loc| window_hash.get(loc));
+    let first = hashes.next().flatten();
+    first.is_some() && hashes.all(|h| h == first)
+}
+
 /// Extend a matched window backward by shifting all locations by -1 at each step.
 ///
-/// Stops when any location reaches offset 0 or when the shifted location set
-/// is not found in the lookup table. Marks consumed windows in `consumed` to
-/// prevent re-processing. Returns the new start locations and backward count.
+/// Stops when any location reaches offset 0 or when the shifted windows no
+/// longer hold the same text. Marks the shifted location sets in `consumed`
+/// so that they are not grouped again. Returns the new start locations and
+/// backward count.
 pub fn extend_backward(
     locations: &[(usize, usize)],
-    location_to_hash: &HashMap<u64, u64>,
+    window_hash: &HashMap<(usize, usize), u64>,
     consumed: &mut HashSet<u64>,
 ) -> (LocationSet, usize) {
     let mut start_locs = locations.to_vec();
     let mut backward_ext = 0usize;
-    loop {
-        if start_locs.iter().any(|(_, o)| *o == 0) {
-            break;
-        }
+    while start_locs.iter().all(|(_, o)| *o > 0) {
         let prev_locs: LocationSet = start_locs.iter().map(|(f, o)| (*f, o - 1)).collect();
-        let prev_key = hash_location_set(&prev_locs);
-        if location_to_hash.contains_key(&prev_key) {
-            consumed.insert(prev_key);
-            start_locs = prev_locs;
-            backward_ext += 1;
-        } else {
+        if !same_window(&prev_locs, window_hash) {
             break;
         }
+        consumed.insert(hash_location_set(&prev_locs));
+        start_locs = prev_locs;
+        backward_ext += 1;
     }
     (start_locs, backward_ext)
 }
 
 /// Extend a matched window forward by shifting all locations by +1 at each step.
 ///
-/// Stops when the shifted location set is not found in the lookup table.
-/// Marks consumed windows in `consumed` to prevent re-processing.
-/// Returns the number of forward extension steps taken.
+/// Stops when the shifted windows no longer hold the same text. Marks the
+/// shifted location sets in `consumed`. Returns the number of forward
+/// extension steps taken.
 pub fn extend_forward(
     locations: &[(usize, usize)],
-    location_to_hash: &HashMap<u64, u64>,
+    window_hash: &HashMap<(usize, usize), u64>,
     consumed: &mut HashSet<u64>,
 ) -> usize {
     let mut current_locs = locations.to_vec();
     let mut forward_ext = 0usize;
     loop {
         let next_locs: LocationSet = current_locs.iter().map(|(f, o)| (*f, o + 1)).collect();
-        let next_key = hash_location_set(&next_locs);
-        if location_to_hash.contains_key(&next_key) {
-            consumed.insert(next_key);
-            current_locs = next_locs;
-            forward_ext += 1;
-        } else {
+        if !same_window(&next_locs, window_hash) {
             break;
         }
+        consumed.insert(hash_location_set(&next_locs));
+        current_locs = next_locs;
+        forward_ext += 1;
     }
     forward_ext
 }

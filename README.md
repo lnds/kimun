@@ -125,6 +125,8 @@ Finds duplicate code blocks across files using a sliding window approach. Applie
 
 Test files and directories are excluded by default, since tests often contain intentional repetition.
 
+The occurrences of a group never overlap within a file, so a run of repeated lines (a table of `0xFF`) is not a copy of itself. A block grows while every occurrence goes on matching, even when the next lines also appear elsewhere. The duplicated lines of a project are counted once each, however many groups hold them, so they never exceed the code lines.
+
 ```bash
 km dups [path]
 ```
@@ -265,6 +267,8 @@ km hal [path]
 | T | Time | E / 18 seconds | Estimated development time |
 
 Higher effort, volume, and bugs indicate more complex and error-prone code.
+
+In TypeScript, declarations that run nothing (`interface`, `type` aliases, `import type`, `export type { … }`, `declare`) are left out: a file of types alone has no Halstead metrics, so it does not reach `km miv` or the Halstead dimension of `km score`.
 
 Options:
 
@@ -412,6 +416,8 @@ MI    = MIwoc + MIcw
 ```
 
 Where V = Halstead Volume, G = cyclomatic complexity, LOC = code lines, PerCM = comment percentage (converted to radians).
+
+The scale has no lower bound, as verifysoft defines it. The index is computed once per file, and both logarithmic terms grow with the file's size, so a long file of trivial functions can fall below zero while a short file with one tangled function stays moderate; the `Total` row averages the files. For a scale clamped to 0–100 use `km mi`; to find tangled functions, `km cogcom`.
 
 #### Thresholds
 

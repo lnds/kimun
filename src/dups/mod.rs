@@ -75,7 +75,7 @@ pub(crate) fn compute_metrics(cfg: &WalkConfig<'_>, min_lines: usize) -> Duplica
     }
 
     let groups = detect_duplicates(&files, min_lines, false);
-    let duplicated_lines: usize = groups.iter().map(|g| g.duplicated_lines()).sum();
+    let duplicated_lines: usize = crate::dups::detector::duplicated_line_count(&groups);
     let largest_block = groups.iter().map(|g| g.line_count).max().unwrap_or(0);
     let files_with_dups: HashSet<&Path> = groups
         .iter()
@@ -232,7 +232,7 @@ pub fn run(
 
     let groups = detect_duplicates(&files, min_lines, output == crate::cli::OutputMode::Json);
 
-    let duplicated_lines: usize = groups.iter().map(|g| g.duplicated_lines()).sum();
+    let duplicated_lines: usize = crate::dups::detector::duplicated_line_count(&groups);
     let largest_block = groups.iter().map(|g| g.line_count).max().unwrap_or(0);
 
     let files_with_dups: HashSet<&Path> = groups

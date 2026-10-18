@@ -219,7 +219,7 @@ fn build_dup_summary(
         dups::detector::detect_duplicates(dup_files, min_lines, true)
     };
     // Aggregate group-level stats into project-level summary.
-    let duplicated_lines: usize = dup_groups.iter().map(|g| g.duplicated_lines()).sum();
+    let duplicated_lines: usize = crate::dups::detector::duplicated_line_count(&dup_groups);
     let largest_block = dup_groups.iter().map(|g| g.line_count).max().unwrap_or(0);
     let files_with_dups: HashSet<&Path> = dup_groups
         .iter()
