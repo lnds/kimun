@@ -30,14 +30,14 @@ fn kind_counts(smells: &FileSmells) -> [usize; 5] {
 }
 
 /// Print a table of per-file code smell counts with one column per smell kind.
-pub fn print_report(files: &[FileSmellMetrics]) {
+pub fn print_report(files: &[FileSmellMetrics], shown: usize) {
     if files.is_empty() {
         println!("No code smells found.");
         return;
     }
 
     let kinds = SmellKind::all();
-    let max_path_len = report_helpers::max_path_width(files.iter().map(|f| f.path.as_path()), 4);
+    let max_path_len = report_helpers::path_column(files.iter().map(|f| f.path.as_path()), shown);
 
     // Per-file kind counts and column-wide totals (for the footer and column widths).
     let per_file: Vec<[usize; 5]> = files.iter().map(|f| kind_counts(&f.smells)).collect();
@@ -76,10 +76,10 @@ pub fn print_report(files: &[FileSmellMetrics]) {
     println!("{header}");
     println!("{separator}");
 
-    for (f, counts) in files.iter().zip(&per_file) {
+    for (f, counts) in files.iter().zip(&per_file).take(shown) {
         let mut row = format!(
             " {:<width$}  {:>tw$}",
-            f.path.display(),
+            crate::report_helpers::shown(&f.path),
             f.total,
             width = max_path_len,
             tw = total_col
@@ -92,7 +92,7 @@ pub fn print_report(files: &[FileSmellMetrics]) {
 
     println!("{separator}");
 
-    let total_label = format!(" Total ({} files)", files.len());
+    let total_label = report_helpers::total_label(files.len(), shown);
     let mut footer = format!(
         "{:<width$}  {:>tw$}",
         total_label,
@@ -128,7 +128,7 @@ pub fn print_json(files: &[FileSmellMetrics]) -> Result<(), Box<dyn std::error::
     let entries: Vec<JsonFileEntry> = files
         .iter()
         .map(|f| JsonFileEntry {
-            path: f.path.display().to_string(),
+            path: crate::report_helpers::shown(&f.path),
             language: f.language.clone(),
             smells: f
                 .smells
@@ -165,7 +165,7 @@ pub fn print_codeclimate(files: &[FileSmellMetrics]) -> Result<(), Box<dyn std::
     let entries: Vec<_> = files
         .iter()
         .flat_map(|f| {
-            let path = f.path.display().to_string();
+            let path = crate::report_helpers::shown(&f.path);
             f.smells.smells.iter().map(move |s| {
                 report_helpers::codeclimate_entry("minor", &path, s.line, s.kind.title(), &s.detail)
             })
@@ -178,7 +178,7 @@ pub fn print_codeclimate(files: &[FileSmellMetrics]) -> Result<(), Box<dyn std::
 /// Each annotation links directly to the file and line in the PR diff.
 pub fn print_github(files: &[FileSmellMetrics]) {
     for f in files {
-        let path = f.path.display().to_string();
+        let path = crate::report_helpers::shown(&f.path);
         for s in &f.smells.smells {
             report_helpers::github_annotation("warning", &path, s.line, s.kind.title(), &s.detail);
         }
@@ -218,7 +218,7 @@ mod tests {
 
     #[test]
     fn print_report_empty_does_not_panic() {
-        print_report(&[]);
+        print_report(&[], usize::MAX);
     }
 
     #[test]
@@ -228,7 +228,7 @@ mod tests {
             make_smell(SmellKind::TodoDebt, 10, "TODO: fix this"),
         ];
         let files = vec![make_file_metrics("src/main.rs", "Rust", smells)];
-        print_report(&files);
+        print_report(&files, usize::MAX);
     }
 
     #[test]
@@ -242,7 +242,7 @@ mod tests {
             make_file_metrics("src/a.rs", "Rust", s1),
             make_file_metrics("src/b.rs", "Rust", s2),
         ];
-        print_report(&files);
+        print_report(&files, usize::MAX);
     }
 
     #[test]

@@ -41,12 +41,12 @@ fn sample_files() -> Vec<FileHalsteadMetrics> {
 
 #[test]
 fn print_report_does_not_panic() {
-    print_report(&sample_files());
+    print_report(&sample_files(), usize::MAX);
 }
 
 #[test]
 fn print_report_empty() {
-    print_report(&[]);
+    print_report(&[], usize::MAX);
 }
 
 #[test]
@@ -141,7 +141,7 @@ fn make_large_time_file() -> Vec<FileHalsteadMetrics> {
 
 #[test]
 fn print_report_with_large_time_does_not_panic() {
-    print_report(&make_large_time_file());
+    print_report(&make_large_time_file(), usize::MAX);
 }
 
 #[test]

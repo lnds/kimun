@@ -26,7 +26,7 @@ use report::{print_json, print_report, print_short, print_terse};
 pub fn run(
     cfg: &WalkConfig<'_>,
     output: OutputMode,
-    top: usize,
+    top: Option<usize>,
     sort_by: &str,
     since: Option<&str>,
 ) -> Result<(), Box<dyn Error>> {
@@ -75,16 +75,16 @@ pub fn run(
         _ => files.sort_by_key(|f| Reverse(f.commits)),
     }
 
-    files.truncate(top);
+    let shown = crate::report_helpers::shown_count(output, top, files.len());
 
     match output {
-        OutputMode::Json => print_json(&files),
+        OutputMode::Json => print_json(&files[..shown]),
         OutputMode::Short => print_short(&files),
         OutputMode::Terse => print_terse(&files),
         OutputMode::Github | OutputMode::Codeclimate => {
             return Err(crate::cli::ERR_CI_FORMAT_ONLY.into());
         }
-        OutputMode::Table => print_report(&files),
+        OutputMode::Table => print_report(&files, shown),
     }
 
     Ok(())

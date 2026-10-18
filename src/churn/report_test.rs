@@ -33,12 +33,12 @@ fn sample() -> Vec<FileChurn> {
 
 #[test]
 fn print_report_does_not_panic() {
-    print_report(&sample());
+    print_report(&sample(), usize::MAX);
 }
 
 #[test]
 fn print_report_empty() {
-    print_report(&[]);
+    print_report(&[], usize::MAX);
 }
 
 #[test]

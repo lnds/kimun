@@ -69,14 +69,14 @@ pub fn analyze_file_for_report(
     let dup_normalized = crate::dups::normalize_content(&lines, &kinds);
 
     let indent = indent::analyzer::analyze(&lines, &kinds, 4).map(|m| IndentEntry {
-        path: file_path.display().to_string(),
+        path: crate::report_helpers::shown(file_path),
         code_lines: m.code_lines,
         stddev: m.stddev,
         max_depth: m.max_depth,
         complexity: m.complexity.as_str().to_string(),
     });
 
-    let path_str = file_path.display().to_string();
+    let path_str = crate::report_helpers::shown(file_path);
     let (halstead, volume_opt) = if let Some(h) = hal::analyze_content(&lines, &kinds, spec) {
         let vol = h.volume;
         (

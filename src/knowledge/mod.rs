@@ -30,7 +30,7 @@ use report::{
 /// Options for knowledge map analysis.
 pub struct KnowledgeOptions<'a> {
     pub output: OutputMode,
-    pub top: usize,
+    pub top: Option<usize>,
     pub sort_by: &'a str,
     pub since: Option<&'a str>,
     pub risk_only: bool,
@@ -162,7 +162,11 @@ pub fn run(cfg: &WalkConfig<'_>, opts: &KnowledgeOptions<'_>) -> Result<(), Box<
                 Err(crate::cli::ERR_CI_FORMAT_ONLY.into())
             }
             OutputMode::Table => {
-                print_bus_factor_report(&bf, opts.top, opts.since);
+                print_bus_factor_report(
+                    &bf,
+                    opts.top.unwrap_or(report_helpers::DEFAULT_TOP),
+                    opts.since,
+                );
                 Ok(())
             }
         };
@@ -176,7 +180,7 @@ pub fn run(cfg: &WalkConfig<'_>, opts: &KnowledgeOptions<'_>) -> Result<(), Box<
             "risk" => authors.sort_by_key(|a| a.worst_risk.sort_key()),
             _ => authors.sort_by_key(|a| Reverse(a.files_owned)),
         }
-        let limit = opts.top.min(authors.len());
+        let limit = report_helpers::shown_count(opts.output, opts.top, authors.len());
         let authors = &authors[..limit];
         match opts.output {
             OutputMode::Json => print_summary_json(authors),
@@ -199,11 +203,11 @@ pub fn run(cfg: &WalkConfig<'_>, opts: &KnowledgeOptions<'_>) -> Result<(), Box<
     } else {
         let at_risk = results.iter().filter(|f| f.knowledge_loss).count();
         report_helpers::output_results(
-            &mut results,
+            &results,
             opts.top,
             opts.output,
             print_json,
-            |shown| print_report(shown, at_risk),
+            |all, shown| print_report(&all[..shown], at_risk),
             print_short,
             print_terse,
         )

@@ -9,7 +9,7 @@ fn run_on_empty_dir() {
     let dir = tempfile::tempdir().unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, 20, "mi").unwrap();
+    run(&cfg, OutputMode::Table, Some(20), "mi").unwrap();
 }
 
 #[test]
@@ -22,7 +22,7 @@ fn run_on_rust_file() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, 20, "mi").unwrap();
+    run(&cfg, OutputMode::Table, Some(20), "mi").unwrap();
 }
 
 #[test]
@@ -35,7 +35,7 @@ fn run_on_python_file() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, 20, "mi").unwrap();
+    run(&cfg, OutputMode::Table, Some(20), "mi").unwrap();
 }
 
 #[test]
@@ -48,7 +48,7 @@ fn run_json_output() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Json, 20, "mi").unwrap();
+    run(&cfg, OutputMode::Json, Some(20), "mi").unwrap();
 }
 
 #[test]
@@ -57,7 +57,7 @@ fn run_skips_binary() {
     fs::write(dir.path().join("data.c"), b"hello\x00world").unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, 20, "mi").unwrap();
+    run(&cfg, OutputMode::Table, Some(20), "mi").unwrap();
 }
 
 #[test]
@@ -71,7 +71,7 @@ fn run_excludes_tests_by_default() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, 20, "mi").unwrap();
+    run(&cfg, OutputMode::Table, Some(20), "mi").unwrap();
 }
 
 #[test]
@@ -85,7 +85,7 @@ fn run_includes_tests_with_flag() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), true, &filter);
-    run(&cfg, OutputMode::Table, 20, "mi").unwrap();
+    run(&cfg, OutputMode::Table, Some(20), "mi").unwrap();
 }
 
 #[test]
@@ -98,7 +98,7 @@ fn run_sort_by_volume() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, 20, "volume").unwrap();
+    run(&cfg, OutputMode::Table, Some(20), "volume").unwrap();
 }
 
 #[test]
@@ -111,7 +111,7 @@ fn run_sort_by_complexity() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, 20, "complexity").unwrap();
+    run(&cfg, OutputMode::Table, Some(20), "complexity").unwrap();
 }
 
 #[test]
@@ -124,7 +124,7 @@ fn run_sort_by_loc() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, 20, "loc").unwrap();
+    run(&cfg, OutputMode::Table, Some(20), "loc").unwrap();
 }
 
 #[test]
@@ -142,7 +142,7 @@ fn run_sort_by_volume_two_files() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, 20, "volume").unwrap();
+    run(&cfg, OutputMode::Table, Some(20), "volume").unwrap();
 }
 
 #[test]
@@ -160,7 +160,7 @@ fn run_sort_by_complexity_two_files() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, 20, "complexity").unwrap();
+    run(&cfg, OutputMode::Table, Some(20), "complexity").unwrap();
 }
 
 #[test]
@@ -230,7 +230,7 @@ fn run_short_format() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Short, 20, "mi").unwrap();
+    run(&cfg, OutputMode::Short, Some(20), "mi").unwrap();
 }
 
 #[test]
@@ -243,7 +243,7 @@ fn run_terse_format() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Terse, 20, "mi").unwrap();
+    run(&cfg, OutputMode::Terse, Some(20), "mi").unwrap();
 }
 
 #[test]

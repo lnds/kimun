@@ -51,7 +51,7 @@ fn compute_complexity(
 pub fn run(
     cfg: &WalkConfig<'_>,
     output: OutputMode,
-    top: usize,
+    top: Option<usize>,
     sort_by: &str,
     since: Option<&str>,
     complexity_metric: &str,
@@ -118,16 +118,16 @@ pub fn run(
         _ => results.sort_by_key(|r| Reverse(r.score)),
     }
 
-    results.truncate(top);
+    let shown = crate::report_helpers::shown_count(output, top, results.len());
 
     match output {
-        OutputMode::Json => print_json(&results, complexity_metric)?,
+        OutputMode::Json => print_json(&results[..shown], complexity_metric)?,
         OutputMode::Short => print_short(&results),
         OutputMode::Terse => print_terse(&results),
         OutputMode::Github | OutputMode::Codeclimate => {
             return Err(crate::cli::ERR_CI_FORMAT_ONLY.into());
         }
-        OutputMode::Table => print_report(&results, complexity_metric),
+        OutputMode::Table => print_report(&results[..shown], complexity_metric),
     }
 
     Ok(())

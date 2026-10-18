@@ -8,7 +8,7 @@ fn run_on_empty_dir() {
     let dir = tempfile::tempdir().unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, 20, "effort").unwrap();
+    run(&cfg, OutputMode::Table, Some(20), "effort").unwrap();
 }
 
 #[test]
@@ -21,7 +21,7 @@ fn run_on_rust_file() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, 20, "effort").unwrap();
+    run(&cfg, OutputMode::Table, Some(20), "effort").unwrap();
 }
 
 #[test]
@@ -34,7 +34,7 @@ fn run_on_python_file() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, 20, "effort").unwrap();
+    run(&cfg, OutputMode::Table, Some(20), "effort").unwrap();
 }
 
 #[test]
@@ -47,7 +47,7 @@ fn run_json_output() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Json, 20, "effort").unwrap();
+    run(&cfg, OutputMode::Json, Some(20), "effort").unwrap();
 }
 
 #[test]
@@ -56,7 +56,7 @@ fn run_skips_binary() {
     fs::write(dir.path().join("data.c"), b"hello\x00world").unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, 20, "effort").unwrap();
+    run(&cfg, OutputMode::Table, Some(20), "effort").unwrap();
 }
 
 #[test]
@@ -70,7 +70,7 @@ fn run_excludes_tests_by_default() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, 20, "effort").unwrap();
+    run(&cfg, OutputMode::Table, Some(20), "effort").unwrap();
 }
 
 #[test]
@@ -84,7 +84,7 @@ fn run_includes_tests_with_flag() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), true, &filter);
-    run(&cfg, OutputMode::Table, 20, "effort").unwrap();
+    run(&cfg, OutputMode::Table, Some(20), "effort").unwrap();
 }
 
 #[test]
@@ -93,7 +93,7 @@ fn run_skips_unsupported_languages() {
     fs::write(dir.path().join("data.json"), "{\"key\": \"value\"}\n").unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, 20, "effort").unwrap();
+    run(&cfg, OutputMode::Table, Some(20), "effort").unwrap();
 }
 
 #[test]
@@ -106,7 +106,7 @@ fn run_sort_by_volume() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, 20, "volume").unwrap();
+    run(&cfg, OutputMode::Table, Some(20), "volume").unwrap();
 }
 
 #[test]
@@ -119,7 +119,7 @@ fn python_docstring_not_tokenized() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, 20, "effort").unwrap();
+    run(&cfg, OutputMode::Table, Some(20), "effort").unwrap();
 }
 
 #[test]
@@ -132,7 +132,7 @@ fn run_sort_by_bugs() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, 20, "bugs").unwrap();
+    run(&cfg, OutputMode::Table, Some(20), "bugs").unwrap();
 }
 
 #[test]
@@ -150,7 +150,7 @@ fn run_sort_by_volume_two_files() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, 20, "volume").unwrap();
+    run(&cfg, OutputMode::Table, Some(20), "volume").unwrap();
 }
 
 #[test]
@@ -168,7 +168,7 @@ fn run_sort_by_bugs_two_files() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, 20, "bugs").unwrap();
+    run(&cfg, OutputMode::Table, Some(20), "bugs").unwrap();
 }
 
 #[test]
@@ -205,7 +205,7 @@ fn run_short_format() {
     fs::write(dir.path().join("main.rs"), "fn main() { let x = 1; }\n").unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Short, 20, "effort").unwrap();
+    run(&cfg, OutputMode::Short, Some(20), "effort").unwrap();
 }
 
 #[test]
@@ -214,7 +214,7 @@ fn run_terse_format() {
     fs::write(dir.path().join("main.rs"), "fn main() { let x = 1; }\n").unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Terse, 20, "effort").unwrap();
+    run(&cfg, OutputMode::Terse, Some(20), "effort").unwrap();
 }
 
 #[test]

@@ -189,7 +189,7 @@ pub fn print_detailed(
         for loc in &group.locations {
             println!(
                 "   {}:{}-{}",
-                loc.file_path.display(),
+                crate::report_helpers::shown(&loc.file_path),
                 loc.start_line,
                 loc.end_line
             );

@@ -77,6 +77,11 @@ km completions fish > ~/.config/fish/completions/km.fish
 
 ## Comandos
 
+Dos convenciones valen para todos los comandos:
+
+- **`--top N`** limita las filas de una tabla (20 por defecto), y el JSON solo cuando se indica; los totales de una tabla, los resúmenes `short` y `terse` y las anotaciones de CI (`github`, `codeclimate`) cubren siempre todos los archivos. Una fila de totales sobre más archivos de los que muestra lo dice: `Total (30 files, 20 shown)`.
+- **Las rutas** se muestran relativas a la raíz del repositorio git, o al directorio analizado fuera de uno, sin `./` al inicio, desde cualquier directorio en que se ejecute km y como sea que se escriba la ruta, así que la salida de dos comandos se puede cruzar.
+
 ### `km loc` -- Contar líneas de código
 
 ```bash
@@ -276,7 +281,7 @@ Opciones:
 |------|-------------|
 | `--format {table,json,short,terse}` | Formato de salida (por defecto: table) |
 | `--include-tests` | Incluye los tests, ejemplos y benchmarks en el análisis (excluidos por defecto) |
-| `--top N` | Muestra solo los N primeros archivos (por defecto: 20) |
+| `--top N` | Filas de la tabla (por defecto: 20); el JSON lista todos los archivos salvo que se indique `--top` |
 | `--sort-by METRIC` | Ordena por `effort`, `volume` o `bugs` (por defecto: `effort`) |
 
 Ejemplo de salida:
@@ -310,7 +315,7 @@ Opciones:
 |------|-------------|
 | `--format {table,json,short,terse,github,codeclimate}` | Formato de salida (por defecto: table). `github` emite anotaciones de GitHub Actions; `codeclimate` (alias: `gitlab`) emite JSON de CodeClimate para GitLab Code Quality |
 | `--include-tests` | Incluye los tests, ejemplos y benchmarks en el análisis (excluidos por defecto) |
-| `--top N` | Muestra solo los N primeros archivos (por defecto: 20) |
+| `--top N` | Filas de la tabla (por defecto: 20); el JSON lista todos los archivos salvo que se indique `--top` |
 | `--min-complexity N` | Omite los archivos cuya función más compleja está por debajo de N; con `--per-function`, oculta también las funciones por debajo de N (por defecto: 1) |
 | `--per-function` | Muestra el desglose por función |
 
@@ -339,7 +344,7 @@ Opciones:
 |------|-------------|
 | `--format {table,json,short,terse,github,codeclimate}` | Formato de salida (por defecto: table). `github` emite anotaciones de GitHub Actions; `codeclimate` (alias: `gitlab`) emite JSON de CodeClimate para GitLab Code Quality |
 | `--include-tests` | Incluye los tests, ejemplos y benchmarks en el análisis (excluidos por defecto) |
-| `--top N` | Muestra solo los N primeros archivos (por defecto: 20) |
+| `--top N` | Filas de la tabla (por defecto: 20); el JSON lista todos los archivos salvo que se indique `--top` |
 | `--min-complexity N` | Omite los archivos cuya función más compleja está por debajo de N; con `--per-function`, oculta también las funciones por debajo de N (por defecto: 1) |
 | `--per-function` | Muestra el desglose por función |
 | `--sort-by METRIC` | Ordena por `total`, `max` o `avg` (por defecto: `total`) |
@@ -380,7 +385,7 @@ Opciones:
 |------|-------------|
 | `--format {table,json,short,terse}` | Formato de salida (por defecto: table) |
 | `--include-tests` | Incluye los tests, ejemplos y benchmarks en el análisis (excluidos por defecto) |
-| `--top N` | Muestra solo los N primeros archivos (por defecto: 20) |
+| `--top N` | Filas de la tabla (por defecto: 20); el JSON lista todos los archivos salvo que se indique `--top` |
 | `--sort-by METRIC` | Ordena por `mi` (ascendente), `volume`, `complexity` o `loc` (por defecto: `mi`) |
 
 Ejemplo de salida:
@@ -435,7 +440,7 @@ Opciones:
 |------|-------------|
 | `--format {table,json,short,terse}` | Formato de salida (por defecto: table) |
 | `--include-tests` | Incluye los tests, ejemplos y benchmarks en el análisis (excluidos por defecto) |
-| `--top N` | Muestra solo los N primeros archivos (por defecto: 20) |
+| `--top N` | Filas de la tabla (por defecto: 20); el JSON lista todos los archivos salvo que se indique `--top` |
 | `--sort-by METRIC` | Ordena por `mi` (ascendente), `volume`, `complexity` o `loc` (por defecto: `mi`) |
 
 Ejemplo de salida:
@@ -480,7 +485,7 @@ Opciones:
 |------|-------------|
 | `--format {table,json,short,terse}` | Formato de salida (por defecto: table) |
 | `--include-tests` | Incluye los tests, ejemplos y benchmarks en el análisis (excluidos por defecto) |
-| `--top N` | Muestra solo los N primeros archivos (por defecto: 20) |
+| `--top N` | Filas de la tabla (por defecto: 20); el JSON lista todos los archivos salvo que se indique `--top` |
 | `--sort-by METRIC` | Ordena por `score`, `commits` o `complexity` (por defecto: `score`) |
 | `--since DURATION` | Considera solo los commits desde este momento (p. ej. `30d`, `6m`, `1y`) |
 | `--complexity METRIC` | `indent` (por defecto, Thornhill) o `cycom` (ciclomática) |
@@ -558,7 +563,7 @@ Opciones:
 |------|-------------|
 | `--format {table,json,short,terse}` | Formato de salida (por defecto: table) |
 | `--include-tests` | Incluye los tests, ejemplos y benchmarks en el análisis (excluidos por defecto) |
-| `--top N` | Muestra solo los N primeros archivos (por defecto: 20) |
+| `--top N` | Filas de la tabla (por defecto: 20); el JSON lista todos los archivos salvo que se indique `--top` |
 | `--sort-by METRIC` | Ordena por `concentration`, `diffusion` o `risk` (por defecto: `concentration`) |
 | `--since DURATION` | Define la ventana de actividad reciente para la pérdida de conocimiento (p. ej. `6m`, `1y`, `30d`) |
 | `--risk-only` | Muestra solo los archivos con riesgo de pérdida de conocimiento |
@@ -640,7 +645,7 @@ Opciones:
 | Flag | Descripción |
 |------|-------------|
 | `--format {table,json,short,terse}` | Formato de salida (por defecto: table) |
-| `--top N` | Muestra solo los N primeros pares de archivos (por defecto: 20) |
+| `--top N` | Filas de la tabla (por defecto: 20); el JSON lista todos los pares salvo que se indique `--top` |
 | `--sort-by METRIC` | Ordena por `strength` o `shared` (por defecto: `strength`) |
 | `--since DURATION` | Considera solo los commits desde este momento (p. ej. `6m`, `1y`, `30d`) |
 | `--min-degree N` | Mínimo de commits por archivo para incluirlo (por defecto: 3) |
@@ -955,7 +960,7 @@ Opciones:
 
 | Flag | Descripción |
 |------|-------------|
-| `--top N` | Muestra solo los N primeros archivos (por defecto: 20) |
+| `--top N` | Filas de la tabla (por defecto: 20); el JSON lista todos los archivos salvo que se indique `--top` |
 | `--sort-by METRIC` | Ordena por `commits` (por defecto), `rate` (commits por mes) o `file` |
 | `--since DURATION` | Considera solo los commits desde este momento (p. ej. `6m`, `1y`, `30d`) |
 | `--format {table,json,short,terse}` | Formato de salida (por defecto: table) |
@@ -999,7 +1004,7 @@ Opciones:
 
 | Flag | Descripción |
 |------|-------------|
-| `--top N` | Muestra solo los N primeros archivos por cantidad de smells (por defecto: 20) |
+| `--top N` | Filas de la tabla (por defecto: 20); el JSON lista todos los archivos salvo que se indique `--top` |
 | `--max-lines N` | Máximo de líneas del cuerpo de una función antes de marcarla (por defecto: 50) |
 | `--max-params N` | Máximo de parámetros antes de marcarla (por defecto: 4) |
 | `--files FILE` | Analiza solo estos archivos (se puede repetir). Útil para scripts |
@@ -1116,7 +1121,7 @@ Notas sobre Kaikai:
 | `--format {table,json,short,terse}` | Formato de salida (por defecto: table) |
 | `--cycles-only` | Muestra solo los archivos que participan en un ciclo de dependencias |
 | `--sort-by METRIC` | Ordena por `fan-out` (por defecto) o `fan-in` |
-| `--top N` | Muestra solo los N primeros archivos (por defecto: 20) |
+| `--top N` | Filas de la tabla (por defecto: 20); el JSON lista todos los archivos salvo que se indique `--top` |
 
 Ejemplo de salida:
 

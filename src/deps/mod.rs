@@ -141,6 +141,20 @@ fn sort_entries(entries: &mut [DepEntry], sort_by: &str) {
     }
 }
 
+/// Turn the paths of `result`, relative to the analyzed directory `root`,
+/// into the paths every report shows (`report_helpers::shown`).
+fn show_paths(result: &mut DepResult, root: &Path) {
+    let show = |path: &Path| PathBuf::from(crate::report_helpers::shown(&root.join(path)));
+    for entry in &mut result.entries {
+        entry.path = show(&entry.path);
+    }
+    for cycle in &mut result.cycles {
+        for path in cycle.iter_mut() {
+            *path = show(path);
+        }
+    }
+}
+
 /// The entries to display: every file in a cycle, or else the first `top`.
 fn visible_entries(entries: &[DepEntry], cycles_only: bool, top: usize) -> Vec<&DepEntry> {
     if cycles_only {
@@ -156,12 +170,14 @@ pub fn run(
     output: crate::cli::OutputMode,
     cycles_only: bool,
     sort_by: &str,
-    top: usize,
+    top: Option<usize>,
 ) -> Result<(), Box<dyn Error>> {
     let mut result = analyze(cfg);
+    show_paths(&mut result, cfg.path);
 
     sort_entries(&mut result.entries, sort_by);
-    let entries = visible_entries(&result.entries, cycles_only, top);
+    let limit = crate::report_helpers::shown_count(output, top, result.entries.len());
+    let entries = visible_entries(&result.entries, cycles_only, limit);
 
     match output {
         crate::cli::OutputMode::Json => {
