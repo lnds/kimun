@@ -1047,12 +1047,14 @@ Notas sobre Elixir:
 - Un módulo definido en varios archivos (proyectos hechos a partir de una misma plantilla) se resuelve al archivo más cercano al que se refiere a él.
 - Los comentarios y los literales no contienen referencias, pero el código que un string interpola sí: `"Total: #{Orders.total(order)}"` usa `Orders`.
 - Un controlador de Phoenix usa las vistas que llevan su nombre (`PageController` y `PageJSON`, `PageHTML`, `PageView`), y un módulo usa los componentes que renderizan sus plantillas `~H`.
+- `mix.exs`, `.formatter.exs` y los scripts de un directorio `config` configuran el build: quedan en el grafo sin dependencias, y los módulos que nombran (`groups_for_modules`, `config :app, App.Endpoint`) o definen (`App.MixProject`) no generan aristas.
 - No se ven: los módulos nombrados en tiempo de ejecución (`apply/3`, configuración), los generados por macros, y los que un router de Phoenix nombra bajo el alias de un `scope`.
 
 Notas sobre Rust:
 
 - Una dependencia es una ruta: `use crate::git::GitRepo`, una ruta calificada `super::analyzer::run(x)`, una llamada sobre un módulo hijo (`report::print(x)`). Se leen los grupos, `as`, `self`, los globs y los `use` de varias líneas. `mod x;` solo dice dónde vive un módulo y no agrega relación.
-- Cada crate es un árbol de módulos que crece desde su raíz (`src/lib.rs`, `src/main.rs`, un archivo de `src/bin`, `tests`, `examples` o `benches`, `build.rs`) por sus declaraciones `mod`, incluido `#[path]`. Una ruta lleva al archivo del módulo más profundo que nombra: el ítem puede estar definido ahí o solo reexportado.
+- Cada crate es un árbol de módulos que crece desde su raíz (`src/lib.rs`, `src/main.rs`, un archivo de `src/bin`, `tests`, `examples` o `benches`, `build.rs`) por sus declaraciones `mod`, incluido `#[path]`. Una ruta lleva al archivo del módulo más profundo que nombra: el ítem puede estar definido ahí o solo reexportado. Un módulo declarado dos veces bajo `#[cfg]` opuestos, con un `#[path]` cada uno, lleva a ambos archivos.
+- Un crate reexportado bajo un nombre (`pub extern crate grep_printer as printer`, `pub use grep_printer as printer`) se sigue: `grep::printer::Stats` lleva a la librería de `grep-printer`, y la fachada la usa.
 - Los demás targets de un paquete llegan a su librería por el nombre (`my_app::orders` desde `tests/` o `main.rs`), y también los otros crates del workspace. El nombre sale de `[package] name`, con `-` leído como `_`.
 - Un tipo usa los archivos que tienen sus bloques `impl`, porque lo que definen se alcanza a través del tipo.
 - Para `km impact`, un archivo con funciones `#[test]` tiene un test propio; un archivo de `tests/` que las tiene, o un módulo `tests.rs`, es un test. Lo que un paquete ejecuta (`src/main.rs`, `src/bin`, `examples`, `benches`, `build.rs`) es un punto de entrada.
@@ -1071,7 +1073,8 @@ Notas sobre Python:
 
 Notas sobre Go:
 
-- Un import nombra un paquete, y un paquete es un directorio: el import depende de cada archivo `.go` que esté directamente dentro, no de los que están en sus subdirectorios, que son otros paquetes. No se lee en qué archivo está lo que se usó.
+- Un import nombra un paquete, y un paquete es un directorio: el import depende de cada archivo `.go` que esté directamente dentro, no de los que están en sus subdirectorios, que son otros paquetes. No se lee en qué archivo está lo que se usó, así que el fan-out cuenta archivos: un import de un paquete de 17 archivos suma 17.
+- Los imports se leen del código: uno escrito en un comentario o en un string, como el programa de ejemplo del comentario de un paquete, no es un import. Un paquete no puede importarse a sí mismo, así que un import del directorio del propio archivo no agrega arista, salvo que el archivo sea un paquete de test externo.
 - Los archivos de test (`_test.go`) no son parte de lo que un paquete ofrece, ni tampoco los que la herramienta ignora (`_x.go`, `.x.go`). Un test en un paquete de test externo (`package store_test`) que importa su propio paquete depende de los archivos que tiene al lado.
 - Se lee cada `go.mod` bajo el directorio analizado, así que los módulos de un repositorio con varios se resuelven cada uno desde su propio directorio, con o sin `go.work`. Un import de la ruta del módulo misma es el paquete en la raíz del módulo.
 - Los archivos de un mismo paquete se usan entre sí sin importarse, así que no hay aristas entre ellos. El grafo de imports es, por lo tanto, una cota inferior de las dependencias reales.

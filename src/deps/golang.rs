@@ -9,7 +9,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
-use super::extractor::extract_imports;
+use super::golang_source;
 use super::graph::Source;
 use super::layout::Layout;
 
@@ -56,12 +56,16 @@ impl Packages {
     }
 
     /// The files `source` imports: those of each package it names. `None`
-    /// when it is not Go.
+    /// when it is not Go. A package cannot import itself, so an import of
+    /// its own directory is left out, unless the file is an external test.
     pub fn uses(&self, source: &Source) -> Option<BTreeMap<usize, BTreeSet<String>>> {
         (source.language == "Go").then(|| {
-            extract_imports(&source.language, &source.text)
+            let file = golang_source::read(&source.text);
+            let own = source.path.parent().unwrap_or(Path::new(""));
+            file.imports
                 .iter()
                 .filter_map(|import| self.directory(import))
+                .filter(|dir| file.is_external_test() || dir != own)
                 .filter_map(|dir| self.by_dir.get(&dir))
                 .flatten()
                 .map(|&file| (file, BTreeSet::new()))

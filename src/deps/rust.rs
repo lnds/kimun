@@ -121,6 +121,9 @@ impl<'a> Parser<'a> {
                     self.at += 1;
                     self.use_tree(&[]);
                 }
+                Tok::Word("extern") if self.peek(1) == Some(Tok::Word("crate")) => {
+                    self.extern_crate()
+                }
                 Tok::Word(_) => self.path(),
                 other => self.punct(other),
             }
@@ -331,6 +334,26 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// `extern crate name;` or `extern crate name as alias;`: a path to the
+    /// crate, and the alias it is known by here, as a `use` would bring.
+    fn extern_crate(&mut self) {
+        self.at += 2;
+        let Some(Tok::Word(name)) = self.peek(0) else {
+            return;
+        };
+        self.at += 1;
+        let alias = match (self.peek(0), self.peek(1)) {
+            (Some(Tok::Word("as")), Some(Tok::Word(alias))) => {
+                self.at += 2;
+                alias
+            }
+            _ => name,
+        };
+        if name != "self" {
+            self.import(vec![name.to_string()], alias);
+        }
+    }
+
     /// Record what a `use` names. `self` at the end stands for the module
     /// before it; `_` is no name to refer to later.
     fn import(&mut self, mut segments: Vec<String>, name: &str) {
@@ -348,7 +371,8 @@ impl<'a> Parser<'a> {
             scope: self.scope(),
             segments,
         };
-        if name != "_" && path.segments.len() > 1 {
+        // A crate brought under its own name binds nothing new.
+        if name != "_" && (path.segments.len() > 1 || path.segments[0] != name) {
             self.out.imports.push((name, path.clone()));
         }
         self.out.paths.push(path);

@@ -96,6 +96,45 @@ fn a_test_script_is_part_of_the_graph() {
     assert_eq!(uses(&graph, "test/a_test.exs"), [("lib/a.ex", vec!["A.f"])]);
 }
 
+#[test]
+fn build_configuration_neither_uses_nor_defines_modules() {
+    let graph = build(&[
+        source(
+            "mix.exs",
+            "defmodule App.MixProject do\n  use Mix.Project\n  defp docs, do: [groups_for_modules: [Core: [App.Reloader]]]\nend\n",
+        ),
+        source(
+            "lib/app/reloader.ex",
+            "defmodule App.Reloader do\n  def own?, do: Mix.Project.get() == App.MixProject\nend\n",
+        ),
+        source(
+            "config/config.exs",
+            "import Config\nconfig :app, App.Reloader, enabled: true\n",
+        ),
+        source(".formatter.exs", "[inputs: [App.Reloader]]\n"),
+    ]);
+    for file in ["mix.exs", "config/config.exs", ".formatter.exs"] {
+        assert!(uses(&graph, file).is_empty(), "{file}");
+    }
+    assert!(uses(&graph, "lib/app/reloader.ex").is_empty());
+}
+
+#[test]
+fn build_configuration_is_told_by_name_and_place() {
+    for path in [
+        "mix.exs",
+        "apps/web/mix.exs",
+        ".formatter.exs",
+        "config/runtime.exs",
+        "apps/web/config/dev.exs",
+    ] {
+        assert!(elixir::is_build_config(Path::new(path)), "{path}");
+    }
+    for path in ["test/mix_test.exs", "lib/config.exs", "lib/app/config/x.ex"] {
+        assert!(!elixir::is_build_config(Path::new(path)), "{path}");
+    }
+}
+
 fn template(project: &str) -> Vec<Source> {
     vec![
         source(

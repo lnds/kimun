@@ -288,3 +288,18 @@ fn what_a_use_names_and_what_it_does_not() {
     // An alias that is no name binds nothing.
     assert!(parse("use a::b as ;").imports.is_empty());
 }
+
+#[test]
+fn extern_crate_is_a_path_to_the_crate_and_binds_its_alias() {
+    let file = parse("pub extern crate grep_printer as printer;\nextern crate serde;");
+    assert_eq!(
+        file.imports,
+        [("printer".to_string(), path(&[], &["grep_printer"]))]
+    );
+    assert_eq!(
+        file.paths,
+        [path(&[], &["grep_printer"]), path(&[], &["serde"])]
+    );
+    assert!(parse("extern crate self as me;").paths.is_empty());
+    assert!(parse("extern crate foo as _;").imports.is_empty());
+}

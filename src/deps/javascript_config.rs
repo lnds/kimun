@@ -7,7 +7,8 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
-use super::javascript::{find, line_len, normalize};
+use super::c_like::{find, line_len};
+use super::javascript::normalize;
 
 /// The aliases that govern the files under a directory.
 #[derive(Debug, Default, PartialEq)]

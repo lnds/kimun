@@ -258,3 +258,61 @@ fn a_tree_that_starts_inside_src_still_has_its_root() {
     assert_eq!(used_by(&g, "main.rs"), ["loc/mod.rs"]);
     assert_eq!(used_by(&g, "loc/mod.rs"), ["util.rs"]);
 }
+
+#[test]
+fn a_crate_re_exported_by_a_facade_is_followed_through_it() {
+    let g = graph(
+        &[
+            ("printer/src/lib.rs", "pub struct Stats;"),
+            ("matcher/src/lib.rs", "pub trait Matcher {}"),
+            (
+                "grep/src/lib.rs",
+                "pub extern crate grep_printer as printer;\npub use grep_matcher as matcher;\npub struct Own;",
+            ),
+            (
+                "core/src/main.rs",
+                "fn main() { grep::printer::Stats; grep::Own; }\nuse grep::matcher::Matcher;",
+            ),
+        ],
+        &[
+            ("printer", "grep-printer"),
+            ("matcher", "grep-matcher"),
+            ("grep", "grep"),
+            ("core", "core"),
+        ],
+    );
+    assert_eq!(
+        used_by(&g, "grep/src/lib.rs"),
+        ["printer/src/lib.rs", "matcher/src/lib.rs"]
+    );
+    // An item of the facade stays there; a module it re-exports leads on.
+    assert_eq!(
+        used_by(&g, "core/src/main.rs"),
+        [
+            "printer/src/lib.rs",
+            "matcher/src/lib.rs",
+            "grep/src/lib.rs"
+        ]
+    );
+}
+
+#[test]
+fn every_cfg_alternative_of_a_module_is_used() {
+    let g = graph(
+        &[
+            ("src/main.rs", "mod index;\nfn main() { index::run() }"),
+            (
+                "src/index/mod.rs",
+                "#[cfg(feature = \"index\")]\n#[path = \"enabled.rs\"]\nmod imp;\n\n#[cfg(not(feature = \"index\"))]\n#[path = \"disabled.rs\"]\nmod imp;\n\npub(crate) use self::imp::*;",
+            ),
+            ("src/index/enabled.rs", "pub(crate) fn run() {}"),
+            ("src/index/disabled.rs", "pub(crate) fn run() {}"),
+        ],
+        &[],
+    );
+    assert_eq!(used_by(&g, "src/main.rs"), ["src/index/mod.rs"]);
+    assert_eq!(
+        used_by(&g, "src/index/mod.rs"),
+        ["src/index/enabled.rs", "src/index/disabled.rs"]
+    );
+}

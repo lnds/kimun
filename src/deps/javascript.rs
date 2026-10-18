@@ -10,6 +10,7 @@
 use std::collections::HashSet;
 use std::path::{Component, Path, PathBuf};
 
+use super::c_like::{find, line_len};
 use super::javascript_config::{Config, Package};
 use super::layout::Layout;
 
@@ -134,19 +135,6 @@ impl<'s> Iterator for Tokens<'s> {
 
 fn is_word(c: u8) -> bool {
     c.is_ascii_alphanumeric() || c == b'_' || c == b'$'
-}
-
-/// The length of a line, without its newline.
-pub(super) fn line_len(bytes: &[u8]) -> usize {
-    bytes
-        .iter()
-        .position(|&c| c == b'\n')
-        .unwrap_or(bytes.len())
-}
-
-/// Where `needle` first is in `bytes`.
-pub(super) fn find(bytes: &[u8], needle: &[u8]) -> Option<usize> {
-    bytes.windows(needle.len()).position(|w| w == needle)
 }
 
 /// The file `specifier` names when `importer` imports it, if it is one of
