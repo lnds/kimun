@@ -64,3 +64,32 @@ fn comparison_names_both_scores_and_the_change() {
         "{text}"
     );
 }
+
+#[test]
+fn the_mi_dimension_counts_each_file_once() {
+    let dir = tempfile::tempdir().unwrap();
+    // One large tangled file and four small clean ones.
+    let big: String = (0..300)
+        .map(|i| format!("pub fn f{i}(x: u32) -> u32 {{\n    if x > {i} && x < {i} * 7 {{\n        return x * {i};\n    }}\n    0\n}}\n"))
+        .collect();
+    std::fs::write(dir.path().join("big.rs"), big).unwrap();
+    for n in 0..4 {
+        std::fs::write(
+            dir.path().join(format!("s{n}.rs")),
+            "pub fn g() -> u32 {\n    1\n}\n",
+        )
+        .unwrap();
+    }
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let measured = measure(&cfg, 6, &ScoringModel::ExperimentalMi);
+    let experimental = snapshot_of(&measured, 5, &ScoringModel::ExperimentalMi).score;
+    let mi = experimental
+        .dimensions
+        .iter()
+        .find(|d| d.name == "Maintainability Index")
+        .unwrap();
+    // Weighted by lines the large file would dominate; per file the four
+    // small files hold four fifths of the mean.
+    assert!(mi.score > 70.0, "{}", mi.score);
+}

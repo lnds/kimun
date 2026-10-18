@@ -1233,11 +1233,13 @@ Up to v0.35 File Size weighed 15%, and the others 30%, 20%, 15% and 20%. It weig
 
 #### Experimental model (--experimental)
 
-`km score --experimental` scores with the Maintainability Index (Visual Studio variant, 0–100) in place of Halstead Effort, at its weight (21%), and prints the score of the default model next to it, from the same measurement. The MI weighs Halstead volume, cyclomatic complexity and size together; a file scores 0 at MI 0, 40 at 10, 70 at 20 (where Visual Studio turns green), 85 at 30, 95 at 45 and 100 from 60. It is for trying the dimension out, not for gates: it cannot be combined with `--model` or `--trend`.
+`km score --experimental` scores with the Maintainability Index (Visual Studio variant, 0–100) in place of Halstead Effort, at its weight (21%), and prints the score of the default model next to it, from the same measurement. The MI weighs Halstead volume, cyclomatic complexity and size together; a file scores 0 at MI 0, 40 at 5, 60 at 10, 80 at 20 (where Visual Studio turns green), 90 at 30, 97 at 45 and 100 from 60. Unlike the other dimensions, the MI of the project is the plain mean of its files, not weighted by lines: the MI already falls with the size of a file, and weighting it would count size twice. It is for trying the dimension out, not for gates: it cannot be combined with `--model` or `--trend`.
+
+On the projects it was tried on, the experimental score stays within about 1.5 points of the default one, in the same order: the MI follows Halstead closely, from which it is largely computed. A project whose worst code sits in a few large files among many small ones scores higher than with the default model (jq: F 51.3 against D 60.5), since each file counts once.
 
 ```
  Experimental: Maintainability Index (Visual Studio) in place of Halstead Effort.
- Default model: B+ (83.2)  →  experimental: C+ (74.0), -9.2
+ Default model: B+ (83.2)  →  experimental: B (81.8), -1.5
 ```
 
 `--format json` adds a `baseline` object with the score and grade of the default model; `--format short` adds a `baseline` line.
