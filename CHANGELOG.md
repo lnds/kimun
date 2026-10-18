@@ -1,3 +1,41 @@
+## v0.37.0 (2026-10-18)
+
+### Feat
+
+- **deps**: keep the file edges and list them in the JSON
+- **deps**: Elixir uses needed to compile are compile edges
+- **deps**: Ruby graph through requires and the constants named
+- **deps**: imports that do not load leave cycles, unresolved internal imports are reported
+- **deps**: Elixir use injects, import answers bare calls
+- **deps**: C# extension methods reach their class; Kaikai package imports name one file
+- **score**: the experimental MI counts each file once, on a gentler curve
+- **score**: --experimental scores with the Maintainability Index in place of Halstead
+- **deps**: C# graph through namespaces, usings and the types named
+- **deps**: Java graph through packages, imports and the classes named
+- **deps**: C and C++ include graph, with the sources behind each header
+- **deps**: JS/TS imports resolve through tsconfig aliases and workspace packages
+- **loc**: Fortran and Pascal, with complexity and Halstead
+
+### Fix
+
+- **deps**: the compile-time footer names what counts
+- **deps**: Go imports come from code, Rust facades and cfg alternatives are followed, mix.exs leaves the module graph
+- **output**: totals cover every file, JSON lists every entry, one form for paths
+- **blame**: reformats and moved code keep their author, Last Active is the last commit
+- **history**: tc pairs only real coupling, churn rate over a common window, knowledge risk needs a window
+- **smells**: documentation is not commented-out code, named values are not magic, parameters after the name
+- **loc**: Python docstrings are comment, C++ headers, and rst, yacc, lex, EEx, CMake, jq
+- **metrics**: dups counts each duplicated line once, Halstead skips TypeScript types
+- **complexity**: cogcom reads every keyword of a line, Elixir branches count
+- **detection**: signatures over several lines, continuations, annotations, Script and Elixir macros
+- **walk**: metrics of code leave out generated files, data, prose, examples and test modules
+- **knowledge**: the bus factor counts who would have to leave, not who covers 80%
+
+### Refactor
+
+- indent structure in a module of its own, smaller walk functions
+- **knowledge**: split the bus factor and its report into smaller functions
+
 ## v0.36.0 (2026-10-16)
 
 ### Feat
