@@ -11,14 +11,14 @@ fn path() -> PathBuf {
 #[test]
 fn single_commit_zero_span_clamps_to_medium() {
     // span = 0 → months clamped to 1.0 → rate = 1/1 = 1.0 → Medium
-    let f = classify(path(), "Rust", 1, 0, 0);
+    let f = classify(path(), "Rust", 1, (0, 0), (0, 0));
     assert_eq!(f.level, ChurnLevel::Medium);
     assert!((f.rate - 1.0).abs() < 1e-9);
 }
 
 #[test]
 fn two_commits_over_three_months_is_low() {
-    let f = classify(path(), "Rust", 2, 0, 3 * MONTH);
+    let f = classify(path(), "Rust", 2, (0, 3 * MONTH), (0, 3 * MONTH));
     // rate = 2/3 ≈ 0.67 → Low
     assert_eq!(f.level, ChurnLevel::Low);
     assert!(f.rate < 1.0);
@@ -26,14 +26,14 @@ fn two_commits_over_three_months_is_low() {
 
 #[test]
 fn four_commits_per_month_is_medium() {
-    let f = classify(path(), "Rust", 4, 0, MONTH);
+    let f = classify(path(), "Rust", 4, (0, MONTH), (0, MONTH));
     // rate = 4/1 = 4.0 → Medium (not > 4)
     assert_eq!(f.level, ChurnLevel::Medium);
 }
 
 #[test]
 fn five_commits_per_month_is_high() {
-    let f = classify(path(), "Rust", 5, 0, MONTH);
+    let f = classify(path(), "Rust", 5, (0, MONTH), (0, MONTH));
     // rate = 5/1 = 5.0 > 4 → High
     assert_eq!(f.level, ChurnLevel::High);
 }
@@ -41,7 +41,7 @@ fn five_commits_per_month_is_high() {
 #[test]
 fn many_commits_over_long_period_can_be_low() {
     // 12 commits over 2 years = 0.5/month → Low
-    let f = classify(path(), "Rust", 12, 0, 24 * MONTH);
+    let f = classify(path(), "Rust", 12, (0, 24 * MONTH), (0, 24 * MONTH));
     assert_eq!(f.level, ChurnLevel::Low);
 }
 
@@ -56,10 +56,33 @@ fn level_labels() {
 fn fields_are_stored() {
     let first = 1_000_000i64;
     let last = first + 6 * MONTH;
-    let f = classify(PathBuf::from("a/b.py"), "Python", 10, first, last);
+    let f = classify(
+        PathBuf::from("a/b.py"),
+        "Python",
+        10,
+        (first, last),
+        (first, last),
+    );
     assert_eq!(f.path, PathBuf::from("a/b.py"));
     assert_eq!(f.language, "Python");
     assert_eq!(f.commits, 10);
     assert_eq!(f.first_commit, first);
     assert_eq!(f.last_commit, last);
+}
+
+#[test]
+fn a_burst_long_ago_is_spread_over_the_time_since() {
+    let now = 24 * MONTH;
+    let burst = classify(path(), "Rust", 5, (0, DAY), (0, now));
+    let steady = classify(path(), "Rust", 16, (0, now), (0, now));
+    assert_eq!(burst.level, ChurnLevel::Low);
+    assert!(burst.rate < steady.rate);
+}
+
+#[test]
+fn the_since_window_is_the_denominator() {
+    // 8 commits in the last week of a 12-month window.
+    let now = 12 * MONTH;
+    let f = classify(path(), "Rust", 8, (now - 7 * DAY, now), (0, now));
+    assert!((f.rate - 8.0 / 12.0).abs() < 1e-9);
 }

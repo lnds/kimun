@@ -60,11 +60,13 @@ pub struct FileCoupling {
 ///
 /// For each commit, generates all pairs of eligible files (those with
 /// at least `min_degree` total commits), counts shared commits per pair,
-/// and returns results sorted by strength descending.
+/// keeps the pairs that share at least `min_shared`, and returns results
+/// sorted by strength descending.
 pub fn compute_coupling(
     co_changes: &[Vec<PathBuf>],
     freq_map: &HashMap<PathBuf, usize>,
     min_degree: usize,
+    min_shared: usize,
 ) -> Vec<FileCoupling> {
     let mut pair_counts: HashMap<(PathBuf, PathBuf), usize> = HashMap::new();
 
@@ -87,6 +89,7 @@ pub fn compute_coupling(
 
     let mut results: Vec<FileCoupling> = pair_counts
         .into_iter()
+        .filter(|(_, shared)| *shared >= min_shared)
         .map(|((a, b), shared)| {
             let commits_a = freq_map[&a];
             let commits_b = freq_map[&b];

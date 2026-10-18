@@ -13,7 +13,7 @@ fn make_blame(author: &str, email: &str, lines: usize, time: i64) -> BlameInfo {
 fn test_critical_single_owner() {
     let blames = vec![make_blame("Alice", "alice@x.com", 90, 100)];
     let recent = HashSet::from(["alice@x.com".to_string()]);
-    let result = compute_ownership(PathBuf::from("a.rs"), "Rust", &blames, &recent);
+    let result = compute_ownership(PathBuf::from("a.rs"), "Rust", &blames, Some(&recent));
 
     assert_eq!(result.risk, RiskLevel::Critical);
     assert_eq!(result.primary_owner, "Alice");
@@ -27,8 +27,7 @@ fn test_high_risk() {
         make_blame("Alice", "alice@x.com", 70, 100),
         make_blame("Bob", "bob@x.com", 30, 100),
     ];
-    let recent = HashSet::new();
-    let result = compute_ownership(PathBuf::from("a.rs"), "Rust", &blames, &recent);
+    let result = compute_ownership(PathBuf::from("a.rs"), "Rust", &blames, None);
     assert_eq!(result.risk, RiskLevel::High);
 }
 
@@ -39,8 +38,7 @@ fn test_medium_risk() {
         make_blame("Bob", "bob@x.com", 40, 100),
         make_blame("Carol", "carol@x.com", 10, 100),
     ];
-    let recent = HashSet::new();
-    let result = compute_ownership(PathBuf::from("a.rs"), "Rust", &blames, &recent);
+    let result = compute_ownership(PathBuf::from("a.rs"), "Rust", &blames, None);
     assert_eq!(result.risk, RiskLevel::Medium);
 }
 
@@ -52,8 +50,7 @@ fn test_low_risk() {
         make_blame("Carol", "carol@x.com", 25, 100),
         make_blame("Dan", "dan@x.com", 25, 100),
     ];
-    let recent = HashSet::new();
-    let result = compute_ownership(PathBuf::from("a.rs"), "Rust", &blames, &recent);
+    let result = compute_ownership(PathBuf::from("a.rs"), "Rust", &blames, None);
     assert_eq!(result.risk, RiskLevel::Low);
 }
 
@@ -62,7 +59,7 @@ fn test_knowledge_loss_detected() {
     let blames = vec![make_blame("Alice", "alice@x.com", 100, 100)];
     // Alice is NOT in recent authors → knowledge loss
     let recent = HashSet::from(["bob@x.com".to_string()]);
-    let result = compute_ownership(PathBuf::from("a.rs"), "Rust", &blames, &recent);
+    let result = compute_ownership(PathBuf::from("a.rs"), "Rust", &blames, Some(&recent));
     assert!(result.knowledge_loss);
 }
 
@@ -70,16 +67,14 @@ fn test_knowledge_loss_detected() {
 fn test_no_knowledge_loss_when_no_since() {
     let blames = vec![make_blame("Alice", "alice@x.com", 100, 100)];
     // Empty recent_authors means --since was not used → no knowledge loss check
-    let recent = HashSet::new();
-    let result = compute_ownership(PathBuf::from("a.rs"), "Rust", &blames, &recent);
+    let result = compute_ownership(PathBuf::from("a.rs"), "Rust", &blames, None);
     assert!(!result.knowledge_loss);
 }
 
 #[test]
 fn test_empty_blames() {
     let blames: Vec<BlameInfo> = vec![];
-    let recent = HashSet::new();
-    let result = compute_ownership(PathBuf::from("a.rs"), "Rust", &blames, &recent);
+    let result = compute_ownership(PathBuf::from("a.rs"), "Rust", &blames, None);
     assert_eq!(result.total_lines, 0);
     assert_eq!(result.risk, RiskLevel::Low);
 }
@@ -90,8 +85,7 @@ fn test_contributors_count() {
         make_blame("Alice", "alice@x.com", 50, 100),
         make_blame("Bob", "bob@x.com", 50, 100),
     ];
-    let recent = HashSet::new();
-    let result = compute_ownership(PathBuf::from("a.rs"), "Rust", &blames, &recent);
+    let result = compute_ownership(PathBuf::from("a.rs"), "Rust", &blames, None);
     assert_eq!(result.contributors, 2);
 }
 
@@ -237,7 +231,7 @@ fn bus_factor_empty() {
 fn ownership_activity_follows_identity() {
     let blames = vec![make_blame("Alice", "Alice@X.com", 90, 100)];
     let recent = HashSet::from(["alice@x.com".to_string()]);
-    let result = compute_ownership(PathBuf::from("a.rs"), "Rust", &blames, &recent);
+    let result = compute_ownership(PathBuf::from("a.rs"), "Rust", &blames, Some(&recent));
     assert!(!result.knowledge_loss);
 }
 
@@ -248,7 +242,7 @@ fn summary_groups_owners_by_identity() {
             PathBuf::from("a.rs"),
             "Rust",
             &[make_blame(name, email, 10, 100)],
-            &HashSet::new(),
+            None,
         )
     };
     let summary = aggregate_by_author(&[
@@ -263,4 +257,14 @@ fn summary_groups_owners_by_identity() {
             .iter()
             .any(|a| a.author == "Victor Z" && a.files_owned == 2)
     );
+}
+
+#[test]
+fn with_an_empty_window_every_owner_is_inactive() {
+    let blames = vec![make_blame("Ana", "ana@x.org", 10, 100)];
+    let nobody = HashSet::new();
+    let result = compute_ownership(PathBuf::from("a.rs"), "Rust", &blames, Some(&nobody));
+    assert!(result.knowledge_loss);
+    let unknown = compute_ownership(PathBuf::from("a.rs"), "Rust", &blames, None);
+    assert!(!unknown.knowledge_loss);
 }

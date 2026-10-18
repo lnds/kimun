@@ -5,6 +5,33 @@ use std::path::Path as StdPath;
 
 use git2::Repository;
 
+static NO_FILTER: std::sync::LazyLock<ExcludeFilter> =
+    std::sync::LazyLock::new(ExcludeFilter::default);
+
+/// Options as the command line gives them, with any pair sharing one commit.
+fn opts<'a>(
+    output: OutputMode,
+    include_tests: bool,
+    top: usize,
+    sort_by: &'a str,
+    since: Option<&'a str>,
+    min_degree: usize,
+    min_strength: Option<f64>,
+) -> TcOptions<'a> {
+    TcOptions {
+        output,
+        include_tests,
+        top,
+        sort_by,
+        since,
+        min_degree,
+        min_strength,
+        min_shared: 1,
+        max_changeset: 30,
+        filter: &NO_FILTER,
+    }
+}
+
 fn create_test_repo() -> (tempfile::TempDir, Repository) {
     let dir = tempfile::tempdir().unwrap();
     let repo = Repository::init(dir.path()).unwrap();
@@ -42,13 +69,7 @@ fn run_on_non_git_dir() {
     fs::create_dir_all(&sub).unwrap();
     let err = run(
         &sub,
-        OutputMode::Table,
-        false,
-        20,
-        "strength",
-        None,
-        3,
-        None,
+        &opts(OutputMode::Table, false, 20, "strength", None, 3, None),
     )
     .unwrap_err();
     assert!(
@@ -61,13 +82,7 @@ fn run_on_non_git_dir() {
 fn run_min_degree_zero_rejected() {
     let err = run(
         StdPath::new("."),
-        OutputMode::Table,
-        false,
-        20,
-        "strength",
-        None,
-        0,
-        None,
+        &opts(OutputMode::Table, false, 20, "strength", None, 0, None),
     )
     .unwrap_err();
     assert!(
@@ -96,8 +111,8 @@ fn integration_basic() {
     let freqs = git_repo.file_frequencies(None).unwrap();
     let freq_map: HashMap<PathBuf, usize> =
         freqs.into_iter().map(|f| (f.path, f.commits)).collect();
-    let co = git_repo.co_changing_commits(None).unwrap();
-    let results = compute_coupling(&co, &freq_map, 3);
+    let co = git_repo.co_changing_commits(None, 30).unwrap();
+    let results = compute_coupling(&co, &freq_map, 3, 1);
 
     assert_eq!(results.len(), 1, "should find exactly one coupled pair");
     assert_eq!(results[0].shared_commits, 3);
@@ -106,13 +121,7 @@ fn integration_basic() {
     // Also verify run() succeeds
     let result = run(
         dir.path(),
-        OutputMode::Table,
-        false,
-        20,
-        "strength",
-        None,
-        3,
-        None,
+        &opts(OutputMode::Table, false, 20, "strength", None, 3, None),
     );
     assert!(result.is_ok(), "basic coupling should succeed");
 }
@@ -132,13 +141,7 @@ fn integration_json() {
     }
     let result = run(
         dir.path(),
-        OutputMode::Json,
-        false,
-        20,
-        "strength",
-        None,
-        3,
-        None,
+        &opts(OutputMode::Json, false, 20, "strength", None, 3, None),
     );
     assert!(result.is_ok(), "JSON output should succeed");
 }
@@ -163,13 +166,7 @@ fn integration_no_coupling() {
     }
     let result = run(
         dir.path(),
-        OutputMode::Table,
-        false,
-        20,
-        "strength",
-        None,
-        3,
-        None,
+        &opts(OutputMode::Table, false, 20, "strength", None, 3, None),
     );
     assert!(result.is_ok(), "no coupling should succeed");
 }
@@ -190,13 +187,7 @@ fn integration_min_degree_filter() {
     );
     let result = run(
         dir.path(),
-        OutputMode::Table,
-        false,
-        20,
-        "strength",
-        None,
-        3,
-        None,
+        &opts(OutputMode::Table, false, 20, "strength", None, 3, None),
     );
     assert!(result.is_ok(), "min_degree filter should not crash");
 }
@@ -244,13 +235,7 @@ fn run_on_current_repo() {
     // Smoke test on the actual repo
     let result = run(
         StdPath::new("."),
-        OutputMode::Table,
-        false,
-        5,
-        "strength",
-        None,
-        3,
-        None,
+        &opts(OutputMode::Table, false, 5, "strength", None, 3, None),
     );
     assert!(result.is_ok(), "tc should succeed on a git repo");
 }
@@ -259,13 +244,7 @@ fn run_on_current_repo() {
 fn run_on_current_repo_json() {
     let result = run(
         StdPath::new("."),
-        OutputMode::Json,
-        false,
-        5,
-        "strength",
-        None,
-        3,
-        None,
+        &opts(OutputMode::Json, false, 5, "strength", None, 3, None),
     );
     assert!(result.is_ok(), "tc JSON should succeed on a git repo");
 }
@@ -274,13 +253,7 @@ fn run_on_current_repo_json() {
 fn run_short_format() {
     let result = run(
         StdPath::new("."),
-        OutputMode::Short,
-        false,
-        5,
-        "strength",
-        None,
-        3,
-        None,
+        &opts(OutputMode::Short, false, 5, "strength", None, 3, None),
     );
     assert!(result.is_ok(), "tc short format should succeed on git repo");
 }
@@ -289,13 +262,15 @@ fn run_short_format() {
 fn run_terse_format() {
     let result = run(
         StdPath::new("."),
-        OutputMode::Terse,
-        false,
-        5,
-        "strength",
-        None,
-        3,
-        None,
+        &opts(OutputMode::Terse, false, 5, "strength", None, 3, None),
     );
     assert!(result.is_ok(), "tc terse format should succeed on git repo");
+}
+
+#[test]
+fn path_filters_apply_to_history_paths() {
+    let filter = ExcludeFilter::new(&["rs".to_string()], &[], &["vendor".to_string()], &[]);
+    assert!(kept_by(&filter, StdPath::new("src/a.rs")));
+    assert!(!kept_by(&filter, StdPath::new("src/b.js")));
+    assert!(!kept_by(&filter, StdPath::new("vendor/c.rs")));
 }

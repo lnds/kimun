@@ -82,6 +82,18 @@ pub fn identity(name: &str, email: &str) -> String {
     }
 }
 
+/// The commit a revert undoes, as `git revert` writes it: a message opening
+/// with `Revert "` that says `This reverts commit <sha>`.
+fn reverted_commit(commit: &git2::Commit) -> Option<git2::Oid> {
+    let message = commit.message().ok()?;
+    if !message.starts_with("Revert \"") {
+        return None;
+    }
+    let after = message.split("This reverts commit ").nth(1)?;
+    let sha: String = after.chars().take_while(char::is_ascii_hexdigit).collect();
+    git2::Oid::from_str(&sha).ok()
+}
+
 /// Per-author blame contribution for a single file.
 pub struct BlameInfo {
     /// Author display name from git signature.
@@ -98,6 +110,11 @@ impl BlameInfo {
     /// The person these lines belong to (see [`identity`]).
     pub fn identity(&self) -> String {
         identity(&self.author, &self.email)
+    }
+
+    /// Whether these lines belong to a bot account (`dependabot[bot]`).
+    pub fn is_bot(&self) -> bool {
+        self.author.ends_with("[bot]") || self.email.contains("[bot]@")
     }
 }
 
@@ -219,15 +236,29 @@ impl GitRepo {
 
     /// Collect groups of files that changed together in each commit.
     /// Only includes commits that touch 2+ files.
+    ///
+    /// Commits touching more than `max_changeset` files are left out: a
+    /// sweeping change relates files by accident. So are a revert and the
+    /// commit it reverts, which together changed nothing.
     pub fn co_changing_commits(
         &self,
         since: Option<i64>,
+        max_changeset: usize,
     ) -> Result<Vec<Vec<PathBuf>>, Box<dyn Error>> {
         let mut result = Vec::new();
+        let mut reverted: HashSet<git2::Oid> = HashSet::new();
 
         self.walk_commits(since, |commit| {
+            // Newest first: a revert is met before the commit it undoes.
+            if let Some(undone) = reverted_commit(commit) {
+                reverted.insert(undone);
+                return Ok(ControlFlow::Continue(()));
+            }
+            if reverted.remove(&commit.id()) {
+                return Ok(ControlFlow::Continue(()));
+            }
             let paths = self.changed_files(commit)?;
-            if paths.len() >= 2 {
+            if (2..=max_changeset).contains(&paths.len()) {
                 result.push(paths);
             }
             Ok(ControlFlow::Continue(()))

@@ -540,7 +540,9 @@ Identifica el riesgo de bus factor y la concentración del conocimiento por arch
 
 #### Detección de pérdida de conocimiento
 
-Usa `--since` para definir qué es "actividad reciente". Si el dueño principal de un archivo no tiene commits en ese período, el archivo se marca con riesgo de **pérdida de conocimiento**. Usa `--risk-only` para mostrar solo esos archivos.
+Usa `--since` para definir qué es "actividad reciente". Si el dueño principal de un archivo no tiene commits en ese período, el archivo se marca con riesgo de **pérdida de conocimiento**; si nadie hizo commits en el período, se marcan todos. Usa `--risk-only` para mostrar solo esos archivos; requiere `--since`. El conteo final es de todos los archivos en riesgo, junto con cuántos muestra `--top`.
+
+Las cuentas de bots (`dependabot[bot]`, `github-actions[bot]`) no tienen conocimiento: sus líneas quedan fuera, y un archivo que solo escribieron bots no se lista. También quedan fuera los archivos generados y los de datos o prosa (JSON, YAML, Markdown, texto).
 
 Opciones:
 
@@ -634,7 +636,12 @@ Opciones:
 | `--sort-by METRIC` | Ordena por `strength` o `shared` (por defecto: `strength`) |
 | `--since DURATION` | Considera solo los commits desde este momento (p. ej. `6m`, `1y`, `30d`) |
 | `--min-degree N` | Mínimo de commits por archivo para incluirlo (por defecto: 3) |
+| `--min-shared N` | Mínimo de commits que dos archivos deben compartir para formar un par (por defecto: 3) |
+| `--max-changeset N` | Ignora como evidencia de acoplamiento los commits que tocan más de N archivos (por defecto: 30) |
 | `--min-strength F` | Fuerza mínima de acoplamiento que se muestra (p. ej. `0.5` para ver solo el fuerte) |
+| `--include-ext`, `--exclude-ext`, `--exclude-dir`, `--exclude` | Filtros de ruta, aplicados a las rutas del historial |
+
+Solo se emparejan archivos que todavía existen en el árbol de trabajo, y solo código: los archivos lock, los manifiestos, el YAML de CI y la documentación quedan fuera. Un commit masivo (más de `--max-changeset` archivos) relaciona archivos por accidente y se omite, igual que un revert junto con el commit que revierte (un mensaje que empieza con `Revert "` y nombra el commit): juntos no cambiaron nada. Los renombres no se siguen: un archivo se empareja con la ruta que tiene hoy.
 
 Ejemplo de salida:
 
@@ -929,6 +936,8 @@ km impact --since-ref origin/main --format json
 ### `km churn` -- Análisis de churn
 
 Mide la frecuencia de cambio pura por archivo a partir del historial de git (solo la cantidad de commits, sin ponderar por complejidad). Identifica los archivos que más se modifican: un churn alto sin una mejora de calidad que lo acompañe es una señal de mantenimiento.
+
+La tasa son los commits por mes desde el primer commit del archivo hasta hoy, o desde el inicio de la ventana de `--since` hasta hoy, con un mínimo de un mes. Una ráfaga de commits de hace tiempo se reparte en el tiempo transcurrido desde entonces, así que no supera a un archivo que sigue cambiando. HIGH es más de 4 al mes, MEDIUM desde 1, LOW por debajo.
 
 ```bash
 km churn [path]

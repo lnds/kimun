@@ -11,9 +11,10 @@ pub mod analyzer;
 mod report;
 
 use std::cmp::Reverse;
+use std::collections::HashSet;
 use std::error::Error;
 
-use crate::git::GitRepo;
+use crate::git::{BlameInfo, GitRepo};
 use crate::util::{is_generated_file, parse_since};
 use crate::walk::{self, WalkConfig};
 
@@ -66,46 +67,64 @@ fn sort_results(results: &mut [FileOwnership], sort_by: &str) {
     }
 }
 
-/// Run knowledge map analysis: walk source files, blame each one,
-/// compute ownership concentration and risk, then output results.
-pub fn run(cfg: &WalkConfig<'_>, opts: &KnowledgeOptions<'_>) -> Result<(), Box<dyn Error>> {
-    let git_repo = GitRepo::open(cfg.path)
-        .map_err(|e| format!("not a git repository (or any parent): {e}"))?;
+/// The ownership of each file, and the blame it was computed from.
+type Collected = (Vec<FileOwnership>, Vec<Vec<BlameInfo>>);
 
-    let since_ts = opts.since.map(parse_since).transpose()?;
-
-    // Collect recent authors (for knowledge loss detection)
-    let recent_authors = if since_ts.is_some() {
-        git_repo.recent_authors(since_ts)?
-    } else {
-        std::collections::HashSet::new()
-    };
-
+/// Blame each code file and compute its ownership. Generated files and
+/// data or prose are left out, and so are the lines of bot accounts, which
+/// hold no knowledge; a file only bots wrote is left out too.
+fn collect(
+    cfg: &WalkConfig<'_>,
+    git_repo: &GitRepo,
+    recent_authors: Option<&HashSet<String>>,
+) -> Result<Collected, Box<dyn Error>> {
     let (walk_root, walk_prefix) = git_repo.walk_prefix(cfg.path)?;
-
-    let mut results: Vec<FileOwnership> = Vec::new();
+    let mut results = Vec::new();
     let mut file_blames = Vec::new();
-
-    for (file_path, spec) in walk::source_files(&walk_root, cfg.exclude_tests(), cfg.filter) {
-        if is_generated_file(&file_path) {
-            continue;
-        }
-
+    let files = walk::source_files(&walk_root, cfg.exclude_tests(), cfg.filter)
+        .into_iter()
+        .filter(|(path, spec)| spec.is_code() && !is_generated_file(path));
+    for (file_path, spec) in files {
         let rel_path = GitRepo::to_git_path(&walk_root, &walk_prefix, &file_path);
-
-        // Run blame
-        let blames = match git_repo.blame_file(&rel_path) {
+        let mut blames = match git_repo.blame_file(&rel_path) {
             Ok(b) => b,
             Err(e) => {
                 eprintln!("warning: blame {}: {e}", rel_path.display());
                 continue;
             }
         };
-
-        let ownership = compute_ownership(rel_path, spec.name, &blames, &recent_authors);
-        results.push(ownership);
+        blames.retain(|b| !b.is_bot());
+        if blames.is_empty() {
+            continue;
+        }
+        results.push(compute_ownership(
+            rel_path,
+            spec.name,
+            &blames,
+            recent_authors,
+        ));
         file_blames.push(blames);
     }
+    Ok((results, file_blames))
+}
+
+/// Run knowledge map analysis: walk source files, blame each one,
+/// compute ownership concentration and risk, then output results.
+pub fn run(cfg: &WalkConfig<'_>, opts: &KnowledgeOptions<'_>) -> Result<(), Box<dyn Error>> {
+    let git_repo = GitRepo::open(cfg.path)
+        .map_err(|e| format!("not a git repository (or any parent): {e}"))?;
+
+    if opts.risk_only && opts.since.is_none() {
+        return Err("--risk-only needs --since to tell who is inactive (e.g. --since 1y)".into());
+    }
+    let since_ts = opts.since.map(parse_since).transpose()?;
+
+    // Authors with commits in the window; with no window, activity is unknown.
+    let recent_authors = since_ts
+        .map(|ts| git_repo.recent_authors(Some(ts)))
+        .transpose()?;
+
+    let (mut results, file_blames) = collect(cfg, &git_repo, recent_authors.as_ref())?;
 
     // Filter by author if requested (case-insensitive substring match on name or email)
     if let Some(author_filter) = opts.author {
@@ -124,8 +143,11 @@ pub fn run(cfg: &WalkConfig<'_>, opts: &KnowledgeOptions<'_>) -> Result<(), Box<
     sort_results(&mut results, opts.sort_by);
 
     if opts.bus_factor {
-        let active = since_ts.is_some().then_some(&recent_authors);
-        let bf = compute_bus_factor(&file_blames, active, opts.bus_factor_threshold);
+        let bf = compute_bus_factor(
+            &file_blames,
+            recent_authors.as_ref(),
+            opts.bus_factor_threshold,
+        );
         return match opts.output {
             OutputMode::Json => print_bus_factor_json(&bf),
             OutputMode::Short => {
@@ -175,12 +197,13 @@ pub fn run(cfg: &WalkConfig<'_>, opts: &KnowledgeOptions<'_>) -> Result<(), Box<
             }
         }
     } else {
+        let at_risk = results.iter().filter(|f| f.knowledge_loss).count();
         report_helpers::output_results(
             &mut results,
             opts.top,
             opts.output,
             print_json,
-            print_report,
+            |shown| print_report(shown, at_risk),
             print_short,
             print_terse,
         )

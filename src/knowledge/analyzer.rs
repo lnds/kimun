@@ -63,12 +63,14 @@ pub struct FileOwnership {
 }
 
 /// Compute ownership metrics from git blame data for a single file.
-/// Uses `recent_authors` (if non-empty) to detect knowledge loss risk.
+/// With `recent_authors` (the `--since` window), a file whose primary owner
+/// is not among them is at risk of knowledge loss; with an empty window,
+/// every owner is inactive.
 pub fn compute_ownership(
     path: PathBuf,
     language: &str,
     blames: &[BlameInfo],
-    recent_authors: &HashSet<String>,
+    recent_authors: Option<&HashSet<String>>,
 ) -> FileOwnership {
     let total_lines: usize = blames.iter().map(|b| b.lines).sum();
 
@@ -94,14 +96,14 @@ pub fn compute_ownership(
                 author: b.author.clone(),
                 email: b.email.clone(),
                 percentage: pct,
-                active: recent_authors.contains(&b.identity()),
+                active: recent_authors.is_none_or(|r| r.contains(&b.identity())),
             }
         })
         .collect();
 
     let primary = &contributions[0]; // blames are sorted by lines desc
     let risk = classify_risk(&contributions);
-    let knowledge_loss = !recent_authors.is_empty() && !primary.active;
+    let knowledge_loss = !primary.active;
 
     FileOwnership {
         path,
