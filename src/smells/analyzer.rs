@@ -5,7 +5,7 @@ use serde::Serialize;
 use crate::detection::FunctionDetectionMarkers;
 use crate::loc::counter::LineKind;
 
-use super::rules;
+use super::{commented, magic, params, rules};
 
 /// Categories of code smells detected by the analyzer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
@@ -81,14 +81,16 @@ pub fn detect_smells(
     smells.extend(rules::detect_long_functions(
         lines, kinds, markers, max_lines,
     ));
-    smells.extend(rules::detect_long_params(lines, kinds, markers, max_params));
+    smells.extend(params::detect_long_params(
+        lines, kinds, markers, max_params,
+    ));
     smells.extend(rules::detect_todo_debt(lines, kinds));
-    smells.extend(rules::detect_magic_numbers(
+    smells.extend(magic::detect_magic_numbers(
         lines,
         kinds,
         markers.line_comments(),
     ));
-    smells.extend(rules::detect_commented_out_code(lines, kinds));
+    smells.extend(commented::detect_commented_out_code(lines, kinds));
 
     if smells.is_empty() {
         return None;

@@ -251,7 +251,10 @@ still measured. `loc` and the line counts of `report` keep those lines.
 
 Code smell detection. Invoked via `km smells`.
 
-- **`rules.rs`** — Individual smell detectors: long functions, long parameter lists, TODO debt, magic numbers (note: `'_'` is a valid digit separator, included in `is_numeric_char`), and commented-out code.
+- **`rules.rs`** — Long functions and TODO debt.
+- **`params.rs`** — Long parameter lists: the list after the function's name, top-level commas only.
+- **`magic.rs`** — Magic numbers (note: `'_'` is a valid digit separator, included in `is_numeric_char`). `Declarations` follows a declaration across the data it opens (enum members, Go `const (`, tables, `type` unions); named keys and parameter defaults name their value.
+- **`commented.rs`** — Commented-out code, outside documentation comments (`documentation_lines`).
 - **`analyzer.rs`** — Per-file smell aggregation.
 - **`report.rs`** — Table and JSON output formatters.
 - **`mod.rs`** — Orchestration: walks files (or a specific `--files` list), supports `--since-ref <REF>` to limit analysis to files changed since a git ref (ideal for CI/PR checks).
