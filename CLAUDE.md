@@ -42,6 +42,10 @@ CLI tool for code metrics: lines of code (like `cloc`), duplicate detection, Hal
 
 - **`mod.rs`** — Orchestrates: walks directory tree (via `ignore` crate, respects `.gitignore`), detects language, deduplicates files by content hash (streaming), counts lines, aggregates by language.
 
+### Shared: `src/walk.rs`
+
+`source_files` is every recognized file; with tests excluded it also leaves out `EXAMPLE_DIRS` (examples, benchmarks) and the Rust modules declared under `#[cfg(test)]` (`test_blocks::rust_test_modules`). `code_files` is what metrics of code read: no data or prose (`LanguageSpec::is_code`) and no generated files (`util::is_generated_file`, by name, header marker or source map). `collect_analysis`, `score`, `report`, `dups`, `init`, `hotspots` and `churn` use it; `loc` and `deps` read `source_files`; `tc` filters history paths with `is_code_path`.
+
 ### Adding a new language
 
 Use the `lang!` macro in `language.rs`. For most languages:
@@ -84,7 +88,7 @@ Maintainability Index (verifysoft variant with comment weight). Invoked via `km 
 
 Cognitive complexity (SonarSource method). Invoked via `km cogcom`.
 
-- **`analyzer.rs`** — Core computation: penalizes nesting increments and non-linear control structures. Resets `opens_flow` after consuming the first `{` on a control-flow line so closure/struct braces on the same line are not double-counted.
+- **`analyzer.rs`** — Core computation: penalizes nesting increments and non-linear control structures. Brace-scoped code is read token by token along each line (`line_tokens`: keywords and braces in order), through `BraceScan`: a control keyword leaves its block pending until the next `{`, on its line or the next (Allman), and only that first brace nests, so closure/struct braces on the same line are not double-counted.
 - **`detection.rs`** — Language-aware function boundary detection.
 - **`markers.rs`** — Per-language complexity markers (keywords that trigger nesting increments).
 - **`report.rs`** — Table and JSON output formatters.
@@ -101,7 +105,7 @@ Hotspot analysis (Thornhill, change frequency × complexity). Invoked via `km ho
 
 Knowledge maps (Thornhill, code ownership via git blame). Invoked via `km knowledge`.
 
-- **`analyzer.rs`** — `RiskLevel` enum (Critical/High/Medium/Low), `FileOwnership` struct, `compute_ownership()` function that calculates primary owner, concentration, and knowledge loss risk.
+- **`analyzer.rs`** — `RiskLevel` enum (Critical/High/Medium/Low), `FileOwnership` struct, `compute_ownership()` function that calculates primary owner, concentration, and knowledge loss risk. `compute_bus_factor()` is the truck factor: a file's authors hold at least `AUTHOR_SHARE` (0.75) of its main author's lines, and the authors of the most lines leave first until more than the threshold of the code, weighed by lines, has no author; with `--since`, inactive authors have left before counting.
 - **`report.rs`** — Table and JSON output formatters. `--summary` mode aggregates by author (files owned, lines, languages, worst risk) as an alternative to the per-file view.
 - **`mod.rs`** — Orchestration: opens git repo, walks files (filtering generated files), runs `blame_file()` per file, computes ownership, sorts/filters results. Uses `util::parse_since` for `--since` flag. `--summary` flag switches to author-level aggregation.
 
@@ -115,7 +119,7 @@ Temporal coupling analysis (Thornhill, files that change together). Invoked via 
 
 ### Shared: `src/git/`
 
-`GitRepo` wraps `git2::Repository`. `mod.rs` holds history walks, blame and tree extraction. `changeset.rs` holds what concerns a change set: `diff_stats_since` (ref → working tree), `diff_stats_between` (two refs), `patch_stats` (a patch in git format), all through one `stats_of`, plus `co_change_history` and the merge base they start from. `FileDiffStat` carries the lines touched on both sides and a probe of added lines, so `lines_in` picks the side that matches a text: a patch need not be applied where it is measured. `tree.rs` reads files from the tree of a commit without checking it out (`files_at`, `has_file_at`).
+`GitRepo` wraps `git2::Repository`. Blame and the commit walk read authors through `.mailmap`, and `identity` (email without case, or the name when there is none) is how every command tells people apart. `mod.rs` holds history walks, blame and tree extraction. `changeset.rs` holds what concerns a change set: `diff_stats_since` (ref → working tree), `diff_stats_between` (two refs), `patch_stats` (a patch in git format), all through one `stats_of`, plus `co_change_history` and the merge base they start from. `FileDiffStat` carries the lines touched on both sides and a probe of added lines, so `lines_in` picks the side that matches a text: a patch need not be applied where it is measured. `tree.rs` reads files from the tree of a commit without checking it out (`files_at`, `has_file_at`).
 
 ### Shared: `src/projects/`
 
@@ -172,16 +176,22 @@ Dependency graph (file-level coupling from imports, cycles via Tarjan SCC). Invo
 - **`rust_literals.rs`** — Blanks comments and character literals of Rust, keeping lines; a string keeps its quotes and its content is handed apart, for `#[path = "…"]`.
 - **`rust.rs`** — Rust, read lexically: the `mod` declarations of a file (with `#[path]` and the inline modules around them), every path of `use` trees and of code, the names `use` brings in, the types `impl` blocks are for, and whether the file holds `#[test]`s.
 - **`rust_crates.rs`** — The module tree of each crate, grown from its root files by `mod` declarations, and `uses`: each path made absolute from the module it is written in and led to the file of the deepest module it names. Library crates answer to their package name. `mod x;` is no edge; a type uses the files of its `impl` blocks.
-- **`graph.rs`** — `FileGraph::build` builds the file graph from `(path, language, text)` sources, so they can come from disk or from a commit's tree. `Layout` carries what is known besides the sources: paths to look up, the Go modules, the Cargo packages, the import roots of Python projects. Elixir references resolve through a module index (nearest file, then `Related`: what the projects declare); Python and Go are read apart (`python_uses`, `golang`); the rest go through `extract_imports` + `resolve_import`. `Use.calls` keeps the functions called.
-- **`extractor.rs`** — `extract_imports` dispatches by language name and returns raw import strings: relative imports for JS/TS, every quoted import path for Go. Elixir and Rust are read apart, over the whole graph. `is_supported` decides which languages enter the graph.
+- **`graph.rs`** — `FileGraph::build` builds the file graph from `(path, language, text)` sources, so they can come from disk or from a commit's tree. `Layout` carries what is known besides the sources: paths to look up, the Go modules, the Cargo packages, the import roots of Python projects, the aliases and packages of JavaScript. Elixir references resolve through a module index (nearest file, then `Related`: what the projects declare); Python and Go are read apart (`python_uses`, `golang`); the rest go through `extract_imports` + `resolve_import`. `Use.calls` keeps the functions called.
+- **`extractor.rs`** — `extract_imports` dispatches by language name and returns raw import strings: the specifiers of the import forms for JS/TS, every quoted import path for Go. Elixir and Rust are read apart, over the whole graph. `is_supported` decides which languages enter the graph.
 - **`python.rs`** — Python extraction and resolution. `extract` reads every `import` and `from … import`, on several lines too, outside docstrings; `from a.b import c` is kept as `a.b:c`, since `c` may be a submodule. `resolve` looks an absolute import up from each ancestor of the importer that is not a package, and from `src` under each; a relative one from the importer's package. Then come the roots `Layout.python_roots` holds for the nearest project: what its `pyproject.toml` declares, read by `projects::python_roots`.
 - **`python_names.rs`** — What a Python module offers, by lines and indentation: `defined` gives its top-level names (functions, classes, assignments), `changed` the ones a change to some lines affects, carrying it to the names that mention them (`Err(line)` for code that runs on import), and `taken` what a file reads on a module it imports. `python::read` keeps the name each import binds.
 - **`python_uses.rs`** — The files a Python source imports, each with the names it takes there, as `module.name`: what fills `Use.calls` for Python.
 - **`golang.rs`** — Go, where an import names a package and a package is a directory. `Packages` holds the files of each directory that a package offers (no `_test.go`) and the modules of the repository, by the path each `go.mod` declares; an import leads to every file directly inside the directory it names. No edges between the files of one package.
+- **`javascript.rs`** — JavaScript and TypeScript. `extract` reads the specifiers of the import forms only (`import`, `export … from`, `require()`, `import()`) through a coarse tokenizer that skips comments. `resolve` takes a relative specifier from the importer, any other through the `paths` and `baseUrl` of the nearest config, then through the packages of the repository by name; `file_at` tries extensions, the TypeScript source of a `.js` and `index` files.
+- **`javascript_config.rs`** — What `tsconfig.json`/`jsconfig.json` (JSON with comments, `extends` followed within the repository) and `package.json` (name and entry points) say about imports, as `Modules` in `Layout.javascript`.
 - **`kaikai.rs`** — Kaikai extraction and resolution: `import a.b.c` names a file under a package root, found by trying each ancestor directory of the importer.
-- **`analyzer.rs`** — `resolve_import` maps a raw import to project files per language; `build_graph` computes fan-in, fan-out and cycles (`tarjan_scc`, iterative).
+- **`analyzer.rs`** — `resolve_import` maps a raw import to project files per language (JavaScript and TypeScript resolve through `javascript::resolve` in the graph, since they need the layout); `build_graph` computes fan-in, fan-out and cycles (`tarjan_scc`, iterative).
 - **`report.rs`** — `render_report` builds the table as a `String` and `print_report` prints it, so tests assert on the text. JSON, short and terse formatters.
 - **`mod.rs`** — Orchestration: walks files, leaves unsupported languages out of the graph and counts them, extracts and resolves imports. `sort_entries` and `visible_entries` hold the `--sort-by` and `--cycles-only`/`--top` logic apart from `run`, which only prints.
+
+### Shared: `src/detection/`
+
+Function detection for `cycom`, `cogcom`, `smells` and `init`. `code_lines` gives the code lines they read, without preprocessor directives and their `\` continuations in the C family. `mod.rs` walks brace-scoped code: a line is a declaration by marker, or by shape over the signature it spans (`shape::signature`, `shape::is_c_family_function`), unless it starts inside open parentheses (`shape::continuation_lines`) or is an annotation or attribute. `body.rs` reads the body by braces (`BodyScan`; braces of a type in the parameter list are not the body). `script.rs` holds what `FunctionSyntax::Script` (JavaScript, TypeScript) adds: functions bound to a name and regex literals. `indented.rs` reads indent-scoped bodies and leaves `quote` blocks out of them.
 
 ### Shared: `src/string_mask.rs`
 

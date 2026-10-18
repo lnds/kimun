@@ -432,6 +432,7 @@ fn main() {
             risk_only,
             summary,
             bus_factor,
+            bus_factor_threshold,
             author,
         } => {
             dispatch!(common, |cfg, output| {
@@ -445,6 +446,7 @@ fn main() {
                         risk_only,
                         summary,
                         bus_factor,
+                        bus_factor_threshold,
                         author: author.as_deref(),
                     },
                 )

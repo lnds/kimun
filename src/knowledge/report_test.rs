@@ -1,5 +1,5 @@
 use super::*;
-use crate::knowledge::analyzer::{AuthorSummary, BusFactor, BusFactorEntry, RiskLevel};
+use crate::knowledge::analyzer::{AuthorSummary, BusFactor, RiskLevel, compute_bus_factor};
 use std::path::PathBuf;
 
 fn sample_files() -> Vec<FileOwnership> {
@@ -92,135 +92,104 @@ fn print_summary_json_does_not_panic() {
     print_summary_json(&sample_authors()).unwrap();
 }
 
-// ── print_bus_factor_report ────────────────────────────────────────────────
+// ── bus factor ─────────────────────────────────────────────────────────────
 
-fn make_bus_factor(
-    factor: usize,
-    threshold: f64,
-    total_lines: usize,
-    contributors: Vec<BusFactorEntry>,
-) -> BusFactor {
-    BusFactor {
-        factor,
-        threshold,
-        total_lines,
-        contributors,
+fn file(authors: &[(&str, usize)]) -> Vec<crate::git::BlameInfo> {
+    authors
+        .iter()
+        .map(|(a, n)| crate::git::BlameInfo {
+            author: a.to_string(),
+            email: format!("{a}@x.org"),
+            lines: *n,
+            last_commit_time: 0,
+        })
+        .collect()
+}
+
+fn long_tail() -> BusFactor {
+    let mut files = vec![file(&[("Ana", 30)]), file(&[("Bea", 30)])];
+    for dev in ["c", "d", "e", "f", "g", "h", "i", "j"] {
+        files.push(file(&[(dev, 5)]));
     }
-}
-
-fn make_entry(
-    author: &str,
-    lines: usize,
-    pct: f64,
-    cumulative_pct: f64,
-    is_critical: bool,
-) -> BusFactorEntry {
-    BusFactorEntry {
-        author: author.to_string(),
-        lines,
-        pct,
-        cumulative_pct,
-        is_critical,
-    }
+    compute_bus_factor(&files, None, 50.0)
 }
 
 #[test]
-fn print_bus_factor_report_no_data() {
-    let bf = make_bus_factor(0, 80.0, 0, vec![]);
-    print_bus_factor_report(&bf);
-}
-
-#[test]
-fn print_bus_factor_critical_single() {
-    let bf = make_bus_factor(
-        1,
-        80.0,
-        1000,
-        vec![
-            make_entry("Alice", 900, 90.0, 90.0, true),
-            make_entry("Bob", 100, 10.0, 100.0, false),
-        ],
+fn bus_factor_report_no_data() {
+    let bf = compute_bus_factor(&[], None, 50.0);
+    assert_eq!(
+        render_bus_factor_report(&bf, 20, None),
+        "No blame data found for bus factor analysis.\n"
     );
-    print_bus_factor_report(&bf);
 }
 
 #[test]
-fn print_bus_factor_high_two() {
-    let bf = make_bus_factor(
-        2,
-        80.0,
-        1000,
-        vec![
-            make_entry("Alice", 500, 50.0, 50.0, true),
-            make_entry("Bob", 350, 35.0, 85.0, true),
-            make_entry("Carol", 150, 15.0, 100.0, false),
-        ],
+fn bus_factor_report_says_what_the_number_means() {
+    let out = render_bus_factor_report(&long_tail(), 20, None);
+    assert!(out.starts_with("Project Bus Factor: 2\n"), "{out}");
+    assert!(
+        out.contains(
+            "If these 2 contributors leave, 60% of the code is in files with no author left."
+        ),
+        "{out}"
     );
-    print_bus_factor_report(&bf);
+    assert!(out.contains("Risk: HIGH"), "{out}");
+    assert!(out.contains("threshold 50%"), "{out}");
+    assert!(out.contains("30.0%") && out.contains("60.0%"), "{out}");
 }
 
 #[test]
-fn print_bus_factor_low_distributed() {
-    let bf = make_bus_factor(
-        4,
-        80.0,
-        1000,
-        vec![
-            make_entry("Alice", 250, 25.0, 25.0, true),
-            make_entry("Bob", 220, 22.0, 47.0, true),
-            make_entry("Carol", 200, 20.0, 67.0, true),
-            make_entry("Dave", 180, 18.0, 85.0, true),
-            make_entry("Eve", 150, 15.0, 100.0, false),
-        ],
+fn bus_factor_report_singular() {
+    let bf = compute_bus_factor(&[file(&[("Solo", 10)])], None, 50.0);
+    let out = render_bus_factor_report(&bf, 20, None);
+    assert!(out.contains("If this contributor leaves, 100%"), "{out}");
+    assert!(out.contains("Risk: CRITICAL — one person"), "{out}");
+}
+
+#[test]
+fn bus_factor_report_limits_rows_beyond_the_factor() {
+    let out = render_bus_factor_report(&long_tail(), 3, None);
+    assert!(out.contains(" 5  e "), "{out}");
+    assert!(!out.contains(" 6  f "), "{out}");
+    assert!(out.contains("5 more contributors (see --top)"), "{out}");
+}
+
+#[test]
+fn bus_factor_report_with_inactive_authors() {
+    let files = [file(&[("Ana", 90)]), file(&[("Bea", 10)])];
+    let active = std::collections::HashSet::from(["bea@x.org".to_string()]);
+    let bf = compute_bus_factor(&files, Some(&active), 50.0);
+    let out = render_bus_factor_report(&bf, 20, Some("1y"));
+    assert!(out.starts_with("Project Bus Factor: 0\n"), "{out}");
+    assert!(
+        out.contains("90% of the code is already in files whose authors have not committed in 1y."),
+        "{out}"
     );
-    print_bus_factor_report(&bf);
-}
-
-#[test]
-fn print_bus_factor_factor_3() {
-    let bf = make_bus_factor(
-        3,
-        80.0,
-        300,
-        vec![
-            make_entry("X", 130, 43.3, 43.3, true),
-            make_entry("Y", 110, 36.7, 80.0, true),
-            make_entry("Z", 60, 20.0, 100.0, true),
-        ],
+    assert!(
+        out.contains("Risk: CRITICAL — the authors of most of the code are already gone"),
+        "{out}"
     );
-    print_bus_factor_report(&bf);
+    assert!(out.contains("Ana (inactive)"), "{out}");
+    assert!(!out.contains("If this"), "{out}");
 }
 
 #[test]
-fn print_bus_factor_single_contributor() {
-    // factor = 1, single person "contributor" (singular)
-    let bf = make_bus_factor(
-        1,
-        80.0,
-        500,
-        vec![make_entry("Solo", 500, 100.0, 100.0, true)],
-    );
-    print_bus_factor_report(&bf);
-}
-
-// ── print_bus_factor_json ──────────────────────────────────────────────────
-
-#[test]
-fn print_bus_factor_json_no_data() {
-    let bf = make_bus_factor(0, 80.0, 0, vec![]);
-    print_bus_factor_json(&bf).unwrap();
+fn bus_factor_json_fields() {
+    let json = serde_json::to_value(bus_factor_json(&long_tail())).unwrap();
+    assert_eq!(json["factor"], 2);
+    assert_eq!(json["threshold"], 50.0);
+    assert_eq!(json["author_share"], 0.75);
+    assert_eq!(json["total_files"], 10);
+    assert_eq!(json["contributors"][1]["orphaned_pct"], 60.0);
+    assert!(json["contributors"][2].get("orphaned_pct").is_none());
+    assert!(json.get("orphaned_by_inactivity").is_none());
 }
 
 #[test]
-fn print_bus_factor_json_with_data() {
-    let bf = make_bus_factor(
-        1,
-        80.0,
-        1000,
-        vec![
-            make_entry("Alice", 900, 90.0, 90.0, true),
-            make_entry("Bob", 100, 10.0, 100.0, false),
-        ],
-    );
+fn bus_factor_printers_do_not_panic() {
+    let bf = long_tail();
+    print_bus_factor_report(&bf, 20, None);
+    print_bus_factor_short(&bf);
+    print_bus_factor_terse(&bf);
     print_bus_factor_json(&bf).unwrap();
 }

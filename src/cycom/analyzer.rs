@@ -90,13 +90,7 @@ pub fn analyze(
         return None;
     }
 
-    let code_lines: Vec<(usize, &str)> = lines
-        .iter()
-        .zip(kinds)
-        .enumerate()
-        .filter(|(_, (_, k))| **k == LineKind::Code)
-        .map(|(i, (line, _))| (i, line.as_str()))
-        .collect();
+    let code_lines = crate::detection::code_lines(lines, kinds, markers);
 
     if code_lines.is_empty() {
         return None;
@@ -199,6 +193,20 @@ fn count_line_complexity(line: &str, markers: &ComplexityMarkers) -> usize {
     mw_count
         + count_singleword_keywords(&masked, markers)
         + count_operators_in_line(&stripped, markers)
+        + count_clause(&stripped, markers)
+}
+
+/// 1 when the line is a clause of a construct whose clauses branch
+/// (`ComplexityMarkers::clause_arrow`), unless the arrow is that of an
+/// anonymous function opened on the same line.
+fn count_clause(stripped: &str, markers: &ComplexityMarkers) -> usize {
+    let Some(arrow) = markers.clause_arrow else {
+        return 0;
+    };
+    let Some(at) = stripped.find(arrow) else {
+        return 0;
+    };
+    usize::from(count_keyword(&stripped[..at], "fn") == 0)
 }
 
 /// Count whole-word occurrences of a keyword in a line.

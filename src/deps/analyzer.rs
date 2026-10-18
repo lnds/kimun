@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-use super::kaikai;
+use super::{javascript, kaikai};
 
 /// A single file's dependency metrics.
 #[derive(Clone)]
@@ -54,45 +54,36 @@ pub fn build_graph(
 
     let n = files.len();
 
-    // Build adjacency list using indices
+    // Adjacency list by index, over the edges between known files.
     let mut adj: Vec<Vec<usize>> = vec![vec![]; n];
     for (src, dsts) in edges {
-        if let Some(&si) = index.get(src) {
-            for dst in dsts {
-                if let Some(&di) = index.get(dst) {
-                    adj[si].push(di);
-                }
-            }
-        }
+        let Some(&si) = index.get(src) else { continue };
+        adj[si].extend(dsts.iter().filter_map(|dst| index.get(dst).copied()));
     }
 
-    // Fan-out: number of outgoing edges per node
-    let fan_out: Vec<usize> = adj.iter().map(|v| v.len()).collect();
-
-    // Fan-in: number of incoming edges per node
+    let fan_out: Vec<usize> = adj.iter().map(Vec::len).collect();
     let mut fan_in = vec![0usize; n];
-    for neighbors in &adj {
-        for &dst in neighbors {
-            fan_in[dst] += 1;
-        }
+    for &dst in adj.iter().flatten() {
+        fan_in[dst] += 1;
     }
 
-    // Tarjan's SCC to find cycles
-    let sccs = tarjan_scc(n, &adj);
-
-    // Mark nodes that are part of a non-trivial SCC (size > 1)
+    // A strongly connected component of more than one file is a cycle.
+    let sccs: Vec<Vec<usize>> = tarjan_scc(n, &adj)
+        .into_iter()
+        .filter(|scc| scc.len() > 1)
+        .collect();
     let mut in_cycle = vec![false; n];
-    let mut cycles: Vec<Vec<PathBuf>> = Vec::new();
-    for scc in &sccs {
-        if scc.len() > 1 {
-            for &i in scc {
-                in_cycle[i] = true;
-            }
-            let mut cycle_paths: Vec<PathBuf> = scc.iter().map(|&i| files[i].0.clone()).collect();
-            cycle_paths.sort();
-            cycles.push(cycle_paths);
-        }
+    for &i in sccs.iter().flatten() {
+        in_cycle[i] = true;
     }
+    let mut cycles: Vec<Vec<PathBuf>> = sccs
+        .iter()
+        .map(|scc| {
+            let mut paths: Vec<PathBuf> = scc.iter().map(|&i| files[i].0.clone()).collect();
+            paths.sort();
+            paths
+        })
+        .collect();
     cycles.sort();
 
     let entries = files
@@ -116,68 +107,87 @@ pub fn build_graph(
 
 /// Tarjan's strongly-connected components algorithm (iterative to avoid stack overflow).
 fn tarjan_scc(n: usize, adj: &[Vec<usize>]) -> Vec<Vec<usize>> {
-    let mut index_counter = 0usize;
-    let mut stack: Vec<usize> = Vec::new();
-    let mut on_stack = vec![false; n];
-    let mut index: Vec<Option<usize>> = vec![None; n];
-    let mut lowlink = vec![0usize; n];
-    let mut sccs: Vec<Vec<usize>> = Vec::new();
-
-    // Iterative DFS using an explicit work stack.
-    // Each entry: (node, iterator position in adj[node])
-    let mut work: Vec<(usize, usize)> = Vec::new();
-
+    let mut tarjan = Tarjan {
+        adj,
+        counter: 0,
+        stack: Vec::new(),
+        on_stack: vec![false; n],
+        index: vec![None; n],
+        lowlink: vec![0; n],
+        sccs: Vec::new(),
+    };
     for start in 0..n {
-        if index[start].is_some() {
-            continue;
+        if tarjan.index[start].is_none() {
+            tarjan.search(start);
         }
+    }
+    tarjan.sccs
+}
 
-        work.push((start, 0));
+/// The state of Tarjan's algorithm over a graph.
+struct Tarjan<'a> {
+    adj: &'a [Vec<usize>],
+    counter: usize,
+    stack: Vec<usize>,
+    on_stack: Vec<bool>,
+    index: Vec<Option<usize>>,
+    lowlink: Vec<usize>,
+    sccs: Vec<Vec<usize>>,
+}
 
-        while let Some((v, ei)) = work.last_mut() {
-            let v = *v;
-            if index[v].is_none() {
-                // First visit
-                index[v] = Some(index_counter);
-                lowlink[v] = index_counter;
-                index_counter += 1;
-                stack.push(v);
-                on_stack[v] = true;
-            }
-
-            let neighbors = &adj[v];
-            if *ei < neighbors.len() {
-                let w = neighbors[*ei];
-                *ei += 1;
-                if index[w].is_none() {
-                    work.push((w, 0));
-                } else if on_stack[w] {
-                    lowlink[v] = lowlink[v].min(index[w].unwrap());
-                }
-            } else {
-                // Done with v's neighbors — pop and update parent's lowlink
+impl Tarjan<'_> {
+    /// Depth first from `start`, with an explicit stack of each node and
+    /// the next of its neighbors to visit.
+    fn search(&mut self, start: usize) {
+        self.enter(start);
+        let mut work = vec![(start, 0usize)];
+        while let Some(&(v, next)) = work.last() {
+            let Some(&w) = self.adj[v].get(next) else {
                 work.pop();
-                if let Some((parent, _)) = work.last() {
-                    let parent = *parent;
-                    lowlink[parent] = lowlink[parent].min(lowlink[v]);
+                self.leave(v, work.last().map(|&(parent, _)| parent));
+                continue;
+            };
+            if let Some(top) = work.last_mut() {
+                top.1 += 1;
+            }
+            match self.index[w] {
+                None => {
+                    self.enter(w);
+                    work.push((w, 0));
                 }
-                // Check if v is an SCC root
-                if lowlink[v] == index[v].unwrap() {
-                    let mut scc = Vec::new();
-                    loop {
-                        let w = stack.pop().unwrap();
-                        on_stack[w] = false;
-                        scc.push(w);
-                        if w == v {
-                            break;
-                        }
-                    }
-                    sccs.push(scc);
-                }
+                Some(index) if self.on_stack[w] => self.lowlink[v] = self.lowlink[v].min(index),
+                Some(_) => {}
             }
         }
     }
-    sccs
+
+    fn enter(&mut self, v: usize) {
+        self.index[v] = Some(self.counter);
+        self.lowlink[v] = self.counter;
+        self.counter += 1;
+        self.stack.push(v);
+        self.on_stack[v] = true;
+    }
+
+    /// Done with `v`: its parent learns its lowlink, and a root takes its
+    /// component off the stack.
+    fn leave(&mut self, v: usize, parent: Option<usize>) {
+        if let Some(parent) = parent {
+            self.lowlink[parent] = self.lowlink[parent].min(self.lowlink[v]);
+        }
+        if self.index[v] != Some(self.lowlink[v]) {
+            return;
+        }
+        let mut scc = Vec::new();
+        while let Some(w) = self.stack.pop() {
+            self.on_stack[w] = false;
+            scc.push(w);
+            if w == v {
+                break;
+            }
+        }
+        self.sccs.push(scc);
+    }
 }
 
 /// JSON-serializable dependency entry.
@@ -236,52 +246,17 @@ pub fn resolve_import(
 ) -> Vec<PathBuf> {
     let dir = importer.parent().unwrap_or(Path::new(""));
     let single = match language {
-        "JavaScript" | "TypeScript" | "JSX" => resolve_js(dir, import_str, file_set),
+        "JavaScript" | "TypeScript" | "JSX" => javascript::relative(dir, import_str, file_set),
         "Kaikai" => return kaikai::resolve(importer, import_str, file_set),
         _ => None,
     };
     single.into_iter().collect()
 }
 
-fn resolve_js(dir: &Path, import_str: &str, file_set: &HashSet<PathBuf>) -> Option<PathBuf> {
-    let base = dir.join(import_str);
-    // If already has an extension, try directly
-    if base.extension().is_some() {
-        let p = normalize_path(&base);
-        if file_set.contains(&p) {
-            return Some(p);
-        }
-    }
-    // Try common JS/TS extensions
-    for ext in &["ts", "tsx", "js", "jsx", "mts", "mjs"] {
-        let p = normalize_path(&base.with_extension(ext));
-        if file_set.contains(&p) {
-            return Some(p);
-        }
-    }
-    // Try index file
-    for ext in &["ts", "tsx", "js", "jsx"] {
-        let p = normalize_path(&base.join(format!("index.{ext}")));
-        if file_set.contains(&p) {
-            return Some(p);
-        }
-    }
-    None
-}
-
 /// Normalize a path by resolving `..` components (without touching the filesystem).
+#[cfg(test)]
 fn normalize_path(path: &Path) -> PathBuf {
-    let mut components = Vec::new();
-    for comp in path.components() {
-        match comp {
-            std::path::Component::ParentDir => {
-                components.pop();
-            }
-            std::path::Component::CurDir => {}
-            other => components.push(other),
-        }
-    }
-    components.iter().collect()
+    javascript::normalize(path).unwrap_or_default()
 }
 
 #[cfg(test)]

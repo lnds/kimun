@@ -100,7 +100,7 @@ pub fn build_report(
 
     // Walk source files, skipping test directories/files when requested.
     // Each file is analyzed once and its results distributed to all accumulators.
-    for (file_path, spec) in cfg.source_files() {
+    for (file_path, spec) in cfg.code_files() {
         // Skip duplicate files (same content), matching km loc behavior.
         if let Some(h) = hash_file(&file_path)
             && !seen_hashes.insert(h)

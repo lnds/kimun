@@ -1,5 +1,6 @@
 use serde::Serialize;
 
+use super::structure::structural_depths;
 use crate::loc::counter::LineKind;
 
 /// Qualitative complexity classification based on indentation stddev
@@ -16,7 +17,12 @@ pub enum ComplexityLevel {
     Moderate,
     High,
     VeryHigh,
+    /// Too few code lines for their spread to mean anything.
+    Ungraded,
 }
+
+/// Fewer code lines than this leave a file ungraded.
+pub const MIN_GRADED_LINES: usize = 10;
 
 impl ComplexityLevel {
     pub fn from_stddev(stddev: f64) -> Self {
@@ -37,6 +43,7 @@ impl ComplexityLevel {
             Self::Moderate => "Moderate",
             Self::High => "High",
             Self::VeryHigh => "Very High",
+            Self::Ungraded => "-",
         }
     }
 }
@@ -67,14 +74,16 @@ pub fn indent_depth(line: &str, tab_width: usize) -> usize {
 }
 
 /// Calculate indentation metrics from lines and their classifications.
-/// Only considers `LineKind::Code` lines.
+/// Only considers `LineKind::Code` lines, at their structural depth
+/// ([`structural_depths`]).
 pub fn analyze(lines: &[String], kinds: &[LineKind], tab_width: usize) -> Option<IndentMetrics> {
-    let depths: Vec<usize> = lines
+    let code: Vec<&str> = lines
         .iter()
         .zip(kinds)
         .filter(|(_, k)| **k == LineKind::Code)
-        .map(|(line, _)| indent_depth(line, tab_width))
+        .map(|(line, _)| line.as_str())
         .collect();
+    let depths = structural_depths(&code, tab_width);
 
     if depths.is_empty() {
         return None;
@@ -83,7 +92,11 @@ pub fn analyze(lines: &[String], kinds: &[LineKind], tab_width: usize) -> Option
     let max_depth = *depths.iter().max().unwrap();
     let total_indent: usize = depths.iter().sum();
     let stddev = calculate_stddev(&depths);
-    let complexity = ComplexityLevel::from_stddev(stddev);
+    let complexity = if depths.len() < MIN_GRADED_LINES {
+        ComplexityLevel::Ungraded
+    } else {
+        ComplexityLevel::from_stddev(stddev)
+    };
 
     Some(IndentMetrics {
         code_lines: depths.len(),

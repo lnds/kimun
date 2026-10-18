@@ -223,3 +223,60 @@ fn aggregation_stats() {
     assert_eq!(result.max_complexity, 2);
     assert!((result.avg_complexity - 1.5).abs() < 0.01);
 }
+
+#[test]
+fn elixir_branches_by_clause_keyword_and_operator() {
+    let code = "\
+defmodule Branches do
+  def with_it(a, b) do
+    with {:ok, x} <- a,
+         {:ok, y} <- b do
+      x + y
+    end
+  end
+  def unless_it(x) do
+    unless x do
+      1
+    end
+  end
+  def receive_it do
+    receive do
+      :a -> 1
+      :b -> 2
+    end
+  end
+  def case_it(x) do
+    case x do
+      1 -> :one
+      2 -> :two
+      _ -> :many
+    end
+  end
+  def bool_it(a, b) do
+    a and b or a && b
+  end
+  def map_it(xs) do
+    Enum.map(xs, fn x -> x + 1 end)
+  end
+end";
+    let markers = super::super::markers::markers_for("Elixir").unwrap();
+    let (lines, kinds) = make_lines(code);
+    let found: Vec<(String, usize)> = analyze(&lines, &kinds, markers)
+        .unwrap()
+        .functions
+        .into_iter()
+        .map(|f| (f.name, f.complexity))
+        .collect();
+    let expected: Vec<(String, usize)> = [
+        ("with_it", 2),
+        ("unless_it", 2),
+        ("receive_it", 3),
+        ("case_it", 4),
+        ("bool_it", 4),
+        ("map_it", 1),
+    ]
+    .iter()
+    .map(|(n, c)| (n.to_string(), *c))
+    .collect();
+    assert_eq!(found, expected);
+}

@@ -311,3 +311,136 @@ fn pascal_nesting_is_two_columns_a_level() {
     // for +1, nested if +2, and +1, else +1
     assert_eq!(result.functions[0].complexity, 5);
 }
+
+/// Name and cognitive complexity of each function of `code`.
+fn cognitive(language: &str, code: &str) -> Vec<(String, usize)> {
+    let markers = super::super::markers::cognitive_markers_for(language).unwrap();
+    let (lines, kinds) = make_lines(code);
+    analyze(&lines, &kinds, markers)
+        .unwrap()
+        .functions
+        .into_iter()
+        .map(|f| (f.name, f.complexity))
+        .collect()
+}
+
+fn scored(pairs: &[(&str, usize)]) -> Vec<(String, usize)> {
+    pairs.iter().map(|(n, c)| (n.to_string(), *c)).collect()
+}
+
+#[test]
+fn nested_blocks_on_one_line_count_as_on_several() {
+    let one = "\
+function g(xs, x, y) {
+  if (x) { return 1 }
+  for (const v of xs) { if (y) { return v } }
+  return 0
+}";
+    let several = "\
+function g(xs, x, y) {
+  if (x) {
+    return 1
+  }
+  for (const v of xs) {
+    if (y) {
+      return v
+    }
+  }
+  return 0
+}";
+    assert_eq!(cognitive("TypeScript", one), scored(&[("g", 4)]));
+    assert_eq!(cognitive("TypeScript", several), scored(&[("g", 4)]));
+}
+
+#[test]
+fn if_and_else_on_one_line() {
+    let code = "\
+function h(a) {
+  if (a) { return 1 } else { return 2 }
+}";
+    assert_eq!(cognitive("JavaScript", code), scored(&[("h", 2)]));
+}
+
+#[test]
+fn rust_loop_and_if_on_one_line() {
+    let code = "\
+fn f(xs: &[u32], y: bool) -> u32 {
+    for x in xs { if y { return *x; } }
+    0
+}";
+    assert_eq!(cognitive("Rust", code), scored(&[("f", 3)]));
+}
+
+#[test]
+fn allman_braces_and_else_if_nest_like_if() {
+    let code = "\
+int F(int x)
+{
+    if (x > 0)
+    {
+        if (x > 1)
+        {
+            return 2;
+        }
+    }
+    else if (x < 0)
+    {
+        if (x < -1)
+        {
+            return -2;
+        }
+    }
+    return 0;
+}";
+    assert_eq!(cognitive("C", code), scored(&[("F", 6)]));
+}
+
+#[test]
+fn keyword_whose_body_ends_on_its_line_opens_no_block() {
+    let code = "\
+int f(int x) {
+    if (x > 0) return 1;
+    {
+        if (x > 1) return 2;
+    }
+    return 0;
+}";
+    // The bare block after the `if` is no flow control: the second `if`
+    // is not nested.
+    assert_eq!(cognitive("C", code), scored(&[("f", 2)]));
+}
+
+#[test]
+fn elixir_with_unless_receive_and_boolean_operators() {
+    let code = "\
+defmodule Branches do
+  def with_it(a, b) do
+    with {:ok, x} <- a,
+         {:ok, y} <- b do
+      x + y
+    end
+  end
+  def unless_it(x) do
+    unless x do
+      1
+    end
+  end
+  def receive_it do
+    receive do
+      :a -> 1
+    end
+  end
+  def bool_it(a, b) do
+    a and b or a && b
+  end
+end";
+    assert_eq!(
+        cognitive("Elixir", code),
+        scored(&[
+            ("with_it", 1),
+            ("unless_it", 1),
+            ("receive_it", 1),
+            ("bool_it", 3)
+        ])
+    );
+}

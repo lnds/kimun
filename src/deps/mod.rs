@@ -13,6 +13,8 @@ mod extractor;
 mod golang;
 pub mod graph;
 pub mod heex;
+mod javascript;
+mod javascript_config;
 mod kaikai;
 pub mod layout;
 mod phoenix;

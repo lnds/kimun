@@ -158,11 +158,27 @@ fn complexity_level_serde() {
 
 #[test]
 fn analyze_includes_complexity() {
-    let lines: Vec<String> = vec!["    a();", "    b();", "    c();"]
+    let lines: Vec<String> = vec!["    a();"; MIN_GRADED_LINES]
+        .into_iter()
+        .map(String::from)
+        .collect();
+    let kinds = vec![LineKind::Code; lines.len()];
+    let m = analyze(&lines, &kinds, 4).unwrap();
+    assert_eq!(m.complexity, ComplexityLevel::Low);
+}
+
+#[test]
+fn analyze_leaves_small_files_ungraded() {
+    let lines: Vec<String> = vec!["a();", "        b();", "c();"]
         .into_iter()
         .map(String::from)
         .collect();
     let kinds = vec![LineKind::Code; 3];
     let m = analyze(&lines, &kinds, 4).unwrap();
-    assert_eq!(m.complexity, ComplexityLevel::Low);
+    assert_eq!(m.complexity, ComplexityLevel::Ungraded);
+    assert_eq!(m.complexity.as_str(), "-");
+    assert_eq!(
+        serde_json::to_string(&ComplexityLevel::Ungraded).unwrap(),
+        "\"ungraded\""
+    );
 }
