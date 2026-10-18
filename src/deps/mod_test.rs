@@ -223,6 +223,26 @@ fn kaikai_package_directory_import() {
     assert_eq!(metrics(&result, "mid/mid.kai"), (1, 0, false));
 }
 
+#[test]
+fn kaikai_files_of_a_package_have_only_the_edges_of_their_imports() {
+    let dir = tempfile::tempdir().unwrap();
+    write(dir.path(), "lib/kai.toml", "name = \"lib\"\n");
+    write(
+        dir.path(),
+        "lib/one.kai",
+        "import two\n\npub fn f() : Int = two.g()\n",
+    );
+    write(dir.path(), "lib/two.kai", "pub fn g() : Int = 1\n");
+    write(dir.path(), "lib/three.kai", "pub fn h() : Int = 3\n");
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = analyze(&cfg);
+
+    assert_eq!(metrics(&result, "lib/one.kai"), (0, 1, false));
+    assert_eq!(metrics(&result, "lib/two.kai"), (1, 0, false));
+    assert_eq!(metrics(&result, "lib/three.kai"), (0, 0, false));
+}
+
 // ── unsupported languages ────────────────────────────────────────────────────
 
 #[test]

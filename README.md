@@ -1107,14 +1107,15 @@ C# notes:
 - A file sees by their simple name the types of each namespace it is in and of those around it (`App.Web` sees `App`), of the global namespace, of each `using`, and of each `global using` written in its directory or above it. An alias (`using M = App.Models;`) names a type or a namespace, `using static` uses the type it names, and `[Audited]` names the class `AuditedAttribute`.
 - A partial type is declared by each of its files, and a use of it uses them all. When two projects declare a type of the same name, the one nearest to the file that names it is taken.
 - Types of .NET and of NuGet packages declare no file of the repository: external. The implicit usings of the SDK bring nothing of the repository.
+- An extension method (`this` before the first parameter, in a static class) is called on a value without naming its class. A call after a dot (`t.IsValueType()`) uses the file that declares an extension method of that name, taking as many arguments, in a namespace the caller sees. The receiver's type is not known: a call several files could answer is ambiguous and adds no edge, and an instance method that shares the name and the arity of a visible extension is taken for it. Private extension methods are left out.
 - A field, a variable or a method that has a type's name is not told from it.
 
 Kaikai notes:
 
 - `import a.b.c` names `a/b/c.kai` relative to a package root, not to the importing file. Each ancestor directory of the importing file is tried, nearest first, so run `km deps` on a directory that contains the package root.
-- When no such file exists, `import a` can name a package directory `a/` that carries a `kai.toml`; the import then depends on every `.kai` file directly inside it.
+- When no such file exists, `import a` can name a package directory `a/` that carries a `kai.toml`, which the compiler searches: the import depends on `a/a.kai`, or, when the package has no file of its name, on every `.kai` file directly inside it.
 - An import that resolves to no analysed file is external and adds no edge.
-- The files of one Kaikai package merge, so a module can use a name declared in another file of its package without importing it. The import graph is therefore a lower bound on the real dependencies.
+- Each file is a module of its own. The files of a package do not share names: they import each other like any other module (`import store`, `import notes.store`), so their only edges are their imports, and a change to one reaches the files of its package that import it. Unlike Go, where the files of a package see each other without importing and an import reaches them all.
 
 | Flag | Description |
 |------|-------------|

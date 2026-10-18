@@ -1107,14 +1107,15 @@ Notas sobre C#:
 - Un archivo ve por su nombre simple los tipos de cada namespace en que está y de los que lo rodean (`App.Web` ve `App`), del namespace global, de cada `using` y de cada `global using` escrito en su directorio o más arriba. Un alias (`using M = App.Models;`) nombra un tipo o un namespace, `using static` usa el tipo que nombra, y `[Audited]` nombra la clase `AuditedAttribute`.
 - Un tipo parcial lo declara cada uno de sus archivos, y usarlo los usa a todos. Cuando dos proyectos declaran un tipo del mismo nombre, se toma el más cercano al archivo que lo nombra.
 - Los tipos de .NET y de los paquetes de NuGet no declaran ningún archivo del repositorio: son externos. Los usings implícitos del SDK no traen nada del repositorio.
+- Un método de extensión (`this` antes del primer parámetro, en una clase estática) se llama sobre un valor sin nombrar su clase. Una llamada después de un punto (`t.IsValueType()`) usa el archivo que declara un método de extensión con ese nombre, que recibe esa cantidad de argumentos, en un namespace que el archivo que llama ve. El tipo del receptor no se conoce: una llamada que varios archivos podrían atender es ambigua y no agrega arista, y un método de instancia con el mismo nombre y la misma aridad que una extensión visible se toma por ella. Los métodos de extensión privados quedan fuera.
 - Un campo, una variable o un método con el nombre de un tipo no se distingue de él.
 
 Notas sobre Kaikai:
 
 - `import a.b.c` nombra `a/b/c.kai` relativo a la raíz de un paquete, no al archivo que importa. Se prueba cada directorio ancestro del archivo que importa, del más cercano al más lejano, así que ejecuta `km deps` en un directorio que contenga la raíz del paquete.
-- Cuando ese archivo no existe, `import a` puede nombrar un directorio de paquete `a/` que tenga un `kai.toml`; el import depende entonces de cada archivo `.kai` que esté directamente dentro.
+- Cuando ese archivo no existe, `import a` puede nombrar un directorio de paquete `a/` que tenga un `kai.toml`, donde el compilador busca: el import depende de `a/a.kai` o, cuando el paquete no tiene un archivo con su nombre, de cada archivo `.kai` que esté directamente dentro.
 - Un import que no se resuelve a ningún archivo analizado es externo y no agrega ninguna arista.
-- Los archivos de un mismo paquete de Kaikai se fusionan, así que un módulo puede usar un nombre declarado en otro archivo de su paquete sin importarlo. El grafo de imports es, por lo tanto, una cota inferior de las dependencias reales.
+- Cada archivo es un módulo propio. Los archivos de un paquete no comparten nombres: se importan entre sí como cualquier otro módulo (`import store`, `import notes.store`), así que sus únicas aristas son sus imports, y un cambio en uno alcanza a los archivos de su paquete que lo importan. A diferencia de Go, donde los archivos de un paquete se ven sin importarse y un import los alcanza a todos.
 
 | Flag | Descripción |
 |------|-------------|

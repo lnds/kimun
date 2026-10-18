@@ -138,3 +138,66 @@ fn aliases_static_usings_and_attributes() {
         ["Audited.cs", "Clock.cs", "Models.cs", "Util.cs"]
     );
 }
+
+#[test]
+fn a_call_to_an_extension_method_uses_its_class() {
+    let extensions = "using System;\n\nnamespace Lib.Utilities\n{\n    internal static class TypeExtensions\n    {\n        public static bool IsValueType(this Type t)\n        {\n            return t.IsValueType;\n        }\n        private static bool Hidden(this Type t) => true;\n    }\n}\n";
+    let sources = [
+        cs("Utilities/TypeExtensions.cs", extensions),
+        cs(
+            "Serializer.cs",
+            "using System;\nusing Lib.Utilities;\n\nnamespace Lib\n{\n    public class Serializer\n    {\n        public bool Check(Type t)\n        {\n            return t.IsValueType();\n        }\n    }\n}\n",
+        ),
+        cs(
+            "Reader.cs",
+            "using System;\n\nnamespace Lib.Utilities\n{\n    internal class Reader\n    {\n        public bool Check(Type t) => t.IsValueType();\n    }\n}\n",
+        ),
+        cs(
+            "Outside.cs",
+            "namespace Other { class Outside { bool A(System.Type t) => t.IsValueType(); } }\n",
+        ),
+        cs(
+            "Private.cs",
+            "using Lib.Utilities;\nclass Private { bool A(System.Type t) => t.Hidden(); }\n",
+        ),
+    ];
+    let declared: Vec<(String, String)> = read(extensions)
+        .members
+        .declared
+        .into_iter()
+        .map(|e| (e.namespace, e.method))
+        .collect();
+    assert_eq!(
+        declared,
+        [("Lib.Utilities".to_string(), "IsValueType".to_string())]
+    );
+    let expected = ["Utilities/TypeExtensions.cs"];
+    assert_eq!(used(&sources, "Serializer.cs"), expected);
+    assert_eq!(used(&sources, "Reader.cs"), expected);
+    assert!(used(&sources, "Outside.cs").is_empty());
+    assert!(used(&sources, "Private.cs").is_empty());
+    assert!(used(&sources, "Utilities/TypeExtensions.cs").is_empty());
+}
+
+#[test]
+fn an_extension_call_two_classes_may_answer_is_ambiguous() {
+    let sources = [
+        cs(
+            "A.cs",
+            "namespace Lib { static class A { public static int Size(this string s) => 0; } }\n",
+        ),
+        cs(
+            "B.cs",
+            "namespace Lib { static class B { public static int Size(this int[] s) => 0; } }\n",
+        ),
+        cs(
+            "C.cs",
+            "namespace Lib { static class C { public static int Size(this int[] s, int n) => 0; } }\n",
+        ),
+        cs(
+            "Main.cs",
+            "namespace Lib { class Main { int M(string s) => s.Size() + s.Size(1); } }\n",
+        ),
+    ];
+    assert_eq!(used(&sources, "Main.cs"), ["C.cs"]);
+}
