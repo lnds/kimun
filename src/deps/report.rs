@@ -106,6 +106,12 @@ fn totals_lines(totals: &Totals) -> Vec<String> {
             totals.type_edges, totals.deferred_edges
         ));
     }
+    if totals.compile_edges > 0 {
+        lines.push(format!(
+            "Compile-time uses (use, require, import, macros): {}",
+            totals.compile_edges
+        ));
+    }
     if totals.unresolved > 0 {
         lines.push(format!(
             "Unresolved internal imports: {} in {} (listed with --format json)",

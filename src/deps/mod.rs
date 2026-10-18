@@ -13,6 +13,7 @@ mod c_like_reader;
 mod csharp;
 mod csharp_extensions;
 mod elixir;
+mod elixir_compile;
 mod elixir_directives;
 mod elixir_functions;
 mod elixir_literals;

@@ -28,6 +28,9 @@ pub struct Source {
 /// How an import makes one file depend on another when the program runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub enum EdgeKind {
+    /// The importer needs the file to compile: an Elixir `use`, or a macro
+    /// called outside a `quote` block.
+    Compile,
     /// The importer loads the file when it loads itself.
     #[default]
     Load,
@@ -334,13 +337,7 @@ impl FileGraph {
         let modules = std::mem::take(&mut graph.modules);
         for (file, source) in sources.iter().enumerate() {
             let found = match (&parsed[file], rust_uses[file].take()) {
-                (Some(parsed), _) => {
-                    let (uses, whole) = graph.elixir_uses(file, parsed, &modules, related);
-                    Found {
-                        whole,
-                        ..Found::from(uses)
-                    }
-                }
+                (Some(_), _) => graph.elixir_uses(file, &parsed, &modules, related),
                 (None, Some(used)) => used.into_iter().map(no_calls).collect(),
                 (None, None) => imports(source, layout, &by_path, &apart),
             };
@@ -369,17 +366,19 @@ impl FileGraph {
     fn elixir_uses(
         &mut self,
         file: usize,
-        parsed: &ElixirFile,
+        parsed: &[Option<ElixirFile>],
         modules: &ModuleIndex,
         related: Related,
-    ) -> (BTreeMap<usize, BTreeSet<String>>, BTreeSet<usize>) {
-        let mut uses: BTreeMap<usize, BTreeSet<String>> = BTreeMap::new();
+    ) -> Found {
+        let mut found = Found::default();
         let mut ambiguous = BTreeSet::new();
-        for reference in &parsed.refs {
+        let Some(own) = &parsed[file] else {
+            return found;
+        };
+        for reference in &own.refs {
             match modules.resolve(&reference.module, &self.files[file], &self.files, related) {
                 Ok(Some(to)) => {
-                    let calls = uses.entry(to).or_default();
-                    calls.extend(
+                    found.add(to, EdgeKind::Load).extend(
                         reference
                             .function
                             .iter()
@@ -394,17 +393,18 @@ impl FileGraph {
         }
         self.ambiguous += ambiguous.len();
         let from = &self.files[file];
-        let whole = parsed
-            .whole
-            .iter()
-            .filter_map(|m| {
-                modules
-                    .resolve(m, from, &self.files, related)
-                    .ok()
-                    .flatten()
-            })
-            .collect();
-        (uses, whole)
+        let resolved = |m: &String| {
+            modules
+                .resolve(m, from, &self.files, related)
+                .ok()
+                .flatten()
+        };
+        let macros = |to: usize| parsed[to].as_ref().map_or(&[][..], |p| p.macros.as_slice());
+        for to in own.compile.needed(&own.whole, &resolved, &macros) {
+            found.add(to, EdgeKind::Compile);
+        }
+        found.whole = own.whole.iter().filter_map(resolved).collect();
+        found
     }
 
     /// What `file` uses, named or implied.

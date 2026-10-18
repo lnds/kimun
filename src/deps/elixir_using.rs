@@ -12,6 +12,7 @@
 use std::collections::{BTreeSet, HashMap};
 
 use super::elixir::{self, Aliases, ElixirFile, Reference, references};
+use super::elixir_compile::CompileTime;
 use super::elixir_directives::{Using, directives, ident_of};
 use super::elixir_functions::{Function, functions};
 use super::elixir_literals::code_only;
@@ -27,6 +28,12 @@ pub struct Injection {
     pub whole: Vec<String>,
     /// Modules the injected code `use`s in turn.
     pub uses: Vec<Using>,
+    /// Modules the injected code `use`s, which the user then needs to
+    /// compile.
+    pub compile: Vec<String>,
+    /// What the `use`s written outside `quote` blocks inject, which is
+    /// compiled with the user.
+    pub compiled: CompileTime,
 }
 
 impl Injection {
@@ -34,6 +41,7 @@ impl Injection {
         self.aliases.inherit(&other.aliases);
         self.refs.extend(other.refs.iter().cloned());
         self.whole.extend(other.whole.iter().cloned());
+        self.compile.extend(other.compile.iter().cloned());
     }
 
     fn is_empty(&self) -> bool {
@@ -92,7 +100,9 @@ pub fn injection(source: &str, option: Option<&str>) -> Option<Injection> {
         aliases: inner,
         refs,
         whole: found.whole,
+        compile: found.uses.iter().map(|u| u.module.clone()).collect(),
         uses: found.uses,
+        ..Injection::default()
     })
 }
 
@@ -113,10 +123,13 @@ pub fn complete(parsed: &mut [Option<ElixirFile>], sources: &[Source], resolve: 
         cache: HashMap::new(),
     };
     for file in 0..parsed.len() {
-        let Some(uses) = parsed[file].as_ref().map(|p| p.uses.clone()) else {
+        let Some(parsed_file) = parsed[file].as_ref() else {
             continue;
         };
-        let injected = injector.inject(file, uses);
+        let uses = parsed_file.uses.clone();
+        let written = parsed_file.compile.written(&uses);
+        let mut injected = injector.inject(file, uses);
+        injected.compiled = CompileTime::injected(injector.inject(file, written));
         if !injected.is_empty() {
             let source = &sources[file];
             parsed[file] = Some(elixir::read(&source.text, &source.templates, &injected));
