@@ -1043,6 +1043,8 @@ Some imports do not load a module when the importer loads: a TypeScript `import 
 
 An import that has the form of a project file but resolves to none is reported, so that a missing edge is not read as no dependency: a quoted `#include` that is no header of the system (often a file generated at build time), a relative JavaScript or TypeScript specifier of a script, a relative Python import, a Go import within a module of the repository. External packages are never listed. The table footer counts them (`Unresolved internal imports: N in M files`), the JSON lists them per file in `unresolved` and counts them in `unresolved_count`, and the short format gives `unresolved:N`. Rust, Elixir, Java, C# and Kaikai name modules and types rather than files, where nothing tells an internal name from an external one, so they report none.
 
+The JSON lists the edges in `edges`, each as `{"from", "to", "kind"}` with `kind` one of `load`, `compile`, `deferred` or `type`: those that leave the files listed, so `--top` and `--cycles-only` narrow them as they narrow `files`.
+
 Elixir notes:
 
 - Dependencies are between modules, and most need no import, so every module name in the code counts as a reference: calls, structs, `use`, `import`, `require`, `@behaviour`, `defimpl`. Comments, strings, heredocs and sigils are set aside first, so a doctest is not a dependency.

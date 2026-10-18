@@ -47,6 +47,16 @@ impl EdgeKind {
     pub fn strongest(self, other: Self) -> Self {
         self.min(other)
     }
+
+    /// How the kind is written in JSON.
+    pub fn name(self) -> &'static str {
+        match self {
+            EdgeKind::Compile => "compile",
+            EdgeKind::Load => "load",
+            EdgeKind::Deferred => "deferred",
+            EdgeKind::Type => "type",
+        }
+    }
 }
 
 /// One file's use of another.

@@ -344,6 +344,21 @@ fn visible_entries_are_the_cycle_members_or_the_first_ones() {
 }
 
 #[test]
+fn json_lists_the_edges_that_leave_the_files_listed() {
+    let entries = [entry("a.rs", 0, 1, false), entry("b.rs", 1, 1, false)];
+    let edge = |from: &str, to: &str| edges::Edge {
+        from: PathBuf::from(from),
+        to: PathBuf::from(to),
+        kind: graph::EdgeKind::Load,
+    };
+    let edges = [edge("a.rs", "b.rs"), edge("b.rs", "c.rs")];
+    assert_eq!(
+        edges::leaving(&edges, &[&entries[0]]),
+        vec![edge("a.rs", "b.rs")]
+    );
+}
+
+#[test]
 fn go_modules_in_subdirectories_resolve_from_where_they_are() {
     let dir = tempfile::tempdir().unwrap();
     write(dir.path(), "libs/core/go.mod", "module example.com/core\n");

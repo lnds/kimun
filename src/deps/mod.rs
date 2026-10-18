@@ -12,6 +12,7 @@ mod c_like;
 mod c_like_reader;
 mod csharp;
 mod csharp_extensions;
+mod edges;
 mod elixir;
 mod elixir_compile;
 mod elixir_directives;
@@ -168,6 +169,10 @@ fn show_paths(result: &mut DepResult, root: &Path) {
             *path = show(path);
         }
     }
+    for edge in &mut result.edges {
+        edge.from = show(&edge.from);
+        edge.to = show(&edge.to);
+    }
 }
 
 /// The entries to display: every file in a cycle, or else the first `top`.
@@ -201,6 +206,7 @@ pub fn run(
                 cycles: result.cycles.clone(),
                 unsupported: result.unsupported.clone(),
                 totals: result.totals,
+                edges: edges::leaving(&result.edges, &entries),
             };
             report::print_json(&filtered)
         }

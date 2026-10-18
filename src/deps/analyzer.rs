@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
+use super::edges::{self, Edge, JsonEdge};
 use super::graph::EdgeKind;
 use super::{javascript, kaikai};
 
@@ -54,6 +55,8 @@ pub struct DepResult {
     pub unsupported: Vec<UnsupportedLanguage>,
     /// Totals over every file, shown or not.
     pub totals: Totals,
+    /// Every file-level edge, sorted.
+    pub edges: Vec<Edge>,
 }
 
 /// What the whole graph holds besides its files and cycles.
@@ -155,6 +158,7 @@ pub fn build_graph(
         entries,
         cycles,
         unsupported: Vec::new(),
+        edges: edges::of(files, &adj),
     }
 }
 
@@ -288,6 +292,7 @@ pub struct JsonDepResult<'a> {
     pub compile_edges: usize,
     pub unresolved_count: usize,
     pub unsupported: Vec<UnsupportedLanguage>,
+    pub edges: Vec<JsonEdge>,
 }
 
 impl<'a> From<&'a DepResult> for JsonDepResult<'a> {
@@ -312,6 +317,7 @@ impl<'a> From<&'a DepResult> for JsonDepResult<'a> {
             compile_edges: r.totals.compile_edges,
             unresolved_count: r.totals.unresolved,
             unsupported: r.unsupported.clone(),
+            edges: r.edges.iter().map(JsonEdge::from).collect(),
         }
     }
 }
@@ -390,6 +396,20 @@ mod tests {
         assert_eq!(a.fan_in, 2);
         assert_eq!(result.totals.type_edges, 1);
         assert_eq!(result.totals.deferred_edges, 1);
+        let edge = |from: &str, to: &str, kind| Edge {
+            from: PathBuf::from(from),
+            to: PathBuf::from(to),
+            kind,
+        };
+        assert_eq!(
+            result.edges,
+            vec![
+                edge("a.ts", "b.ts", EdgeKind::Type),
+                edge("a.ts", "c.py", EdgeKind::Deferred),
+                edge("b.ts", "a.ts", EdgeKind::Load),
+                edge("c.py", "a.ts", EdgeKind::Load),
+            ]
+        );
     }
 
     #[test]
@@ -609,5 +629,10 @@ mod tests {
         assert_eq!(json.cycle_count, 1);
         assert_eq!(json.cycles.len(), 1);
         assert!(json.files.iter().all(|f| f.entry.in_cycle));
+        let value = serde_json::to_value(&json).unwrap();
+        assert_eq!(
+            value["edges"][0],
+            serde_json::json!({"from": "a.rs", "to": "b.rs", "kind": "load"})
+        );
     }
 }
