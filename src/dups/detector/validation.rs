@@ -1,39 +1,38 @@
 /// Phase 2: validate candidate hash groups by verifying text equality.
 ///
 /// Filters out FNV collisions and boilerplate patterns (>100 occurrences).
-/// Builds a reverse lookup from LocationSet hash to window hash, used
-/// by the extension phase to merge adjacent duplicate windows.
 use std::collections::HashMap;
 
-use super::hashing::hash_location_set;
-use super::{LocationSet, MAX_OCCURRENCES, NormalizedFile};
+use super::{LocationSet, MAX_OCCURRENCES, NormalizedFile, without_overlaps};
 
 /// Filter candidate hashes to those with 2+ truly identical locations.
 ///
-/// After dedup, verifies each hash group by comparing actual text content
-/// (guards against FNV collisions). Skips patterns with more than
-/// `MAX_OCCURRENCES` hits, which are likely boilerplate. Returns both a
-/// reverse lookup (`LocationSet → hash`) for the extension phase, and the
-/// sorted list of valid `(hash, locations)` entries.
+/// After dedup, drops the locations that overlap an earlier one in the same
+/// file (a run of repeated lines matches itself one line apart), then
+/// verifies each hash group by comparing actual text content (guards
+/// against FNV collisions). Skips patterns with more than `MAX_OCCURRENCES`
+/// hits, which are likely boilerplate. Returns the sorted list of valid
+/// `(hash, locations)` entries.
 pub fn validate_hashes(
-    hash_map: HashMap<u64, LocationSet>,
+    hash_map: &HashMap<u64, LocationSet>,
     files: &[NormalizedFile],
     min_lines: usize,
     quiet: bool,
-) -> (HashMap<u64, u64>, Vec<(u64, LocationSet)>) {
-    let mut location_to_hash: HashMap<u64, u64> = HashMap::new();
+) -> Vec<(u64, LocationSet)> {
     let mut valid_hashes: Vec<(u64, LocationSet)> = Vec::new();
     let mut skipped_common = 0usize;
 
-    for (hash, mut locations) in hash_map {
+    for (&hash, locations) in hash_map {
         if locations.len() < 2 || locations.len() > MAX_OCCURRENCES {
             if locations.len() > MAX_OCCURRENCES {
                 skipped_common += 1;
             }
             continue;
         }
+        let mut locations = locations.clone();
         locations.sort();
         locations.dedup();
+        let locations = without_overlaps(locations, min_lines);
         if locations.len() < 2 {
             continue;
         }
@@ -54,7 +53,6 @@ pub fn validate_hashes(
             continue;
         }
 
-        location_to_hash.insert(hash_location_set(&locations), hash);
         valid_hashes.push((hash, locations));
     }
 
@@ -65,5 +63,5 @@ pub fn validate_hashes(
     }
 
     valid_hashes.sort_by_key(|x| x.1.clone());
-    (location_to_hash, valid_hashes)
+    valid_hashes
 }

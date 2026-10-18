@@ -35,6 +35,7 @@ fn sample_groups() -> Vec<DuplicateGroup> {
             line_count: 6,
             sample: vec!["use std::io;".to_string(), "use std::fs;".to_string()],
             severity: DuplicationSeverity::Critical,
+            starts: vec![],
         },
         DuplicateGroup {
             locations: vec![
@@ -56,6 +57,7 @@ fn sample_groups() -> Vec<DuplicateGroup> {
                 "transform(x);".to_string(),
             ],
             severity: DuplicationSeverity::Tolerable,
+            starts: vec![],
         },
     ]
 }
