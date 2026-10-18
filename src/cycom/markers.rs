@@ -1,4 +1,5 @@
 use crate::detection::{FunctionSyntax, detection_markers};
+use crate::loc::language::is_fortran;
 
 /// Language-specific tokens used to compute cyclomatic complexity.
 ///
@@ -313,6 +314,33 @@ static KAIKAI: ComplexityMarkers = ComplexityMarkers {
     line_comments: &["#"],
 };
 
+/// Fortran, read in lower case with `end if`, `end do` and `end select`
+/// joined (`case_fold`), so a construct's end is no branch. `select case`
+/// counts once, as a `switch` does, and each `case` adds one.
+static FORTRAN: ComplexityMarkers = ComplexityMarkers {
+    keywords: &["else if", "select case", "elseif", "if", "do", "case"],
+    operators: &[".and.", ".or."],
+    clause_arrow: None,
+    function_markers: &[],
+    brace_scoped: false,
+    function_syntax: FunctionSyntax::Fortran,
+    line_comments: &["!"],
+};
+
+/// Pascal, read in lower case. `and`/`or` are keywords; `except` is the
+/// handler path, as `catch` is.
+static PASCAL: ComplexityMarkers = ComplexityMarkers {
+    keywords: &[
+        "else if", "if", "for", "while", "repeat", "case", "except", "and", "or",
+    ],
+    operators: &[],
+    clause_arrow: None,
+    function_markers: &[],
+    brace_scoped: false,
+    function_syntax: FunctionSyntax::Pascal,
+    line_comments: &["//"],
+};
+
 /// Look up the complexity markers for a given language name.
 ///
 /// Returns `None` for languages without cyclomatic complexity support
@@ -344,6 +372,8 @@ pub fn markers_for(language_name: &str) -> Option<&'static ComplexityMarkers> {
         "Zig" => Some(&ZIG),
         "Clojure" => Some(&CLOJURE),
         "Kaikai" => Some(&KAIKAI),
+        name if is_fortran(name) => Some(&FORTRAN),
+        "Pascal" => Some(&PASCAL),
         _ => None,
     }
 }

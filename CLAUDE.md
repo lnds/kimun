@@ -26,11 +26,13 @@ CLI tool for code metrics: lines of code (like `cloc`), duplicate detection, Hal
 
 - **`language.rs`** — `LanguageSpec` struct + `lang!` macro defining 40+ languages. Detection by filename, extension, or shebang. Each spec declares: line comment markers, block comment delimiters, nesting support, string delimiter rules, pragma syntax, and exception characters for comment detection.
 
-- **`counter.rs`** — FSM with states `Normal`, `InString(StringKind)`, `InBlockComment(depth)`, `InDocAttribute(Option<StringKind>)`, `InDocString(StringKind)`. Processes files line-by-line via `BufReader`, classifying each line as blank/comment/code. Mixed lines (code + comment) count as code. Key design decisions:
+- **`counter.rs`** — FSM with states `Normal`, `InString(StringKind)`, `InBlockComment(block, depth)`, `InDocAttribute(Option<StringKind>)`, `InDocString(StringKind)`. Processes files line-by-line via `BufReader`, classifying each line as blank/comment/code. Bytes that are not UTF-8 are replaced, so a Latin-1 or Windows-1252 source is read whole. Mixed lines (code + comment) count as code. Key design decisions:
   - Only `"` triggers string mode (not `'`) unless `single_quote_strings` is set — avoids Rust lifetime false positives
   - `InString` resets at line end for single/double quotes but persists for triple-quotes (Python) and raw strings
   - `raw_strings` (Rust): `r"…"`, `r#"…"#`, with a `b` or `c` prefix too, end at a quote followed by as many `#` as opened them (`raw.rs`). `raw_string_spans` tells where they are on each line
-  - Block comments track nesting depth when `nested_block_comments` is true
+  - Block comments track nesting depth when `nested_block_comments` is true. A language may have a second kind (`other_block_comment`, Pascal's `(* *)` besides `{ }`); each is closed only by its own delimiter
+  - `column_one_comments` (Fortran's fixed form: `C`, `c`, `*`) make a comment of the whole line; `directives` (`$omp`, `$acc`, `$ `) right after a comment marker make it code
+  - `backslash_escapes` is false in Fortran and Pascal, where `'\'` is a one-character string
   - Pragmas (Haskell `{-# ... #-}`) are checked before block comments and counted as code
   - Shebang lines (`#!`) are always counted as code
   - `line_comment_not_before` field prevents `-->` from matching `--` in Haskell, and `#[` from matching `#` in Kaikai
@@ -55,7 +57,7 @@ lang!("LangName", ext: ["ext1", "ext2"],
       shebangs: ["interpreter"]),
 ```
 
-Optional flags: `nested: true`, `sq: true` (single-quote strings), `tq: true` (triple-quote strings), `tqc: true` (triple-quoted strings count as comment, line-comment variant), `pragma: "{-#", "#-}"`. Use `lines: ["marker1", "marker2"]` for multiple line comment markers. For languages needing `line_comment_not_before`, `doc_attribute` or `raw_strings`, write the `LanguageSpec` struct directly (see Rust, Haskell and Kaikai).
+Optional flags: `nested: true`, `sq: true` (single-quote strings), `tq: true` (triple-quote strings), `tqc: true` (triple-quoted strings count as comment, line-comment variant), `pragma: "{-#", "#-}"`. Use `lines: ["marker1", "marker2"]` for multiple line comment markers. For languages needing `line_comment_not_before`, `doc_attribute`, `raw_strings`, `other_block_comment`, `column_one_comments`, `directives`, `case_insensitive` or no `backslash_escapes`, write the `LanguageSpec` struct directly (see Rust, Haskell, Kaikai, Fortran and Pascal).
 
 ## Conventions
 
@@ -176,7 +178,7 @@ Dependency graph (file-level coupling from imports, cycles via Tarjan SCC). Invo
 - **`rust_literals.rs`** — Blanks comments and character literals of Rust, keeping lines; a string keeps its quotes and its content is handed apart, for `#[path = "…"]`.
 - **`rust.rs`** — Rust, read lexically: the `mod` declarations of a file (with `#[path]` and the inline modules around them), every path of `use` trees and of code, the names `use` brings in, the types `impl` blocks are for, and whether the file holds `#[test]`s.
 - **`rust_crates.rs`** — The module tree of each crate, grown from its root files by `mod` declarations, and `uses`: each path made absolute from the module it is written in and led to the file of the deepest module it names. Library crates answer to their package name. `mod x;` is no edge; a type uses the files of its `impl` blocks.
-- **`graph.rs`** — `FileGraph::build` builds the file graph from `(path, language, text)` sources, so they can come from disk or from a commit's tree. `Layout` carries what is known besides the sources: paths to look up, the Go modules, the Cargo packages, the import roots of Python projects, the aliases and packages of JavaScript. Elixir references resolve through a module index (nearest file, then `Related`: what the projects declare); Python and Go are read apart (`python_uses`, `golang`); the rest go through `extract_imports` + `resolve_import`. `Use.calls` keeps the functions called.
+- **`graph.rs`** — `FileGraph::build` builds the file graph from `(path, language, text)` sources, so they can come from disk or from a commit's tree. `Layout` carries what is known besides the sources: paths to look up, the Go modules, the Cargo packages, the import roots of Python projects, the aliases and packages of JavaScript. Elixir references resolve through a module index (nearest file, then `Related`: what the projects declare); Python, Go, C/C++, Java and C# are read apart (`Apart`: `python_uses`, `golang`, `c_family`, `java`, `csharp`); the rest go through `extract_imports` + `resolve_import`. `Use.calls` keeps the functions called.
 - **`extractor.rs`** — `extract_imports` dispatches by language name and returns raw import strings: the specifiers of the import forms for JS/TS, every quoted import path for Go. Elixir and Rust are read apart, over the whole graph. `is_supported` decides which languages enter the graph.
 - **`python.rs`** — Python extraction and resolution. `extract` reads every `import` and `from … import`, on several lines too, outside docstrings; `from a.b import c` is kept as `a.b:c`, since `c` may be a submodule. `resolve` looks an absolute import up from each ancestor of the importer that is not a package, and from `src` under each; a relative one from the importer's package. Then come the roots `Layout.python_roots` holds for the nearest project: what its `pyproject.toml` declares, read by `projects::python_roots`.
 - **`python_names.rs`** — What a Python module offers, by lines and indentation: `defined` gives its top-level names (functions, classes, assignments), `changed` the ones a change to some lines affects, carrying it to the names that mention them (`Err(line)` for code that runs on import), and `taken` what a file reads on a module it imports. `python::read` keeps the name each import binds.
@@ -184,6 +186,12 @@ Dependency graph (file-level coupling from imports, cycles via Tarjan SCC). Invo
 - **`golang.rs`** — Go, where an import names a package and a package is a directory. `Packages` holds the files of each directory that a package offers (no `_test.go`) and the modules of the repository, by the path each `go.mod` declares; an import leads to every file directly inside the directory it names. No edges between the files of one package.
 - **`javascript.rs`** — JavaScript and TypeScript. `extract` reads the specifiers of the import forms only (`import`, `export … from`, `require()`, `import()`) through a coarse tokenizer that skips comments. `resolve` takes a relative specifier from the importer, any other through the `paths` and `baseUrl` of the nearest config, then through the packages of the repository by name; `file_at` tries extensions, the TypeScript source of a `.js` and `index` files.
 - **`javascript_config.rs`** — What `tsconfig.json`/`jsconfig.json` (JSON with comments, `extends` followed within the repository) and `package.json` (name and entry points) say about imports, as `Modules` in `Layout.javascript`.
+- **`c_family.rs`** — C and C++: `includes` reads `#include` outside comments; `Files` resolves each one beside the includer (quoted), then in the directories above and their `include`, then by path suffix when one file is nearest. A header's sources (same name beside it, or `include/` mirrored to `src/`) are `implied` uses: in `FileGraph::implied`, not in `edges`, so `km deps` shows no cycle they would make, while `km impact` follows them (`uses_of`).
+- **`c_like.rs`** — The tokens of Java and C#, without comments and literals (text blocks, raw, verbatim and interpolated strings, characters). A leading byte order mark is skipped.
+- **`c_like_reader.rs`** — `chain_at` reads a chain of names (`a.b.C`, `a.b.*`); `Reader` is the walk the Java and C# readers share over a `Cursor`: braces through `punct`, `top_level` outside every type, `name` anywhere, never from a word after a dot.
+- **`types.rs`** — `Types`: the files that declare each type, by qualified name. `Scope` is what a file sees: namespaces whole, aliases, enclosing namespaces; `resolve` reads a chain of names (`models.User.find`) to the type it starts with, `holding` gives the outer type of a nested one or a member.
+- **`java.rs`** — Java: `read` gives the package, the imports (single, static, on demand), the top-level types and every chain of names of a file (`c_like_reader::chain_at`); `Classes` resolves them through `Types`, keeping the nearest of several declarations of one type (`types::nearest_all`).
+- **`csharp.rs`** — C#: `read` follows the braces as namespace, type or body frames; at namespace level it reads `using` (plain, `global`, `static`, aliases), `namespace` (block or file-scoped) and type declarations (`record struct`, `delegate` too), and every chain of names, an attribute also as `NameAttribute`. `Namespaces` resolves through `Types`: a file sees its namespaces and their parents, the global namespace, its usings and the `global using`s at or above its directory.
 - **`kaikai.rs`** — Kaikai extraction and resolution: `import a.b.c` names a file under a package root, found by trying each ancestor directory of the importer.
 - **`analyzer.rs`** — `resolve_import` maps a raw import to project files per language (JavaScript and TypeScript resolve through `javascript::resolve` in the graph, since they need the layout); `build_graph` computes fan-in, fan-out and cycles (`tarjan_scc`, iterative).
 - **`report.rs`** — `render_report` builds the table as a `String` and `print_report` prints it, so tests assert on the text. JSON, short and terse formatters.
@@ -202,7 +210,31 @@ analyzers that select `LineKind::Code` skip them. Used by `hal`, `cycom`,
 count as control flow. `loc` is deliberately left alone: those lines are still
 code for line counting. `code_view` is what those analyzers read: the same
 demotion, and each raw string left as `""`, with the lines wholly inside one
-turned into blanks.
+turned into blanks. Code of a language that ignores case comes in
+lower case (`case_fold`), and one without backslash escapes without its
+backslashes.
+
+### Shared: `src/case_fold.rs`
+
+Languages that ignore case (`LanguageSpec::case_insensitive`: Fortran, Pascal)
+are read in lower case by every analyzer that goes through `code_view`. In
+Fortran the end of a construct written apart is joined (`end if` reads
+`endif`), so it never reads as the construct it closes. Lines keep their
+length, so `name_at` gives back a function name as written: `cycom`, `cogcom`
+and `smells` report names that way.
+
+### Shared: `src/unit_bodies.rs`
+
+Functions closed by words, for `FunctionSyntax::Fortran` and
+`FunctionSyntax::Pascal` (`detection::detect_function_bodies` hands them
+over). Fortran: program units to the `end` that closes them, contained units
+included, interface blocks skipped. Pascal: routines of the implementation to
+the `end` of their `begin` block, after their local routines; the `interface`
+section, class types, `forward` and `external` have no body. Unindented
+sections and routines bound what conditional compilation leaves unbalanced,
+and headers repeated under it with the routine's own name are one routine.
+`cogcom` reads Fortran nesting from constructs (`fortran_statement`), Pascal
+nesting from indentation, two columns a level.
 
 ### Shared: `src/test_blocks.rs`
 

@@ -17,6 +17,7 @@
 
 use serde::Serialize;
 
+use crate::detection::FunctionSyntax;
 use crate::loc::counter::LineKind;
 use crate::util::indent_level as indent_spaces;
 use crate::util::mask_strings;
@@ -165,10 +166,20 @@ pub fn count_cognitive_for_lines(
         return 0;
     }
 
-    if markers.brace_scoped {
-        count_brace_scoped(func_lines, markers)
-    } else {
-        count_indent_scoped(func_lines, markers)
+    match markers.function_syntax {
+        FunctionSyntax::Fortran => super::fortran::count(func_lines, markers),
+        FunctionSyntax::Pascal => count_indent_scoped(func_lines, markers, 2),
+        _ if markers.brace_scoped => count_brace_scoped(func_lines, markers),
+        _ => count_indent_scoped(func_lines, markers, 4),
+    }
+}
+
+/// The increment a line's classification adds at `nesting_depth`.
+pub(super) fn increment(line_result: LineClassification, nesting_depth: usize) -> usize {
+    match line_result {
+        LineClassification::Structural => 1 + nesting_depth,
+        LineClassification::Hybrid | LineClassification::Fundamental => 1,
+        LineClassification::None => 0,
     }
 }
 
@@ -307,8 +318,13 @@ fn keyword_at(
 }
 
 /// Count cognitive complexity for indent-scoped languages.
-/// Uses indentation level relative to the function's base indent.
-fn count_indent_scoped(func_lines: &[(usize, &str)], markers: &CognitiveMarkers) -> usize {
+/// Uses indentation level relative to the function's base indent, in
+/// steps of `indent_unit` columns.
+fn count_indent_scoped(
+    func_lines: &[(usize, &str)],
+    markers: &CognitiveMarkers,
+    indent_unit: usize,
+) -> usize {
     let mut complexity: usize = 0;
 
     // Base indent is the function declaration line's indent
@@ -317,8 +333,6 @@ fn count_indent_scoped(func_lines: &[(usize, &str)], markers: &CognitiveMarkers)
     } else {
         return 0;
     };
-
-    let indent_unit = 4; // standard indent unit
 
     for &(_, line) in func_lines.iter().skip(1) {
         // skip function declaration line
@@ -334,18 +348,7 @@ fn count_indent_scoped(func_lines: &[(usize, &str)], markers: &CognitiveMarkers)
 
         let line_result = classify_line(&stripped, markers);
 
-        match line_result {
-            LineClassification::Structural => {
-                complexity += 1 + nesting_depth;
-            }
-            LineClassification::Hybrid => {
-                complexity += 1;
-            }
-            LineClassification::Fundamental => {
-                complexity += 1;
-            }
-            LineClassification::None => {}
-        }
+        complexity += increment(line_result, nesting_depth);
 
         complexity += count_boolean_sequences(&stripped, markers);
     }
@@ -355,7 +358,7 @@ fn count_indent_scoped(func_lines: &[(usize, &str)], markers: &CognitiveMarkers)
 
 /// Classification result for a single line.
 #[derive(Debug, Clone, Copy, PartialEq)]
-enum LineClassification {
+pub(super) enum LineClassification {
     Structural,
     Hybrid,
     Fundamental,
@@ -365,7 +368,7 @@ enum LineClassification {
 /// Classify a line as structural, hybrid, fundamental, or none.
 /// Checks hybrid keywords first (multi-word like "else if") to avoid
 /// partial matches with structural/fundamental keywords.
-fn classify_line(stripped: &str, markers: &CognitiveMarkers) -> LineClassification {
+pub(super) fn classify_line(stripped: &str, markers: &CognitiveMarkers) -> LineClassification {
     // Check hybrid keywords first (multi-word, e.g. "else if", "elif")
     for kw in markers.hybrid_keywords {
         if contains_keyword(stripped, kw) {
@@ -424,7 +427,7 @@ fn is_word_char(b: u8) -> bool {
 /// `a && b && c` = 1 (one sequence of &&)
 /// `a && b || c` = 2 (first && = +1, change to || = +1)
 /// `a || b || c && d` = 2 (first || = +1, change to && = +1)
-fn count_boolean_sequences(stripped: &str, markers: &CognitiveMarkers) -> usize {
+pub(super) fn count_boolean_sequences(stripped: &str, markers: &CognitiveMarkers) -> usize {
     let mut count = 0;
     let mut last_op: Option<&str> = None;
     let bytes = stripped.as_bytes();

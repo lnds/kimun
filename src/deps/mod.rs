@@ -6,6 +6,11 @@
 //! imports), and detects dependency cycles using Tarjan's SCC algorithm.
 
 mod analyzer;
+mod apart;
+mod c_family;
+mod c_like;
+mod c_like_reader;
+mod csharp;
 mod elixir;
 mod elixir_functions;
 mod elixir_literals;
@@ -13,6 +18,7 @@ mod extractor;
 mod golang;
 pub mod graph;
 pub mod heex;
+mod java;
 mod javascript;
 mod javascript_config;
 mod kaikai;
@@ -26,12 +32,14 @@ pub mod routes;
 mod rust;
 mod rust_crates;
 pub(crate) mod rust_literals;
+mod types;
 
 use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
+use crate::util::read_lossy;
 use crate::walk::{self, WalkConfig};
 
 use analyzer::{DepEntry, DepResult, UnsupportedLanguage, build_graph};
@@ -89,7 +97,7 @@ fn analyze(cfg: &WalkConfig<'_>) -> DepResult {
         .map(|(rel_path, language)| Source {
             path: rel_path.clone(),
             language: language.clone(),
-            text: std::fs::read_to_string(cfg.path.join(rel_path)).unwrap_or_default(),
+            text: read_lossy(&cfg.path.join(rel_path)).unwrap_or_default(),
             templates: Vec::new(),
         })
         .collect();

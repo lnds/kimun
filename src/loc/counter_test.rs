@@ -16,6 +16,11 @@ fn spec_c_like() -> LanguageSpec {
         raw_strings: false,
         pragma: None,
         doc_attributes: &[],
+        other_block_comment: None,
+        column_one_comments: "",
+        case_insensitive: false,
+        backslash_escapes: true,
+        directives: &[],
         shebangs: &[],
     }
 }
@@ -35,6 +40,11 @@ fn spec_rust() -> LanguageSpec {
         raw_strings: true,
         pragma: None,
         doc_attributes: &[],
+        other_block_comment: None,
+        column_one_comments: "",
+        case_insensitive: false,
+        backslash_escapes: true,
+        directives: &[],
         shebangs: &[],
     }
 }
@@ -54,6 +64,11 @@ fn spec_python() -> LanguageSpec {
         raw_strings: false,
         pragma: None,
         doc_attributes: &[],
+        other_block_comment: None,
+        column_one_comments: "",
+        case_insensitive: false,
+        backslash_escapes: true,
+        directives: &[],
         shebangs: &["python", "python3"],
     }
 }
@@ -73,6 +88,11 @@ fn spec_js() -> LanguageSpec {
         raw_strings: false,
         pragma: None,
         doc_attributes: &[],
+        other_block_comment: None,
+        column_one_comments: "",
+        case_insensitive: false,
+        backslash_escapes: true,
+        directives: &[],
         shebangs: &["node"],
     }
 }
@@ -92,6 +112,11 @@ fn spec_haskell() -> LanguageSpec {
         raw_strings: false,
         pragma: Some(("{-#", "#-}")),
         doc_attributes: &[],
+        other_block_comment: None,
+        column_one_comments: "",
+        case_insensitive: false,
+        backslash_escapes: true,
+        directives: &[],
         shebangs: &[],
     }
 }
@@ -111,6 +136,11 @@ fn spec_kaikai() -> LanguageSpec {
         raw_strings: false,
         pragma: None,
         doc_attributes: &[("#[doc(", ")]")],
+        other_block_comment: None,
+        column_one_comments: "",
+        case_insensitive: false,
+        backslash_escapes: true,
+        directives: &[],
         shebangs: &[],
     }
 }
@@ -593,6 +623,11 @@ fn spec_no_comments() -> LanguageSpec {
         raw_strings: false,
         pragma: None,
         doc_attributes: &[],
+        other_block_comment: None,
+        column_one_comments: "",
+        case_insensitive: false,
+        backslash_escapes: true,
+        directives: &[],
         shebangs: &[],
     }
 }
@@ -619,6 +654,11 @@ fn spec_batch() -> LanguageSpec {
         raw_strings: false,
         pragma: None,
         doc_attributes: &[],
+        other_block_comment: None,
+        column_one_comments: "",
+        case_insensitive: false,
+        backslash_escapes: true,
+        directives: &[],
         shebangs: &[],
     }
 }
@@ -648,6 +688,11 @@ fn spec_heex() -> LanguageSpec {
         raw_strings: false,
         pragma: None,
         doc_attributes: &[],
+        other_block_comment: None,
+        column_one_comments: "",
+        case_insensitive: false,
+        backslash_escapes: true,
+        directives: &[],
         shebangs: &[],
     }
 }
@@ -667,6 +712,11 @@ fn spec_po() -> LanguageSpec {
         raw_strings: false,
         pragma: None,
         doc_attributes: &[],
+        other_block_comment: None,
+        column_one_comments: "",
+        case_insensitive: false,
+        backslash_escapes: true,
+        directives: &[],
         shebangs: &[],
     }
 }
@@ -888,4 +938,88 @@ fn yacc_lex_cmake_jq_and_eex_comments() {
         counted("reStructuredText", ".. note:: x\nText.\n"),
         (0, 1, 1)
     );
+}
+
+// --- Fortran ---
+
+fn spec_at(path: &str) -> &'static LanguageSpec {
+    super::super::language::detect(std::path::Path::new(path)).unwrap()
+}
+
+#[test]
+fn fortran_fixed_form_comments_by_first_column() {
+    let text = "C     a comment\nc     another\n*     and another\n      X = 1\n      CALL F(X)\n";
+    let stats = count(spec_at("old.f"), text);
+    assert_eq!(stats.comment, 3);
+    assert_eq!(stats.code, 2);
+}
+
+#[test]
+fn fortran_free_form_has_no_first_column_comments() {
+    // `contains` starts with a `c` in the first column; cloc takes it for a
+    // comment, as it would be in fixed form
+    let text = "module m\ncontains\n! a comment\nsubroutine s()\nend subroutine\nend module\n";
+    let stats = count(spec_at("m.f90"), text);
+    assert_eq!(stats.comment, 1);
+    assert_eq!(stats.code, 5);
+}
+
+#[test]
+fn fortran_directives_are_code() {
+    let fixed = count(
+        spec_at("a.F"),
+        "C$OMP PARALLEL\n!$omp end parallel\n      END\n",
+    );
+    assert_eq!(fixed.code, 3);
+    let free = count(spec_at("a.F90"), "  !$omp parallel do\n  ! a comment\n");
+    assert_eq!(free.code, 1);
+    assert_eq!(free.comment, 1);
+}
+
+#[test]
+fn fortran_bang_in_a_string_is_no_comment() {
+    let stats = count(spec_at("a.f95"), "print *, 'hi! there'\nprint *, \"!\"\n");
+    assert_eq!(stats.code, 2);
+    assert_eq!(stats.comment, 0);
+}
+
+// --- Pascal ---
+
+#[test]
+fn pascal_has_two_kinds_of_block_comment() {
+    let text = "{ a brace comment (* with the other inside\n  still open }\n(* the other\n   { a brace } still open\n*)\nbegin\nend.\n";
+    let stats = count(spec_at("a.pas"), text);
+    assert_eq!(stats.comment, 5);
+    assert_eq!(stats.code, 2);
+}
+
+#[test]
+fn pascal_directives_are_code() {
+    let stats = count(
+        spec_at("a.dpr"),
+        "{$mode objfpc}{$H+}\n{ comment }\n// another\n",
+    );
+    assert_eq!(stats.code, 1);
+    assert_eq!(stats.comment, 2);
+}
+
+#[test]
+fn pascal_brace_in_a_string_opens_no_comment() {
+    let stats = count(spec_at("a.pas"), "WriteLn('{ not a comment');\nX := 1;\n");
+    assert_eq!(stats.code, 2);
+    assert_eq!(stats.comment, 0);
+}
+
+#[test]
+fn fortran_commented_out_sentinels_are_comments() {
+    // `c$$$` comments out code; only the OpenMP and OpenACC sentinels and
+    // conditional compilation make directives
+    let stats = count(
+        spec_at("a.f"),
+        "c$$$  WRITE(*,*) X\nC$OMP PARALLEL\nc$acc kernels\nC$    X = 1\n",
+    );
+    assert_eq!(stats.comment, 1);
+    assert_eq!(stats.code, 3);
+    let free = count(spec_at("a.f90"), "!$$ not a directive\n!$OMP DO\n");
+    assert_eq!((free.comment, free.code), (1, 1));
 }

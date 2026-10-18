@@ -22,6 +22,10 @@ pub fn is_supported(language: &str) -> bool {
             | "Kaikai"
             | "Elixir"
             | "Elixir Script"
+            | "C"
+            | "C++"
+            | "Java"
+            | "C#"
     )
 }
 

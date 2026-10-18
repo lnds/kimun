@@ -135,6 +135,11 @@ macro_rules! lang_spec {
             pragma: $pragma,
             doc_attributes: &[],
             shebangs: &[$($($sh),*)?],
+            other_block_comment: None,
+            column_one_comments: "",
+            case_insensitive: false,
+            backslash_escapes: true,
+            directives: &[],
         }
     };
 }

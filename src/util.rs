@@ -113,6 +113,12 @@ pub fn mask_strings(line: &str, line_comments: &[&str]) -> String {
     String::from_utf8(result).unwrap_or_else(|_| line.to_string())
 }
 
+/// The text of a file, with the bytes that are not UTF-8 replaced, so that
+/// a source in Latin-1 or Windows-1252 is read whole.
+pub fn read_lossy(path: &Path) -> io::Result<String> {
+    Ok(String::from_utf8_lossy(&std::fs::read(path)?).into_owned())
+}
+
 /// Read a source file, check for binary content, and classify lines.
 /// Returns None for binary files. On success returns the split lines
 /// and the per-line classification. With `exclude_tests`, the lines of
@@ -129,7 +135,11 @@ pub fn read_and_classify(
         return Ok(None);
     }
 
-    let content = io::read_to_string(reader)?;
+    let mut bytes = Vec::new();
+    reader.read_to_end(&mut bytes)?;
+    // A source in Latin-1 or Windows-1252 is read whole, its other bytes
+    // replaced.
+    let content = String::from_utf8_lossy(&bytes);
     // Normalize CRLF → LF before splitting, so the FSM never sees trailing \r.
     let normalized = content.replace("\r\n", "\n");
     let lines: Vec<String> = normalized.lines().map(String::from).collect();

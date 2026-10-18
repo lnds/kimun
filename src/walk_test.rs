@@ -642,6 +642,21 @@ fn try_detect_shebang_nonexistent_file_returns_none() {
     assert!(spec.is_none(), "nonexistent file should return None");
 }
 
+#[test]
+fn dotnet_test_projects_are_test_directories() {
+    for name in [
+        "App.Tests",
+        "Ordering.UnitTests",
+        "Api.IntegrationTest",
+        "tests",
+    ] {
+        assert!(is_test_dir(name), "{name}");
+    }
+    for name in ["App.Testing", "Tests.Helpers", "Contest", "src"] {
+        assert!(!is_test_dir(name), "{name}");
+    }
+}
+
 fn tree(dir: &Path, files: &[(&str, &str)]) {
     for (name, text) in files {
         let path = dir.join(name);

@@ -4,7 +4,8 @@ use std::ops::Range;
 use std::path::Path;
 
 use super::fsm::{
-    State, StringKind, step_in_block_comment, step_in_doc_attribute, step_in_string, step_normal,
+    State, StringKind, is_column_one_comment, step_in_block_comment, step_in_doc_attribute,
+    step_in_string, step_normal,
 };
 use super::language::LanguageSpec;
 use crate::util::is_binary_reader;
@@ -47,12 +48,21 @@ pub struct RawSpan {
     pub opens: bool,
 }
 
+/// The lines of a reader without their line ends. Bytes that are not
+/// UTF-8 are replaced, so a source in Latin-1 or Windows-1252 is read whole.
+fn lossy_lines<R: BufRead>(reader: R) -> impl Iterator<Item = String> {
+    reader.split(b'\n').map_while(Result::ok).map(|mut line| {
+        if line.last() == Some(&b'\r') {
+            line.pop();
+        }
+        String::from_utf8_lossy(&line).into_owned()
+    })
+}
+
 /// Classify each line of source code as Blank, Comment, or Code.
 pub fn classify_reader<R: BufRead>(reader: R, spec: &LanguageSpec) -> Vec<LineKind> {
     let mut kinds = Vec::new();
-    process_lines(reader.lines().map_while(Result::ok), spec, |kind, _| {
-        kinds.push(kind)
-    });
+    process_lines(lossy_lines(reader), spec, |kind, _| kinds.push(kind));
     kinds
 }
 
@@ -119,7 +129,7 @@ fn classify_line(
     let mut has_code = matches!(state, State::InString(_));
     let mut has_comment = matches!(
         state,
-        State::InBlockComment(_) | State::InDocAttribute(..) | State::InDocString(_)
+        State::InBlockComment(..) | State::InDocAttribute(..) | State::InDocString(_)
     );
     let bytes = line.as_bytes();
     let len = bytes.len();
@@ -129,12 +139,14 @@ fn classify_line(
         let was_raw = in_raw_string(state);
         let result = match &state {
             State::Normal => step_normal(&bytes[i..], spec, bytes, i),
-            State::InString(kind) => step_in_string(&bytes[i..], kind, false),
-            State::InBlockComment(depth) => step_in_block_comment(&bytes[i..], spec, *depth),
+            State::InString(kind) => step_in_string(&bytes[i..], kind, spec, false),
+            State::InBlockComment(block, depth) => {
+                step_in_block_comment(&bytes[i..], spec, *block, *depth)
+            }
             State::InDocAttribute(close, inner) => {
                 step_in_doc_attribute(&bytes[i..], spec, close, inner)
             }
-            State::InDocString(kind) => step_in_string(&bytes[i..], kind, true),
+            State::InDocString(kind) => step_in_string(&bytes[i..], kind, spec, true),
         };
         has_code |= result.has_code;
         has_comment |= result.has_comment;
@@ -175,9 +187,11 @@ fn process_lines(
         let kind = if number == 0 && line.starts_with("#!") {
             LineKind::Code
         } else if line.trim().is_empty()
-            && !matches!(state, State::InBlockComment(_) | State::InDocAttribute(..))
+            && !matches!(state, State::InBlockComment(..) | State::InDocAttribute(..))
         {
             LineKind::Blank
+        } else if state == State::Normal && is_column_one_comment(line, spec) {
+            LineKind::Comment
         } else {
             classify_line(line, &mut state, spec, &mut raw)
         };

@@ -5,13 +5,13 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 use super::analyzer::resolve_import;
+use super::apart::Apart;
 use super::elixir::{self, ElixirFile};
 use super::extractor::extract_imports;
-use super::golang;
 use super::javascript;
 use super::layout::Layout;
+use super::python_names;
 use super::rust_crates;
-use super::{python_names, python_uses};
 
 /// A source file to place in the graph.
 pub struct Source {
@@ -75,6 +75,10 @@ pub struct FileGraph {
     pub files: Vec<PathBuf>,
     /// For each file, the files it uses.
     pub uses: Vec<Vec<Use>>,
+    /// For each file, the files it uses without naming them: the sources
+    /// behind the headers it includes. Not in `edges`, which is what the
+    /// code writes, nor so in its cycles.
+    pub implied: Vec<Vec<Use>>,
     /// References left out because several files define the module named
     /// and none is nearer than the others.
     pub ambiguous: usize,
@@ -90,17 +94,14 @@ fn no_calls(to: usize) -> (usize, BTreeSet<String>) {
 }
 
 /// The files a source imports, for the languages whose imports resolve
-/// one by one from where the importer is. Python tells the names taken
-/// too, and a Go import leads to every file of a package.
+/// one by one from where the importer is, or are read apart.
 fn imports(
     source: &Source,
     layout: &Layout,
     by_path: &HashMap<&Path, usize>,
-    python: &python_uses::Modules,
-    go: &golang::Packages,
+    apart: &Apart,
 ) -> BTreeMap<usize, BTreeSet<String>> {
-    let apart = python.uses(source, layout, by_path);
-    if let Some(uses) = apart.or_else(|| go.uses(source)) {
+    if let Some(uses) = apart.uses(source) {
         return uses;
     }
     let known = &layout.known;
@@ -128,6 +129,17 @@ pub fn shared_depth(a: &Path, b: &Path) -> usize {
         .zip(b.components())
         .take_while(|(x, y)| x == y)
         .count()
+}
+
+/// The one file of `pool` deepest by `depth`, or `Err` when none or
+/// several are.
+pub fn nearest(pool: &[usize], depth: impl Fn(usize) -> usize) -> Result<usize, ()> {
+    let deepest = pool.iter().map(|&f| depth(f)).max().ok_or(())?;
+    let mut at_deepest = pool.iter().filter(|&&f| depth(f) == deepest);
+    match (at_deepest.next(), at_deepest.next()) {
+        (Some(&only), None) => Ok(only),
+        _ => Err(()),
+    }
 }
 
 /// Tells whether the file at the first path may use the one at the second
@@ -169,13 +181,7 @@ impl ModuleIndex {
             &declared
         };
 
-        let depth = |&file: &usize| shared_depth(&files[file], from);
-        let nearest = pool.iter().map(depth).max().unwrap_or(0);
-        let mut at_nearest = pool.iter().filter(|c| depth(c) == nearest);
-        match (at_nearest.next(), at_nearest.next()) {
-            (Some(&only), None) => Ok(Some(only)),
-            _ => Err(()),
-        }
+        nearest(pool, |file| shared_depth(&files[file], from)).map(Some)
     }
 }
 
@@ -205,8 +211,7 @@ impl FileGraph {
             .map(|s| (s.language == "Rust").then_some(s.text.as_str()))
             .collect();
         let (mut rust_uses, own_tests) = rust_crates::read(&files, &rust, &layout.packages);
-        let python = python_uses::Modules::of(sources);
-        let go = golang::Packages::of(sources, layout);
+        let apart = Apart::of(sources, layout, &by_path);
 
         let mut graph = FileGraph {
             files,
@@ -219,7 +224,7 @@ impl FileGraph {
             let uses = match (&parsed[file], rust_uses[file].take()) {
                 (Some(parsed), _) => graph.elixir_uses(file, parsed, &modules, related),
                 (None, Some(used)) => used.into_iter().map(no_calls).collect(),
-                (None, None) => imports(source, layout, &by_path, &python, &go),
+                (None, None) => imports(source, layout, &by_path, &apart),
             };
             graph.uses.push(
                 uses.into_iter()
@@ -231,6 +236,7 @@ impl FileGraph {
                     .collect(),
             );
         }
+        graph.implied = apart.implied(sources, &graph.uses);
         graph.modules = modules;
         graph
     }
@@ -273,6 +279,13 @@ impl FileGraph {
         }
         self.ambiguous += ambiguous.len();
         uses
+    }
+
+    /// What `file` uses, named or implied.
+    pub fn uses_of(&self, file: usize) -> impl Iterator<Item = &Use> {
+        self.uses[file]
+            .iter()
+            .chain(self.implied.get(file).into_iter().flatten())
     }
 
     /// The graph as the paths each file uses.
