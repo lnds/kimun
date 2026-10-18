@@ -4,8 +4,8 @@
 /// fan-in (importers) and fan-out (imports), and detects cycles using
 /// Tarjan's strongly-connected components (SCC) algorithm. Fan-in and
 /// fan-out count every import; cycles only those that load the module with
-/// the importer, since a type-only or deferred import never makes one
-/// module wait for another to load.
+/// the importer or compile with it, since a type-only or deferred import
+/// never makes one module wait for another to load.
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
@@ -29,6 +29,8 @@ pub struct DepEntry {
     pub type_fan_out: usize,
     /// Of `fan_out`, the files imported only where the code runs later.
     pub deferred_fan_out: usize,
+    /// Of `fan_out`, the files needed to compile this one.
+    pub compile_fan_out: usize,
     /// True if this file participates in a dependency cycle.
     pub in_cycle: bool,
     /// Imports that look internal but name no file of the project.
@@ -61,6 +63,8 @@ pub struct Totals {
     pub type_edges: usize,
     /// Imports that load their module later, left out of cycles.
     pub deferred_edges: usize,
+    /// Uses needed to compile the user, in cycles.
+    pub compile_edges: usize,
     /// Imports that look internal but name no file.
     pub unresolved: usize,
     /// Files with at least one of those.
@@ -73,6 +77,7 @@ impl Totals {
         Totals {
             type_edges: sum(|e| e.type_fan_out),
             deferred_edges: sum(|e| e.deferred_fan_out),
+            compile_edges: sum(|e| e.compile_fan_out),
             unresolved: sum(|e| e.unresolved.len()),
             files_with_unresolved: sum(|e| usize::from(!e.unresolved.is_empty())),
         }
@@ -95,7 +100,14 @@ pub fn build_graph(
     let n = files.len();
 
     let adj = adjacency(n, &index, edges);
-    let loading: Vec<Vec<usize>> = adj.iter().map(|out| of_kind(out, EdgeKind::Load)).collect();
+    let loading: Vec<Vec<usize>> = adj
+        .iter()
+        .map(|out| {
+            let mut to = of_kind(out, EdgeKind::Compile);
+            to.extend(of_kind(out, EdgeKind::Load));
+            to
+        })
+        .collect();
     let count = |i: usize, kind: EdgeKind| of_kind(&adj[i], kind).len();
 
     let mut fan_in = vec![0usize; n];
@@ -132,6 +144,7 @@ pub fn build_graph(
             fan_out: adj[i].len(),
             type_fan_out: count(i, EdgeKind::Type),
             deferred_fan_out: count(i, EdgeKind::Deferred),
+            compile_fan_out: count(i, EdgeKind::Compile),
             in_cycle: in_cycle[i],
             unresolved: Vec::new(),
         })
@@ -272,6 +285,7 @@ pub struct JsonDepResult<'a> {
     pub cycle_count: usize,
     pub type_edges: usize,
     pub deferred_edges: usize,
+    pub compile_edges: usize,
     pub unresolved_count: usize,
     pub unsupported: Vec<UnsupportedLanguage>,
 }
@@ -295,6 +309,7 @@ impl<'a> From<&'a DepResult> for JsonDepResult<'a> {
             cycle_count: r.cycles.len(),
             type_edges: r.totals.type_edges,
             deferred_edges: r.totals.deferred_edges,
+            compile_edges: r.totals.compile_edges,
             unresolved_count: r.totals.unresolved,
             unsupported: r.unsupported.clone(),
         }
@@ -375,6 +390,22 @@ mod tests {
         assert_eq!(a.fan_in, 2);
         assert_eq!(result.totals.type_edges, 1);
         assert_eq!(result.totals.deferred_edges, 1);
+    }
+
+    #[test]
+    fn uses_needed_to_compile_make_cycles_and_are_counted() {
+        let files = paths(&["a.ex", "b.ex"]);
+        let edges: HashMap<PathBuf, Vec<(PathBuf, EdgeKind)>> = [
+            ("a.ex", ("b.ex", EdgeKind::Compile)),
+            ("b.ex", ("a.ex", EdgeKind::Load)),
+        ]
+        .into_iter()
+        .map(|(from, (to, kind))| (PathBuf::from(from), vec![(PathBuf::from(to), kind)]))
+        .collect();
+        let result = build_graph(&files, &edges);
+        assert_eq!(result.cycles.len(), 1);
+        assert_eq!(result.entries[0].compile_fan_out, 1);
+        assert_eq!(result.totals.compile_edges, 1);
     }
 
     #[test]

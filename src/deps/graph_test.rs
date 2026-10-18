@@ -84,6 +84,77 @@ fn elixir_references_resolve_to_the_files_that_define_the_modules() {
     assert_eq!(graph.ambiguous, 0);
 }
 
+/// The kind of each use `file` makes, by the path used.
+fn kinds<'a>(graph: &'a FileGraph, file: &str) -> Vec<(&'a str, EdgeKind)> {
+    let index = graph.files.iter().position(|f| f == Path::new(file));
+    graph.uses[index.unwrap()]
+        .iter()
+        .map(|u| (graph.files[u.to].to_str().unwrap(), u.kind))
+        .collect()
+}
+
+#[test]
+fn elixir_uses_needed_to_compile_are_compile_edges() {
+    let graph = build(&[
+        source(
+            "lib/macros.ex",
+            "defmodule Macros do\n  defmacro check(x), do: x\n  def plain(x), do: x\nend\n",
+        ),
+        source(
+            "lib/helpers.ex",
+            "defmodule Helpers do\n  def h, do: 1\nend\n",
+        ),
+        source(
+            "lib/required.ex",
+            "defmodule Required do\n  def r, do: 1\nend\n",
+        ),
+        source(
+            "lib/plain.ex",
+            "defmodule Plain do\n  def p, do: 1\n  defmacro __using__(_) do\n    quote do\n      Macros.check(1)\n    end\n  end\nend\n",
+        ),
+        source(
+            "lib/user.ex",
+            "defmodule User do\n  require Required\n  import Helpers\n  def a, do: Macros.check(1)\nend\n",
+        ),
+        source(
+            "lib/web.ex",
+            "defmodule Web do\n  use Plain\n  def b, do: Plain.p()\nend\n",
+        ),
+        source(
+            "lib/caller.ex",
+            "defmodule Caller do\n  def c, do: Macros.plain(1)\nend\n",
+        ),
+    ]);
+
+    // `require` and `import` alone recompile the user only when the
+    // exports of the module change.
+    assert_eq!(
+        kinds(&graph, "lib/user.ex"),
+        [
+            ("lib/macros.ex", EdgeKind::Compile),
+            ("lib/helpers.ex", EdgeKind::Load),
+            ("lib/required.ex", EdgeKind::Load),
+        ]
+    );
+    // What a `quote` calls is compiled where the macro is called.
+    assert_eq!(
+        kinds(&graph, "lib/plain.ex"),
+        [("lib/macros.ex", EdgeKind::Load)]
+    );
+    assert_eq!(
+        kinds(&graph, "lib/web.ex"),
+        [
+            ("lib/macros.ex", EdgeKind::Compile),
+            ("lib/plain.ex", EdgeKind::Compile),
+        ]
+    );
+    // A function of a module that defines macros is called when the code runs.
+    assert_eq!(
+        kinds(&graph, "lib/caller.ex"),
+        [("lib/macros.ex", EdgeKind::Load)]
+    );
+}
+
 #[test]
 fn a_test_script_is_part_of_the_graph() {
     let graph = build(&[

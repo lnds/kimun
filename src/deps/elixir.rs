@@ -11,6 +11,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 
+use super::elixir_compile::{CompileTime, macros};
 use super::elixir_directives::{Using, bare_calls, directives};
 use super::elixir_literals::code_only;
 pub(super) use super::elixir_literals::{interpolation_end, literal_end};
@@ -41,6 +42,10 @@ pub struct ElixirFile {
     /// Functions it calls without a module, and defines none of: what an
     /// `import` may answer.
     pub bare: Vec<String>,
+    /// What it may need at compile time.
+    pub compile: CompileTime,
+    /// The public macros it defines.
+    pub macros: Vec<String>,
 }
 
 /// Whether a file configures the build rather than belongs to the code:
@@ -301,6 +306,7 @@ pub fn read(source: &str, templates: &[String], injected: &Injection) -> ElixirF
     let (defines, code) = modules_of(&code_only(source));
     let (mut aliases, mut used) = Aliases::of(&code);
     aliases.inherit(&injected.aliases);
+    let mut compile = CompileTime::of(&used, source, &aliases);
     let mut refs = references(&used, &aliases);
     let directives = directives(&used, &aliases);
     refs.extend(directives.calls);
@@ -317,12 +323,15 @@ pub fn read(source: &str, templates: &[String], injected: &Injection) -> ElixirF
     whole.extend(injected.whole.iter().cloned());
     whole.sort();
     whole.dedup();
+    compile.add(&injected.compiled);
     ElixirFile {
         bare: bare_calls(&used, source),
         defines,
         refs,
         whole,
         uses: directives.uses,
+        compile,
+        macros: macros(source),
     }
 }
 

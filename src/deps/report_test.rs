@@ -196,11 +196,13 @@ fn render_report_counts_imports_left_out_of_cycles_and_unresolved() {
     result.totals = crate::deps::analyzer::Totals {
         type_edges: 3,
         deferred_edges: 1,
+        compile_edges: 4,
         unresolved: 2,
         files_with_unresolved: 1,
     };
     let text = render_report(&entries, &result);
     assert!(text.contains("Imports left out of cycles: 3 type-only, 1 deferred\n"));
+    assert!(text.contains("Compile-time uses (use, macros): 4\n"));
     assert!(
         text.contains("Unresolved internal imports: 2 in 1 file (listed with --format json)\n")
     );
