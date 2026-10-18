@@ -6,6 +6,8 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
+use super::graph::EdgeKind;
+use super::python_blocks::Blocks;
 use crate::loc::language::{LanguageSpec, languages};
 use crate::string_mask::starts_in_string_mask;
 
@@ -19,6 +21,8 @@ pub struct Binding {
     /// What the file calls it: the alias, the name taken, or the dotted
     /// path of a plain `import`. `None` for `*`, which binds every name.
     pub bound: Option<String>,
+    /// When the import runs: as the module loads, in a function, or never.
+    pub kind: EdgeKind,
 }
 
 impl Binding {
@@ -54,6 +58,7 @@ pub fn spec() -> Option<&'static LanguageSpec> {
 
 /// Extract what each `import` and `from … import` statement names, wherever
 /// it is written: at the top, in a function, under `if TYPE_CHECKING:`.
+/// `read` tells which of them run when the module loads.
 ///
 /// `import a.b` gives `a.b`. `from a.b import c` gives `a.b:c`, since `c`
 /// may be a submodule of `a.b` or a name it defines; `from a.b import *`
@@ -80,23 +85,32 @@ pub fn read(source: &str) -> Read {
         .filter(|(_, masked)| !masked)
         .map(|(line, _)| without_comment(line));
 
+    let mut blocks = Blocks::default();
     while let Some(written) = code.next() {
+        let kind = blocks.line(written);
         let line = written.trim_start();
         if keyword(line, "import").is_none() && keyword(line, "from").is_none() {
             read.code.push(written.to_string());
             continue;
         }
-        let mut statement = line.to_string();
-        while unfinished(&mut statement) {
-            let Some(more) = code.next() else { break };
-            statement.push(' ');
-            statement.push_str(more);
-        }
+        let statement = whole(line, &mut code, &mut blocks);
         for part in statement.split(';') {
-            read_statement(part.trim(), &mut read.bindings);
+            read_statement(part.trim(), kind, &mut read.bindings);
         }
     }
     read
+}
+
+/// The statement that starts with `line`, with the lines it goes on to.
+fn whole<'a>(line: &str, code: &mut impl Iterator<Item = &'a str>, blocks: &mut Blocks) -> String {
+    let mut statement = line.to_string();
+    while unfinished(&mut statement) {
+        let Some(more) = code.next() else { break };
+        blocks.line(more);
+        statement.push(' ');
+        statement.push_str(more);
+    }
+    statement
 }
 
 /// The line without its comment. An import statement holds no string, so
@@ -124,7 +138,7 @@ pub fn keyword<'a>(text: &'a str, word: &str) -> Option<&'a str> {
 }
 
 /// Add what one statement binds, if it is an import.
-fn read_statement(statement: &str, bindings: &mut Vec<Binding>) {
+fn read_statement(statement: &str, kind: EdgeKind, bindings: &mut Vec<Binding>) {
     if let Some(listed) = keyword(statement, "import") {
         bindings.extend(
             names(listed)
@@ -133,6 +147,7 @@ fn read_statement(statement: &str, bindings: &mut Vec<Binding>) {
                     module: name.to_string(),
                     name: None,
                     bound: Some(alias.unwrap_or(name).to_string()),
+                    kind,
                 }),
         );
         return;
@@ -159,6 +174,7 @@ fn read_statement(statement: &str, bindings: &mut Vec<Binding>) {
             module: module.to_string(),
             name: (!star).then(|| name.to_string()),
             bound: (!star).then(|| alias.unwrap_or(name).to_string()),
+            kind,
         });
     }
 }

@@ -15,6 +15,7 @@ fn make_entry(
         fan_in,
         fan_out,
         in_cycle,
+        ..DepEntry::default()
     }
 }
 
@@ -22,7 +23,7 @@ fn make_result(entries: Vec<DepEntry>, cycles: Vec<Vec<PathBuf>>) -> DepResult {
     DepResult {
         entries,
         cycles,
-        unsupported: vec![],
+        ..DepResult::default()
     }
 }
 
@@ -187,6 +188,32 @@ fn json_carries_unsupported_languages() {
 }
 
 // ── render_report ────────────────────────────────────────────────────────────
+
+#[test]
+fn render_report_counts_imports_left_out_of_cycles_and_unresolved() {
+    let entries = vec![make_entry("a.ts", "TypeScript", 0, 2, false)];
+    let mut result = make_result(entries.clone(), vec![]);
+    result.totals = crate::deps::analyzer::Totals {
+        type_edges: 3,
+        deferred_edges: 1,
+        unresolved: 2,
+        files_with_unresolved: 1,
+    };
+    let text = render_report(&entries, &result);
+    assert!(text.contains("Imports left out of cycles: 3 type-only, 1 deferred\n"));
+    assert!(
+        text.contains("Unresolved internal imports: 2 in 1 file (listed with --format json)\n")
+    );
+}
+
+#[test]
+fn render_report_says_nothing_of_kinds_when_every_import_loads() {
+    let entries = vec![make_entry("a.ts", "TypeScript", 0, 2, false)];
+    let result = make_result(entries.clone(), vec![]);
+    let text = render_report(&entries, &result);
+    assert!(!text.contains("left out of cycles"));
+    assert!(!text.contains("Unresolved"));
+}
 
 fn separator_line(width: usize) -> String {
     "\u{2500}".repeat(width)
