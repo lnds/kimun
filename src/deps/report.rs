@@ -122,7 +122,7 @@ fn totals_lines(totals: &Totals) -> Vec<String> {
     lines
 }
 
-fn unsupported_note(unsupported: &[UnsupportedLanguage]) -> Option<String> {
+pub(super) fn unsupported_note(unsupported: &[UnsupportedLanguage]) -> Option<String> {
     if unsupported.is_empty() {
         return None;
     }

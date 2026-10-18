@@ -461,19 +461,8 @@ fn main() {
                 )
             })
         }
-        Commands::Deps {
-            common,
-            cycles_only,
-            sort_by,
-            top,
-        } => {
-            dispatch!(common, |cfg, output| deps::run(
-                &cfg,
-                output,
-                cycles_only,
-                &sort_by,
-                top
-            ))
+        Commands::Deps { common, args } => {
+            dispatch!(common, |cfg, output| deps::run(&cfg, output, &args))
         }
         Commands::Authors { common, since } => {
             dispatch!(common, |cfg, output| authors::run(
