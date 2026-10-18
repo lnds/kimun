@@ -36,6 +36,9 @@ pub(super) enum State {
     /// being read, so that the closing `)]` is only recognised outside a
     /// string.
     InDocAttribute(&'static str, Option<StringKind>),
+    /// Inside a triple-quoted string that counts as comment (Python's
+    /// docstrings, as cloc counts them), with the kind that closes it.
+    InDocString(StringKind),
 }
 
 /// Result of processing one FSM step: how many bytes to advance, optional
@@ -121,7 +124,7 @@ pub(super) fn step_normal(
     // String delimiters — triple quotes are matched before the single-byte
     // ones, so `"""` never reads as an empty string followed by a quote.
     if let Some((width, kind)) = literal_open(full_bytes, pos, spec) {
-        return StepResult::code(width, Some(State::InString(kind)));
+        return open_literal(width, kind, spec);
     }
 
     // Documentation attribute (e.g. Kaikai `#[doc(`) — before the line comment
@@ -174,6 +177,17 @@ pub(super) fn step_normal(
         has_code: !rest[0].is_ascii_whitespace(),
         has_comment: false,
         break_line: false,
+    }
+}
+
+/// The step that opens a string literal: code, or comment for a
+/// triple-quoted string in a language that counts those as comment.
+fn open_literal(width: usize, kind: StringKind, spec: &LanguageSpec) -> StepResult {
+    let triple = matches!(kind, StringKind::TripleDouble | StringKind::TripleSingle);
+    if triple && spec.triple_quote_comments {
+        StepResult::comment(width, Some(State::InDocString(kind)))
+    } else {
+        StepResult::code(width, Some(State::InString(kind)))
     }
 }
 
@@ -253,11 +267,21 @@ fn quoted_scan(rest: &[u8], kind: &StringKind, escapes: bool) -> (usize, bool) {
     (1, false)
 }
 
-/// Process one byte inside a string literal. All content inside strings is
-/// classified as code.
-pub(super) fn step_in_string(rest: &[u8], kind: &StringKind, spec: &LanguageSpec) -> StepResult {
+/// Process one byte inside a string literal: code, or comment inside a
+/// triple-quoted string a language counts as comment (`doc`).
+pub(super) fn step_in_string(
+    rest: &[u8],
+    kind: &StringKind,
+    spec: &LanguageSpec,
+    doc: bool,
+) -> StepResult {
     let (advance, closed) = string_scan(rest, kind, spec);
-    StepResult::code(advance, closed.then_some(State::Normal))
+    let new_state = closed.then_some(State::Normal);
+    if doc {
+        StepResult::comment(advance, new_state)
+    } else {
+        StepResult::code(advance, new_state)
+    }
 }
 
 /// Process one byte inside a documentation attribute. The body is

@@ -127,7 +127,10 @@ fn classify_line(
     raw: &mut Vec<RawSpan>,
 ) -> LineKind {
     let mut has_code = matches!(state, State::InString(_));
-    let mut has_comment = matches!(state, State::InBlockComment(..) | State::InDocAttribute(..));
+    let mut has_comment = matches!(
+        state,
+        State::InBlockComment(..) | State::InDocAttribute(..) | State::InDocString(_)
+    );
     let bytes = line.as_bytes();
     let len = bytes.len();
     let mut i = 0;
@@ -136,13 +139,14 @@ fn classify_line(
         let was_raw = in_raw_string(state);
         let result = match &state {
             State::Normal => step_normal(&bytes[i..], spec, bytes, i),
-            State::InString(kind) => step_in_string(&bytes[i..], kind, spec),
+            State::InString(kind) => step_in_string(&bytes[i..], kind, spec, false),
             State::InBlockComment(block, depth) => {
                 step_in_block_comment(&bytes[i..], spec, *block, *depth)
             }
             State::InDocAttribute(close, inner) => {
                 step_in_doc_attribute(&bytes[i..], spec, close, inner)
             }
+            State::InDocString(kind) => step_in_string(&bytes[i..], kind, spec, true),
         };
         has_code |= result.has_code;
         has_comment |= result.has_comment;

@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use ignore::WalkBuilder;
 
-use crate::loc::language::{LanguageSpec, detect, detect_by_shebang};
+use crate::loc::language::{LanguageSpec, detect, detect_by_shebang, detect_file};
 use crate::test_blocks::rust_test_modules;
 use crate::util::is_generated_file;
 
@@ -363,7 +363,7 @@ pub fn source_files(
         let file_path = entry.path();
         // File-level filtering (test names, extension/glob exclusion) is
         // handled by the walker's filter_entry callback — no checks needed here.
-        let Some(spec) = detect(file_path).or_else(|| try_detect_shebang(file_path)) else {
+        let Some(spec) = detect_file(file_path).or_else(|| try_detect_shebang(file_path)) else {
             continue;
         };
         result.push((file_path.to_path_buf(), spec));

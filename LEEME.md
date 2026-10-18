@@ -1399,13 +1399,15 @@ Todas las secciones y todos los campos son opcionales: omite los que no necesite
 | Bourne Shell | `.sh` |
 | C | `.c`, `.h` |
 | C# | `.cs` |
-| C++ | `.cpp`, `.cxx`, `.cc`, `.hpp`, `.hxx` |
+| C++ | `.cpp`, `.cxx`, `.cc`, `.hpp`, `.hxx`, `.hh` |
 | Clojure | `.clj`, `.cljs`, `.cljc`, `.edn` |
+| CMake | `.cmake`, `CMakeLists.txt` |
 | CSS | `.css` |
 | Dart | `.dart` |
 | Dockerfile | `Dockerfile` |
 | DOS Batch | `.bat`, `.cmd` |
 | Elixir | `.ex` |
+| EEx | `.eex` |
 | Elixir Script | `.exs` |
 | Erlang | `.erl`, `.hrl` |
 | F# | `.fs`, `.fsi`, `.fsx` |
@@ -1419,13 +1421,16 @@ Todas las secciones y todos los campos son opcionales: omite los que no necesite
 | Groovy | `.groovy` |
 | Haskell | `.hs` |
 | HTML | `.html`, `.htm` |
+| HTML EEx | `.heex` |
 | Java | `.java` |
 | JavaScript | `.js`, `.mjs`, `.cjs` |
+| jq | `.jq` |
 | JSON | `.json` |
 | JSX | `.jsx` |
 | Julia | `.jl` |
 | Kaikai | `.kai` |
 | Kotlin | `.kt`, `.kts` |
+| lex | `.l`, `.lex` |
 | Lua | `.lua` |
 | Makefile | `.mk`, `Makefile`, `makefile`, `GNUmakefile` |
 | Markdown | `.md`, `.markdown` |
@@ -1438,6 +1443,7 @@ Todas las secciones y todos los campos son opcionales: omite los que no necesite
 | Properties | `.properties` |
 | Python | `.py`, `.pyi` |
 | R | `.r`, `.R` |
+| reStructuredText | `.rst`, `.rest` |
 | Ruby | `.rb`, `Rakefile`, `Gemfile` |
 | Rust | `.rs` |
 | Scala | `.scala`, `.sc`, `.sbt` |
@@ -1447,6 +1453,7 @@ Todas las secciones y todos los campos son opcionales: omite los que no necesite
 | Text | `.txt` |
 | TOML | `.toml` |
 | TypeScript | `.ts`, `.tsx`, `.mts`, `.cts` |
+| yacc | `.y`, `.yacc` |
 | XML | `.xml`, `.xsl`, `.xslt`, `.svg`, `.fsproj`, `.csproj`, `.vbproj`, `.vcxproj`, `.sln`, `.plist`, `.xaml` |
 | YAML | `.yaml`, `.yml` |
 | Zig | `.zig` |
@@ -1462,6 +1469,20 @@ Todas las secciones y todos los campos son opcionales: omite los que no necesite
   `~S"""` y `~s"""`) cuentan como comentarios, como los cuenta cloc, y se excluyen
   de los análisis de complejidad, de Halstead y de smells. Un `@doc "..."` de una
   línea y cualquier otro heredoc cuentan como código.
+- **Python**: un string con triple comilla, sobre todo un docstring, cuenta
+  como comentario, como lo cuenta cloc: sus líneas son comentario salvo que
+  compartan línea con código (`SQL = """` es código, las líneas que siguen son
+  comentario).
+- **Headers de C y C++**: un `.h` es C++ cuando su texto lo dice (una línea que
+  empieza con `namespace`, `template`, `class`, un especificador de acceso,
+  `using`, `constexpr`, o cualquier `std::`), y C en otro caso. cloc informa
+  todos los headers como `C/C++ Header`; kimun los deja con el lenguaje que los
+  analiza.
+- **reStructuredText**: una línea que empieza con `..` (una directiva o un
+  comentario) cuenta como comentario; cloc cuenta además como comentario las
+  líneas indentadas bajo ella.
+- **HTML EEx**: `<%!-- --%>` y las líneas que empiezan con `<% #` son
+  comentarios, como los cuenta cloc. **EEx**: `<%# %>` es un comentario.
 - **Fortran**: la forma libre (`.f90` y posteriores) comenta con `!`; la forma
   fija (`.f`, `.for`, `.f77`) además hace comentario de una línea con `C`, `c` o
   `*` en la primera columna. Las directivas de OpenMP y OpenACC (`!$omp`,
@@ -1490,7 +1511,7 @@ Todas las secciones y todos los campos son opcionales: omite los que no necesite
   repetidos bajo compilación condicional son una sola rutina. La anidación
   cognitiva se lee de la sangría, dos columnas por nivel.
 - **Las líneas interiores de los strings de varias líneas** (los literales con
-  triple comilla de Kaikai y Python, los heredocs de Elixir) cuentan como código
+  triple comilla de Kaikai, los heredocs de Elixir) cuentan como código
   para `km loc`, pero se excluyen de los análisis ciclomático, cognitivo, de
   Halstead y de smells: la prosa y los datos incrustados no son flujo de control.
 - **Los strings crudos de Rust** (`r"..."`, `r#"..."#` y las formas con más `#`,

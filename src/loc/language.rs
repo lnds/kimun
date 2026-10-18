@@ -37,6 +37,10 @@ pub struct LanguageSpec {
     pub single_quote_strings: bool,
     /// Whether triple quotes delimit multi-line strings (Python).
     pub triple_quote_strings: bool,
+    /// Whether a triple-quoted string counts as comment rather than code,
+    /// as cloc counts Python's docstrings and other triple-quoted strings:
+    /// its lines are comment unless code shares them.
+    pub triple_quote_comments: bool,
     /// Whether `r"…"` and `r#"…"#` are raw strings: no escapes, and one
     /// opened with `#` ends only at a quote followed by as many (Rust).
     pub raw_strings: bool,
@@ -83,6 +87,7 @@ impl LanguageSpec {
         nested_block_comments: false,
         single_quote_strings: false,
         triple_quote_strings: false,
+        triple_quote_comments: false,
         raw_strings: false,
         pragma: None,
         doc_attributes: &[],
@@ -150,8 +155,10 @@ pub fn languages() -> &'static [LanguageSpec] {
             raw_strings: true,
             ..LanguageSpec::PLAIN
         },
+        // A triple-quoted string, a docstring above all, counts as
+        // comment, as cloc counts it.
         lang_spec!("Python", ext: ["py", "pyi"],
-              line: "#", sq: true, tq: true,
+              line: "#", sq: true, tq: true, tqc: true,
               shebangs: ["python", "python3"]),
         lang_spec!("JavaScript", ext: ["js", "mjs", "cjs"],
               line: "//", block: "/*", "*/", sq: true,
@@ -278,8 +285,23 @@ pub fn languages() -> &'static [LanguageSpec] {
               line: "//", block: "/*", "*/", sq: true),
         lang_spec!("Erlang", ext: ["erl", "hrl"],
               line: "%"),
+        // As cloc: `<%!-- --%>` comments, and lines opening with `<% #`.
         lang_spec!("HTML EEx", ext: ["heex"],
-              block: "<!--", "-->", sq: true),
+              line: "<% #", block: "<%!--", "--%>", sq: true),
+        lang_spec!("EEx", ext: ["eex"],
+              block: "<%#", "%>"),
+        lang_spec!("CMake", ext: ["cmake"], files: ["CMakeLists.txt"],
+              line: "#"),
+        // cloc takes a `..` directive and the lines indented under it as
+        // comment; here only the line that opens it is.
+        lang_spec!("reStructuredText", ext: ["rst", "rest"],
+              line: ".."),
+        lang_spec!("yacc", ext: ["y", "yacc"],
+              line: "//", block: "/*", "*/"),
+        lang_spec!("lex", ext: ["l", "lex"],
+              block: "/*", "*/"),
+        lang_spec!("jq", ext: ["jq"],
+              line: "#"),
         lang_spec!("PO File", ext: ["po", "pot"],
               line: "#"),
         lang_spec!("DOS Batch", ext: ["bat", "cmd"],
@@ -340,6 +362,7 @@ const DATA_AND_PROSE: &[&str] = &[
     "TOML",
     "XML",
     "Markdown",
+    "reStructuredText",
     "Text",
     "Properties",
     "PO File",
@@ -367,6 +390,41 @@ pub fn detect(path: &Path) -> Option<&'static LanguageSpec> {
     languages()
         .iter()
         .find(|spec| spec.extensions.contains(&ext))
+}
+
+/// What only C++ writes, at the start of a line of a header: a header
+/// holding any of them is C++, not C.
+const CPP_ONLY: &[&str] = &[
+    "namespace ",
+    "template<",
+    "template <",
+    "class ",
+    "public:",
+    "private:",
+    "protected:",
+    "using ",
+    "constexpr ",
+    "static_assert(",
+];
+
+/// Detect the language of a file on disk: as [`detect`] does by its name,
+/// and a `.h` header, which C and C++ share, as C++ when its text says so
+/// (`namespace`, `template`, `class`, access specifiers, `std::`).
+pub fn detect_file(path: &Path) -> Option<&'static LanguageSpec> {
+    let spec = detect(path)?;
+    let header = spec.name == "C" && path.extension().is_some_and(|e| e == "h");
+    if header && is_cpp_text(&std::fs::read_to_string(path).unwrap_or_default()) {
+        return languages().iter().find(|s| s.name == "C++");
+    }
+    Some(spec)
+}
+
+/// Whether the text of a header is C++.
+fn is_cpp_text(text: &str) -> bool {
+    text.lines().any(|line| {
+        let line = line.trim_start();
+        CPP_ONLY.iter().any(|m| line.starts_with(m)) || line.contains("std::")
+    })
 }
 
 /// Detect the language from a shebang line (e.g. `#!/usr/bin/env python3`).

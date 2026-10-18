@@ -12,6 +12,7 @@ fn spec_c_like() -> LanguageSpec {
         nested_block_comments: false,
         single_quote_strings: false,
         triple_quote_strings: false,
+        triple_quote_comments: false,
         raw_strings: false,
         pragma: None,
         doc_attributes: &[],
@@ -35,6 +36,7 @@ fn spec_rust() -> LanguageSpec {
         nested_block_comments: true,
         single_quote_strings: false,
         triple_quote_strings: false,
+        triple_quote_comments: false,
         raw_strings: true,
         pragma: None,
         doc_attributes: &[],
@@ -58,6 +60,7 @@ fn spec_python() -> LanguageSpec {
         nested_block_comments: false,
         single_quote_strings: true,
         triple_quote_strings: true,
+        triple_quote_comments: false,
         raw_strings: false,
         pragma: None,
         doc_attributes: &[],
@@ -81,6 +84,7 @@ fn spec_js() -> LanguageSpec {
         nested_block_comments: false,
         single_quote_strings: true,
         triple_quote_strings: false,
+        triple_quote_comments: false,
         raw_strings: false,
         pragma: None,
         doc_attributes: &[],
@@ -104,6 +108,7 @@ fn spec_haskell() -> LanguageSpec {
         nested_block_comments: true,
         single_quote_strings: false,
         triple_quote_strings: false,
+        triple_quote_comments: false,
         raw_strings: false,
         pragma: Some(("{-#", "#-}")),
         doc_attributes: &[],
@@ -127,6 +132,7 @@ fn spec_kaikai() -> LanguageSpec {
         nested_block_comments: false,
         single_quote_strings: false,
         triple_quote_strings: true,
+        triple_quote_comments: false,
         raw_strings: false,
         pragma: None,
         doc_attributes: &[("#[doc(", ")]")],
@@ -613,6 +619,7 @@ fn spec_no_comments() -> LanguageSpec {
         nested_block_comments: false,
         single_quote_strings: false,
         triple_quote_strings: false,
+        triple_quote_comments: false,
         raw_strings: false,
         pragma: None,
         doc_attributes: &[],
@@ -643,6 +650,7 @@ fn spec_batch() -> LanguageSpec {
         nested_block_comments: false,
         single_quote_strings: false,
         triple_quote_strings: false,
+        triple_quote_comments: false,
         raw_strings: false,
         pragma: None,
         doc_attributes: &[],
@@ -676,6 +684,7 @@ fn spec_heex() -> LanguageSpec {
         nested_block_comments: false,
         single_quote_strings: true,
         triple_quote_strings: false,
+        triple_quote_comments: false,
         raw_strings: false,
         pragma: None,
         doc_attributes: &[],
@@ -699,6 +708,7 @@ fn spec_po() -> LanguageSpec {
         nested_block_comments: false,
         single_quote_strings: false,
         triple_quote_strings: false,
+        triple_quote_comments: false,
         raw_strings: false,
         pragma: None,
         doc_attributes: &[],
@@ -849,6 +859,84 @@ fn raw_string_spans_tell_where_each_one_is() {
             vec![span(0, 3, false)],
             vec![span(0, 2, false)],
         ]
+    );
+}
+
+// --- Triple-quoted strings as comment (Python, as cloc counts them) ---
+
+/// Blank, comment and code lines of `text`, written in `language`.
+fn counted(language: &str, text: &str) -> (usize, usize, usize) {
+    let spec = crate::loc::language::languages()
+        .iter()
+        .find(|s| s.name == language)
+        .unwrap();
+    let stats = count(spec, text);
+    (stats.blank, stats.comment, stats.code)
+}
+
+#[test]
+fn python_docstrings_are_comment() {
+    let src = "\
+\"\"\"Module docstring.
+
+Explains the module.
+\"\"\"
+
+
+def add(a, b):
+    \"\"\"Add two numbers.
+
+    :param a: first
+    \"\"\"
+    return a + b
+
+
+class Box:
+    \'\'\'A box.\'\'\'
+";
+    assert_eq!(counted("Python", src), (6, 7, 3));
+}
+
+#[test]
+fn python_triple_quoted_string_after_code() {
+    // The line that opens the string holds code; the rest is comment.
+    assert_eq!(
+        counted("Python", "SQL = \"\"\"\nselect *\nfrom t\n\"\"\"\n"),
+        (0, 3, 1)
+    );
+    // Code after the closing quotes makes the line code.
+    assert_eq!(
+        counted("Python", "\"\"\"a\"\"\" + \"\"\"b\"\"\"\n"),
+        (0, 0, 1)
+    );
+}
+
+#[test]
+fn python_apostrophe_inside_a_docstring() {
+    let src = "def f():\n    \"\"\"Don't\n    stop.\"\"\"\n    return 1\n";
+    assert_eq!(counted("Python", src), (0, 2, 2));
+}
+
+#[test]
+fn yacc_lex_cmake_jq_and_eex_comments() {
+    assert_eq!(
+        counted("yacc", "%token A\n/* c */\n// c\nrule: A ;\n"),
+        (0, 2, 2)
+    );
+    assert_eq!(
+        counted("lex", "%%\n/* c */\n[0-9]+ { return 1; }\n"),
+        (0, 1, 2)
+    );
+    assert_eq!(counted("CMake", "# c\nproject(x)\n"), (0, 1, 1));
+    assert_eq!(counted("jq", "# c\ndef f: .;\n"), (0, 1, 1));
+    assert_eq!(counted("EEx", "<%# c %>\n<%= @x %>\n"), (0, 1, 1));
+    assert_eq!(
+        counted("HTML EEx", "<%!-- c\n--%>\n<% # c %>\n<div>{@x}</div>\n"),
+        (0, 3, 1)
+    );
+    assert_eq!(
+        counted("reStructuredText", ".. note:: x\nText.\n"),
+        (0, 1, 1)
     );
 }
 
