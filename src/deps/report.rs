@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use crate::report_helpers;
 
-use super::analyzer::{DepEntry, DepResult, JsonDepResult, UnsupportedLanguage};
+use super::analyzer::{DepEntry, DepResult, JsonDepResult, Totals, UnsupportedLanguage};
 
 const COL_LANG: usize = 10;
 const COL_FAN_IN: usize = 6;
@@ -28,6 +28,7 @@ fn render_report(entries: &[DepEntry], result: &DepResult) -> String {
     } else {
         let mut lines = table_lines(entries);
         lines.extend(cycle_lines(&result.cycles));
+        lines.extend(totals_lines(&result.totals));
         lines
     };
     // Name the languages left out, so that their absence from the table is
@@ -91,6 +92,30 @@ fn cycle_lines(cycles: &[Vec<PathBuf>]) -> Vec<String> {
     lines
 }
 
+fn files(n: usize) -> String {
+    let noun = if n == 1 { "file" } else { "files" };
+    format!("{n} {noun}")
+}
+
+/// The imports left out of cycles, and those that name no file.
+fn totals_lines(totals: &Totals) -> Vec<String> {
+    let mut lines = Vec::new();
+    if totals.type_edges + totals.deferred_edges > 0 {
+        lines.push(format!(
+            "Imports left out of cycles: {} type-only, {} deferred",
+            totals.type_edges, totals.deferred_edges
+        ));
+    }
+    if totals.unresolved > 0 {
+        lines.push(format!(
+            "Unresolved internal imports: {} in {} (listed with --format json)",
+            totals.unresolved,
+            files(totals.files_with_unresolved)
+        ));
+    }
+    lines
+}
+
 fn unsupported_note(unsupported: &[UnsupportedLanguage]) -> Option<String> {
     if unsupported.is_empty() {
         return None;
@@ -114,12 +139,13 @@ pub fn print_json(result: &DepResult) -> Result<(), Box<dyn std::error::Error>> 
 /// Print dependency analysis as a single compact line.
 pub fn print_short(result: &DepResult) {
     println!(
-        "deps files:{} cycles:{} max_fan_out:{} max_fan_in:{} unsupported:{}",
+        "deps files:{} cycles:{} max_fan_out:{} max_fan_in:{} unsupported:{} unresolved:{}",
         result.entries.len(),
         result.cycles.len(),
         result.entries.iter().map(|e| e.fan_out).max().unwrap_or(0),
         result.entries.iter().map(|e| e.fan_in).max().unwrap_or(0),
         result.unsupported.iter().map(|u| u.files).sum::<usize>(),
+        result.totals.unresolved,
     );
 }
 

@@ -24,10 +24,12 @@ pub mod heex;
 mod java;
 mod javascript;
 mod javascript_config;
+mod javascript_imports;
 mod kaikai;
 pub mod layout;
 mod phoenix;
 mod python;
+mod python_blocks;
 mod python_names;
 mod python_uses;
 mod report;
@@ -45,7 +47,7 @@ use std::path::{Path, PathBuf};
 use crate::util::read_lossy;
 use crate::walk::{self, WalkConfig};
 
-use analyzer::{DepEntry, DepResult, UnsupportedLanguage, build_graph};
+use analyzer::{DepEntry, DepResult, Totals, UnsupportedLanguage, build_graph};
 pub use extractor::is_supported;
 use graph::{FileGraph, Source};
 use layout::{Layout, is_manifest};
@@ -123,9 +125,14 @@ fn analyze(cfg: &WalkConfig<'_>) -> DepResult {
     }
     .with_manifests(manifests.iter().map(|(p, t)| (p.as_path(), t.as_str())));
     // One directory is analysed, with no manifests to tell projects apart.
-    let edges = FileGraph::build(&sources, &layout, &|_, _| false).edges();
+    let graph = FileGraph::build(&sources, &layout, &|_, _| false);
 
-    let mut result = build_graph(&all_files, &edges);
+    let mut result = build_graph(&all_files, &graph.kinded_edges());
+    // The graph holds the files in the order of `all_files`, as the entries.
+    for (entry, imports) in result.entries.iter_mut().zip(graph.unresolved) {
+        entry.unresolved = imports;
+    }
+    result.totals = Totals::of(&result.entries);
     result.unsupported = unsupported;
     result
 }
@@ -188,6 +195,7 @@ pub fn run(
                 entries: entries.iter().map(|e| (*e).clone()).collect(),
                 cycles: result.cycles.clone(),
                 unsupported: result.unsupported.clone(),
+                totals: result.totals,
             };
             report::print_json(&filtered)
         }

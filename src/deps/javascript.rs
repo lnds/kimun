@@ -6,50 +6,70 @@
 //!
 //! A barrel (`index.ts`) is a file like any other: its importers depend on
 //! it, and it on what it re-exports.
+//!
+//! An import that takes only types (`import type`, `import { type A }`,
+//! `export type … from`) is erased by the compiler, and `import()` loads
+//! its module when it runs: neither loads the module with the importer.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Component, Path, PathBuf};
 
+use super::graph::{EdgeKind, Found, Source};
 use super::javascript_config::{Config, Package};
+use super::javascript_imports;
 use super::layout::Layout;
-
-/// What precedes a token, as far as imports are concerned.
-#[derive(Clone, Copy)]
-enum Before {
-    From,
-    Import,
-    Require,
-    Call,
-    Dot,
-    Other,
-}
 
 /// The specifiers of the import forms of a source, in order: `import … from`,
 /// `import '…'`, `export … from`, `require('…')` and `import('…')`. Other
 /// strings, those in comments and templates that interpolate are left out.
 pub fn extract(source: &str) -> Vec<String> {
-    let mut specifiers = Vec::new();
-    let mut before = Before::Other;
-    for token in Tokens::of(source) {
-        before = match (token, before) {
-            (Token::Str(Some(text)), Before::From | Before::Import | Before::Call) => {
-                specifiers.push(text);
-                Before::Other
+    imports(source).into_iter().map(|(s, _)| s).collect()
+}
+
+/// The specifiers of a source, each with how its import loads the module.
+pub fn imports(source: &str) -> Vec<(String, EdgeKind)> {
+    let tokens: Vec<Token> = Tokens::of(source).collect();
+    javascript_imports::read(&tokens)
+}
+
+/// The files `source` imports, with how each import loads them, and the
+/// relative specifiers of scripts that name no file.
+pub fn found(source: &Source, layout: &Layout, by_path: &HashMap<&Path, usize>) -> Found {
+    let mut found = Found::default();
+    for (specifier, kind) in imports(&source.text) {
+        let resolved = resolve(&source.path, &specifier, layout);
+        match resolved
+            .as_ref()
+            .and_then(|path| by_path.get(path.as_path()).copied())
+        {
+            Some(to) => {
+                found.add(to, kind);
             }
-            (Token::Word(_), Before::Dot) => Before::Other,
-            (Token::Word("from"), _) => Before::From,
-            (Token::Word("import"), _) => Before::Import,
-            (Token::Word("require"), _) => Before::Require,
-            (Token::Punct(b'('), Before::Import | Before::Require) => Before::Call,
-            (Token::Punct(b'.'), _) => Before::Dot,
-            _ => Before::Other,
-        };
+            None if resolved.is_none() && names_script(&specifier) => {
+                found.unresolved.insert(specifier);
+            }
+            None => {}
+        }
     }
-    specifiers
+    found
+}
+
+/// Whether a specifier is relative and names a script, by its extension or
+/// the lack of one: a stylesheet or an image is no file of the graph.
+fn names_script(specifier: &str) -> bool {
+    let specifier = specifier.split('?').next().unwrap_or(specifier);
+    if !is_relative(specifier) {
+        return false;
+    }
+    let last = specifier.rsplit('/').next().unwrap_or(specifier);
+    match last.rsplit_once('.') {
+        Some((stem, ext)) if !stem.is_empty() => EXTENSIONS.contains(&ext),
+        _ => true,
+    }
 }
 
 /// A token of JavaScript, coarsely: what imports need.
-enum Token<'s> {
+pub(super) enum Token<'s> {
     Word(&'s str),
     /// A string literal, with its text when it is plain.
     Str(Option<String>),

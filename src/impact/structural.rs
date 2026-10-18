@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-use crate::deps::graph::{FileGraph, Related, Unnarrowed, Use};
+use crate::deps::graph::{EdgeKind, FileGraph, Related, Unnarrowed, Use};
 use crate::git::{ChangeKind, FileDiffStat};
 
 use super::protection::{Protection, Tests};
@@ -156,6 +156,14 @@ impl Structural {
     }
 }
 
+/// Whether `used` makes a file of `role` reach what it uses. Every import
+/// of a source does: a type change breaks those that check against it. A
+/// test that imports only types runs none of the module, so it does not
+/// protect it.
+fn reaches(role: Role, used: &Use) -> bool {
+    role == Role::Source || used.kind != EdgeKind::Type
+}
+
 /// The graph read backwards: for each file, the sources and the tests that
 /// use it.
 struct Reverse {
@@ -174,7 +182,7 @@ impl Reverse {
                 Role::Test => &mut referring,
                 Role::Other => continue,
             };
-            for used in graph.uses_of(file) {
+            for used in graph.uses_of(file).filter(|u| reaches(*role, u)) {
                 into[used.to].push(file);
             }
         }

@@ -294,6 +294,7 @@ fn entry(path: &str, fan_in: usize, fan_out: usize, in_cycle: bool) -> DepEntry 
         fan_in,
         fan_out,
         in_cycle,
+        ..DepEntry::default()
     }
 }
 
@@ -442,5 +443,121 @@ fn typescript_aliases_and_workspace_packages_add_edges() {
     assert_eq!(
         metrics(&result, "packages/utils/src/index.ts"),
         (1, 0, false)
+    );
+}
+
+// ── imports that do not load, and those that name no file ─────────────────────
+
+fn analyze_files(files: &[(&str, &str)]) -> DepResult {
+    let dir = tempfile::tempdir().unwrap();
+    for (path, text) in files {
+        write(dir.path(), path, text);
+    }
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    analyze(&cfg)
+}
+
+fn entry_of<'a>(result: &'a DepResult, path: &str) -> &'a DepEntry {
+    let found = result.entries.iter().find(|e| e.path == Path::new(path));
+    found.unwrap_or_else(|| panic!("{path} not in the graph"))
+}
+
+#[test]
+fn typescript_import_type_makes_no_cycle() {
+    let result = analyze_files(&[
+        (
+            "a.ts",
+            "import type { B } from './b'\nexport function make(): B { return { n: 1 } }\n",
+        ),
+        (
+            "b.ts",
+            "import { make } from './a'\nexport interface B { n: number }\nexport const value = make()\n",
+        ),
+    ]);
+    assert!(result.cycles.is_empty());
+    let a = entry_of(&result, "a.ts");
+    assert_eq!((a.fan_out, a.type_fan_out), (1, 1));
+    assert_eq!(result.totals.type_edges, 1);
+}
+
+#[test]
+fn python_type_checking_and_function_imports_make_no_cycle() {
+    let result = analyze_files(&[
+        ("pkg/__init__.py", ""),
+        (
+            "pkg/app.py",
+            "from typing import TYPE_CHECKING\n\nif TYPE_CHECKING:\n    from pkg.ctx import Context\n\n\ndef run(ctx: \"Context\") -> None:\n    print(ctx)\n",
+        ),
+        (
+            "pkg/ctx.py",
+            "from pkg.app import run\n\n\nclass Context:\n    def go(self) -> None:\n        run(self)\n",
+        ),
+        (
+            "pkg/helpers.py",
+            "def current():\n    from pkg.views import render\n    return render()\n",
+        ),
+        (
+            "pkg/views.py",
+            "from pkg.helpers import current\n\n\ndef render():\n    return 1\n",
+        ),
+    ]);
+    assert!(result.cycles.is_empty(), "{:?}", result.cycles);
+    assert_eq!(entry_of(&result, "pkg/app.py").type_fan_out, 1);
+    assert_eq!(entry_of(&result, "pkg/helpers.py").deferred_fan_out, 1);
+}
+
+#[test]
+fn a_quoted_include_of_no_file_is_unresolved() {
+    let result = analyze_files(&[
+        (
+            "src/main.c",
+            "#include \"util.h\"\n#include \"builtin.inc\"\n#include <stdio.h>\n\nint main(void) { return util(); }\n",
+        ),
+        ("src/util.h", "int util(void);\n"),
+    ]);
+    assert_eq!(
+        entry_of(&result, "src/main.c").unresolved,
+        vec!["builtin.inc"]
+    );
+    assert_eq!(result.totals.unresolved, 1);
+    assert_eq!(result.totals.files_with_unresolved, 1);
+}
+
+#[test]
+fn a_relative_import_of_no_script_is_unresolved() {
+    let result = analyze_files(&[(
+        "a.js",
+        "import x from './missing'\nimport './style.css'\nimport React from 'react'\nexport default x\n",
+    )]);
+    assert_eq!(entry_of(&result, "a.js").unresolved, vec!["./missing"]);
+}
+
+#[test]
+fn a_relative_python_import_of_no_module_is_unresolved() {
+    let result = analyze_files(&[
+        ("pkg/__init__.py", ""),
+        (
+            "pkg/a.py",
+            "from .gone import x\nfrom .b import y\nimport requests\n",
+        ),
+        ("pkg/b.py", "y = 1\n"),
+    ]);
+    assert_eq!(entry_of(&result, "pkg/a.py").unresolved, vec![".gone"]);
+}
+
+#[test]
+fn a_go_import_of_a_package_of_the_module_with_no_files_is_unresolved() {
+    let result = analyze_files(&[
+        ("go.mod", "module example.com/app\n"),
+        (
+            "main.go",
+            "package main\n\nimport (\n\t\"fmt\"\n\t\"example.com/app/gen\"\n\t\"example.com/app/util\"\n)\n",
+        ),
+        ("util/util.go", "package util\n"),
+    ]);
+    assert_eq!(
+        entry_of(&result, "main.go").unresolved,
+        vec!["example.com/app/gen"]
     );
 }

@@ -1,10 +1,10 @@
 //! What a Python file uses: the files its imports name, each with the
 //! names it takes there.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::HashMap;
 use std::path::Path;
 
-use super::graph::Source;
+use super::graph::{Found, Source};
 use super::layout::Layout;
 use super::{python, python_names};
 
@@ -42,42 +42,52 @@ impl Modules {
         Modules(sources.iter().map(module).collect())
     }
 
-    /// The files `source` imports, each with the names it takes there.
+    /// The files `source` imports, each with the names it takes there and
+    /// when the import runs, and the relative imports that name no file.
     /// `None` when it is not Python.
     pub fn uses(
         &self,
         source: &Source,
         layout: &Layout,
         by_path: &HashMap<&Path, usize>,
-    ) -> Option<BTreeMap<usize, BTreeSet<String>>> {
+    ) -> Option<Found> {
         (source.language == "Python").then(|| self.uses_of(source, layout, by_path))
     }
 
-    fn uses_of(
-        &self,
-        source: &Source,
-        layout: &Layout,
-        by_path: &HashMap<&Path, usize>,
-    ) -> BTreeMap<usize, BTreeSet<String>> {
+    fn uses_of(&self, source: &Source, layout: &Layout, by_path: &HashMap<&Path, usize>) -> Found {
         let resolve = |import: &str| {
             let path = python::resolve(&source.path, import, &layout.known, &layout.python_roots)?;
             by_path.get(path.as_path()).copied()
         };
         let read = python::read(&source.text);
 
-        let mut uses: BTreeMap<usize, BTreeSet<String>> = BTreeMap::new();
+        let mut found = Found::default();
         for binding in &read.bindings {
             // A name taken from a package may be one of its modules.
             let submodule = binding.submodule().and_then(|module| resolve(&module));
             let Some(to) = submodule.or_else(|| resolve(&binding.module)) else {
+                found.unresolved.extend(unresolved(binding));
                 continue;
             };
             let module = &self.0[to];
             let taken = module.taken(binding, submodule.is_some(), &read.code);
             let calls = taken.iter().map(|name| format!("{}.{name}", module.label));
-            uses.entry(to).or_default().extend(calls);
+            found.add(to, binding.kind).extend(calls);
         }
-        uses
+        found
+    }
+}
+
+/// A relative import that names no file, as written: only those are known
+/// to be the project's. `from . import a` is `.a`.
+fn unresolved(binding: &python::Binding) -> Option<String> {
+    if !binding.module.starts_with('.') {
+        return None;
+    }
+    if binding.module.trim_start_matches('.').is_empty() {
+        binding.submodule()
+    } else {
+        Some(binding.module.clone())
     }
 }
 

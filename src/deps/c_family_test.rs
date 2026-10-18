@@ -163,3 +163,17 @@ fn a_header_of_one_language_is_reached_from_the_other() {
     ];
     assert_eq!(used(&sources, "wrap.cpp"), ["lib.h"]);
 }
+
+#[test]
+fn only_quoted_includes_of_no_project_file_are_unresolved() {
+    let sources = [
+        source(
+            "src/main.c",
+            "#include \"util.h\"\n#include \"builtin.inc\"\n#include <stdio.h>\n#include <gen/x.h>\n#include \"stdlib.h\"\n#include \"sys/types.h\"\n",
+        ),
+        source("src/util.h", "int util(void);\n"),
+    ];
+    let graph = FileGraph::build(&sources, &Layout::default(), &|_, _| false);
+    assert_eq!(graph.unresolved[0], ["builtin.inc"]);
+    assert!(graph.unresolved[1].is_empty());
+}

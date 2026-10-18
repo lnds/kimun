@@ -12,11 +12,15 @@
 //! with its name (`foo.h` and `foo.c`, or `include/x/foo.h` and
 //! `src/x/foo.c`), so that a change to a source reaches the users of its
 //! header. The code does not write that use, so it makes no cycle.
+//!
+//! A quoted include that names no file of the repository is noted as
+//! unresolved, unless it names a header of the system: it is often one the
+//! build generates.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
-use super::graph::{Source, Use, nearest, shared_depth};
+use super::graph::{EdgeKind, Found, Source, Use, nearest, shared_depth};
 use super::javascript::normalize;
 
 /// An `#include` and how it names its file.
@@ -34,6 +38,54 @@ fn is_c_family(language: &str) -> bool {
 
 const HEADERS: &[&str] = &["h", "hh", "hpp", "hxx", "h++"];
 const SOURCES: &[&str] = &["c", "cc", "cpp", "cxx", "c++"];
+
+/// Headers of the C library and of POSIX, which a quoted include may name
+/// too: the compiler finds them among those of the system.
+const SYSTEM: &[&str] = &[
+    "assert.h",
+    "complex.h",
+    "ctype.h",
+    "errno.h",
+    "fenv.h",
+    "float.h",
+    "inttypes.h",
+    "iso646.h",
+    "limits.h",
+    "locale.h",
+    "math.h",
+    "setjmp.h",
+    "signal.h",
+    "stdalign.h",
+    "stdarg.h",
+    "stdatomic.h",
+    "stdbool.h",
+    "stddef.h",
+    "stdint.h",
+    "stdio.h",
+    "stdlib.h",
+    "stdnoreturn.h",
+    "string.h",
+    "tgmath.h",
+    "threads.h",
+    "time.h",
+    "uchar.h",
+    "wchar.h",
+    "wctype.h",
+    "unistd.h",
+    "fcntl.h",
+    "pthread.h",
+    "dirent.h",
+    "dlfcn.h",
+    "strings.h",
+    "windows.h",
+];
+
+/// Whether an include that names no file names one of the project, by its
+/// form: quoted, and not a header of the system.
+fn is_internal(include: &Include) -> bool {
+    let path = include.path.as_str();
+    include.quoted && !SYSTEM.contains(&path) && !path.starts_with("sys/")
+}
 
 /// The includes of a source, outside comments, in order.
 pub fn includes(source: &str) -> Vec<Include> {
@@ -127,15 +179,25 @@ impl<'s> Files<'s> {
         self.by_path.get(normalize(path)?.as_path()).copied()
     }
 
-    /// The files `source` includes. `None` when it is neither C nor C++.
-    pub fn uses(&self, source: &Source) -> Option<BTreeMap<usize, BTreeSet<String>>> {
+    /// The files `source` includes, and the quoted includes that name no
+    /// file. `None` when it is neither C nor C++.
+    pub fn uses(&self, source: &Source) -> Option<Found> {
         if !is_c_family(&source.language) {
             return None;
         }
-        let headers = includes(&source.text)
-            .into_iter()
-            .filter_map(|include| self.resolve(&source.path, &include));
-        Some(headers.map(|file| (file, BTreeSet::new())).collect())
+        let mut found = Found::default();
+        for include in includes(&source.text) {
+            match self.resolve(&source.path, &include) {
+                Some(file) => {
+                    found.add(file, EdgeKind::Load);
+                }
+                None if is_internal(&include) => {
+                    found.unresolved.insert(include.path);
+                }
+                None => {}
+            }
+        }
+        Some(found)
     }
 
     /// The sources behind the headers `source` includes, given as the uses
