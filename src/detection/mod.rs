@@ -161,7 +161,7 @@ fn type_arguments_start(text: &str) -> Option<usize> {
 }
 
 /// Where the parenthesis that opens `text` closes.
-fn closing_paren(text: &str) -> Option<usize> {
+pub(crate) fn closing_paren(text: &str) -> Option<usize> {
     let mut depth = 0;
     for (i, ch) in text.char_indices() {
         match ch {

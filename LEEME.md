@@ -971,8 +971,12 @@ km smells [path]
 | `long_function` | El cuerpo de la función supera `--max-lines` (por defecto: 50) |
 | `long_params` | La función tiene más de `--max-params` parámetros (por defecto: 4) |
 | `todo_debt` | TODO, FIXME, HACK, XXX o BUG en líneas de comentario |
-| `magic_number` | Literales numéricos sueltos en el código (sin contar 0, 1, 2, -1 ni las declaraciones `const`/`let`) |
-| `commented_code` | Dos o más líneas de comentario consecutivas con patrones que parecen código |
+| `magic_number` | Literales numéricos sueltos en el código, salvo 0, 1, 2, -1 y los valores que ya tienen nombre |
+| `commented_code` | Dos o más líneas de comentario consecutivas con patrones que parecen código, fuera de la documentación |
+
+- **`long_params`** cuenta los parámetros de la lista que sigue al nombre de la función (no son esa lista el receptor de Go ni la llamada a la que se pasa una función), separados por sus comas de nivel superior: las comas dentro de argumentos de tipo (`Node<K, V>`), patrones (`%{...}`, `<<...>>`), literales y llamadas anidadas no separan nada.
+- **`magic_number`** deja fuera las declaraciones, con cualquier modificador antes de la palabra clave (`private static final`, `public const`), las asignaciones a nombres en mayúsculas (`MAX_RETRIES = 5`) y los datos que abre una declaración: los miembros de un `enum`, un bloque `const (...)` de Go, los elementos de una tabla, las alternativas de una unión `type`. Un literal que es el valor de una clave (`connect: 3`, `"MAX": 4093`) o el valor por defecto de un parámetro también tiene nombre. El cuerpo de una función declarada con una de esas palabras clave (`export function`, `static int f() {`) se sigue revisando.
+- **`commented_code`** deja fuera la documentación, donde el código es un ejemplo: las líneas `///` y `//!`, los bloques `/** */` y `/*! */` (JSDoc, Javadoc, doctests de Rust, documentación XML de C#) y un comentario de documentación de Go con un ejemplo indentado con tabulación justo encima de una declaración.
 
 Opciones:
 

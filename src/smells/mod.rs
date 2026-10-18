@@ -4,6 +4,9 @@
 //! TODO/FIXME debt, magic numbers, and commented-out code.
 
 mod analyzer;
+mod commented;
+mod magic;
+mod params;
 mod report;
 mod rules;
 
