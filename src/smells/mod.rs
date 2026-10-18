@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 
 use crate::cli::OutputMode;
 use crate::cycom::markers::markers_for;
-use crate::loc::language::{LanguageSpec, detect};
+use crate::loc::language::{LanguageSpec, detect_file};
 use crate::string_mask::code_view;
 use crate::util::read_and_classify;
 use crate::walk::WalkConfig;
@@ -71,7 +71,7 @@ pub fn run_on_files(
     let mut results: Vec<FileSmellMetrics> = Vec::new();
 
     for path in paths {
-        let spec = match detect(path) {
+        let spec = match detect_file(path) {
             Some(s) => s,
             None => continue,
         };

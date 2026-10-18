@@ -117,3 +117,39 @@ fn react_components_are_detected() {
     assert_eq!(detect(Path::new("App.jsx")).unwrap().name, "JSX");
     assert_eq!(detect(Path::new("App.tsx")).unwrap().name, "TypeScript");
 }
+
+#[test]
+fn new_languages_by_name_and_extension() {
+    let name = |p: &str| detect(Path::new(p)).map(|s| s.name);
+    assert_eq!(name("docs/index.rst"), Some("reStructuredText"));
+    assert_eq!(name("src/parser.y"), Some("yacc"));
+    assert_eq!(name("src/lexer.l"), Some("lex"));
+    assert_eq!(name("lib/web/page.html.eex"), Some("EEx"));
+    assert_eq!(name("CMakeLists.txt"), Some("CMake"));
+    assert_eq!(name("cmake/fmt.cmake"), Some("CMake"));
+    assert_eq!(name("src/builtin.jq"), Some("jq"));
+    assert_eq!(name("include/a.hh"), Some("C++"));
+    assert_eq!(name("notes.txt"), Some("Text"));
+}
+
+#[test]
+fn header_is_cpp_when_its_text_says_so() {
+    let dir = tempfile::tempdir().unwrap();
+    let cpp = dir.path().join("fmt.h");
+    std::fs::write(&cpp, "#pragma once\nnamespace fmt {\nint f();\n}\n").unwrap();
+    let c = dir.path().join("jv.h");
+    std::fs::write(
+        &c,
+        "#ifndef JV_H\n#ifdef __cplusplus\nextern \"C\" {\n#endif\nint jv(void);\n",
+    )
+    .unwrap();
+    assert_eq!(detect_file(&cpp).map(|s| s.name), Some("C++"));
+    assert_eq!(detect_file(&c).map(|s| s.name), Some("C"));
+    assert_eq!(detect(&cpp).map(|s| s.name), Some("C"));
+}
+
+#[test]
+fn restructured_text_is_prose() {
+    let spec = detect(Path::new("a.rst")).unwrap();
+    assert!(!spec.is_code());
+}

@@ -19,6 +19,8 @@
 /// - `nested: true` — enable nested block comment tracking
 /// - `sq: true` — treat single quotes as string delimiters
 /// - `tq: true` — enable triple-quote string support
+/// - `tqc: true` — count triple-quoted strings as comment (line-comment
+///   variant only)
 /// - `shebangs: [...]` — shebang interpreter names
 ///
 /// Every variant normalizes its comment syntax and forwards to the `@spec`
@@ -63,10 +65,12 @@ macro_rules! lang_spec {
      $(, nested: $nested:expr)?
      $(, sq: $sq:expr)?
      $(, tq: $tq:expr)?
+     $(, tqc: $tqc:expr)?
      $(, shebangs: [$($sh:expr),*])?
     ) => {
         lang_spec!(@spec $name, $ext, $files, &[$lc], None, None
-            $(, nested: $nested)? $(, sq: $sq)? $(, tq: $tq)? $(, shebangs: [$($sh),*])?)
+            $(, nested: $nested)? $(, sq: $sq)? $(, tq: $tq)?
+            $(, shebangs: [$($sh),*])? $(, tqc: $tqc)?)
     };
     // block + pragma (no line comment)
     (@build $name:expr, $ext:expr, $files:expr,
@@ -114,6 +118,7 @@ macro_rules! lang_spec {
      $(, sq: $sq:expr)?
      $(, tq: $tq:expr)?
      $(, shebangs: [$($sh:expr),*])?
+     $(, tqc: $tqc:expr)?
     ) => {
         LanguageSpec {
             name: $name,
@@ -125,6 +130,7 @@ macro_rules! lang_spec {
             nested_block_comments: false $(|| $nested)?,
             single_quote_strings: false $(|| $sq)?,
             triple_quote_strings: false $(|| $tq)?,
+            triple_quote_comments: false $(|| $tqc)?,
             raw_strings: false,
             pragma: $pragma,
             doc_attributes: &[],

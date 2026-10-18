@@ -1369,13 +1369,15 @@ All sections and fields are optional — omit any you don't need. A fully docume
 | Bourne Shell | `.sh` |
 | C | `.c`, `.h` |
 | C# | `.cs` |
-| C++ | `.cpp`, `.cxx`, `.cc`, `.hpp`, `.hxx` |
+| C++ | `.cpp`, `.cxx`, `.cc`, `.hpp`, `.hxx`, `.hh` |
 | Clojure | `.clj`, `.cljs`, `.cljc`, `.edn` |
+| CMake | `.cmake`, `CMakeLists.txt` |
 | CSS | `.css` |
 | Dart | `.dart` |
 | Dockerfile | `Dockerfile` |
 | DOS Batch | `.bat`, `.cmd` |
 | Elixir | `.ex` |
+| EEx | `.eex` |
 | Elixir Script | `.exs` |
 | Erlang | `.erl`, `.hrl` |
 | F# | `.fs`, `.fsi`, `.fsx` |
@@ -1384,13 +1386,16 @@ All sections and fields are optional — omit any you don't need. A fully docume
 | Groovy | `.groovy` |
 | Haskell | `.hs` |
 | HTML | `.html`, `.htm` |
+| HTML EEx | `.heex` |
 | Java | `.java` |
 | JavaScript | `.js`, `.mjs`, `.cjs` |
+| jq | `.jq` |
 | JSON | `.json` |
 | JSX | `.jsx` |
 | Julia | `.jl` |
 | Kaikai | `.kai` |
 | Kotlin | `.kt`, `.kts` |
+| lex | `.l`, `.lex` |
 | Lua | `.lua` |
 | Makefile | `.mk`, `Makefile`, `makefile`, `GNUmakefile` |
 | Markdown | `.md`, `.markdown` |
@@ -1402,6 +1407,7 @@ All sections and fields are optional — omit any you don't need. A fully docume
 | Properties | `.properties` |
 | Python | `.py`, `.pyi` |
 | R | `.r`, `.R` |
+| reStructuredText | `.rst`, `.rest` |
 | Ruby | `.rb`, `Rakefile`, `Gemfile` |
 | Rust | `.rs` |
 | Scala | `.scala`, `.sc`, `.sbt` |
@@ -1411,6 +1417,7 @@ All sections and fields are optional — omit any you don't need. A fully docume
 | Text | `.txt` |
 | TOML | `.toml` |
 | TypeScript | `.ts`, `.tsx`, `.mts`, `.cts` |
+| yacc | `.y`, `.yacc` |
 | XML | `.xml`, `.xsl`, `.xslt`, `.svg`, `.fsproj`, `.csproj`, `.vbproj`, `.vcxproj`, `.sln`, `.plist`, `.xaml` |
 | YAML | `.yaml`, `.yml` |
 | Zig | `.zig` |
@@ -1426,8 +1433,19 @@ All sections and fields are optional — omit any you don't need. A fully docume
   `~S"""` and `~s"""` sigils) count as comments, as cloc counts them, and are
   excluded from the complexity, Halstead, and smell analyses. A one-line
   `@doc "..."` and any other heredoc count as code.
-- **Interior lines of multi-line strings** (Kaikai and Python triple-quoted
-  literals, Elixir heredocs) count as code for `km loc`, but are excluded from
+- **Python** — a triple-quoted string, a docstring above all, counts as comment,
+  as cloc counts it: its lines are comment unless code shares them
+  (`SQL = """` is code, the lines after it are comment).
+- **C and C++ headers** — a `.h` is C++ when its text says so (a line opening
+  with `namespace`, `template`, `class`, an access specifier, `using`,
+  `constexpr`, or any `std::`), and C otherwise. cloc reports every header as
+  `C/C++ Header`; kimun keeps them with the language that analyzes them.
+- **reStructuredText** — a line opening with `..` (a directive or a comment)
+  counts as comment; cloc also counts as comment the lines indented under it.
+- **HTML EEx** — `<%!-- --%>` and lines opening with `<% #` are comments, as
+  cloc counts them. **EEx** — `<%# %>` is a comment.
+- **Interior lines of multi-line strings** (Kaikai triple-quoted literals,
+  Elixir heredocs) count as code for `km loc`, but are excluded from
   cyclomatic, cognitive, Halstead, and smell analyses: prose and embedded data
   are not control flow.
 - **Rust raw strings** (`r"..."`, `r#"..."#` and the forms with more `#`, with a

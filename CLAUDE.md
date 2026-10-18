@@ -26,7 +26,7 @@ CLI tool for code metrics: lines of code (like `cloc`), duplicate detection, Hal
 
 - **`language.rs`** — `LanguageSpec` struct + `lang!` macro defining 40+ languages. Detection by filename, extension, or shebang. Each spec declares: line comment markers, block comment delimiters, nesting support, string delimiter rules, pragma syntax, and exception characters for comment detection.
 
-- **`counter.rs`** — FSM with states `Normal`, `InString(StringKind)`, `InBlockComment(depth)`, `InDocAttribute(Option<StringKind>)`. Processes files line-by-line via `BufReader`, classifying each line as blank/comment/code. Mixed lines (code + comment) count as code. Key design decisions:
+- **`counter.rs`** — FSM with states `Normal`, `InString(StringKind)`, `InBlockComment(depth)`, `InDocAttribute(Option<StringKind>)`, `InDocString(StringKind)`. Processes files line-by-line via `BufReader`, classifying each line as blank/comment/code. Mixed lines (code + comment) count as code. Key design decisions:
   - Only `"` triggers string mode (not `'`) unless `single_quote_strings` is set — avoids Rust lifetime false positives
   - `InString` resets at line end for single/double quotes but persists for triple-quotes (Python) and raw strings
   - `raw_strings` (Rust): `r"…"`, `r#"…"#`, with a `b` or `c` prefix too, end at a quote followed by as many `#` as opened them (`raw.rs`). `raw_string_spans` tells where they are on each line
@@ -35,6 +35,8 @@ CLI tool for code metrics: lines of code (like `cloc`), duplicate detection, Hal
   - Shebang lines (`#!`) are always counted as code
   - `line_comment_not_before` field prevents `-->` from matching `--` in Haskell, and `#[` from matching `#` in Kaikai
   - `doc_attribute` delimiters (Kaikai `#[doc(` … `)]`) classify the whole attribute as comment; the state tracks the enclosed string literal so a `)]` inside the doc text does not close it early
+  - `triple_quote_comments` (Python, `tqc: true`): a triple-quoted string is `InDocString`, comment unless code shares its line, as cloc counts docstrings
+  - `detect_file` refines `detect` by content: a `.h` holding C++ (`namespace`, `template`, `class`, `std::`, ...) is C++
 
 - **`report.rs`** — Formats results as a table sorted by code lines descending, with totals.
 
@@ -42,7 +44,7 @@ CLI tool for code metrics: lines of code (like `cloc`), duplicate detection, Hal
 
 ### Shared: `src/walk.rs`
 
-`source_files` is every recognized file; with tests excluded it also leaves out `EXAMPLE_DIRS` (examples, benchmarks) and the Rust modules declared under `#[cfg(test)]` (`test_blocks::rust_test_modules`). `code_files` is what metrics of code read: no data or prose (`LanguageSpec::is_code`) and no generated files (`util::is_generated_file`, by name, header marker or source map). `collect_analysis`, `score`, `report`, `dups`, `init`, `hotspots` and `churn` use it; `loc` and `deps` read `source_files`; `tc` filters history paths with `is_code_path`.
+`source_files` is every recognized file (language by `detect_file`); with tests excluded it also leaves out `EXAMPLE_DIRS` (examples, benchmarks) and the Rust modules declared under `#[cfg(test)]` (`test_blocks::rust_test_modules`). `code_files` is what metrics of code read: no data or prose (`LanguageSpec::is_code`) and no generated files (`util::is_generated_file`, by name, header marker or source map). `collect_analysis`, `score`, `report`, `dups`, `init`, `hotspots` and `churn` use it; `loc` and `deps` read `source_files`; `tc` filters history paths with `is_code_path`.
 
 ### Adding a new language
 
@@ -53,7 +55,7 @@ lang!("LangName", ext: ["ext1", "ext2"],
       shebangs: ["interpreter"]),
 ```
 
-Optional flags: `nested: true`, `sq: true` (single-quote strings), `tq: true` (triple-quote strings), `pragma: "{-#", "#-}"`. Use `lines: ["marker1", "marker2"]` for multiple line comment markers. For languages needing `line_comment_not_before`, `doc_attribute` or `raw_strings`, write the `LanguageSpec` struct directly (see Rust, Haskell and Kaikai).
+Optional flags: `nested: true`, `sq: true` (single-quote strings), `tq: true` (triple-quote strings), `tqc: true` (triple-quoted strings count as comment, line-comment variant), `pragma: "{-#", "#-}"`. Use `lines: ["marker1", "marker2"]` for multiple line comment markers. For languages needing `line_comment_not_before`, `doc_attribute` or `raw_strings`, write the `LanguageSpec` struct directly (see Rust, Haskell and Kaikai).
 
 ## Conventions
 
