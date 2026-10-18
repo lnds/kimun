@@ -268,6 +268,7 @@ impl FileGraph {
                     .collect(),
             );
         }
+        graph.ambiguous += apart.ambiguous();
         graph.implied = apart.implied(sources, &graph.uses);
         graph.modules = modules;
         graph

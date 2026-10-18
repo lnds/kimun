@@ -439,7 +439,7 @@ fn what_each_file_is_to_the_radius() {
     for measured in ["config/a.exs", "web/a.js", "src/a.kai"] {
         assert!(is_measured(Path::new(measured)), "{measured}");
     }
-    assert!(!is_measured(Path::new("app/a.rb")));
+    assert!(is_measured(Path::new("app/a.rb")));
     assert!(!is_measured(Path::new("README.md")));
 }
 
