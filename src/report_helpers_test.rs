@@ -73,3 +73,11 @@ fn rows_at_least_above_max_keeps_nothing() {
     let rows = [Row("trivial", 0), Row("nasty", 23)];
     assert!(rows_at_least(&rows, 24).is_empty());
 }
+
+#[test]
+fn weighted_mi_weighs_by_lines_and_floors_at_zero() {
+    // 900 lines at 80 and 100 lines at -200 (taken as 0): 72.
+    let mi = weighted_mi([(80.0, 900), (-200.0, 100)].into_iter());
+    assert!((mi - 72.0).abs() < 1e-9);
+    assert_eq!(weighted_mi(std::iter::empty()), 0.0);
+}

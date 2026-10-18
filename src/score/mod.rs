@@ -23,6 +23,7 @@ mod collector;
 pub(crate) mod diff;
 /// Table and JSON formatters for score diff output.
 mod diff_report;
+pub(crate) mod experimental;
 /// Piecewise linear normalization curves mapping raw metrics to 0–100.
 mod normalize;
 /// Table and JSON output formatters for the score report.
@@ -65,6 +66,9 @@ pub enum ScoringModel {
     Cognitive035,
     /// Legacy model (v0.13): MI + cyclomatic, 6 dimensions.
     Legacy,
+    /// Experimental: the cognitive model with the Maintainability Index
+    /// (Visual Studio variant) in place of Halstead Effort (`--experimental`).
+    ExperimentalMi,
 }
 
 impl ScoringModel {
@@ -86,7 +90,7 @@ impl ScoringModel {
     pub fn cognitive_weights(&self) -> &'static scoring::CognitiveWeights {
         match self {
             Self::Cognitive035 => &scoring::COGNITIVE_0_35,
-            Self::Cognitive | Self::Legacy => &scoring::COGNITIVE,
+            Self::Cognitive | Self::Legacy | Self::ExperimentalMi => &scoring::COGNITIVE,
         }
     }
 }
@@ -237,8 +241,8 @@ pub(crate) fn compute_score(
 }
 
 /// A `ProjectScore` plus the per-file and duplication data the gates compare.
-struct Snapshot {
-    score: ProjectScore,
+pub(crate) struct Snapshot {
+    pub(crate) score: ProjectScore,
     files: Vec<FileScore>,
     duplicated_lines: usize,
 }
@@ -256,12 +260,15 @@ impl Snapshot {
     }
 }
 
-fn compute_snapshot(
-    cfg: &WalkConfig<'_>,
-    bottom: usize,
-    min_lines: usize,
-    model: &ScoringModel,
-) -> Result<Snapshot, Box<dyn Error>> {
+/// The metrics of every scored file, and the duplication among them.
+pub(crate) struct Measured {
+    file_metrics: Vec<FileMetrics>,
+    dup_percent: f64,
+    duplicated_lines: usize,
+}
+
+/// Walk the code files and measure what `model` scores, duplication included.
+pub(crate) fn measure(cfg: &WalkConfig<'_>, min_lines: usize, model: &ScoringModel) -> Measured {
     let exclude_tests = cfg.exclude_tests();
     let mut file_metrics: Vec<FileMetrics> = Vec::new();
     let mut dup_files: Vec<dups::detector::NormalizedFile> = Vec::new();
@@ -275,7 +282,6 @@ fn compute_snapshot(
         }
     }
 
-    // Duplication (project-level)
     let dup_groups = if dup_files.is_empty() {
         Vec::new()
     } else {
@@ -287,45 +293,53 @@ fn compute_snapshot(
     } else {
         duplicated_lines as f64 / total_code_lines as f64 * 100.0
     };
-
-    let total_loc: usize = file_metrics.iter().map(|f| f.code_lines).sum();
-    let files_analyzed = file_metrics.len();
-
-    if files_analyzed == 0 {
-        let dimensions = build_empty_dimensions(model);
-        return Ok(Snapshot {
-            score: ProjectScore {
-                score: 0.0,
-                grade: score_to_grade(0.0),
-                files_analyzed: 0,
-                total_loc: 0,
-                dimensions,
-                needs_attention: vec![],
-            },
-            files: vec![],
-            duplicated_lines,
-        });
+    Measured {
+        file_metrics,
+        dup_percent,
+        duplicated_lines,
     }
+}
 
-    let dimensions = build_dimensions(&file_metrics, total_loc, dup_percent, model);
-    let project_score = compute_project_score(&dimensions);
+/// Score what was measured with `model`, keeping the `bottom` worst files.
+pub(crate) fn snapshot_of(measured: &Measured, bottom: usize, model: &ScoringModel) -> Snapshot {
+    let file_metrics = &measured.file_metrics;
+    let total_loc: usize = file_metrics.iter().map(|f| f.code_lines).sum();
+    let dimensions = if file_metrics.is_empty() {
+        build_empty_dimensions(model)
+    } else {
+        build_dimensions(file_metrics, total_loc, measured.dup_percent, model)
+    };
+    let project_score = if file_metrics.is_empty() {
+        0.0
+    } else {
+        compute_project_score(&dimensions)
+    };
     let mut file_scores: Vec<FileScore> =
         file_metrics.iter().map(|f| score_file(f, model)).collect();
     file_scores.sort_by(|a, b| a.score.total_cmp(&b.score));
     let needs_attention = file_scores.iter().take(bottom).cloned().collect();
 
-    Ok(Snapshot {
+    Snapshot {
         score: ProjectScore {
             score: project_score,
             grade: score_to_grade(project_score),
-            files_analyzed,
+            files_analyzed: file_metrics.len(),
             total_loc,
             dimensions,
             needs_attention,
         },
         files: file_scores,
-        duplicated_lines,
-    })
+        duplicated_lines: measured.duplicated_lines,
+    }
+}
+
+fn compute_snapshot(
+    cfg: &WalkConfig<'_>,
+    bottom: usize,
+    min_lines: usize,
+    model: &ScoringModel,
+) -> Result<Snapshot, Box<dyn Error>> {
+    Ok(snapshot_of(&measure(cfg, min_lines, model), bottom, model))
 }
 
 #[cfg(test)]

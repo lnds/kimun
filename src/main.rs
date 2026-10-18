@@ -205,20 +205,26 @@ fn dispatch_smells(
     });
 }
 
+/// The scoring model `km score` was asked for.
+struct ScoreModel {
+    model: Option<String>,
+    experimental: bool,
+}
+
 /// Dispatch `score` (no subcommand). Parses `--fail-below` early so errors
 /// surface before analysis runs, then delegates to `run_diff` or `run`.
 fn dispatch_score(
     common: cli::CommonArgs,
     bottom: usize,
     min_lines: Option<usize>,
-    model: Option<String>,
+    choice: ScoreModel,
     trend: Option<String>,
     mut gate: score::ScoreGate,
     fail_below: Option<String>,
 ) {
     let kcfg = config::KimunConfig::load();
     let min_lines = kcfg.dups.resolve_min_lines(min_lines);
-    let model = kcfg.score.resolve_model(model);
+    let model = kcfg.score.resolve_model(choice.model);
     let fail_below = kcfg.score.resolve_fail_below(fail_below);
     gate.fail_below = match fail_below {
         Some(ref s) => match score::analyzer::Grade::parse(s) {
@@ -231,7 +237,9 @@ fn dispatch_score(
         None => None,
     };
     dispatch!(common, |cfg, output| {
-        if let Some(ref git_ref) = trend {
+        if choice.experimental {
+            score::experimental::run(&cfg, output, bottom, min_lines)
+        } else if let Some(ref git_ref) = trend {
             score::run_diff(&cfg, git_ref, output, bottom, min_lines, &model, gate)
         } else {
             score::run(&cfg, output, bottom, min_lines, &model)
@@ -514,6 +522,7 @@ fn main() {
             bottom,
             min_lines,
             model,
+            experimental,
             trend,
             fail_if_worse,
             gate_tolerance,
@@ -523,7 +532,10 @@ fn main() {
             common,
             bottom,
             min_lines,
-            model,
+            ScoreModel {
+                model,
+                experimental,
+            },
             trend,
             score::ScoreGate {
                 max_drop: fail_if_worse

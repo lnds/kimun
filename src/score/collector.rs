@@ -25,6 +25,8 @@ pub struct FileMetrics {
     pub max_cognitive: Option<usize>,
     // Legacy model (v0.13: MI + Cyclomatic)
     pub mi_score: Option<f64>,
+    // Experimental model: Maintainability Index, Visual Studio variant
+    pub mi_vs: Option<f64>,
     pub max_complexity: Option<usize>,
     // Shared dimensions
     pub indent_stddev: Option<f64>,
@@ -64,8 +66,20 @@ pub fn analyze_single_file(
     let hal_metrics = hal::analyze_content(&lines, &kinds, spec);
     let halstead_effort = hal_metrics.as_ref().map(|h| h.effort);
 
+    let mi_vs = (*model == ScoringModel::ExperimentalMi)
+        .then(|| {
+            vs_maintainability(
+                &lines,
+                &kinds,
+                spec,
+                hal_metrics.as_ref().map(|h| h.volume),
+                code_lines,
+            )
+        })
+        .flatten();
+
     let (max_cognitive, mi_score, max_complexity) = match model {
-        ScoringModel::Cognitive | ScoringModel::Cognitive035 => {
+        ScoringModel::Cognitive | ScoringModel::Cognitive035 | ScoringModel::ExperimentalMi => {
             let cogcom_result = cogcom::analyze_content(&lines, &kinds, spec);
             let max_cog = cogcom_result.as_ref().map(|c| c.max_complexity);
             (max_cog, None, None)
@@ -91,8 +105,8 @@ pub fn analyze_single_file(
     // Files without the primary complexity dimension (e.g. Markdown, TOML)
     // are excluded even if they have Halstead data.
     let has_model_metric = match model {
-        ScoringModel::Cognitive | ScoringModel::Cognitive035 => max_cognitive.is_some(),
         ScoringModel::Legacy => mi_score.is_some() || max_complexity.is_some(),
+        _ => max_cognitive.is_some(),
     };
     if !has_model_metric {
         return None;
@@ -107,6 +121,7 @@ pub fn analyze_single_file(
             code_lines,
             max_cognitive,
             mi_score,
+            mi_vs,
             max_complexity,
             indent_stddev,
             halstead_effort,
@@ -117,4 +132,18 @@ pub fn analyze_single_file(
         },
         normalized_count,
     })
+}
+
+/// The Maintainability Index of a file, Visual Studio variant (0–100), from
+/// its Halstead volume and total cyclomatic complexity.
+fn vs_maintainability(
+    lines: &[String],
+    kinds: &[LineKind],
+    spec: &crate::loc::language::LanguageSpec,
+    volume: Option<f64>,
+    code_lines: usize,
+) -> Option<f64> {
+    let volume = volume?;
+    let complexity = cycom::analyze_content(lines, kinds, spec).map_or(1, |c| c.total_complexity);
+    crate::mi::analyzer::compute_mi(volume, complexity, code_lines).map(|m| m.mi_score)
 }

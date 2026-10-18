@@ -17,8 +17,9 @@ pub struct FileMIMetrics {
     pub metrics: MIMetrics,
 }
 
-/// Print a table of per-file MI metrics with a totals row showing
-/// average MI and total LOC across all analyzed files.
+/// Print a table of per-file MI metrics with a totals row showing total
+/// LOC and the MI of the files weighted by their code lines
+/// (`report_helpers::weighted_mi`).
 pub fn print_report(files: &[FileMIMetrics]) {
     if files.is_empty() {
         println!("No recognized source files found.");
@@ -65,7 +66,8 @@ pub fn print_report(files: &[FileMIMetrics]) {
     println!("{separator}");
 
     let count = files.len();
-    let avg_mi: f64 = files.iter().map(|f| f.metrics.mi_score).sum::<f64>() / count as f64;
+    let avg_mi =
+        report_helpers::weighted_mi(files.iter().map(|f| (f.metrics.mi_score, f.metrics.loc)));
     let total_loc: usize = files.iter().map(|f| f.metrics.loc).sum();
     let total_label = format!(" Total ({count} files)");
     println!(
@@ -125,11 +127,8 @@ pub fn print_json(files: &[FileMIMetrics]) -> Result<(), Box<dyn std::error::Err
 /// Print MIv as a single compact line.
 pub fn print_short(files: &[FileMIMetrics]) {
     let count = files.len();
-    let avg_mi = if count > 0 {
-        files.iter().map(|f| f.metrics.mi_score).sum::<f64>() / count as f64
-    } else {
-        0.0
-    };
+    let avg_mi =
+        report_helpers::weighted_mi(files.iter().map(|f| (f.metrics.mi_score, f.metrics.loc)));
     let good = files
         .iter()
         .filter(|f| f.metrics.level == MILevel::Good)
@@ -145,14 +144,10 @@ pub fn print_short(files: &[FileMIMetrics]) {
     println!("miv files:{count} avg:{avg_mi:.1} good:{good} mod:{moderate} diff:{difficult}");
 }
 
-/// Print only the average MI.
+/// Print only the MI of the files, weighted by their code lines.
 pub fn print_terse(files: &[FileMIMetrics]) {
-    let count = files.len();
-    let avg_mi = if count > 0 {
-        files.iter().map(|f| f.metrics.mi_score).sum::<f64>() / count as f64
-    } else {
-        0.0
-    };
+    let avg_mi =
+        report_helpers::weighted_mi(files.iter().map(|f| (f.metrics.mi_score, f.metrics.loc)));
     println!("{avg_mi:.1}");
 }
 

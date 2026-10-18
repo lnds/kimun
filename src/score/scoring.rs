@@ -15,7 +15,7 @@ use super::analyzer::{DimensionScore, FileScore, score_to_grade};
 use super::collector::FileMetrics;
 use super::normalize::{
     normalize_cognitive, normalize_complexity, normalize_duplication, normalize_file_size,
-    normalize_halstead, normalize_indent, normalize_mi,
+    normalize_halstead, normalize_indent, normalize_mi, normalize_mi_vs,
 };
 
 // ─── Cognitive model weights ─────────────────────────────────────────
@@ -90,12 +90,9 @@ pub fn build_dimensions(
     model: &ScoringModel,
 ) -> Vec<DimensionScore> {
     match model {
-        ScoringModel::Cognitive | ScoringModel::Cognitive035 => build_cognitive_dimensions(
-            file_metrics,
-            total_loc,
-            dup_percent,
-            model.cognitive_weights(),
-        ),
+        ScoringModel::Cognitive | ScoringModel::Cognitive035 | ScoringModel::ExperimentalMi => {
+            build_cognitive_dimensions(file_metrics, total_loc, dup_percent, model)
+        }
         ScoringModel::Legacy => build_legacy_dimensions(file_metrics, total_loc, dup_percent),
     }
 }
@@ -108,8 +105,8 @@ pub fn build_empty_dimensions(model: &ScoringModel) -> Vec<DimensionScore> {
 /// Score a single file using the active scoring model.
 pub fn score_file(f: &FileMetrics, model: &ScoringModel) -> FileScore {
     match model {
-        ScoringModel::Cognitive | ScoringModel::Cognitive035 => {
-            score_file_cognitive(f, model.cognitive_weights())
+        ScoringModel::Cognitive | ScoringModel::Cognitive035 | ScoringModel::ExperimentalMi => {
+            score_file_cognitive(f, model)
         }
         ScoringModel::Legacy => score_file_legacy(f),
     }
@@ -117,23 +114,58 @@ pub fn score_file(f: &FileMetrics, model: &ScoringModel) -> FileScore {
 
 // ─── Cognitive model (v0.14+) ────────────────────────────────────────
 
+/// What measures the effort of reading a file in a cognitive model:
+/// Halstead Effort, or in the experimental model the Maintainability Index
+/// (Visual Studio variant), which weighs Halstead volume, cyclomatic
+/// complexity and size together.
+#[derive(Clone, Copy)]
+enum Effort {
+    Halstead,
+    MaintainabilityIndex,
+}
+
+impl Effort {
+    fn of(model: &ScoringModel) -> Self {
+        match model {
+            ScoringModel::ExperimentalMi => Self::MaintainabilityIndex,
+            _ => Self::Halstead,
+        }
+    }
+
+    fn name(self) -> &'static str {
+        match self {
+            Self::Halstead => "Halstead Effort",
+            Self::MaintainabilityIndex => "Maintainability Index",
+        }
+    }
+
+    /// The file's score on this dimension, 0–100.
+    fn score(self, f: &FileMetrics) -> Option<f64> {
+        match self {
+            Self::Halstead => f
+                .halstead_effort
+                .map(|e| normalize_halstead(e, f.code_lines)),
+            Self::MaintainabilityIndex => f.mi_vs.map(normalize_mi_vs),
+        }
+    }
+}
+
 /// Build the five cognitive-model dimension scores from per-file metrics.
 fn build_cognitive_dimensions(
     file_metrics: &[FileMetrics],
     total_loc: usize,
     dup_percent: f64,
-    w: &CognitiveWeights,
+    model: &ScoringModel,
 ) -> Vec<DimensionScore> {
+    let w = model.cognitive_weights();
+    let effort = Effort::of(model);
     let cogcom_dim = weighted_mean(file_metrics, total_loc, |f| {
         f.max_cognitive.map(normalize_cognitive)
     });
     let indent_dim = weighted_mean(file_metrics, total_loc, |f| {
         f.indent_stddev.map(normalize_indent)
     });
-    let hal_dim = weighted_mean(file_metrics, total_loc, |f| {
-        f.halstead_effort
-            .map(|e| normalize_halstead(e, f.code_lines))
-    });
+    let hal_dim = weighted_mean(file_metrics, total_loc, |f| effort.score(f));
     let size_dim = weighted_mean(file_metrics, total_loc, |f| {
         Some(normalize_file_size(f.code_lines))
     });
@@ -150,7 +182,7 @@ fn build_cognitive_dimensions(
         dim("Cognitive Complexity", w.cogcom, cogcom_dim),
         dim("Duplication", w.dup, dup_dim),
         dim("Indentation Complexity", w.indent, indent_dim),
-        dim("Halstead Effort", w.hal, hal_dim),
+        dim(effort.name(), w.hal, hal_dim),
         dim("File Size", w.size, size_dim),
     ]
 }
@@ -159,7 +191,8 @@ fn build_cognitive_dimensions(
 /// Excludes duplication (project-level only). The weighted sum uses absolute
 /// dimension weights divided by the per-file weight sum, so the result is
 /// renormalized to 0–100 but not directly comparable to the project score.
-fn score_file_cognitive(f: &FileMetrics, w: &CognitiveWeights) -> FileScore {
+fn score_file_cognitive(f: &FileMetrics, model: &ScoringModel) -> FileScore {
+    let w = model.cognitive_weights();
     let mut issues: Vec<String> = Vec::new();
 
     let cogcom_s = score_dim(
@@ -174,12 +207,20 @@ fn score_file_cognitive(f: &FileMetrics, w: &CognitiveWeights) -> FileScore {
         |v| format!("Indent: {v:.1}"),
         &mut issues,
     );
-    let hal_s = score_dim(
-        f.halstead_effort,
-        |e| normalize_halstead(e, f.code_lines),
-        |v| format!("Effort: {v:.0}"),
-        &mut issues,
-    );
+    let hal_s = match Effort::of(model) {
+        Effort::Halstead => score_dim(
+            f.halstead_effort,
+            |e| normalize_halstead(e, f.code_lines),
+            |v| format!("Effort: {v:.0}"),
+            &mut issues,
+        ),
+        Effort::MaintainabilityIndex => score_dim(
+            f.mi_vs,
+            normalize_mi_vs,
+            |v| format!("MI: {v:.0}"),
+            &mut issues,
+        ),
+    };
 
     let size_s = normalize_file_size(f.code_lines);
     if f.code_lines > 1000 {
