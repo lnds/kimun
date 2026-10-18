@@ -237,3 +237,40 @@ fn real(n: u32) -> u32 {
         .collect();
     assert_eq!(found, [("text", 1), ("json", 1), ("real", 2)]);
 }
+
+#[test]
+fn case_insensitive_languages_count_keywords_in_any_case_and_keep_names() {
+    use crate::loc::language::detect;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("u.pas");
+    fs::write(
+        &path,
+        "unit U;\ninterface\nimplementation\nprocedure TCounter.Bump(X: Integer);\nBEGIN\n  IF X > 0 THEN Inc(X)\n  ELSE If X < -1 Then Dec(X);\n  While X > 9 do X := X Div 2;\nEND;\nend.\n",
+    )
+    .unwrap();
+    let metrics = analyze_file(&path, detect(&path).unwrap(), false)
+        .unwrap()
+        .unwrap();
+    assert_eq!(metrics.functions.len(), 1);
+    assert_eq!(metrics.functions[0].name, "TCounter.Bump");
+    // if, else if, while
+    assert_eq!(metrics.functions[0].complexity, 4);
+}
+
+#[test]
+fn fortran_ends_of_constructs_are_no_branches() {
+    use crate::loc::language::detect;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("s.f90");
+    fs::write(
+        &path,
+        "SUBROUTINE Walk(N)\n  IF (N > 0 .AND. N < 9) THEN\n    CALL Walk(N - 1)\n  END IF\n  DO I = 1, N\n  END DO\n  SELECT CASE (N)\n  CASE (1)\n  END SELECT\nEND SUBROUTINE Walk\n",
+    )
+    .unwrap();
+    let metrics = analyze_file(&path, detect(&path).unwrap(), false)
+        .unwrap()
+        .unwrap();
+    assert_eq!(metrics.functions[0].name, "Walk");
+    // if, .and., do, select case, case
+    assert_eq!(metrics.functions[0].complexity, 6);
+}

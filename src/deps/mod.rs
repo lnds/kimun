@@ -32,6 +32,7 @@ use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
+use crate::util::read_lossy;
 use crate::walk::{self, WalkConfig};
 
 use analyzer::{DepEntry, DepResult, UnsupportedLanguage, build_graph};
@@ -89,7 +90,7 @@ fn analyze(cfg: &WalkConfig<'_>) -> DepResult {
         .map(|(rel_path, language)| Source {
             path: rel_path.clone(),
             language: language.clone(),
-            text: std::fs::read_to_string(cfg.path.join(rel_path)).unwrap_or_default(),
+            text: read_lossy(&cfg.path.join(rel_path)).unwrap_or_default(),
             templates: Vec::new(),
         })
         .collect();

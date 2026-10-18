@@ -9,6 +9,9 @@
 use super::language::LanguageSpec;
 use super::raw;
 
+/// The opening and closing delimiters of a block comment.
+pub(super) type Block = (&'static str, &'static str);
+
 /// The kind of string literal currently being parsed.
 #[derive(Debug, PartialEq)]
 pub(super) enum StringKind {
@@ -26,7 +29,8 @@ pub(super) enum StringKind {
 pub(super) enum State {
     Normal,
     InString(StringKind),
-    InBlockComment(usize), // nesting depth
+    /// Inside a block comment, with its delimiters and nesting depth.
+    InBlockComment(Block, usize),
     /// Inside a documentation attribute (Kaikai `#[doc( … )]`), with the
     /// delimiter that closes it. The payload also tracks the string literal
     /// being read, so that the closing `)]` is only recognised outside a
@@ -139,10 +143,12 @@ pub(super) fn step_normal(
     }
 
     // Block comment open
-    if let Some((open, _)) = spec.block_comment
-        && bytes_start_with(rest, open)
-    {
-        return StepResult::comment(open.len(), Some(State::InBlockComment(1)));
+    let mut blocks = spec
+        .block_comment
+        .into_iter()
+        .chain(spec.other_block_comment);
+    if let Some(block) = blocks.find(|(open, _)| bytes_start_with(rest, open)) {
+        return StepResult::comment(block.0.len(), Some(State::InBlockComment(block, 1)));
     }
 
     // Line comment
@@ -156,7 +162,7 @@ pub(super) fn step_normal(
         {
             return false;
         }
-        true
+        !is_directive(&rest[lc.len()..], spec)
     });
     if is_line_comment {
         return StepResult::line_comment();
@@ -168,6 +174,24 @@ pub(super) fn step_normal(
         has_code: !rest[0].is_ascii_whitespace(),
         has_comment: false,
         break_line: false,
+    }
+}
+
+/// Whether what follows a comment marker makes a directive of it.
+pub(super) fn is_directive(rest: &[u8], spec: &LanguageSpec) -> bool {
+    spec.directives.iter().any(|d| {
+        rest.get(..d.len())
+            .is_some_and(|start| start.eq_ignore_ascii_case(d.as_bytes()))
+    })
+}
+
+/// Whether the first column makes a comment of the whole line.
+pub(super) fn is_column_one_comment(line: &str, spec: &LanguageSpec) -> bool {
+    match line.as_bytes() {
+        [first, rest @ ..] => {
+            spec.column_one_comments.as_bytes().contains(first) && !is_directive(rest, spec)
+        }
+        [] => false,
     }
 }
 
@@ -210,20 +234,20 @@ fn literal_open(bytes: &[u8], pos: usize, spec: &LanguageSpec) -> Option<(usize,
 /// literal closes here. Escapes are only honoured in single-byte-delimited
 /// strings; a triple-quoted body ends at its delimiter, and a raw string at
 /// a quote followed by the `#` that opened it.
-fn string_scan(rest: &[u8], kind: &StringKind) -> (usize, bool) {
+fn string_scan(rest: &[u8], kind: &StringKind, spec: &LanguageSpec) -> (usize, bool) {
     match kind {
         StringKind::Raw(hashes) => raw::scan(rest, *hashes),
-        _ => quoted_scan(rest, kind),
+        _ => quoted_scan(rest, kind, spec.backslash_escapes),
     }
 }
 
 /// `string_scan` inside a string that ends at its delimiter.
-fn quoted_scan(rest: &[u8], kind: &StringKind) -> (usize, bool) {
+fn quoted_scan(rest: &[u8], kind: &StringKind, escapes: bool) -> (usize, bool) {
     let delim = string_delimiter(kind);
     if rest.starts_with(delim) {
         return (delim.len(), true);
     }
-    if delim.len() == 1 && rest[0] == b'\\' {
+    if escapes && delim.len() == 1 && rest[0] == b'\\' {
         return (rest.len().min(2), false);
     }
     (1, false)
@@ -231,8 +255,8 @@ fn quoted_scan(rest: &[u8], kind: &StringKind) -> (usize, bool) {
 
 /// Process one byte inside a string literal. All content inside strings is
 /// classified as code.
-pub(super) fn step_in_string(rest: &[u8], kind: &StringKind) -> StepResult {
-    let (advance, closed) = string_scan(rest, kind);
+pub(super) fn step_in_string(rest: &[u8], kind: &StringKind, spec: &LanguageSpec) -> StepResult {
+    let (advance, closed) = string_scan(rest, kind, spec);
     StepResult::code(advance, closed.then_some(State::Normal))
 }
 
@@ -247,7 +271,7 @@ pub(super) fn step_in_doc_attribute(
     inner: &Option<StringKind>,
 ) -> StepResult {
     if let Some(kind) = inner {
-        let (advance, closed) = string_scan(rest, kind);
+        let (advance, closed) = string_scan(rest, kind, spec);
         return StepResult::comment(
             advance,
             closed.then_some(State::InDocAttribute(close, None)),
@@ -269,22 +293,23 @@ pub(super) fn step_in_doc_attribute(
 /// Process one byte inside a block comment. Tracks nesting depth when
 /// `nested_block_comments` is enabled (Rust, Haskell). Checks for nested
 /// open before close to correctly handle `/* /* */ */` patterns.
-pub(super) fn step_in_block_comment(rest: &[u8], spec: &LanguageSpec, depth: usize) -> StepResult {
+pub(super) fn step_in_block_comment(
+    rest: &[u8],
+    spec: &LanguageSpec,
+    block: Block,
+    depth: usize,
+) -> StepResult {
+    let (open, close) = block;
     // Check for nested open (before checking close)
-    if spec.nested_block_comments
-        && let Some((open, _)) = spec.block_comment
-        && bytes_start_with(rest, open)
-    {
-        return StepResult::comment(open.len(), Some(State::InBlockComment(depth + 1)));
+    if spec.nested_block_comments && bytes_start_with(rest, open) {
+        return StepResult::comment(open.len(), Some(State::InBlockComment(block, depth + 1)));
     }
 
-    if let Some((_, close)) = spec.block_comment
-        && bytes_start_with(rest, close)
-    {
+    if bytes_start_with(rest, close) {
         let new_state = if depth <= 1 {
             State::Normal
         } else {
-            State::InBlockComment(depth - 1)
+            State::InBlockComment(block, depth - 1)
         };
         return StepResult::comment(close.len(), Some(new_state));
     }

@@ -47,8 +47,57 @@ pub struct LanguageSpec {
     /// is documentation, so it is classified as comment even though it is
     /// written as a string literal.
     pub doc_attributes: &'static [(&'static str, &'static str)],
+    /// A second kind of block comment, which the first does not close:
+    /// Pascal's `(*` … `*)` besides `{` … `}`.
+    pub other_block_comment: Option<(&'static str, &'static str)>,
+    /// Characters that make a comment of the whole line when they stand in
+    /// its first column (Fortran's fixed form: `C`, `c`, `*`), unless a
+    /// directive follows.
+    pub column_one_comments: &'static str,
+    /// Whether keywords and names are the same whatever their case
+    /// (Fortran, Pascal). Analyzers read such code in lower case.
+    pub case_insensitive: bool,
+    /// Whether a backslash escapes the next character in a quoted string.
+    /// Not in Fortran nor Pascal, where `'\'` is a string of one character
+    /// and a quote is escaped by doubling it.
+    pub backslash_escapes: bool,
+    /// What makes a directive of a comment when it follows the comment
+    /// marker, in any case: Fortran's `!$omp`, `!$acc`, and `!$ ` for
+    /// conditional compilation. A directive is code.
+    pub directives: &'static [&'static str],
     /// Shebang interpreter names for extensionless script detection.
     pub shebangs: &'static [&'static str],
+}
+
+impl LanguageSpec {
+    /// A language without comments, whose strings are double-quoted and
+    /// escape with a backslash: the base the specs written by hand start
+    /// from.
+    pub const PLAIN: LanguageSpec = LanguageSpec {
+        name: "",
+        extensions: &[],
+        filenames: &[],
+        line_comments: &[],
+        line_comment_not_before: "",
+        block_comment: None,
+        nested_block_comments: false,
+        single_quote_strings: false,
+        triple_quote_strings: false,
+        raw_strings: false,
+        pragma: None,
+        doc_attributes: &[],
+        other_block_comment: None,
+        column_one_comments: "",
+        case_insensitive: false,
+        backslash_escapes: true,
+        directives: &[],
+        shebangs: &[],
+    };
+}
+
+/// Whether a language is one of the Fortrans, which cloc names by standard.
+pub fn is_fortran(language: &str) -> bool {
+    language.starts_with("Fortran")
 }
 
 /// The heredocs of `@moduledoc` and `@doc`, plain or as a sigil.
@@ -66,17 +115,25 @@ const ELIXIR_DOCS: &[(&str, &str)] = &[
 const ELIXIR_SCRIPT: LanguageSpec = LanguageSpec {
     name: "Elixir Script",
     extensions: &["exs"],
-    filenames: &[],
     line_comments: &["#"],
-    line_comment_not_before: "",
-    block_comment: None,
-    nested_block_comments: false,
     single_quote_strings: true,
     triple_quote_strings: true,
-    raw_strings: false,
-    pragma: None,
     doc_attributes: ELIXIR_DOCS,
-    shebangs: &[],
+    ..LanguageSpec::PLAIN
+};
+
+/// Fortran in free form, the base of every Fortran. OpenMP and OpenACC
+/// directives (`!$omp`, `!$acc`) and conditional compilation (`!$ `) are
+/// code.
+const FORTRAN_90: LanguageSpec = LanguageSpec {
+    name: "Fortran 90",
+    extensions: &["f90", "F90"],
+    line_comments: &["!"],
+    single_quote_strings: true,
+    case_insensitive: true,
+    backslash_escapes: false,
+    directives: &["$omp", "$acc", "$ "],
+    ..LanguageSpec::PLAIN
 };
 
 /// Return the static registry of all supported language specifications.
@@ -87,17 +144,11 @@ pub fn languages() -> &'static [LanguageSpec] {
         LanguageSpec {
             name: "Rust",
             extensions: &["rs"],
-            filenames: &[],
             line_comments: &["//"],
-            line_comment_not_before: "",
             block_comment: Some(("/*", "*/")),
             nested_block_comments: true,
-            single_quote_strings: false,
-            triple_quote_strings: false,
             raw_strings: true,
-            pragma: None,
-            doc_attributes: &[],
-            shebangs: &[],
+            ..LanguageSpec::PLAIN
         },
         lang_spec!("Python", ext: ["py", "pyi"],
               line: "#", sq: true, tq: true,
@@ -159,17 +210,12 @@ pub fn languages() -> &'static [LanguageSpec] {
         LanguageSpec {
             name: "Haskell",
             extensions: &["hs"],
-            filenames: &[],
             line_comments: &["--"],
             line_comment_not_before: "!#$%&*+./<=>?@\\^|~",
-            doc_attributes: &[],
             block_comment: Some(("{-", "-}")),
             nested_block_comments: true,
-            single_quote_strings: false,
-            triple_quote_strings: false,
-            raw_strings: false,
             pragma: Some(("{-#", "#-}")),
-            shebangs: &[],
+            ..LanguageSpec::PLAIN
         },
         lang_spec!("Lua", ext: ["lua"],
               line: "--", block: "--[[", "]]", sq: true,
@@ -207,17 +253,11 @@ pub fn languages() -> &'static [LanguageSpec] {
         LanguageSpec {
             name: "Kaikai",
             extensions: &["kai"],
-            filenames: &[],
             line_comments: &["#"],
             line_comment_not_before: "[",
-            block_comment: None,
-            nested_block_comments: false,
-            single_quote_strings: false,
             triple_quote_strings: true,
-            raw_strings: false,
-            pragma: None,
             doc_attributes: &[("#[doc(", ")]")],
-            shebangs: &[],
+            ..LanguageSpec::PLAIN
         },
         lang_spec!("Objective-C", ext: ["m", "mm"],
               line: "//", block: "/*", "*/"),
@@ -246,6 +286,45 @@ pub fn languages() -> &'static [LanguageSpec] {
               lines: ["::", "rem ", "REM ", "Rem "]),
         lang_spec!("Properties", ext: ["properties"],
               line: "#"),
+        // Fortran is defined manually: it ignores case, and its fixed form
+        // makes a comment of a line by the first column alone.
+        LanguageSpec {
+            name: "Fortran 77",
+            extensions: &["f", "F", "for", "FOR", "ftn", "FTN", "f77", "F77", "pfo"],
+            column_one_comments: "Cc*",
+            ..FORTRAN_90
+        },
+        FORTRAN_90,
+        LanguageSpec {
+            name: "Fortran 95",
+            extensions: &["f95", "F95"],
+            ..FORTRAN_90
+        },
+        LanguageSpec {
+            name: "Fortran 2003",
+            extensions: &["f03", "F03"],
+            ..FORTRAN_90
+        },
+        LanguageSpec {
+            name: "Fortran 2008",
+            extensions: &["f08", "F08"],
+            ..FORTRAN_90
+        },
+        // Pascal (Delphi, Free Pascal) is defined manually: it has two kinds
+        // of block comment, `{$…}` is a compiler directive, and it ignores
+        // case.
+        LanguageSpec {
+            name: "Pascal",
+            extensions: &["pas", "dpr", "dpk", "lpr", "pp", "pascal"],
+            line_comments: &["//"],
+            block_comment: Some(("{", "}")),
+            other_block_comment: Some(("(*", "*)")),
+            single_quote_strings: true,
+            pragma: Some(("{$", "}")),
+            case_insensitive: true,
+            backslash_escapes: false,
+            ..LanguageSpec::PLAIN
+        },
         lang_spec!("Text", ext: ["txt"],
               none),
     ];

@@ -63,6 +63,11 @@ pub enum FunctionSyntax {
     /// assigned to a name (`f = function`, `f = (x) => {`) and regular
     /// expression literals, whose braces are not blocks.
     Script,
+    /// Fortran program units, closed by `end` (`unit_bodies::fortran`).
+    Fortran,
+    /// Pascal routines, closed by the `end` of their block
+    /// (`unit_bodies::pascal`).
+    Pascal,
 }
 
 impl FunctionSyntax {
@@ -188,6 +193,11 @@ pub fn detect_function_bodies<'a>(
     code_lines: &[(usize, &'a str)],
     markers: &dyn FunctionDetectionMarkers,
 ) -> Vec<FunctionBody<'a>> {
+    match markers.function_syntax() {
+        FunctionSyntax::Fortran => return crate::unit_bodies::fortran(code_lines),
+        FunctionSyntax::Pascal => return crate::unit_bodies::pascal(code_lines),
+        _ => {}
+    }
     if markers.brace_scoped() {
         detect_brace_scoped(code_lines, markers)
     } else {

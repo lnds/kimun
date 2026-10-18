@@ -247,3 +247,40 @@ fn elixir_docs_and_heredocs_not_tokenized() {
     assert_eq!(bare.total_operands, with_docs.total_operands);
     assert_eq!(bare.distinct_operands, with_docs.distinct_operands);
 }
+
+#[test]
+fn case_insensitive_languages_are_tokenized_in_any_case() {
+    use crate::loc::language::detect;
+    let dir = tempfile::tempdir().unwrap();
+    let analyze = |name: &str, text: &str| {
+        let path = dir.path().join(name);
+        fs::write(&path, text).unwrap();
+        analyze_file(&path, detect(&path).unwrap(), false)
+            .unwrap()
+            .expect("Fortran has Halstead rules")
+            .metrics
+    };
+    let upper = analyze("a.f90", "IF (X .GT. 0 .AND. Y) THEN\n  CALL F(X)\nEND IF\n");
+    let lower = analyze("b.f90", "if (x .gt. 0 .and. y) then\n  call f(x)\nend if\n");
+    assert_eq!(upper.distinct_operators, lower.distinct_operators);
+    assert_eq!(upper.total_operators, lower.total_operators);
+    assert_eq!(upper.distinct_operands, lower.distinct_operands);
+    // x, 0, y, f; the end of the construct is neither operator nor operand
+    assert_eq!(upper.distinct_operands, 4);
+}
+
+#[test]
+fn pascal_has_halstead_rules() {
+    use crate::loc::language::detect;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("a.pas");
+    fs::write(&path, "begin\n  X := Y div 2;\nend.\n").unwrap();
+    let metrics = analyze_file(&path, detect(&path).unwrap(), false)
+        .unwrap()
+        .expect("Pascal has Halstead rules")
+        .metrics;
+    // begin, :=, div, ;, end, .
+    assert_eq!(metrics.distinct_operators, 6);
+    // x, y, 2
+    assert_eq!(metrics.distinct_operands, 3);
+}
