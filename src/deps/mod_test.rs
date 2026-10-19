@@ -578,16 +578,21 @@ fn a_go_import_of_a_package_of_the_module_with_no_files_is_unresolved() {
 }
 
 #[test]
-fn matrix_prints_only_as_a_table() {
+fn matrix_prints_as_a_table_or_json() {
     let dir = tempfile::tempdir().unwrap();
     write(dir.path(), "a.py", "import b\n");
     write(dir.path(), "b.py", "x = 1\n");
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     matrix_output::run(&cfg, OutputMode::Table, &matrix_args(), &Expand::Depth(1)).unwrap();
+    matrix_output::run(&cfg, OutputMode::Json, &matrix_args(), &Expand::Depth(1)).unwrap();
     let error =
-        matrix_output::run(&cfg, OutputMode::Json, &matrix_args(), &Expand::Depth(1)).unwrap_err();
-    assert!(error.to_string().starts_with("--matrix prints a table"));
+        matrix_output::run(&cfg, OutputMode::Short, &matrix_args(), &Expand::Depth(1)).unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .starts_with("--matrix prints a table or JSON")
+    );
 }
 
 #[test]
