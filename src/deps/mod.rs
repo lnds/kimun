@@ -30,6 +30,9 @@ mod javascript_config;
 mod javascript_imports;
 mod kaikai;
 pub mod layout;
+mod matrix;
+mod matrix_text;
+mod matrix_tree;
 mod phoenix;
 mod python;
 mod python_blocks;
@@ -48,6 +51,7 @@ mod types;
 use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
+use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
 use crate::util::read_lossy;
@@ -57,6 +61,7 @@ use analyzer::{DepEntry, DepResult, Totals, UnsupportedLanguage, build_graph};
 pub use extractor::is_supported;
 use graph::{FileGraph, Source};
 use layout::{Layout, is_manifest};
+pub use matrix::Expand;
 
 /// Count the skipped files per language, largest group first.
 fn count_unsupported(skipped: &[(PathBuf, String)]) -> Vec<UnsupportedLanguage> {
@@ -184,8 +189,75 @@ fn visible_entries(entries: &[DepEntry], cycles_only: bool, top: usize) -> Vec<&
     }
 }
 
-/// Run dependency graph analysis: walk files, extract imports, build graph, output.
+/// Print the dependency structure matrix of the analyzed files, or of
+/// those in cycles.
+fn run_matrix(
+    cfg: &WalkConfig<'_>,
+    output: crate::cli::OutputMode,
+    cycles_only: bool,
+    expand: &matrix::Expand,
+) -> Result<(), Box<dyn Error>> {
+    if !matches!(output, crate::cli::OutputMode::Table) {
+        return Err("--matrix prints a table; --format json lists the edges in `edges`".into());
+    }
+    let mut result = analyze(cfg);
+    show_paths(&mut result, cfg.path);
+    let files: Vec<PathBuf> = result
+        .entries
+        .iter()
+        .filter(|e| !cycles_only || e.in_cycle)
+        .map(|e| e.path.clone())
+        .collect();
+    if files.is_empty() {
+        println!("No source files found for dependency analysis.");
+    } else {
+        print_matrix(&matrix::Matrix::build(
+            &files,
+            &result.edges,
+            &result.cycles,
+            expand,
+        )?)?;
+    }
+    if let Some(note) = report::unsupported_note(&result.unsupported) {
+        println!("{note}");
+    }
+    Ok(())
+}
+
+/// Print a matrix, coloured on a terminal, unless it is wider than one.
+fn print_matrix(m: &matrix::Matrix) -> Result<(), Box<dyn Error>> {
+    let terminal = std::io::stdout().is_terminal();
+    if let Some((terminal_size::Width(columns), _)) = terminal_size::terminal_size() {
+        let wide = matrix_text::width(m);
+        if terminal && wide > usize::from(columns) {
+            return Err(format!(
+                "the matrix takes {wide} columns and the terminal {columns}: try a lower --depth or --focus <DIR>"
+            )
+            .into());
+        }
+    }
+    let color = terminal && std::env::var_os("NO_COLOR").is_none();
+    print!("{}", matrix_text::render(m, color));
+    Ok(())
+}
+
+/// Run `km deps`: the matrix when asked for, else the table.
 pub fn run(
+    cfg: &WalkConfig<'_>,
+    output: crate::cli::OutputMode,
+    args: &crate::cli::DepsArgs,
+) -> Result<(), Box<dyn Error>> {
+    match args.matrix {
+        true => {
+            let expand = Expand::of(args.depth, args.focus.as_deref());
+            run_matrix(cfg, output, args.cycles_only, &expand)
+        }
+        false => run_table(cfg, output, args.cycles_only, &args.sort_by, args.top),
+    }
+}
+
+/// Run dependency graph analysis: walk files, extract imports, build graph, output.
+fn run_table(
     cfg: &WalkConfig<'_>,
     output: crate::cli::OutputMode,
     cycles_only: bool,

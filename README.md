@@ -1150,6 +1150,9 @@ Kaikai notes:
 | `--cycles-only` | Show only files that participate in a dependency cycle |
 | `--sort-by METRIC` | Sort by `fan-out` (default) or `fan-in` |
 | `--top N` | Rows of the table (default: 20); JSON lists every file unless `--top` is given |
+| `--matrix` | Print the dependency structure matrix instead of the table |
+| `--depth N` | Levels of directories the matrix shows expanded (default: 1) |
+| `--focus DIR` | Expand this directory of the matrix, and the ones above it, alone |
 
 Example output:
 
@@ -1168,6 +1171,34 @@ Dependency cycles: 14
     cogcom/analyzer.rs
     cogcom/detection.rs
     cogcom/report.rs
+```
+
+Dependency structure matrix:
+
+`--matrix` shows which file depends on which as a dependency structure matrix (DSM), as IntelliJ IDEA draws it. Rows and columns are the same directories and files, in the same order; a column carries only the number of its row, so the matrix stays narrow. A cell counts the files of its column that use files of its row. A directory shown collapsed (`▸`) counts for every file under it; one shown expanded (`▾`) heads the rows of what it holds. The root is the deepest directory holding every file, and a directory that holds only another one is shown with it (`lib/core/`).
+
+The children of each directory are ordered so that a sibling comes before the siblings it uses: in a layered system every mark falls below the diagonal. Siblings that use each other form a cycle and stay together, those that use more of it than it uses them first; the rest keep the order of their names. Only uses that load or compile order the rows: `type` and `deferred` ones, which make no cycle, are drawn dimmed.
+
+A mark above the diagonal goes against the layering. The list under the matrix gives each one with the uses behind it, five at most, and why it is there: in a cycle between files (`!` after the count, red on a terminal), against the layering when only the directories form a cycle (yellow), or type-only or deferred (dimmed). There are no colours when the output is not a terminal or `NO_COLOR` is set.
+
+`--depth N` expands the directories less than N levels below the root; `--focus DIR` expands that directory alone and the ones above it, with the path written as km shows it. `--cycles-only` keeps the files in cycles. The matrix is only a table: `--top` does not apply, and `--format json` lists the edges instead. A matrix wider than the terminal is not printed: a lower `--depth` or `--focus` narrows it.
+
+```
+$ km deps --matrix --focus shop/core
+Dependency Structure Matrix
+A cell counts the files of its column that use files of its row; ! marks a cycle.
+
+                1  2  3  4  5
+ 1 main.py      ·
+ 2 ▸ billing/   1  ·
+ 3 ▸ web/       1  1  ·
+   ▾ core/
+ 4   db.py            1  · 1!
+ 5   models.py     1  2 1!  ·
+
+Above the diagonal: 1 cell
+  shop/core/models.py → shop/core/db.py: 1, in a cycle
+    shop/core/models.py → shop/core/db.py
 ```
 
 ### `km authors` -- Per-author ownership summary

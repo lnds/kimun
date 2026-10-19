@@ -189,7 +189,7 @@ fn of_kind(out: &[(usize, EdgeKind)], kind: EdgeKind) -> Vec<usize> {
 }
 
 /// Tarjan's strongly-connected components algorithm (iterative to avoid stack overflow).
-fn tarjan_scc(n: usize, adj: &[Vec<usize>]) -> Vec<Vec<usize>> {
+pub(super) fn tarjan_scc(n: usize, adj: &[Vec<usize>]) -> Vec<Vec<usize>> {
     let mut tarjan = Tarjan {
         adj,
         counter: 0,

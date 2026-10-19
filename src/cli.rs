@@ -162,6 +162,34 @@ impl CommonArgs {
     }
 }
 
+/// Arguments of `km deps` besides the common ones.
+#[derive(Args)]
+pub struct DepsArgs {
+    /// Show only files with dependency cycles
+    #[arg(long)]
+    pub cycles_only: bool,
+
+    /// Sort by: fan-out (default), fan-in
+    #[arg(long, default_value = "fan-out", value_parser = ["fan-out", "fan-in"])]
+    pub sort_by: String,
+
+    /// Rows of the table (default: 20); JSON lists every one of the files unless given
+    #[arg(long)]
+    pub top: Option<usize>,
+
+    /// Print the dependency structure matrix instead of the table
+    #[arg(long, conflicts_with = "top")]
+    pub matrix: bool,
+
+    /// Levels of directories the matrix shows expanded (default: 1)
+    #[arg(long, requires = "matrix", value_parser = clap::value_parser!(u32).range(1..))]
+    pub depth: Option<u32>,
+
+    /// Expand this directory of the matrix, and the ones above it, alone
+    #[arg(long, requires = "matrix", conflicts_with = "depth")]
+    pub focus: Option<String>,
+}
+
 /// All available analysis subcommands.
 /// Arguments of `km impact`. One source of the change is required; a patch
 /// may come with `--since-ref`, which then only bounds the history.
@@ -633,17 +661,8 @@ pub enum Commands {
         #[command(flatten)]
         common: CommonArgs,
 
-        /// Show only files with dependency cycles
-        #[arg(long)]
-        cycles_only: bool,
-
-        /// Sort by: fan-out (default), fan-in
-        #[arg(long, default_value = "fan-out", value_parser = ["fan-out", "fan-in"])]
-        sort_by: String,
-
-        /// Rows of the table (default: 20); JSON lists every one of the files unless given
-        #[arg(long)]
-        top: Option<usize>,
+        #[command(flatten)]
+        args: DepsArgs,
     },
 
     /// Summarize code ownership by author: files owned, lines, languages, last active date

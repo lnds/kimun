@@ -10,7 +10,7 @@ fn run_on_empty_dir() {
     let dir = tempfile::tempdir().unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, false, "default", Some(20)).unwrap();
+    run_table(&cfg, OutputMode::Table, false, "default", Some(20)).unwrap();
 }
 
 #[test]
@@ -18,7 +18,7 @@ fn run_on_empty_dir_json() {
     let dir = tempfile::tempdir().unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Json, false, "default", Some(20)).unwrap();
+    run_table(&cfg, OutputMode::Json, false, "default", Some(20)).unwrap();
 }
 
 #[test]
@@ -28,7 +28,7 @@ fn run_on_rust_files_no_deps() {
     fs::write(dir.path().join("lib.rs"), "pub fn helper() {}\n").unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, false, "default", Some(20)).unwrap();
+    run_table(&cfg, OutputMode::Table, false, "default", Some(20)).unwrap();
 }
 
 #[test]
@@ -40,7 +40,7 @@ fn run_on_rust_with_mod_declaration() {
     fs::write(dir.path().join("foo.rs"), "pub fn foo_fn() {}\n").unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, false, "default", Some(20)).unwrap();
+    run_table(&cfg, OutputMode::Table, false, "default", Some(20)).unwrap();
 }
 
 #[test]
@@ -49,7 +49,7 @@ fn run_sort_by_fan_in() {
     fs::write(dir.path().join("main.rs"), "fn main() {}\n").unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, false, "fan-in", Some(20)).unwrap();
+    run_table(&cfg, OutputMode::Table, false, "fan-in", Some(20)).unwrap();
 }
 
 #[test]
@@ -58,7 +58,7 @@ fn run_sort_by_fan_out() {
     fs::write(dir.path().join("main.rs"), "fn main() {}\n").unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, false, "fan-out", Some(20)).unwrap();
+    run_table(&cfg, OutputMode::Table, false, "fan-out", Some(20)).unwrap();
 }
 
 #[test]
@@ -67,7 +67,7 @@ fn run_cycles_only_filter() {
     fs::write(dir.path().join("main.rs"), "fn main() {}\n").unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, true, "default", Some(20)).unwrap();
+    run_table(&cfg, OutputMode::Table, true, "default", Some(20)).unwrap();
 }
 
 #[test]
@@ -76,7 +76,7 @@ fn run_cycles_only_json() {
     fs::write(dir.path().join("main.rs"), "fn main() {}\n").unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Json, true, "default", Some(20)).unwrap();
+    run_table(&cfg, OutputMode::Json, true, "default", Some(20)).unwrap();
 }
 
 #[test]
@@ -94,7 +94,7 @@ fn run_with_go_module() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, false, "default", Some(20)).unwrap();
+    run_table(&cfg, OutputMode::Table, false, "default", Some(20)).unwrap();
 }
 
 #[test]
@@ -105,7 +105,7 @@ fn run_unreadable_file_gracefully_handled() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     // Should not panic — errors are handled gracefully
-    run(&cfg, OutputMode::Table, false, "default", Some(20)).unwrap();
+    run_table(&cfg, OutputMode::Table, false, "default", Some(20)).unwrap();
 }
 
 #[test]
@@ -115,7 +115,7 @@ fn run_json_with_mod_deps() {
     fs::write(dir.path().join("foo.rs"), "pub fn f() {}\n").unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Json, false, "default", Some(20)).unwrap();
+    run_table(&cfg, OutputMode::Json, false, "default", Some(20)).unwrap();
 }
 
 #[test]
@@ -124,7 +124,7 @@ fn run_short_format() {
     fs::write(dir.path().join("main.rs"), "fn main() {}\n").unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Short, false, "default", Some(20)).unwrap();
+    run_table(&cfg, OutputMode::Short, false, "default", Some(20)).unwrap();
 }
 
 #[test]
@@ -133,7 +133,7 @@ fn run_terse_format() {
     fs::write(dir.path().join("main.rs"), "fn main() {}\n").unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Terse, false, "default", Some(20)).unwrap();
+    run_table(&cfg, OutputMode::Terse, false, "default", Some(20)).unwrap();
 }
 
 // ── Kaikai ───────────────────────────────────────────────────────────────────
@@ -281,7 +281,7 @@ fn run_on_unsupported_languages_only() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     for mode in [OutputMode::Table, OutputMode::Json, OutputMode::Short] {
-        run(&cfg, mode, false, "default", Some(20)).unwrap();
+        run_table(&cfg, mode, false, "default", Some(20)).unwrap();
     }
 }
 
@@ -575,4 +575,26 @@ fn a_go_import_of_a_package_of_the_module_with_no_files_is_unresolved() {
         entry_of(&result, "main.go").unresolved,
         vec!["example.com/app/gen"]
     );
+}
+
+#[test]
+fn matrix_prints_only_as_a_table() {
+    let dir = tempfile::tempdir().unwrap();
+    write(dir.path(), "a.py", "import b\n");
+    write(dir.path(), "b.py", "x = 1\n");
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    run_matrix(&cfg, OutputMode::Table, false, &Expand::Depth(1)).unwrap();
+    let error = run_matrix(&cfg, OutputMode::Json, false, &Expand::Depth(1)).unwrap_err();
+    assert!(error.to_string().starts_with("--matrix prints a table"));
+}
+
+#[test]
+fn matrix_focus_on_a_missing_directory_fails() {
+    let dir = tempfile::tempdir().unwrap();
+    write(dir.path(), "a.py", "x = 1\n");
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let focus = Expand::Focus(PathBuf::from("nowhere"));
+    assert!(run_matrix(&cfg, OutputMode::Table, false, &focus).is_err());
 }

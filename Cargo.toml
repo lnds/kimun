@@ -27,4 +27,5 @@ tempfile = "3"
 unicode-width = "0.2.2"
 chrono = { version = "0.4.44", features = ["default"] }
 clap_complete = "4.6.0"
+terminal_size = "0.4"
 
