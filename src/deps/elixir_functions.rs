@@ -124,7 +124,7 @@ pub fn functions(source: &str) -> Vec<Function> {
 }
 
 /// Whether `body` calls the local function `name`: `name(`, or `&name/`.
-fn calls_local(body: &str, name: &str) -> bool {
+pub(super) fn calls_local(body: &str, name: &str) -> bool {
     body.match_indices(name).any(|(at, _)| {
         let before = body[..at].chars().next_back().unwrap_or(' ');
         let after = body[at + name.len()..].chars().next().unwrap_or(' ');

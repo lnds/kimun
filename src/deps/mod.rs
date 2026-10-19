@@ -14,6 +14,7 @@ mod csharp;
 mod csharp_extensions;
 mod edges;
 mod elixir;
+mod elixir_calls;
 mod elixir_compile;
 mod elixir_directives;
 mod elixir_functions;
@@ -60,6 +61,7 @@ use crate::util::read_lossy;
 use crate::walk::{self, WalkConfig};
 
 use analyzer::{DepEntry, DepResult, Totals, UnsupportedLanguage, build_graph};
+pub use elixir_calls::Calls;
 pub use extractor::is_supported;
 use graph::{FileGraph, Source};
 use layout::{Layout, is_manifest};

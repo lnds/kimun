@@ -159,6 +159,13 @@ impl Source {
         }
         told(&self.text, lines).map_err(Unnarrowed::Outside)
     }
+
+    /// For each public function, the functions of other modules it calls,
+    /// when the language tells them: Elixir.
+    pub fn function_calls(&self) -> Option<super::elixir_calls::Calls> {
+        matches!(self.language.as_str(), "Elixir" | "Elixir Script")
+            .then(|| super::elixir_calls::calls(&self.text))
+    }
 }
 
 #[derive(Debug, Default)]

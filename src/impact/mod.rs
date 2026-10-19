@@ -7,6 +7,7 @@
 
 mod analyzer;
 mod entry;
+mod function_reach;
 mod help;
 mod inert;
 mod pr;
@@ -56,6 +57,8 @@ pub struct ImpactOptions {
     pub min_shared: usize,
     /// Commits touching more files than this are not evidence of co-change.
     pub max_changeset: usize,
+    /// How far the structural radius is followed, in files from the change.
+    pub max_distance: Option<usize>,
     pub top: usize,
     /// Print only the projects the diff changes or reaches, one per line.
     pub affected: bool,
@@ -83,6 +86,7 @@ pub fn options(args: &crate::cli::ImpactArgs) -> ImpactOptions {
         min_confidence: args.min_confidence,
         min_shared: args.min_shared,
         max_changeset: args.max_changeset,
+        max_distance: args.max_distance.map(|d| d as usize),
         top: args.top,
         affected: args.affected,
     }
@@ -155,6 +159,7 @@ fn structural_radius(
     change: &Change,
     graph: &ProjectGraph,
     projects: &ProjectRadius,
+    max_distance: Option<usize>,
 ) -> Result<Structural, Box<dyn Error>> {
     let scope: Vec<PathBuf> = match projects.changed.is_empty() || !projects.outside.is_empty() {
         true => Vec::new(),
@@ -171,7 +176,12 @@ fn structural_radius(
     let measured = |p: &Path| structural::is_measured(p) || heex::is_template(p);
     let sources = change.sources(git_repo, |p| (measured(p) && in_scope(p)) || is_manifest(p))?;
     let changed: Vec<structural::Changed> = change.diff.iter().collect();
-    let mut radius = structural::compute(sources, &changed, &|from, to| graph.may_use(from, to));
+    let mut radius = structural::compute(
+        sources,
+        &changed,
+        &|from, to| graph.may_use(from, to),
+        max_distance,
+    );
     let config = KimunConfig::load_from(git_repo.root()).impact;
     let entry = EntryPoints::new(&config.entry_points)?;
     radius.mark_entry_points(
@@ -199,7 +209,7 @@ fn analyze(path: &Path, opts: &ImpactOptions) -> Result<Impact, Box<dyn Error>> 
     let change = Change::resolve(&git_repo, &opts.source)?;
     let graph = change.graph(&git_repo)?;
     let projects = project_radius(&graph, &change, &inert_of(&git_repo)?);
-    let structural = structural_radius(&git_repo, &change, &graph, &projects)?;
+    let structural = structural_radius(&git_repo, &change, &graph, &projects, opts.max_distance)?;
     let (generated, changes): (Vec<_>, Vec<_>) = change
         .diff
         .iter()

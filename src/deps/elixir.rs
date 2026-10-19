@@ -116,7 +116,7 @@ impl Nesting {
 /// The modules a file defines, and its code with `__MODULE__` replaced by
 /// the module each line is in. Nesting is told by indentation, as
 /// `mix format` leaves it.
-fn modules_of(code: &str) -> (Vec<String>, String) {
+pub(super) fn modules_of(code: &str) -> (Vec<String>, String) {
     let mut nesting = Nesting::default();
     let mut defines = Vec::new();
     let mut resolved = String::with_capacity(code.len());
