@@ -2,4 +2,9 @@
 *.pdf
 *.epub
 .envrc
-.kalku/runs.ndjson
+
+# Local tooling: agent settings and worktrees, kalku and its MCP server
+.claude/
+.kalku/
+.kalku.toml
+.mcp.json
