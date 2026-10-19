@@ -1,3 +1,16 @@
+## v0.38.0 (2026-10-18)
+
+### Feat
+
+- **map**: enclosure diagram of the code, coloured by a metric
+- **deps**: the dependency matrix as JSON
+- **deps**: the dependency matrix as an interactive HTML page
+- **deps**: dependency structure matrix as text, with --matrix, --depth and --focus
+
+### Fix
+
+- **walk**: files come by name on every system; pages share their shell
+
 ## v0.37.0 (2026-10-18)
 
 ### Feat
