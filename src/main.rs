@@ -41,6 +41,8 @@ mod git;
 mod hal;
 /// Hotspot analysis: change frequency × complexity.
 mod hotspots;
+/// Self-contained HTML pages: the shell, base styles and embedded data.
+mod html;
 /// Impact of a diff: diffusion and files that usually change with it.
 mod impact;
 /// Indentation complexity (stddev and max depth).

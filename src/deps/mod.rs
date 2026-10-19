@@ -31,6 +31,8 @@ mod javascript_imports;
 mod kaikai;
 pub mod layout;
 mod matrix;
+mod matrix_html;
+mod matrix_output;
 mod matrix_text;
 mod matrix_tree;
 mod phoenix;
@@ -51,7 +53,6 @@ mod types;
 use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
-use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
 use crate::util::read_lossy;
@@ -85,7 +86,7 @@ fn count_unsupported(skipped: &[(PathBuf, String)]) -> Vec<UnsupportedLanguage> 
 }
 
 /// Walk files, extract and resolve their imports, and build the dependency graph.
-fn analyze(cfg: &WalkConfig<'_>) -> DepResult {
+pub(super) fn analyze(cfg: &WalkConfig<'_>) -> DepResult {
     // Collect all source files with their language. A file whose language has
     // no import extractor stays out of the graph: listing it with zero
     // dependencies would pass an unmeasured file off as a measured one.
@@ -164,7 +165,7 @@ fn sort_entries(entries: &mut [DepEntry], sort_by: &str) {
 
 /// Turn the paths of `result`, relative to the analyzed directory `root`,
 /// into the paths every report shows (`report_helpers::shown`).
-fn show_paths(result: &mut DepResult, root: &Path) {
+pub(super) fn show_paths(result: &mut DepResult, root: &Path) {
     let show = |path: &Path| PathBuf::from(crate::report_helpers::shown(&root.join(path)));
     for entry in &mut result.entries {
         entry.path = show(&entry.path);
@@ -189,58 +190,6 @@ fn visible_entries(entries: &[DepEntry], cycles_only: bool, top: usize) -> Vec<&
     }
 }
 
-/// Print the dependency structure matrix of the analyzed files, or of
-/// those in cycles.
-fn run_matrix(
-    cfg: &WalkConfig<'_>,
-    output: crate::cli::OutputMode,
-    cycles_only: bool,
-    expand: &matrix::Expand,
-) -> Result<(), Box<dyn Error>> {
-    if !matches!(output, crate::cli::OutputMode::Table) {
-        return Err("--matrix prints a table; --format json lists the edges in `edges`".into());
-    }
-    let mut result = analyze(cfg);
-    show_paths(&mut result, cfg.path);
-    let files: Vec<PathBuf> = result
-        .entries
-        .iter()
-        .filter(|e| !cycles_only || e.in_cycle)
-        .map(|e| e.path.clone())
-        .collect();
-    if files.is_empty() {
-        println!("No source files found for dependency analysis.");
-    } else {
-        print_matrix(&matrix::Matrix::build(
-            &files,
-            &result.edges,
-            &result.cycles,
-            expand,
-        )?)?;
-    }
-    if let Some(note) = report::unsupported_note(&result.unsupported) {
-        println!("{note}");
-    }
-    Ok(())
-}
-
-/// Print a matrix, coloured on a terminal, unless it is wider than one.
-fn print_matrix(m: &matrix::Matrix) -> Result<(), Box<dyn Error>> {
-    let terminal = std::io::stdout().is_terminal();
-    if let Some((terminal_size::Width(columns), _)) = terminal_size::terminal_size() {
-        let wide = matrix_text::width(m);
-        if terminal && wide > usize::from(columns) {
-            return Err(format!(
-                "the matrix takes {wide} columns and the terminal {columns}: try a lower --depth or --focus <DIR>"
-            )
-            .into());
-        }
-    }
-    let color = terminal && std::env::var_os("NO_COLOR").is_none();
-    print!("{}", matrix_text::render(m, color));
-    Ok(())
-}
-
 /// Run `km deps`: the matrix when asked for, else the table.
 pub fn run(
     cfg: &WalkConfig<'_>,
@@ -250,7 +199,7 @@ pub fn run(
     match args.matrix {
         true => {
             let expand = Expand::of(args.depth, args.focus.as_deref());
-            run_matrix(cfg, output, args.cycles_only, &expand)
+            matrix_output::run(cfg, output, args, &expand)
         }
         false => run_table(cfg, output, args.cycles_only, &args.sort_by, args.top),
     }

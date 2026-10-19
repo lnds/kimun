@@ -67,6 +67,11 @@ pub struct Matrix {
     /// By (row, column): the row is used, the column uses it.
     pub cells: BTreeMap<(usize, usize), Cell>,
     pub edges: Vec<Edge>,
+    pub files: Vec<PathBuf>,
+    /// The files of each edge, by index: user, then used.
+    pub uses: Vec<(usize, usize)>,
+    /// Whether each edge is part of a cycle between files.
+    pub cyclic: Vec<bool>,
 }
 
 impl Expand {
@@ -122,14 +127,19 @@ impl Matrix {
                 .into_iter()
                 .for_each(|f| row_of[f] = r);
         }
-        let ends: Vec<(usize, usize)> = ends.iter().map(|&(f, t)| (row_of[f], row_of[t])).collect();
-        let cells = cells(&edges, &ends, cycles);
+        let cyclic = cyclic(&edges, cycles);
+        let between: Vec<(usize, usize)> =
+            ends.iter().map(|&(f, t)| (row_of[f], row_of[t])).collect();
+        let cells = cells(&edges, &between, &cyclic);
         Ok(Matrix {
             tree,
             lines,
             rows,
             cells,
             edges,
+            files: files.to_vec(),
+            uses: ends,
+            cyclic,
         })
     }
 
@@ -146,12 +156,8 @@ impl Matrix {
     }
 }
 
-/// The cells the edges fall in, given the rows of their ends.
-fn cells(
-    edges: &[Edge],
-    rows: &[(usize, usize)],
-    cycles: &[Vec<PathBuf>],
-) -> BTreeMap<(usize, usize), Cell> {
+/// Whether each edge loads or compiles a file of its own cycle.
+fn cyclic(edges: &[Edge], cycles: &[Vec<PathBuf>]) -> Vec<bool> {
     let cycle_of: HashMap<&Path, usize> = cycles
         .iter()
         .enumerate()
@@ -159,6 +165,15 @@ fn cells(
         .collect();
     let of = |p: &PathBuf| cycle_of.get(p.as_path());
     let in_cycle = |e: &Edge| strong(e.kind) && of(&e.from).is_some() && of(&e.from) == of(&e.to);
+    edges.iter().map(in_cycle).collect()
+}
+
+/// The cells the edges fall in, given the rows of their ends.
+fn cells(
+    edges: &[Edge],
+    rows: &[(usize, usize)],
+    cyclic: &[bool],
+) -> BTreeMap<(usize, usize), Cell> {
     let mut cells: BTreeMap<(usize, usize), Cell> = BTreeMap::new();
     let between_rows = edges
         .iter()
@@ -170,7 +185,7 @@ fn cells(
         let cell = cells.entry((to, from)).or_default();
         cell.count += 1;
         cell.strong |= strong(edge.kind);
-        cell.cycle |= in_cycle(edge);
+        cell.cycle |= cyclic[i];
         cell.edges.push(i);
     }
     cells
