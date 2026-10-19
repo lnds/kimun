@@ -1153,6 +1153,7 @@ Notas sobre Kaikai:
 | `--matrix` | Muestra la matriz de estructura de dependencias en vez de la tabla |
 | `--depth N` | Niveles de directorios que la matriz muestra expandidos (por defecto: 1) |
 | `--focus DIR` | Expande solo este directorio de la matriz y los que están sobre él |
+| `--html FILE` | Escribe la matriz como una página HTML interactiva en este archivo |
 
 Ejemplo de salida:
 
@@ -1182,6 +1183,8 @@ Los hijos de cada directorio se ordenan de modo que un hermano va antes que los 
 Una marca sobre la diagonal va contra las capas. La lista bajo la matriz da cada una con los usos detrás de ella, cinco como máximo, y por qué está ahí: en un ciclo entre archivos (`!` después del número, en rojo en una terminal), contra las capas cuando solo los directorios forman un ciclo (amarillo), o solo de tipos o diferido (atenuado). No hay colores cuando la salida no es una terminal o cuando `NO_COLOR` está definida.
 
 `--depth N` expande los directorios que están a menos de N niveles bajo la raíz; `--focus DIR` expande solo ese directorio y los que están sobre él, con la ruta escrita como km la muestra. `--cycles-only` deja los archivos en ciclos. La matriz es solo una tabla: `--top` no se aplica, y `--format json` lista las aristas en su lugar. Una matriz más ancha que la terminal no se imprime: un `--depth` menor o `--focus` la angostan.
+
+`--html FILE` escribe la matriz como un único archivo HTML que no necesita nada más, en tema claro y oscuro. Abre como la mostraría el texto, y en él un directorio se expande y se colapsa con un clic en su triángulo (o todos a la vez), un clic en un nombre marca en dos colores lo que usa y lo que lo usa, y un clic en una celda lista los usos detrás de ella. Los encabezados quedan fijos al desplazar la matriz, cada celda se sombrea según su número y un nombre muestra su ruta completa al pasar el cursor. El ancho de la terminal no la limita.
 
 ```
 $ km deps --matrix --focus shop/core

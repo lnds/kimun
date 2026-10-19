@@ -1153,6 +1153,7 @@ Kaikai notes:
 | `--matrix` | Print the dependency structure matrix instead of the table |
 | `--depth N` | Levels of directories the matrix shows expanded (default: 1) |
 | `--focus DIR` | Expand this directory of the matrix, and the ones above it, alone |
+| `--html FILE` | Write the matrix as an interactive HTML page to this file |
 
 Example output:
 
@@ -1182,6 +1183,8 @@ The children of each directory are ordered so that a sibling comes before the si
 A mark above the diagonal goes against the layering. The list under the matrix gives each one with the uses behind it, five at most, and why it is there: in a cycle between files (`!` after the count, red on a terminal), against the layering when only the directories form a cycle (yellow), or type-only or deferred (dimmed). There are no colours when the output is not a terminal or `NO_COLOR` is set.
 
 `--depth N` expands the directories less than N levels below the root; `--focus DIR` expands that directory alone and the ones above it, with the path written as km shows it. `--cycles-only` keeps the files in cycles. The matrix is only a table: `--top` does not apply, and `--format json` lists the edges instead. A matrix wider than the terminal is not printed: a lower `--depth` or `--focus` narrows it.
+
+`--html FILE` writes the matrix as one HTML file that needs nothing else, in light and dark themes. It opens as the text would show, and in it a directory expands and collapses with a click on its triangle (or all at once), a click on a name marks what it uses and what uses it in two colours, and a click on a cell lists the uses behind it. The headers stay in place when the matrix scrolls, a cell is shaded by its count, and a name shows its whole path on hover. The terminal width does not limit it.
 
 ```
 $ km deps --matrix --focus shop/core

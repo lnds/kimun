@@ -584,8 +584,9 @@ fn matrix_prints_only_as_a_table() {
     write(dir.path(), "b.py", "x = 1\n");
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run_matrix(&cfg, OutputMode::Table, false, &Expand::Depth(1)).unwrap();
-    let error = run_matrix(&cfg, OutputMode::Json, false, &Expand::Depth(1)).unwrap_err();
+    matrix_output::run(&cfg, OutputMode::Table, &matrix_args(), &Expand::Depth(1)).unwrap();
+    let error =
+        matrix_output::run(&cfg, OutputMode::Json, &matrix_args(), &Expand::Depth(1)).unwrap_err();
     assert!(error.to_string().starts_with("--matrix prints a table"));
 }
 
@@ -596,5 +597,37 @@ fn matrix_focus_on_a_missing_directory_fails() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     let focus = Expand::Focus(PathBuf::from("nowhere"));
-    assert!(run_matrix(&cfg, OutputMode::Table, false, &focus).is_err());
+    assert!(matrix_output::run(&cfg, OutputMode::Table, &matrix_args(), &focus).is_err());
+}
+
+fn matrix_args() -> crate::cli::DepsArgs {
+    crate::cli::DepsArgs {
+        cycles_only: false,
+        sort_by: "fan-out".to_string(),
+        top: None,
+        matrix: true,
+        depth: None,
+        focus: None,
+        html: None,
+    }
+}
+
+#[test]
+fn matrix_html_is_written_to_the_file_given() {
+    let dir = tempfile::tempdir().unwrap();
+    write(dir.path(), "a.py", "import b\n");
+    write(dir.path(), "b.py", "x = 1\n");
+    let out = tempfile::tempdir().unwrap();
+    let page = out.path().join("deps.html");
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let args = crate::cli::DepsArgs {
+        html: Some(page.clone()),
+        ..matrix_args()
+    };
+    matrix_output::run(&cfg, OutputMode::Table, &args, &Expand::Depth(1)).unwrap();
+    let html = fs::read_to_string(page).unwrap();
+    // Paths are shown as every report shows them, here unrelated to a base.
+    assert!(html.contains(r#"a.py",""#) && html.contains(r#"b.py"],"#));
+    assert!(html.contains(r#""edges":[[0,1,true,false]]"#));
 }

@@ -188,6 +188,10 @@ pub struct DepsArgs {
     /// Expand this directory of the matrix, and the ones above it, alone
     #[arg(long, requires = "matrix", conflicts_with = "depth")]
     pub focus: Option<String>,
+
+    /// Write the matrix as an interactive HTML page to this file
+    #[arg(long, value_name = "FILE", requires = "matrix")]
+    pub html: Option<PathBuf>,
 }
 
 /// All available analysis subcommands.
