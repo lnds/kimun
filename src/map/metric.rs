@@ -37,7 +37,8 @@ pub enum ColorBy {
 }
 
 /// How the page speaks of a metric: what a file is on each side of the
-/// scale, and the label of the directory where each side gathers.
+/// scale, and the label, before its path, of the directory where each
+/// side gathers most.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct Words {
     pub risk: &'static str,
@@ -54,33 +55,33 @@ pub fn words(color_by: ColorBy) -> Words {
             "unhealthy",
             "fair",
             Some("healthy"),
-            "Least healthy code",
-            Some("Healthiest code"),
+            "Least healthy",
+            Some("Healthiest"),
         ),
         ColorBy::Llm => (
             "an LLM risk",
             "needing care",
             Some("LLM-friendly"),
-            "Unhealthy code: LLM risk",
-            Some("LLM-friendly code"),
+            "Most LLM risk",
+            Some("Most LLM-friendly"),
         ),
-        ColorBy::Hotspots => ("a hotspot", "calm", None, "Hotspots", None),
+        ColorBy::Hotspots => ("a hotspot", "calm", None, "Main hotspots", None),
         ColorBy::Churn => ("churning", "steady", None, "Most churn", None),
         ColorBy::Age => (
             "frozen",
             "stale",
             Some("active"),
-            "Frozen code",
-            Some("Active code"),
+            "Most frozen",
+            Some("Most active"),
         ),
         ColorBy::Knowledge => (
             "at risk of knowledge loss",
             "shared",
             None,
-            "Knowledge at risk",
+            "Most knowledge at risk",
             None,
         ),
-        ColorBy::Cycles => ("in a cycle", "in no cycle", None, "Dependency cycles", None),
+        ColorBy::Cycles => ("in a cycle", "in no cycle", None, "Most in cycles", None),
     };
     Words {
         risk,

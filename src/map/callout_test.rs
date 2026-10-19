@@ -45,7 +45,7 @@ fn a_metric_without_a_good_side_has_two_shares_and_one_callout() {
     assert_eq!(shares(&nodes, &words).len(), 2);
     let callouts = callouts(&nodes, &words);
     assert_eq!(callouts.len(), 1);
-    assert_eq!(callouts[0].label, "Dependency cycles");
+    assert_eq!(callouts[0].label, "Most in cycles: bad/");
 }
 
 #[test]
@@ -53,9 +53,9 @@ fn callouts_point_at_the_directories_where_each_side_gathers() {
     let nodes = nodes();
     let callouts = callouts(&nodes, &words(ColorBy::Llm));
     assert_eq!(name(&nodes, callouts[0].node), "bad/");
-    assert_eq!(callouts[0].label, "Unhealthy code: LLM risk");
+    assert_eq!(callouts[0].label, "Most LLM risk: bad/");
     assert_eq!(name(&nodes, callouts[1].node), "good/");
-    assert_eq!(callouts[1].heat, 1.0);
+    assert_eq!(callouts[1].label, "Most LLM-friendly: good/");
 }
 
 #[test]

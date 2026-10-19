@@ -19,7 +19,8 @@ pub struct Share {
 pub struct Callout {
     /// The directory labelled, by index into the nodes.
     pub node: usize,
-    pub label: &'static str,
+    /// What gathers there, and where: `Most LLM risk: src/tui/`.
+    pub label: String,
     pub heat: f64,
 }
 
@@ -86,21 +87,22 @@ fn gathering(nodes: &[Placed], side: impl Fn(f64) -> bool) -> Option<usize> {
 /// The labels to put on the map: where the risk gathers, and where the
 /// good side does when the metric has one.
 pub fn callouts(nodes: &[Placed], words: &Words) -> Vec<Callout> {
+    let label = |what: &str, node: usize| format!("{what}: {}/", nodes[node].path);
     let mut found = Vec::new();
     if let Some(node) = gathering(nodes, |h| h < 0.0) {
+        let label = label(words.risk_callout, node);
         found.push(Callout {
             node,
-            label: words.risk_callout,
+            label,
             heat: -1.0,
         });
     }
     let good = words.good_callout.zip(gathering(nodes, |h| h > 0.0));
-    if let Some((label, node)) =
-        good.filter(|(_, node)| found.first().is_none_or(|c| c.node != *node))
-    {
+    let apart = |(_, node): &(&str, usize)| found.first().is_none_or(|c| c.node != *node);
+    if let Some((what, node)) = good.filter(apart) {
         found.push(Callout {
             node,
-            label,
+            label: label(what, node),
             heat: 1.0,
         });
     }
