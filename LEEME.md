@@ -43,7 +43,7 @@ Eso es Kimün midiendo su propio código: 140 archivos y 18.963 líneas de códi
 Además del puntaje agregado, Kimün ofrece 19 comandos especializados:
 
 - **Métricas estáticas**: líneas de código por lenguaje (clasificadas como las clasifica [cloc](https://github.com/AlDanial/cloc)), detección de código duplicado (Regla de Tres), complejidad de Halstead, complejidad ciclomática, complejidad cognitiva (SonarSource), complejidad por indentación, dos variantes del índice de mantenibilidad (Visual Studio y verifysoft), detección de code smells, dependencias entre archivos y sus ciclos, un informe completo con todas las métricas, y un mapa del código como círculos anidados coloreados por cualquiera de ellas.
-- **Análisis basado en git**: detección de hotspots (frecuencia de cambio × complejidad, método de Thornhill), churn (frecuencia de cambio pura), propiedad del código y mapas de conocimiento con `git blame`, acoplamiento temporal entre archivos que cambian juntos, impacto de un diff (difusión y cambios conjuntos que faltan), resumen de propiedad por autor y clasificación de archivos por antigüedad (Active / Stale / Frozen).
+- **Análisis basado en git**: detección de hotspots (frecuencia de cambio × complejidad, método de Tornhill), churn (frecuencia de cambio pura), propiedad del código y mapas de conocimiento con `git blame`, acoplamiento temporal entre archivos que cambian juntos, impacto de un diff (difusión y cambios conjuntos que faltan), resumen de propiedad por autor y clasificación de archivos por antigüedad (Active / Stale / Frozen).
 - **Para agentes de código**: todos los comandos que miden pueden responder en JSON, y `km ai` es una integración opcional con Claude que ejecuta las herramientas y escribe un informe narrativo. Ningún otro comando llama a un modelo.
 
 > Aviso: este repositorio no es la aplicación de notas para la consola `kimun`, escrita en Rust por nico2sh. Ese proyecto está en https://github.com/nico2sh/kimun.
@@ -461,7 +461,7 @@ El MI de verifysoft no tiene cota inferior: un archivo grande puede quedar muy p
 
 ### `km hotspots` -- Análisis de hotspots
 
-Encuentra hotspots: archivos que cambian con frecuencia Y además tienen alta complejidad. Se basa en el método de Adam Thornhill ("Your Code as a Crime Scene").
+Encuentra hotspots: archivos que cambian con frecuencia Y además tienen alta complejidad. Se basa en el método de Adam Tornhill ("Your Code as a Crime Scene").
 
 ```bash
 km hotspots [path]
@@ -475,7 +475,7 @@ Score = Commits × Complexity
 
 Los archivos con puntaje alto concentran el riesgo: cambian mucho y son complejos, así que son los candidatos más valiosos para refactorizar.
 
-Por defecto, la complejidad se mide con la **indentación total** (la suma de los niveles lógicos de indentación de todas las líneas de código), siguiendo el método original de Thornhill en "Your Code as a Crime Scene". Usa `--complexity cycom` para medirla con la complejidad ciclomática.
+Por defecto, la complejidad se mide con la **indentación total** (la suma de los niveles lógicos de indentación de todas las líneas de código), siguiendo el método original de Tornhill en "Your Code as a Crime Scene". Usa `--complexity cycom` para medirla con la complejidad ciclomática.
 
 Requiere un repositorio git. Los commits de merge se excluyen de la cuenta.
 
@@ -488,7 +488,7 @@ Opciones:
 | `--top N` | Filas de la tabla (por defecto: 20); el JSON lista todos los archivos salvo que se indique `--top` |
 | `--sort-by METRIC` | Ordena por `score`, `commits` o `complexity` (por defecto: `score`) |
 | `--since DURATION` | Considera solo los commits desde este momento (p. ej. `30d`, `6m`, `1y`) |
-| `--complexity METRIC` | `indent` (por defecto, Thornhill) o `cycom` (ciclomática) |
+| `--complexity METRIC` | `indent` (por defecto, Tornhill) o `cycom` (ciclomática) |
 
 Unidades de duración: `d` (días), `m` (meses, aprox. 30 días), `y` (años, aprox. 365 días).
 
@@ -506,7 +506,7 @@ Hotspots (Commits × Total Indent Complexity)
  src/report/mod.rs           Rust       4        998       3992
 ──────────────────────────────────────────────────────────────────────────────
 
-Score = Commits × Total Indentation (Thornhill method).
+Score = Commits × Total Indentation (Tornhill method).
 High-score files are change-prone and complex — prime refactoring targets.
 ```
 
@@ -530,7 +530,7 @@ High-score files are change-prone and complex — prime refactoring targets.
 
 ### `km knowledge` -- Análisis de propiedad del código
 
-Analiza los patrones de propiedad del código con git blame (mapas de conocimiento). Se basa en el método de Adam Thornhill ("Your Code as a Crime Scene", capítulos 8 y 9).
+Analiza los patrones de propiedad del código con git blame (mapas de conocimiento). Se basa en el método de Adam Tornhill ("Your Code as a Crime Scene", capítulos 8 y 9).
 
 ```bash
 km knowledge [path]
@@ -618,7 +618,7 @@ Project Bus Factor: 2
 
 ### `km tc` -- Análisis de acoplamiento temporal
 
-Analiza el acoplamiento temporal entre archivos a partir del historial de git. Se basa en el método de Adam Thornhill ("Your Code as a Crime Scene", cap. 7): los archivos que cambian juntos a menudo en los mismos commits tienen un acoplamiento implícito, aunque no se importen directamente.
+Analiza el acoplamiento temporal entre archivos a partir del historial de git. Se basa en el método de Adam Tornhill ("Your Code as a Crime Scene", cap. 7): los archivos que cambian juntos a menudo en los mismos commits tienen un acoplamiento implícito, aunque no se importen directamente.
 
 ```bash
 km tc [path]
@@ -1420,7 +1420,7 @@ km map --html map.html --color-by hotspots --since 6m
 km map --format json [path]   # el árbol dispuesto, para otras herramientas
 ```
 
-La página es un único archivo HTML que no necesita nada más, en tema claro y oscuro. Un clic en un directorio hace zoom en él, un clic fuera de él o en **Up** lo deshace; al pasar el cursor sobre un archivo se ven su ruta, sus líneas y su valor. Los nombres de los directorios aparecen cuando su círculo es suficientemente grande.
+La página es un único archivo HTML que no necesita nada más, en tema claro y oscuro. Un clic en un directorio hace zoom en él, un clic fuera de él o en **Up** lo deshace; al pasar el cursor sobre un archivo se ven su ruta, sus líneas y su valor. Los nombres de los directorios aparecen cuando su círculo es suficientemente grande. Al pie, la página da crédito a aquello en que se basa.
 
 | `--color-by` | Colores | Como |
 |---|---|---|
@@ -1430,13 +1430,16 @@ La página es un único archivo HTML que no necesita nada más, en tema claro y 
 | `age` | activo verde, inactivo gris, congelado rojo pálido | `km age` |
 | `knowledge` | crítico rojo a bajo gris; rojo cuando el dueño está inactivo | `km knowledge` |
 | `cycles` | rojo cuando el archivo está en un ciclo de dependencias | `km deps` |
+| `llm` | verde desde 95 (apto para LLM), gris desde 70 (requiere cuidado), rojo bajo 70 (riesgo para LLM) | preparación para agentes de código, según `km score` |
+
+Sobre el mapa va la proporción de las líneas en cada lado de la escala (`85% an LLM risk · 9% needing care · 5% LLM-friendly`), y en él una etiqueta con la ruta del directorio donde más se reúne cada lado (`Most LLM risk: src/tui/`), no el único lugar de ese lado: el directorio bajo la raíz con más de esas líneas y la mayor proporción de ellas, un directorio que es una parte del código y no casi todo. `--color-by llm` sigue la afirmación de que los agentes de código trabajan bien solo sobre código sano: CodeScene pone la vara en 9,5 de su Code Health, y 95 es su equivalente en la escala de 0 a 100 de `km score`, que se mide de otra forma. Ambos umbrales se pueden cambiar en `.kimun.toml` (`[map] llm_friendly = 95`, `llm_risk = 70`).
 
 Los archivos sin valor (sin historia, un lenguaje sin grafo de dependencias) se dibujan tenues. Las métricas de git necesitan un repositorio y leen la historia desde `--since`; los umbrales vienen de `.kimun.toml` como los leen sus comandos. El layout empaqueta los hijos de cada directorio del más grande al más chico, luego por nombre, como `d3.pack` empaqueta círculos, así que el mismo código da el mismo mapa.
 
 | Flag | Descripción |
 |------|-------------|
 | `--html FILE` | Escribe el mapa como una página HTML interactiva en este archivo |
-| `--color-by METRIC` | `score` (por defecto), `hotspots`, `churn`, `age`, `knowledge` o `cycles` |
+| `--color-by METRIC` | `score` (por defecto), `hotspots`, `churn`, `age`, `knowledge`, `cycles` o `llm` |
 | `--since TIME` | Lee la historia desde este momento (p. ej. `6m`, `1y`, `30d`) |
 | `--format {table,json}` | `json` imprime el árbol dispuesto: cada nodo con `x`, `y`, `r`, `depth`, `parent`, `lines`, y para los archivos `heat` (-1 a 1) y `label` |
 
@@ -1505,6 +1508,10 @@ min_strength = 0.5  # only show pairs with coupling strength >= this value
 
 [hotspots]
 complexity = "cogcom"  # complexity metric: indent (default), cycom, or cogcom
+
+[map]
+llm_friendly = 95  # km map --color-by llm: desde este puntaje un archivo es apto para LLM (por defecto: 95)
+llm_risk     = 70  # bajo este puntaje es un riesgo para LLM (por defecto: 70)
 
 [impact]
 inert = ["scripts/**"]  # changed files that reach nothing, besides documentation
@@ -1667,8 +1674,8 @@ Las métricas y metodologías implementadas en Kimün se basan en las siguientes
 
 ### Libros
 
-- **Adam Thornhill**, *Your Code as a Crime Scene* (Pragmatic Bookshelf, 2015). Base del análisis de hotspots (caps. 4–5), del acoplamiento temporal (cap. 7), de los mapas de conocimiento y la propiedad del código (caps. 8–9), y de la complejidad por indentación como indicador indirecto de la calidad del código.
-- **Adam Thornhill**, *Software Design X-Rays* (Pragmatic Bookshelf, 2018). Extiende la metáfora de la escena del crimen con más técnicas de análisis del comportamiento del código.
+- **Adam Tornhill**, *Your Code as a Crime Scene* (Pragmatic Bookshelf, 2015). Base del análisis de hotspots (caps. 4–5), del acoplamiento temporal (cap. 7), de los mapas de conocimiento y la propiedad del código (caps. 8–9), y de la complejidad por indentación como indicador indirecto de la calidad del código.
+- **Adam Tornhill**, *Software Design X-Rays* (Pragmatic Bookshelf, 2018). Extiende la metáfora de la escena del crimen con más técnicas de análisis del comportamiento del código.
 
 ### Artículos y estándares
 

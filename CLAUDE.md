@@ -98,14 +98,14 @@ Cognitive complexity (SonarSource method). Invoked via `km cogcom`.
 
 ### Module structure: `src/hotspots/`
 
-Hotspot analysis (Thornhill, change frequency × complexity). Invoked via `km hotspots`.
+Hotspot analysis (Tornhill, change frequency × complexity). Invoked via `km hotspots`.
 
 - **`report.rs`** — Table and JSON output formatters.
 - **`mod.rs`** — Orchestration: opens git repo, counts commits per file, computes complexity (indent or cyclomatic), multiplies for hotspot score. Uses `util::parse_since` for `--since` flag.
 
 ### Module structure: `src/knowledge/`
 
-Knowledge maps (Thornhill, code ownership via git blame). Invoked via `km knowledge`.
+Knowledge maps (Tornhill, code ownership via git blame). Invoked via `km knowledge`.
 
 - **`analyzer.rs`** — `RiskLevel` enum (Critical/High/Medium/Low), `FileOwnership` struct, `compute_ownership()` function that calculates primary owner, concentration, and knowledge loss risk. `compute_bus_factor()` is the truck factor: a file's authors hold at least `AUTHOR_SHARE` (0.75) of its main author's lines, and the authors of the most lines leave first until more than the threshold of the code, weighed by lines, has no author; with `--since`, inactive authors have left before counting.
 - **`report.rs`** — Table and JSON output formatters. `--summary` mode aggregates by author (files owned, lines, languages, worst risk) as an alternative to the per-file view.
@@ -113,7 +113,7 @@ Knowledge maps (Thornhill, code ownership via git blame). Invoked via `km knowle
 
 ### Module structure: `src/tc/`
 
-Temporal coupling analysis (Thornhill, files that change together). Invoked via `km tc`.
+Temporal coupling analysis (Tornhill, files that change together). Invoked via `km tc`.
 
 - **`analyzer.rs`** — `CouplingLevel` enum (Strong/Moderate/Weak), `FileCoupling` struct, `compute_coupling()` function that pairs co-changing files, calculates strength = shared_commits / min(commits_a, commits_b), and classifies by threshold (0.5 strong, 0.3 moderate).
 - **`report.rs`** — Table and JSON output formatters.
@@ -310,12 +310,13 @@ Comprehensive multi-metric report. Invoked via `km report`.
 
 ### Module structure: `src/map/`
 
-Enclosure diagram of the code (Thornhill): directories as circles holding their files, a file's area by its code lines, coloured by a metric. Invoked via `km map --html FILE` or `--format json`.
+Enclosure diagram of the code (Tornhill): directories as circles holding their files, a file's area by its code lines, coloured by a metric. Invoked via `km map --html FILE` or `--format json`.
 
-- **`metric.rs`** — `ColorBy` (`score`, `hotspots`, `churn`, `age`, `knowledge`, `cycles`) and the `Shade` of each file: a heat from -1 (red) through 0 (grey) to 1 (green) and the text shown on hover, keyed by the path under the analysed directory. Reads `hotspots::collect`, `churn`/`age` classifiers over `GitRepo`, `knowledge::collect` and `deps::analyze`.
+- **`metric.rs`** — `ColorBy` (`score`, `hotspots`, `churn`, `age`, `knowledge`, `cycles`, `llm` with the thresholds of `[map]`) and the `Shade` of each file: a heat from -1 (red) through 0 (grey) to 1 (green) and the text shown on hover, keyed by the path under the analysed directory. Reads `hotspots::collect`, `churn`/`age` classifiers over `GitRepo`, `knowledge::collect` and `deps::analyze`.
 - **`pack.rs`** — Circle packing as `d3.pack`: siblings placed on a front chain (Wang et al.); **`enclose.rs`** the smallest enclosing circle (Welzl, shuffled with a fixed seed).
 - **`layout.rs`** — The `file_tree::Tree` of the files laid out: children packed largest first, then by name, the root `SIZE` across; every node after its parent.
-- **`page.rs`** — The page of `crate::html`, with `map.js` (SVG, zoom by view box, tooltip, legend) and `map.css`.
+- **`callout.rs`** — The share of the lines on each side of the scale, and the directory where each side gathers (many such lines, a large share of the directory, a part of the code rather than nearly all), labelled with the `Words` of the metric.
+- **`page.rs`** — The page of `crate::html`, with `map.js` (SVG, zoom by view box, tooltip, legend), `map_callouts.js` (the labels) and `map.css`.
 - **`mod.rs`** — Orchestration: scores the files once (`score::measure`/`snapshot_of`) for their lines and the `score` colour, adds the shades, lays out and writes the page or the JSON.
 
 ### Shared: `src/file_tree.rs`

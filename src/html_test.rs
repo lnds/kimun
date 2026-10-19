@@ -23,11 +23,13 @@ fn render_puts_everything_in_one_document() {
         style: ".x{}",
         body: "<main></main>",
         script: "run();",
+        credits: "After <i>a book</i>.",
     };
     let html = render(&page, "{}");
     assert!(html.starts_with("<!doctype html>"));
     assert!(html.contains("<title>A &amp; B</title>"));
     assert!(html.contains(r#"<script type="application/json" id="data">{}</script>"#));
     assert!(html.contains(".x{}") && html.contains("run();") && html.contains("--bg"));
+    assert!(html.contains(r#"<footer class="credits">After <i>a book</i>.</footer>"#));
     assert!(!html.contains("http"));
 }

@@ -68,6 +68,12 @@ min_degree = 3  # default: 3
 
 # ── Hotspot analysis (km hotspots) ───────────────────────────────────────────
 
+[map]
+# km map --color-by llm: how ready each file is for coding agents, on the
+# 0-100 scale of km score.
+llm_friendly = 95  # from this score a file is LLM-friendly (default: 95)
+llm_risk     = 70  # below this score it is an LLM risk (default: 70)
+
 [hotspots]
 # Complexity metric used to compute the hotspot score.
 # - indent  (default): indentation depth — language-agnostic, fast

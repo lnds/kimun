@@ -29,6 +29,10 @@
 /// [hotspots]
 /// complexity = "indent"  # complexity metric: indent, cycom, cogcom (default: indent)
 ///
+/// [map]
+/// llm_friendly = 95  # km map --color-by llm: from this score a file is LLM-friendly (default: 95)
+/// llm_risk     = 70  # below this score it is an LLM risk (default: 70)
+///
 /// [impact]
 /// inert = ["scripts/**"]  # changed files that reach nothing, besides documentation
 /// entry_points = ["**/endpoint.ex"]  # files run rather than used, besides tasks and scripts
@@ -51,6 +55,8 @@ pub struct KimunConfig {
     pub hotspots: HotspotsConfig,
     #[serde(default)]
     pub impact: ImpactConfig,
+    #[serde(default)]
+    pub map: MapConfig,
 }
 
 /// Threshold overrides for `km smells`.
@@ -182,6 +188,28 @@ pub struct ImpactConfig {
     /// conventional task and script directories.
     #[serde(default)]
     pub entry_points: Vec<String>,
+}
+
+/// Thresholds of `km map --color-by llm`, on the 0–100 scale of `km score`.
+#[derive(Debug, Default, Deserialize)]
+pub struct MapConfig {
+    /// From this score a file is LLM-friendly.
+    pub llm_friendly: Option<f64>,
+    /// Below this score a file is an LLM risk.
+    pub llm_risk: Option<f64>,
+}
+
+impl MapConfig {
+    pub const DEFAULT_LLM_FRIENDLY: f64 = 95.0;
+    pub const DEFAULT_LLM_RISK: f64 = 70.0;
+
+    /// The friendly and the risk thresholds, in that order.
+    pub fn llm_thresholds(&self) -> (f64, f64) {
+        (
+            self.llm_friendly.unwrap_or(Self::DEFAULT_LLM_FRIENDLY),
+            self.llm_risk.unwrap_or(Self::DEFAULT_LLM_RISK),
+        )
+    }
 }
 
 /// Configuration for `km hotspots`.
@@ -374,6 +402,13 @@ mod tests {
         let cfg = parse("[tc]\nmin_degree = 5\nmin_strength = 0.5\n");
         assert_eq!(cfg.tc.resolve_min_degree(Some(1)), 1);
         assert_eq!(cfg.tc.resolve_min_strength(Some(0.9)), Some(0.9));
+    }
+
+    #[test]
+    fn map_thresholds_default_and_override() {
+        assert_eq!(KimunConfig::default().map.llm_thresholds(), (95.0, 70.0));
+        let cfg = parse("[map]\nllm_friendly = 90\nllm_risk = 60\n");
+        assert_eq!(cfg.map.llm_thresholds(), (90.0, 60.0));
     }
 
     #[test]

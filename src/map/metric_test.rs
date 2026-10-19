@@ -42,3 +42,29 @@ fn score_shades_key_files_by_their_path_under_the_root() {
     assert_eq!(shade.label, "score 50.0 (D)");
     assert_eq!(legend.len(), 3);
 }
+
+#[test]
+fn llm_readiness_has_three_classes_by_the_thresholds() {
+    let thresholds = (95.0, 70.0);
+    assert_eq!(llm_heat(95.0, thresholds), 1.0);
+    assert_eq!(llm_heat(94.9, thresholds), 0.0);
+    assert_eq!(llm_heat(70.0, thresholds), 0.0);
+    assert_eq!(llm_heat(69.9, thresholds), -1.0);
+    assert_eq!(llm_heat(80.0, (80.0, 50.0)), 1.0);
+}
+
+#[test]
+fn llm_shades_name_the_class() {
+    let file = FileScore {
+        path: PathBuf::from("/repo/a.rs"),
+        score: 96.0,
+        grade: crate::score::analyzer::Grade::APlus,
+        loc: 10,
+        issues: vec![],
+    };
+    let (shades, _) = by_llm(Path::new("/repo"), &[file], (95.0, 70.0));
+    assert_eq!(
+        shades[Path::new("a.rs")].label,
+        "score 96.0 (A+): LLM-friendly"
+    );
+}

@@ -60,3 +60,14 @@ main { padding: 0 16px 16px; }
 }
 #tip b { font-family: var(--mono); font-weight: 500; overflow-wrap: anywhere; }
 #tip span { display: block; color: var(--muted); }
+.callout rect { fill: var(--surface); stroke-width: 1.5; }
+.callout line { stroke-width: 1.5; }
+.callout text { font-weight: 600; stroke: none; }
+.callout.risk rect, .callout.risk line { stroke: var(--red); }
+.callout.risk text { fill: var(--red); }
+.callout.good rect, .callout.good line { stroke: var(--uses); }
+.callout.good text { fill: var(--uses); }
+#summary { font-weight: 500; color: var(--fg); }
+#map circle.marked { stroke-width: 2.5; stroke-dasharray: 6 4; }
+#map circle.marked.risk { stroke: var(--red); }
+#map circle.marked.good { stroke: var(--uses); }

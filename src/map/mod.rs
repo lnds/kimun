@@ -3,6 +3,7 @@
 //! grows with its lines of code, and a metric colours the files, so what
 //! stands out shows where it sits in the system.
 
+mod callout;
 mod enclose;
 mod layout;
 mod metric;
@@ -34,6 +35,7 @@ fn title(color_by: ColorBy) -> &'static str {
         ColorBy::Age => "age",
         ColorBy::Knowledge => "knowledge loss risk",
         ColorBy::Cycles => "dependency cycles",
+        ColorBy::Llm => "readiness for coding agents",
     }
 }
 
@@ -76,9 +78,13 @@ pub fn run(
         return Err("no code files to draw".into());
     }
     let nodes = layout::layout(&files);
+    let words = metric::words(opts.color_by);
     let data = page::Data {
+        llm: opts.color_by == ColorBy::Llm,
         metric: title(opts.color_by),
         legend: &legend,
+        summary: &callout::shares(&nodes, &words),
+        callouts: &callout::callouts(&nodes, &words),
         nodes: &nodes,
     };
     let Some(file) = opts.html else {

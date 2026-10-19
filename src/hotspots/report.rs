@@ -19,7 +19,7 @@ fn complexity_label(metric: &str) -> &'static str {
 fn method_description(metric: &str) -> &'static str {
     match metric {
         "cycom" => "Score = Commits × Cyclomatic Complexity.",
-        _ => "Score = Commits × Total Indentation (Thornhill method).",
+        _ => "Score = Commits × Total Indentation (Tornhill method).",
     }
 }
 

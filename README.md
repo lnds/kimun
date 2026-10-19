@@ -43,7 +43,7 @@ That is Kimün measuring its own source: 140 files and 18,963 lines of code, tes
 Beyond the aggregate score, Kimün provides 19 specialized commands:
 
 - **Static metrics** — lines of code by language (classified as [cloc](https://github.com/AlDanial/cloc) classifies them), duplicate detection (Rule of Three), Halstead complexity, cyclomatic complexity, cognitive complexity (SonarSource), indentation complexity, two Maintainability Index variants (Visual Studio and verifysoft), code smell detection, dependencies between files and their cycles, a comprehensive multi-metric report, and a map of the code as nested circles coloured by any of them.
-- **Git-based analysis** — hotspot detection (change frequency × complexity, Thornhill method), code churn (pure change frequency), code ownership / knowledge maps via `git blame`, temporal coupling between files that change together, impact of a diff (diffusion and missing co-changes), per-author ownership summary, and file age classification (Active / Stale / Frozen).
+- **Git-based analysis** — hotspot detection (change frequency × complexity, Tornhill method), code churn (pure change frequency), code ownership / knowledge maps via `git blame`, temporal coupling between files that change together, impact of a diff (diffusion and missing co-changes), per-author ownership summary, and file age classification (Active / Stale / Frozen).
 - **For coding agents** — every command that measures can answer in JSON, and `km ai` is an optional integration with Claude that runs the tools and writes a narrative report. No other command calls a model.
 
 > Note: This repository is not the same as the Rust console note-taking app `kimun` by nico2sh. That project is available at https://github.com/nico2sh/kimun.
@@ -461,7 +461,7 @@ The verifysoft MI has no lower bound: a large file can be far below 0 (ripgrep `
 
 ### `km hotspots` -- Hotspot analysis
 
-Finds hotspots: files that change frequently AND have high complexity. Based on Adam Thornhill's method ("Your Code as a Crime Scene").
+Finds hotspots: files that change frequently AND have high complexity. Based on Adam Tornhill's method ("Your Code as a Crime Scene").
 
 ```bash
 km hotspots [path]
@@ -475,7 +475,7 @@ Score = Commits × Complexity
 
 Files with high scores concentrate risk — they are both change-prone and complex, making them the highest-value refactoring targets.
 
-By default, complexity is measured by **total indentation** (sum of logical indentation levels across all code lines), following Thornhill's original method from "Your Code as a Crime Scene". Use `--complexity cycom` for cyclomatic complexity instead.
+By default, complexity is measured by **total indentation** (sum of logical indentation levels across all code lines), following Tornhill's original method from "Your Code as a Crime Scene". Use `--complexity cycom` for cyclomatic complexity instead.
 
 Requires a git repository. Merge commits are excluded from the count.
 
@@ -488,7 +488,7 @@ Options:
 | `--top N` | Rows of the table (default: 20); JSON lists every file unless `--top` is given |
 | `--sort-by METRIC` | Sort by `score`, `commits`, or `complexity` (default: `score`) |
 | `--since DURATION` | Only consider commits since this time (e.g. `30d`, `6m`, `1y`) |
-| `--complexity METRIC` | `indent` (default, Thornhill) or `cycom` (cyclomatic) |
+| `--complexity METRIC` | `indent` (default, Tornhill) or `cycom` (cyclomatic) |
 
 Duration units: `d` (days), `m` (months, approx. 30 days), `y` (years, approx. 365 days).
 
@@ -506,7 +506,7 @@ Hotspots (Commits × Total Indent Complexity)
  src/report/mod.rs           Rust       4        998       3992
 ──────────────────────────────────────────────────────────────────────────────
 
-Score = Commits × Total Indentation (Thornhill method).
+Score = Commits × Total Indentation (Tornhill method).
 High-score files are change-prone and complex — prime refactoring targets.
 ```
 
@@ -530,7 +530,7 @@ High-score files are change-prone and complex — prime refactoring targets.
 
 ### `km knowledge` -- Code ownership analysis
 
-Analyzes code ownership patterns via git blame (knowledge maps). Based on Adam Thornhill's method ("Your Code as a Crime Scene" chapters 8-9).
+Analyzes code ownership patterns via git blame (knowledge maps). Based on Adam Tornhill's method ("Your Code as a Crime Scene" chapters 8-9).
 
 ```bash
 km knowledge [path]
@@ -618,7 +618,7 @@ Project Bus Factor: 2
 
 ### `km tc` -- Temporal coupling analysis
 
-Analyzes temporal coupling between files via git history. Based on Adam Thornhill's method ("Your Code as a Crime Scene" ch. 7): files that frequently change together in the same commits have implicit coupling, even without direct imports.
+Analyzes temporal coupling between files via git history. Based on Adam Tornhill's method ("Your Code as a Crime Scene" ch. 7): files that frequently change together in the same commits have implicit coupling, even without direct imports.
 
 ```bash
 km tc [path]
@@ -1420,7 +1420,7 @@ km map --html map.html --color-by hotspots --since 6m
 km map --format json [path]   # the laid out tree, for other tools
 ```
 
-The page is one HTML file that needs nothing else, in light and dark themes. A click on a directory zooms into it, a click outside it or on **Up** zooms out; hovering a file shows its path, its lines and its value. Directory names show when their circle is large enough.
+The page is one HTML file that needs nothing else, in light and dark themes. A click on a directory zooms into it, a click outside it or on **Up** zooms out; hovering a file shows its path, its lines and its value. Directory names show when their circle is large enough. The foot of the page credits what it builds on.
 
 | `--color-by` | Colours | As |
 |---|---|---|
@@ -1430,13 +1430,16 @@ The page is one HTML file that needs nothing else, in light and dark themes. A c
 | `age` | active green, stale grey, frozen pale red | `km age` |
 | `knowledge` | critical red to low grey; red when the owner is inactive | `km knowledge` |
 | `cycles` | red when the file is in a dependency cycle | `km deps` |
+| `llm` | green from 95 (LLM-friendly), grey from 70 (needs care), red below 70 (LLM risk) | readiness for coding agents, by `km score` |
+
+Above the map, the share of the lines on each side of the scale (`85% an LLM risk · 9% needing care · 5% LLM-friendly`), and on it a label with the path of the directory where each side gathers most (`Most LLM risk: src/tui/`), not the only place of that side: the directory below the root with the most such lines and the largest share of them, a directory that is a part of the code rather than nearly all of it. `--color-by llm` follows the claim that coding agents work well only on healthy code: CodeScene puts the bar at 9.5 of its Code Health, and 95 is its counterpart on the 0–100 scale of `km score`, which is measured otherwise. Both thresholds can be changed in `.kimun.toml` (`[map] llm_friendly = 95`, `llm_risk = 70`).
 
 Files without a value (no history, a language with no dependency graph) are drawn faint. The metrics of git need a repository and read history since `--since`; the thresholds come from `.kimun.toml` as their commands read them. The layout packs each directory's children largest first, then by name, as `d3.pack` packs circles, so the same code gives the same map.
 
 | Flag | Description |
 |------|-------------|
 | `--html FILE` | Write the map as an interactive HTML page to this file |
-| `--color-by METRIC` | `score` (default), `hotspots`, `churn`, `age`, `knowledge` or `cycles` |
+| `--color-by METRIC` | `score` (default), `hotspots`, `churn`, `age`, `knowledge`, `cycles` or `llm` |
 | `--since TIME` | Read history since this time (e.g. `6m`, `1y`, `30d`) |
 | `--format {table,json}` | `json` prints the laid out tree: every node with `x`, `y`, `r`, `depth`, `parent`, `lines`, and for files `heat` (-1 to 1) and `label` |
 
@@ -1505,6 +1508,10 @@ min_strength = 0.5  # only show pairs with coupling strength >= this value
 
 [hotspots]
 complexity = "cogcom"  # complexity metric: indent (default), cycom, or cogcom
+
+[map]
+llm_friendly = 95  # km map --color-by llm: from this score a file is LLM-friendly (default: 95)
+llm_risk     = 70  # below this score it is an LLM risk (default: 70)
 
 [impact]
 inert = ["scripts/**"]  # changed files that reach nothing, besides documentation
@@ -1662,8 +1669,8 @@ The metrics and methodologies implemented in Kimün are based on the following s
 
 ### Books
 
-- **Adam Thornhill**, *Your Code as a Crime Scene* (Pragmatic Bookshelf, 2015). Basis for hotspot analysis (ch. 4–5), temporal coupling (ch. 7), knowledge maps / code ownership (ch. 8–9), and indentation-based complexity as a proxy for code quality.
-- **Adam Thornhill**, *Software Design X-Rays* (Pragmatic Bookshelf, 2018). Extends the crime scene metaphor with additional behavioral code analysis techniques.
+- **Adam Tornhill**, *Your Code as a Crime Scene* (Pragmatic Bookshelf, 2015). Basis for hotspot analysis (ch. 4–5), temporal coupling (ch. 7), knowledge maps / code ownership (ch. 8–9), and indentation-based complexity as a proxy for code quality.
+- **Adam Tornhill**, *Software Design X-Rays* (Pragmatic Bookshelf, 2018). Extends the crime scene metaphor with additional behavioral code analysis techniques.
 
 ### Papers and standards
 
