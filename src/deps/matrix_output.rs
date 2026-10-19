@@ -1,40 +1,60 @@
-//! `km deps --matrix`: the matrix printed on a terminal or written as an
-//! HTML page.
+//! `km deps --matrix`: the matrix printed on a terminal, as JSON, or
+//! written as an HTML page.
 
 use std::error::Error;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
-use super::{analyze, matrix, matrix_html, matrix_text, report, show_paths};
+use super::{analyze, matrix, matrix_html, matrix_json, matrix_text, report, show_paths};
+use crate::cli::OutputMode;
 use crate::walk::WalkConfig;
+
+/// Where the matrix goes.
+enum Sink<'a> {
+    Text,
+    Json,
+    Html(&'a Path),
+}
+
+fn sink<'a>(
+    output: OutputMode,
+    args: &'a crate::cli::DepsArgs,
+) -> Result<Sink<'a>, Box<dyn Error>> {
+    match (output, &args.html) {
+        (OutputMode::Table, Some(file)) => Ok(Sink::Html(file)),
+        (OutputMode::Table, None) => Ok(Sink::Text),
+        (OutputMode::Json, None) => Ok(Sink::Json),
+        _ => Err("--matrix prints a table or JSON, or with --html a page".into()),
+    }
+}
 
 /// Print the dependency structure matrix of the analyzed files, or of
 /// those in cycles.
 pub fn run(
     cfg: &WalkConfig<'_>,
-    output: crate::cli::OutputMode,
+    output: OutputMode,
     args: &crate::cli::DepsArgs,
     expand: &matrix::Expand,
 ) -> Result<(), Box<dyn Error>> {
-    if !matches!(output, crate::cli::OutputMode::Table) {
-        return Err("--matrix prints a table; --format json lists the edges in `edges`".into());
-    }
+    let sink = sink(output, args)?;
     let mut result = analyze(cfg);
     show_paths(&mut result, cfg.path);
-    let files: Vec<PathBuf> = result
+    let in_matrix = result
         .entries
         .iter()
-        .filter(|e| !args.cycles_only || e.in_cycle)
-        .map(|e| e.path.clone())
-        .collect();
-    if files.is_empty() {
-        println!("No source files found for dependency analysis.");
-    } else {
-        let m = matrix::Matrix::build(&files, &result.edges, &result.cycles, expand)?;
-        match &args.html {
-            Some(file) => write_matrix_html(&m, cfg.path, file)?,
-            None => print_matrix(&m)?,
-        }
+        .filter(|e| !args.cycles_only || e.in_cycle);
+    let files: Vec<PathBuf> = in_matrix.map(|e| e.path.clone()).collect();
+    let m = (!files.is_empty())
+        .then(|| matrix::Matrix::build(&files, &result.edges, &result.cycles, expand))
+        .transpose()?;
+    if let Sink::Json = sink {
+        let out = matrix_json::of(m.as_ref(), &result.unsupported);
+        return crate::report_helpers::print_json_stdout(&out);
+    }
+    match (&m, sink) {
+        (None, _) => println!("No source files found for dependency analysis."),
+        (Some(m), Sink::Html(file)) => write_matrix_html(m, cfg.path, file)?,
+        (Some(m), _) => print_matrix(m)?,
     }
     if let Some(note) = report::unsupported_note(&result.unsupported) {
         println!("{note}");

@@ -32,6 +32,7 @@ mod kaikai;
 pub mod layout;
 mod matrix;
 mod matrix_html;
+mod matrix_json;
 mod matrix_output;
 mod matrix_text;
 mod matrix_tree;
