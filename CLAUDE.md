@@ -204,7 +204,7 @@ Dependency graph (file-level coupling from imports, cycles via Tarjan SCC). Invo
 - **`ruby_files.rs`** — `Files` resolves Ruby over the graph: requires by path (`require_relative`) or under `lib`, `test`, `spec` and `app/*`; constants through an index of definitions, always on, whole from the innermost namespace out. Several definitions: the file named after the constant (`underscore`), else the nearest when they share a directory, else ambiguous (counted in `FileGraph::ambiguous`). Core classes are skipped, and only tests see what tests define.
 - **`kaikai.rs`** — Kaikai extraction and resolution: `import a.b.c` names a file under a package root, found by trying each ancestor directory of the importer; a package directory (`kai.toml`) names the file of its name, or every file in it when it has none. Each file is a module and the files of a package import each other, so they have no edges besides their imports (unlike Go).
 - **`edges.rs`** — The file-level edges, kept in `DepResult.edges` (sorted, with their `EdgeKind`); the JSON lists those that leave the files shown.
-- **`matrix_tree.rs`** — The directories and files of the matrix as a tree (rooted at the deepest directory holding every file; a directory holding only another is merged with it). `order` sorts the children of each directory so that a sibling comes before those it uses, by the uses that load or compile: SCCs stay together, inside one by uses given minus taken, ties by name.
+- **`matrix_tree.rs`** — The order of the matrix over `crate::file_tree::Tree`: `order` sorts the children of each directory so that a sibling comes before those it uses, by the uses that load or compile: SCCs stay together, inside one by uses given minus taken, ties by name.
 - **`matrix.rs`** — The dependency structure matrix: `Expand` (`--depth`, `--focus`) picks the directories shown expanded, `Matrix::build` the rows and the cells (files of the column using files of the row), each with its `Mark` (cycle, against the layering, type-only or deferred).
 - **`matrix_json.rs`** — The matrix as JSON (`--matrix --format json`): rows, expanded groups, every cell with its mark and uses, and the cells above the diagonal.
 - **`matrix_text.rs`** — The matrix as text: rows numbered and named, columns by number, `!` on cells of a cycle, colours on a terminal, and the cells above the diagonal with the uses behind each.
@@ -307,6 +307,20 @@ Comprehensive multi-metric report. Invoked via `km report`.
 - **`markdown.rs`** — Human-readable table report.
 - **`json.rs`** — JSON output formatter.
 - **`mod.rs`** — Orchestration: walks files once, runs all analyzers, emits unified report.
+
+### Module structure: `src/map/`
+
+Enclosure diagram of the code (Thornhill): directories as circles holding their files, a file's area by its code lines, coloured by a metric. Invoked via `km map --html FILE` or `--format json`.
+
+- **`metric.rs`** — `ColorBy` (`score`, `hotspots`, `churn`, `age`, `knowledge`, `cycles`) and the `Shade` of each file: a heat from -1 (red) through 0 (grey) to 1 (green) and the text shown on hover, keyed by the path under the analysed directory. Reads `hotspots::collect`, `churn`/`age` classifiers over `GitRepo`, `knowledge::collect` and `deps::analyze`.
+- **`pack.rs`** — Circle packing as `d3.pack`: siblings placed on a front chain (Wang et al.); **`enclose.rs`** the smallest enclosing circle (Welzl, shuffled with a fixed seed).
+- **`layout.rs`** — The `file_tree::Tree` of the files laid out: children packed largest first, then by name, the root `SIZE` across; every node after its parent.
+- **`page.rs`** — The page of `crate::html`, with `map.js` (SVG, zoom by view box, tooltip, legend) and `map.css`.
+- **`mod.rs`** — Orchestration: scores the files once (`score::measure`/`snapshot_of`) for their lines and the `score` colour, adds the shades, lays out and writes the page or the JSON.
+
+### Shared: `src/file_tree.rs`
+
+Files as a tree of directories, rooted at the deepest directory holding every file, a directory holding only another merged with it. `deps/matrix_tree.rs` orders it for the dependency matrix; `map/layout.rs` packs it.
 
 ### Module structure: `src/score/`
 

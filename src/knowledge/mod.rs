@@ -68,12 +68,12 @@ fn sort_results(results: &mut [FileOwnership], sort_by: &str) {
 }
 
 /// The ownership of each file, and the blame it was computed from.
-type Collected = (Vec<FileOwnership>, Vec<Vec<BlameInfo>>);
+pub(crate) type Collected = (Vec<FileOwnership>, Vec<Vec<BlameInfo>>);
 
 /// Blame each code file and compute its ownership. Generated files and
 /// data or prose are left out, and so are the lines of bot accounts, which
 /// hold no knowledge; a file only bots wrote is left out too.
-fn collect(
+pub(crate) fn collect(
     cfg: &WalkConfig<'_>,
     git_repo: &GitRepo,
     recent_authors: Option<&HashSet<String>>,

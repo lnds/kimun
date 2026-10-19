@@ -669,6 +669,24 @@ pub enum Commands {
         args: DepsArgs,
     },
 
+    /// Draw the code as nested circles, coloured by a metric, as an HTML page
+    Map {
+        #[command(flatten)]
+        common: CommonArgs,
+
+        /// Write the map as an interactive HTML page to this file
+        #[arg(long, value_name = "FILE")]
+        html: Option<PathBuf>,
+
+        /// The metric that colours the files
+        #[arg(long, value_enum, default_value_t)]
+        color_by: crate::map::ColorBy,
+
+        /// Read history since this time (e.g. 6m, 1y, 30d), for the metrics of git
+        #[arg(long)]
+        since: Option<String>,
+    },
+
     /// Summarize code ownership by author: files owned, lines, languages, last active date
     Authors {
         #[command(flatten)]

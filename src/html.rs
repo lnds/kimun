@@ -28,6 +28,23 @@ pub fn script_json(data: &impl Serialize) -> serde_json::Result<String> {
     Ok(serde_json::to_string(data)?.replace('<', "\\u003c"))
 }
 
+/// The document titled `title` with `body`, its own `(style, script)` and
+/// `data` for the script.
+pub fn page(
+    title: &str,
+    body: &str,
+    (style, script): (&str, &str),
+    data: &impl Serialize,
+) -> serde_json::Result<String> {
+    let page = Page {
+        title,
+        style,
+        body,
+        script,
+    };
+    Ok(render(&page, &script_json(data)?))
+}
+
 /// The whole document, with `data` readable by the script as the JSON of
 /// the element `#data`.
 pub fn render(page: &Page, data: &str) -> String {

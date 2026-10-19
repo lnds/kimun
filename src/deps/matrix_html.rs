@@ -5,7 +5,7 @@
 use serde::Serialize;
 
 use super::matrix::{Line, Matrix};
-use crate::html::{self, Page};
+use crate::html;
 
 const STYLE: &str = include_str!("matrix_html.css");
 const SCRIPT: &str = include_str!("matrix_html.js");
@@ -71,13 +71,7 @@ pub fn render(m: &Matrix, name: &str) -> serde_json::Result<String> {
 </main>"#,
         title = html::escape(&title)
     );
-    let page = Page {
-        title: &title,
-        style: STYLE,
-        body: &body,
-        script: SCRIPT,
-    };
-    Ok(html::render(&page, &html::script_json(&data(m))?))
+    html::page(&title, &body, (STYLE, SCRIPT), &data(m))
 }
 
 #[cfg(test)]

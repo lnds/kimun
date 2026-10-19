@@ -35,6 +35,8 @@ mod deps;
 mod detection;
 /// Duplicate code detection using sliding-window fingerprinting.
 mod dups;
+/// Files as a tree of directories, for the views that nest them.
+mod file_tree;
 /// Git repository access via libgit2 (change frequency, blame, coupling).
 mod git;
 /// Halstead complexity metrics (volume, effort, bugs, time).
@@ -53,6 +55,8 @@ mod init;
 mod knowledge;
 /// Lines of code counting with FSM-based line classification.
 mod loc;
+/// Enclosure diagram: directories as circles holding their files, coloured by a metric.
+mod map;
 /// Maintainability Index (Visual Studio variant, 0–100 scale).
 mod mi;
 /// Maintainability Index (verifysoft variant, with comment weight).
@@ -465,6 +469,19 @@ fn main() {
         }
         Commands::Deps { common, args } => {
             dispatch!(common, |cfg, output| deps::run(&cfg, output, &args))
+        }
+        Commands::Map {
+            common,
+            html,
+            color_by,
+            since,
+        } => {
+            let opts = map::Options {
+                html: html.as_deref(),
+                color_by,
+                since: since.as_deref(),
+            };
+            dispatch!(common, |cfg, output| map::run(&cfg, output, &opts))
         }
         Commands::Authors { common, since } => {
             dispatch!(common, |cfg, output| authors::run(

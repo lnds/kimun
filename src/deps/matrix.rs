@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use super::edges::Edge;
 use super::graph::EdgeKind;
-use super::matrix_tree::{Node, ROOT, Tree};
+use crate::file_tree::{Node, ROOT, Tree};
 
 /// Which directories are shown expanded.
 pub enum Expand {

@@ -248,6 +248,11 @@ pub(crate) struct Snapshot {
 }
 
 impl Snapshot {
+    /// Every scored file, worst first.
+    pub(crate) fn files(&self) -> &[FileScore] {
+        &self.files
+    }
+
     /// File scores keyed by path relative to `root`, the directory that was walked.
     fn scores_by_path(&self, root: &Path) -> HashMap<PathBuf, f64> {
         self.files
