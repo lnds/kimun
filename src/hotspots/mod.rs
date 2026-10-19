@@ -45,31 +45,18 @@ fn compute_complexity(
     })
 }
 
-/// Identify hotspot files by combining git change frequency with code
-/// complexity. Opens the git repo, walks source files, computes complexity
-/// per file, and sorts by the chosen metric (score, commits, or complexity).
-pub fn run(
+/// The hotspots of the code files: commits since `since_ts` (a Unix time)
+/// times complexity by `complexity_metric`. `None` when no commit is found.
+pub(crate) fn collect(
     cfg: &WalkConfig<'_>,
-    output: OutputMode,
-    top: Option<usize>,
-    sort_by: &str,
-    since: Option<&str>,
+    since_ts: Option<i64>,
     complexity_metric: &str,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<Option<Vec<FileHotspot>>, Box<dyn Error>> {
     let git_repo = GitRepo::open(cfg.path)
         .map_err(|e| format!("not a git repository (or any parent): {e}"))?;
-
-    let since_ts = since.map(parse_since).transpose()?;
-
-    // Build a HashMap of relative path → commits
     let freqs = git_repo.file_frequencies(since_ts)?;
     if freqs.is_empty() {
-        if since.is_some() {
-            eprintln!("No commits found in the specified time range.");
-        } else {
-            eprintln!("No commits found in the repository.");
-        }
-        return Ok(());
+        return Ok(None);
     }
     let freq_map: HashMap<PathBuf, usize> =
         freqs.into_iter().map(|f| (f.path, f.commits)).collect();
@@ -100,16 +87,37 @@ pub fn run(
             }
         };
 
-        let score = commits * complexity;
-
         results.push(FileHotspot {
             path: rel_path,
             language: spec.name.to_string(),
             commits,
             complexity,
-            score,
+            score: commits * complexity,
         });
     }
+    Ok(Some(results))
+}
+
+/// Identify hotspot files by combining git change frequency with code
+/// complexity. Opens the git repo, walks source files, computes complexity
+/// per file, and sorts by the chosen metric (score, commits, or complexity).
+pub fn run(
+    cfg: &WalkConfig<'_>,
+    output: OutputMode,
+    top: Option<usize>,
+    sort_by: &str,
+    since: Option<&str>,
+    complexity_metric: &str,
+) -> Result<(), Box<dyn Error>> {
+    let since_ts = since.map(parse_since).transpose()?;
+    let Some(mut results) = collect(cfg, since_ts, complexity_metric)? else {
+        if since.is_some() {
+            eprintln!("No commits found in the specified time range.");
+        } else {
+            eprintln!("No commits found in the repository.");
+        }
+        return Ok(());
+    };
 
     // Sort by chosen metric descending
     match sort_by {

@@ -40,9 +40,9 @@ That is Kimün measuring its own source: 140 files and 18,963 lines of code, tes
 
 **Website: [kimun.tools](https://kimun.tools/en/)** · [A two-minute video](https://kimun.tools/en/#video) of the grade, the metrics, what git remembers, the impact of a change and the gate for CI · Also [in Spanish](LEEME.md).
 
-Beyond the aggregate score, Kimün provides 18 specialized commands:
+Beyond the aggregate score, Kimün provides 19 specialized commands:
 
-- **Static metrics** — lines of code by language (classified as [cloc](https://github.com/AlDanial/cloc) classifies them), duplicate detection (Rule of Three), Halstead complexity, cyclomatic complexity, cognitive complexity (SonarSource), indentation complexity, two Maintainability Index variants (Visual Studio and verifysoft), code smell detection, dependencies between files and their cycles, and a comprehensive multi-metric report.
+- **Static metrics** — lines of code by language (classified as [cloc](https://github.com/AlDanial/cloc) classifies them), duplicate detection (Rule of Three), Halstead complexity, cyclomatic complexity, cognitive complexity (SonarSource), indentation complexity, two Maintainability Index variants (Visual Studio and verifysoft), code smell detection, dependencies between files and their cycles, a comprehensive multi-metric report, and a map of the code as nested circles coloured by any of them.
 - **Git-based analysis** — hotspot detection (change frequency × complexity, Thornhill method), code churn (pure change frequency), code ownership / knowledge maps via `git blame`, temporal coupling between files that change together, impact of a diff (diffusion and missing co-changes), per-author ownership summary, and file age classification (Active / Stale / Frozen).
 - **For coding agents** — every command that measures can answer in JSON, and `km ai` is an optional integration with Claude that runs the tools and writes a narrative report. No other command calls a model.
 
@@ -1409,6 +1409,36 @@ Options:
 | `--format {table,json,short,terse}` | Output format (default: table) |
 | `--bottom N` | Number of worst files to show (default: 10) |
 | `--min-lines N` | Minimum lines for a duplicate block (default: 6) |
+
+### `km map` -- Enclosure diagram of the code
+
+Draws the code as nested circles, the enclosure diagram of *Your Code as a Crime Scene*: every directory is a circle holding the circles of its subdirectories and files, a file's area grows with its lines of code, and one metric colours the files. A table ranks files; the map shows where the ones that stand out sit, whether spread out or gathered in one module, and how big that module is next to the rest.
+
+```bash
+km map --html map.html [path]
+km map --html map.html --color-by hotspots --since 6m
+km map --format json [path]   # the laid out tree, for other tools
+```
+
+The page is one HTML file that needs nothing else, in light and dark themes. A click on a directory zooms into it, a click outside it or on **Up** zooms out; hovering a file shows its path, its lines and its value. Directory names show when their circle is large enough.
+
+| `--color-by` | Colours | As |
+|---|---|---|
+| `score` (default) | red below 70, grey from 70 to 90, green from 90 | `km score`, per file |
+| `hotspots` | red by share of the largest hotspot, grey under a tenth of it | `km hotspots` |
+| `churn` | high red, medium pale red, low grey | `km churn` |
+| `age` | active green, stale grey, frozen pale red | `km age` |
+| `knowledge` | critical red to low grey; red when the owner is inactive | `km knowledge` |
+| `cycles` | red when the file is in a dependency cycle | `km deps` |
+
+Files without a value (no history, a language with no dependency graph) are drawn faint. The metrics of git need a repository and read history since `--since`; the thresholds come from `.kimun.toml` as their commands read them. The layout packs each directory's children largest first, then by name, as `d3.pack` packs circles, so the same code gives the same map.
+
+| Flag | Description |
+|------|-------------|
+| `--html FILE` | Write the map as an interactive HTML page to this file |
+| `--color-by METRIC` | `score` (default), `hotspots`, `churn`, `age`, `knowledge` or `cycles` |
+| `--since TIME` | Read history since this time (e.g. `6m`, `1y`, `30d`) |
+| `--format {table,json}` | `json` prints the laid out tree: every node with `x`, `y`, `r`, `depth`, `parent`, `lines`, and for files `heat` (-1 to 1) and `label` |
 
 ### `km report` -- Comprehensive metrics report
 

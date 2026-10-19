@@ -1,0 +1,43 @@
+//! The map as a self-contained HTML page: the circles come laid out, the
+//! page draws them as SVG, zooms into a directory on a click and tells a
+//! file's path, lines and value on hover.
+
+use serde::Serialize;
+
+use super::layout::Placed;
+use super::metric::Key;
+use crate::html::{self, Page};
+
+const STYLE: &str = include_str!("map.css");
+const SCRIPT: &str = include_str!("map.js");
+
+#[derive(Serialize)]
+pub struct Data<'a> {
+    /// What colours the files, as the legend titles it.
+    pub metric: &'a str,
+    pub legend: &'a [Key],
+    pub nodes: &'a [Placed],
+}
+
+/// The page of the map of the directory `name`.
+pub fn render(name: &str, data: &Data<'_>) -> serde_json::Result<String> {
+    let title = format!("Code map · {name}");
+    let body = format!(
+        r#"<header class="page">
+<h1>{title}</h1>
+<p>Each circle is a directory holding its files, a file's area grows with its lines of code. Coloured by {metric}. Click a directory to zoom in, outside it to zoom out.</p>
+</header>
+<div class="toolbar"><button id="up">Up</button><span id="crumb" class="mono"></span><span id="legend" class="legend"></span></div>
+<main><svg id="map" viewBox="0 0 1000 1000" role="img" aria-label="{title}"></svg></main>
+<div id="tip" hidden></div>"#,
+        title = html::escape(&title),
+        metric = html::escape(data.metric),
+    );
+    let page = Page {
+        title: &title,
+        style: STYLE,
+        body: &body,
+        script: SCRIPT,
+    };
+    Ok(html::render(&page, &html::script_json(data)?))
+}
