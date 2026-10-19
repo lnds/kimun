@@ -32,6 +32,63 @@ pub enum ColorBy {
     Knowledge,
     /// Files in a dependency cycle, as `km deps`
     Cycles,
+    /// How ready each file is for coding agents, by its `km score`
+    Llm,
+}
+
+/// How the page speaks of a metric: what a file is on each side of the
+/// scale, and the label of the directory where each side gathers.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct Words {
+    pub risk: &'static str,
+    pub fine: &'static str,
+    pub good: Option<&'static str>,
+    pub risk_callout: &'static str,
+    pub good_callout: Option<&'static str>,
+}
+
+/// The words of `color_by`.
+pub fn words(color_by: ColorBy) -> Words {
+    let (risk, fine, good, risk_callout, good_callout) = match color_by {
+        ColorBy::Score => (
+            "unhealthy",
+            "fair",
+            Some("healthy"),
+            "Least healthy code",
+            Some("Healthiest code"),
+        ),
+        ColorBy::Llm => (
+            "an LLM risk",
+            "needing care",
+            Some("LLM-friendly"),
+            "Unhealthy code: LLM risk",
+            Some("LLM-friendly code"),
+        ),
+        ColorBy::Hotspots => ("a hotspot", "calm", None, "Hotspots", None),
+        ColorBy::Churn => ("churning", "steady", None, "Most churn", None),
+        ColorBy::Age => (
+            "frozen",
+            "stale",
+            Some("active"),
+            "Frozen code",
+            Some("Active code"),
+        ),
+        ColorBy::Knowledge => (
+            "at risk of knowledge loss",
+            "shared",
+            None,
+            "Knowledge at risk",
+            None,
+        ),
+        ColorBy::Cycles => ("in a cycle", "in no cycle", None, "Dependency cycles", None),
+    };
+    Words {
+        risk,
+        fine,
+        good,
+        risk_callout,
+        good_callout,
+    }
 }
 
 /// How a file is drawn.
@@ -60,6 +117,15 @@ pub fn score_heat(score: f64) -> f64 {
     match score {
         s if s < 70.0 => -((70.0 - s) / 40.0).clamp(0.25, 1.0),
         s if s >= 90.0 => ((s - 85.0) / 15.0).clamp(0.3, 1.0),
+        _ => 0.0,
+    }
+}
+
+/// Green from `friendly`, red below `risk`, grey between.
+pub fn llm_heat(score: f64, (friendly, risk): (f64, f64)) -> f64 {
+    match score {
+        s if s >= friendly => 1.0,
+        s if s < risk => -1.0,
         _ => 0.0,
     }
 }
@@ -129,6 +195,11 @@ pub fn shades(
         ColorBy::Age => by_age(cfg),
         ColorBy::Knowledge => by_knowledge(cfg, since),
         ColorBy::Cycles => Ok(by_cycles(cfg)),
+        ColorBy::Llm => Ok(by_llm(
+            cfg.path,
+            scores,
+            crate::config::KimunConfig::load().map.llm_thresholds(),
+        )),
     }
 }
 
@@ -148,6 +219,26 @@ fn by_score(root: &Path, scores: &[FileScore]) -> Shades {
         key("below 70", -0.7),
         key("70 to 90", 0.0),
         key("90 and above", 0.7),
+    ];
+    (shades.collect(), legend)
+}
+
+fn by_llm(root: &Path, scores: &[FileScore], thresholds: (f64, f64)) -> Shades {
+    let shades = scores.iter().map(|f| {
+        let heat = llm_heat(f.score, thresholds);
+        let class = match heat {
+            h if h > 0.0 => "LLM-friendly",
+            h if h < 0.0 => "an LLM risk",
+            _ => "needs care",
+        };
+        let label = format!("score {:.1} ({}): {class}", f.score, f.grade);
+        let path = f.path.strip_prefix(root).unwrap_or(&f.path).to_path_buf();
+        (path, Shade { heat, label })
+    });
+    let legend = vec![
+        key("LLM risk", -1.0),
+        key("needs care", 0.0),
+        key("LLM-friendly", 1.0),
     ];
     (shades.collect(), legend)
 }

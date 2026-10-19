@@ -4,18 +4,22 @@
 
 use serde::Serialize;
 
+use super::callout::{Callout, Share};
 use super::layout::Placed;
 use super::metric::Key;
 use crate::html;
 
 const STYLE: &str = include_str!("map.css");
-const SCRIPT: &str = include_str!("map.js");
+const SCRIPT: &str = concat!(include_str!("map_callouts.js"), include_str!("map.js"));
 
 #[derive(Serialize)]
 pub struct Data<'a> {
     /// What colours the files, as the legend titles it.
     pub metric: &'a str,
     pub legend: &'a [Key],
+    /// The share of the lines on each side of the scale.
+    pub summary: &'a [Share],
+    pub callouts: &'a [Callout],
     pub nodes: &'a [Placed],
 }
 
@@ -26,6 +30,7 @@ pub fn render(name: &str, data: &Data<'_>) -> serde_json::Result<String> {
         r#"<header class="page">
 <h1>{title}</h1>
 <p>Each circle is a directory holding its files, a file's area grows with its lines of code. Coloured by {metric}. Click a directory to zoom in, outside it to zoom out.</p>
+<p id="summary"></p>
 </header>
 <div class="toolbar"><button id="up">Up</button><span id="crumb" class="mono"></span><span id="legend" class="legend"></span></div>
 <main><svg id="map" viewBox="0 0 1000 1000" role="img" aria-label="{title}"></svg></main>

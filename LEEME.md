@@ -1430,13 +1430,16 @@ La página es un único archivo HTML que no necesita nada más, en tema claro y 
 | `age` | activo verde, inactivo gris, congelado rojo pálido | `km age` |
 | `knowledge` | crítico rojo a bajo gris; rojo cuando el dueño está inactivo | `km knowledge` |
 | `cycles` | rojo cuando el archivo está en un ciclo de dependencias | `km deps` |
+| `llm` | verde desde 95 (apto para LLM), gris desde 70 (requiere cuidado), rojo bajo 70 (riesgo para LLM) | preparación para agentes de código, según `km score` |
+
+Sobre el mapa va la proporción de las líneas en cada lado de la escala (`85% an LLM risk · 9% needing care · 5% LLM-friendly`), y en él una etiqueta donde se reúne cada lado: el directorio bajo la raíz con más de esas líneas y la mayor proporción de ellas, un directorio que es una parte del código y no casi todo. `--color-by llm` sigue la afirmación de que los agentes de código trabajan bien solo sobre código sano: CodeScene pone la vara en 9,5 de su Code Health, y 95 es su equivalente en la escala de 0 a 100 de `km score`, que se mide de otra forma. Ambos umbrales se pueden cambiar en `.kimun.toml` (`[map] llm_friendly = 95`, `llm_risk = 70`).
 
 Los archivos sin valor (sin historia, un lenguaje sin grafo de dependencias) se dibujan tenues. Las métricas de git necesitan un repositorio y leen la historia desde `--since`; los umbrales vienen de `.kimun.toml` como los leen sus comandos. El layout empaqueta los hijos de cada directorio del más grande al más chico, luego por nombre, como `d3.pack` empaqueta círculos, así que el mismo código da el mismo mapa.
 
 | Flag | Descripción |
 |------|-------------|
 | `--html FILE` | Escribe el mapa como una página HTML interactiva en este archivo |
-| `--color-by METRIC` | `score` (por defecto), `hotspots`, `churn`, `age`, `knowledge` o `cycles` |
+| `--color-by METRIC` | `score` (por defecto), `hotspots`, `churn`, `age`, `knowledge`, `cycles` o `llm` |
 | `--since TIME` | Lee la historia desde este momento (p. ej. `6m`, `1y`, `30d`) |
 | `--format {table,json}` | `json` imprime el árbol dispuesto: cada nodo con `x`, `y`, `r`, `depth`, `parent`, `lines`, y para los archivos `heat` (-1 a 1) y `label` |
 
@@ -1505,6 +1508,10 @@ min_strength = 0.5  # only show pairs with coupling strength >= this value
 
 [hotspots]
 complexity = "cogcom"  # complexity metric: indent (default), cycom, or cogcom
+
+[map]
+llm_friendly = 95  # km map --color-by llm: desde este puntaje un archivo es apto para LLM (por defecto: 95)
+llm_risk     = 70  # bajo este puntaje es un riesgo para LLM (por defecto: 70)
 
 [impact]
 inert = ["scripts/**"]  # changed files that reach nothing, besides documentation

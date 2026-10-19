@@ -60,6 +60,7 @@ function relabel() {
   const crumb = nodes[focus];
   document.getElementById("crumb").textContent = focus === 0 ? "" : crumb.path + "/";
   document.getElementById("up").disabled = focus === 0;
+  callouts.forEach((c) => (c.style.display = focus === 0 ? "" : "none"));
 }
 
 function zoomTo(i) {
@@ -122,6 +123,13 @@ data.legend.forEach((key) => {
   swatch.style.background = fill({ heat: key.heat });
   legend.append(swatch, document.createTextNode(key.label));
 });
+// The share of the lines on each side of the scale.
+document.getElementById("summary").textContent = data.summary
+  .map((s) => `${Math.round(s.share * 100)}% ${s.label}`)
+  .join(" · ");
+
+const callouts = drawCallouts(data.callouts);
+
 const none = document.createElement("i");
 none.className = "swatch";
 none.style.background = "var(--nodata)";

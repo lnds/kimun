@@ -312,10 +312,11 @@ Comprehensive multi-metric report. Invoked via `km report`.
 
 Enclosure diagram of the code (Thornhill): directories as circles holding their files, a file's area by its code lines, coloured by a metric. Invoked via `km map --html FILE` or `--format json`.
 
-- **`metric.rs`** — `ColorBy` (`score`, `hotspots`, `churn`, `age`, `knowledge`, `cycles`) and the `Shade` of each file: a heat from -1 (red) through 0 (grey) to 1 (green) and the text shown on hover, keyed by the path under the analysed directory. Reads `hotspots::collect`, `churn`/`age` classifiers over `GitRepo`, `knowledge::collect` and `deps::analyze`.
+- **`metric.rs`** — `ColorBy` (`score`, `hotspots`, `churn`, `age`, `knowledge`, `cycles`, `llm` with the thresholds of `[map]`) and the `Shade` of each file: a heat from -1 (red) through 0 (grey) to 1 (green) and the text shown on hover, keyed by the path under the analysed directory. Reads `hotspots::collect`, `churn`/`age` classifiers over `GitRepo`, `knowledge::collect` and `deps::analyze`.
 - **`pack.rs`** — Circle packing as `d3.pack`: siblings placed on a front chain (Wang et al.); **`enclose.rs`** the smallest enclosing circle (Welzl, shuffled with a fixed seed).
 - **`layout.rs`** — The `file_tree::Tree` of the files laid out: children packed largest first, then by name, the root `SIZE` across; every node after its parent.
-- **`page.rs`** — The page of `crate::html`, with `map.js` (SVG, zoom by view box, tooltip, legend) and `map.css`.
+- **`callout.rs`** — The share of the lines on each side of the scale, and the directory where each side gathers (many such lines, a large share of the directory, a part of the code rather than nearly all), labelled with the `Words` of the metric.
+- **`page.rs`** — The page of `crate::html`, with `map.js` (SVG, zoom by view box, tooltip, legend), `map_callouts.js` (the labels) and `map.css`.
 - **`mod.rs`** — Orchestration: scores the files once (`score::measure`/`snapshot_of`) for their lines and the `score` colour, adds the shades, lays out and writes the page or the JSON.
 
 ### Shared: `src/file_tree.rs`
