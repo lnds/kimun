@@ -1,3 +1,12 @@
+## v0.39.0 (2026-10-19)
+
+### Feat
+
+- **impact**: the Elixir radius follows functions past distance 1, with --max-distance
+- **html**: pages credit what they build on; Adam Tornhill's name spelled right
+- **map**: callouts name the directory they mark
+- **map**: --color-by llm, with the share of lines and labels where each side gathers
+
 ## v0.38.0 (2026-10-18)
 
 ### Feat
