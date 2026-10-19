@@ -80,6 +80,7 @@ pub fn run(
     let nodes = layout::layout(&files);
     let words = metric::words(opts.color_by);
     let data = page::Data {
+        llm: opts.color_by == ColorBy::Llm,
         metric: title(opts.color_by),
         legend: &legend,
         summary: &callout::shares(&nodes, &words),

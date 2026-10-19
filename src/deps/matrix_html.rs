@@ -9,6 +9,9 @@ use crate::html;
 
 const STYLE: &str = include_str!("matrix_html.css");
 const SCRIPT: &str = include_str!("matrix_html.js");
+const CREDITS: &str = "The dependency structure matrix comes from Donald V. Steward, \
+    \"The Design Structure System\" (1981); its layout here follows the one of IntelliJ IDEA. \
+    kimun is not affiliated with JetBrains.";
 
 #[derive(Serialize)]
 struct Node<'a> {
@@ -71,7 +74,7 @@ pub fn render(m: &Matrix, name: &str) -> serde_json::Result<String> {
 </main>"#,
         title = html::escape(&title)
     );
-    html::page(&title, &body, (STYLE, SCRIPT), &data(m))
+    html::page(&title, &body, (STYLE, SCRIPT), CREDITS, &data(m))
 }
 
 #[cfg(test)]

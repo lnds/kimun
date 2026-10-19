@@ -460,7 +460,7 @@ pub enum Commands {
         #[arg(long)]
         since: Option<String>,
 
-        /// Complexity metric: indent (default, Thornhill), cycom (cyclomatic), or cogcom (cognitive).
+        /// Complexity metric: indent (default, Tornhill), cycom (cyclomatic), or cogcom (cognitive).
         /// Overridable via .kimun.toml [hotspots] complexity.
         #[arg(long, value_parser = ["indent", "cycom", "cogcom"])]
         complexity: Option<String>,

@@ -12,8 +12,22 @@ use crate::html;
 const STYLE: &str = include_str!("map.css");
 const SCRIPT: &str = concat!(include_str!("map_callouts.js"), include_str!("map.js"));
 
+/// What every map builds on.
+const CREDITS: &str = "The enclosure diagram follows Adam Tornhill, <i>Your Code as a Crime \
+    Scene</i> (Pragmatic Bookshelf, 2015; second edition, 2024). The circles are packed as \
+    d3.pack by Mike Bostock packs them: the front chain of Wang et al. (2006) and the smallest \
+    enclosing circle of Welzl (1991).";
+
+/// What the readiness for coding agents builds on.
+const LLM_CREDITS: &str = " The thresholds of readiness for coding agents follow CodeScene's \
+    research on Code Health and AI-assisted coding, mapped to the scale of km score. kimun is \
+    not affiliated with Adam Tornhill or CodeScene.";
+
 #[derive(Serialize)]
 pub struct Data<'a> {
+    /// Whether the map shows the readiness for coding agents.
+    #[serde(skip)]
+    pub llm: bool,
     /// What colours the files, as the legend titles it.
     pub metric: &'a str,
     pub legend: &'a [Key],
@@ -38,5 +52,9 @@ pub fn render(name: &str, data: &Data<'_>) -> serde_json::Result<String> {
         title = html::escape(&title),
         metric = html::escape(data.metric),
     );
-    html::page(&title, &body, (STYLE, SCRIPT), data)
+    let credits = match data.llm {
+        true => format!("{CREDITS}{LLM_CREDITS}"),
+        false => format!("{CREDITS} kimun is not affiliated with Adam Tornhill."),
+    };
+    html::page(&title, &body, (STYLE, SCRIPT), &credits, data)
 }

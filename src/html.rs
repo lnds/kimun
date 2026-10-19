@@ -12,6 +12,8 @@ pub struct Page<'a> {
     pub style: &'a str,
     pub body: &'a str,
     pub script: &'a str,
+    /// The sources the page builds on, as HTML, shown at its foot.
+    pub credits: &'a str,
 }
 
 /// `text` safe inside HTML text and attribute values.
@@ -28,12 +30,13 @@ pub fn script_json(data: &impl Serialize) -> serde_json::Result<String> {
     Ok(serde_json::to_string(data)?.replace('<', "\\u003c"))
 }
 
-/// The document titled `title` with `body`, its own `(style, script)` and
-/// `data` for the script.
+/// The document titled `title` with `body`, its own `(style, script)`,
+/// the `credits` of what it builds on, and `data` for the script.
 pub fn page(
     title: &str,
     body: &str,
     (style, script): (&str, &str),
+    credits: &str,
     data: &impl Serialize,
 ) -> serde_json::Result<String> {
     let page = Page {
@@ -41,6 +44,7 @@ pub fn page(
         style,
         body,
         script,
+        credits,
     };
     Ok(render(&page, &script_json(data)?))
 }
@@ -63,6 +67,7 @@ pub fn render(page: &Page, data: &str) -> String {
 </head>
 <body>
 {body}
+<footer class="credits">{credits}</footer>
 <script type="application/json" id="data">{data}</script>
 <script>
 {script}
@@ -75,6 +80,7 @@ pub fn render(page: &Page, data: &str) -> String {
         style = page.style,
         body = page.body,
         script = page.script,
+        credits = page.credits,
     )
 }
 

@@ -108,14 +108,14 @@ Thresholds:
   <65     difficult    -- hard to maintain";
 
 /// Hotspot analysis: files that change frequently AND have high complexity.
-/// Based on Adam Thornhill's "Your Code as a Crime Scene" methodology.
+/// Based on Adam Tornhill's "Your Code as a Crime Scene" methodology.
 pub const HOTSPOTS: &str = "\
 Find hotspots: files that change frequently AND have high complexity.
 
-Based on Adam Thornhill's method (\"Your Code as a Crime Scene\"):
+Based on Adam Tornhill's method (\"Your Code as a Crime Scene\"):
   Score = commits \u{00d7} complexity
 
-By default, complexity is measured by total indentation (Thornhill's original
+By default, complexity is measured by total indentation (Tornhill's original
 method). Use --complexity cycom for cyclomatic complexity, or --complexity
 cogcom for cognitive complexity (SonarSource) instead.
 
@@ -140,7 +140,7 @@ Examples:
 pub const KNOWLEDGE: &str = "\
 Analyze code ownership patterns via git blame (knowledge maps).
 
-Based on Adam Thornhill's method (\"Your Code as a Crime Scene\" caps 8-9):
+Based on Adam Tornhill's method (\"Your Code as a Crime Scene\" caps 8-9):
 identifies bus factor risk and knowledge concentration per file.
 
 Risk levels:
@@ -171,7 +171,7 @@ Examples:
 pub const TC: &str = "\
 Analyze temporal coupling between files via git history.
 
-Based on Adam Thornhill's method (\"Your Code as a Crime Scene\" ch. 7):
+Based on Adam Tornhill's method (\"Your Code as a Crime Scene\" ch. 7):
 files that frequently change together in the same commits have implicit
 coupling, even without direct imports.
 
