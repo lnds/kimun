@@ -443,12 +443,15 @@ pub fn collect_analysis<T>(
 ///
 /// File-level filtering is done here (rather than in `source_files()`)
 /// so that excluded files are never yielded, reducing downstream work.
+/// Entries come by name, whatever order the file system keeps: what is
+/// counted once among copies (duplicated lines) is the same on every system.
 pub(crate) fn walk(path: &Path, exclude_tests: bool, filter: &ExcludeFilter) -> ignore::Walk {
     let filter = filter.clone();
     let walk_root = path.to_path_buf();
     WalkBuilder::new(path)
         .hidden(false)
         .follow_links(false)
+        .sort_by_file_name(|a, b| a.cmp(b))
         .filter_entry(move |entry| keeps_entry(entry, &walk_root, exclude_tests, &filter))
         .build()
 }

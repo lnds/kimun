@@ -6,7 +6,7 @@ use serde::Serialize;
 
 use super::layout::Placed;
 use super::metric::Key;
-use crate::html::{self, Page};
+use crate::html;
 
 const STYLE: &str = include_str!("map.css");
 const SCRIPT: &str = include_str!("map.js");
@@ -33,11 +33,5 @@ pub fn render(name: &str, data: &Data<'_>) -> serde_json::Result<String> {
         title = html::escape(&title),
         metric = html::escape(data.metric),
     );
-    let page = Page {
-        title: &title,
-        style: STYLE,
-        body: &body,
-        script: SCRIPT,
-    };
-    Ok(html::render(&page, &html::script_json(data)?))
+    html::page(&title, &body, (STYLE, SCRIPT), data)
 }
