@@ -247,6 +247,10 @@ pub struct ImpactArgs {
     #[arg(long, default_value = "30", value_name = "N")]
     pub max_changeset: usize,
 
+    /// Follow the structural radius at most N files away from the change
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..))]
+    pub max_distance: Option<u32>,
+
     /// Print only the projects the diff changes or reaches, one per line (for CI)
     #[arg(long)]
     pub affected: bool,

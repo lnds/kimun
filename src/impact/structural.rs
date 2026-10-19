@@ -14,6 +14,7 @@ use serde::Serialize;
 use crate::deps::graph::{EdgeKind, FileGraph, Related, Unnarrowed, Use};
 use crate::git::{ChangeKind, FileDiffStat};
 
+use super::function_reach;
 use super::protection::{Protection, Tests};
 use super::reading::{self, graphed_language};
 use super::role::{self, Role, roles_of};
@@ -103,6 +104,9 @@ pub struct Structural {
     pub by_distance: Vec<usize>,
     /// The files behind `by_distance`, distance by distance.
     pub reached_files: Vec<Vec<PathBuf>>,
+    /// The distance `--max-distance` stopped the radius at, when files lay
+    /// beyond it.
+    pub cut_at: Option<usize>,
     /// Files reached when every use of a changed file counts, whatever the
     /// function: what the radius cannot exceed.
     pub upper_bound: usize,
@@ -221,18 +225,6 @@ impl Reverse {
     fn levels(&self, origins: &[usize]) -> Vec<Vec<usize>> {
         self.levels_beyond(origins, origins.iter().copied().collect())
     }
-
-    /// The reach that starts at `calling`, the files that call what changed,
-    /// at distance 1, without going back to the `origins`.
-    fn levels_through(&self, origins: &[usize], calling: &[usize]) -> Vec<Vec<usize>> {
-        if calling.is_empty() {
-            return Vec::new();
-        }
-        let seen = origins.iter().chain(calling).copied().collect();
-        let mut levels = vec![calling.to_vec()];
-        levels.extend(self.levels_beyond(calling, seen));
-        levels
-    }
 }
 
 /// `Tip.apply` for `Booking.Tip.apply`: the module's own name is enough
@@ -275,6 +267,7 @@ pub fn compute(
     sources: Vec<(PathBuf, String)>,
     changed: &[Changed<'_>],
     related: Related,
+    max_distance: Option<usize>,
 ) -> Structural {
     let (sources, graph) = reading::read(sources, related);
     let roles = roles_of(&graph);
@@ -366,7 +359,12 @@ pub fn compute(
         .filter(|(_, d)| d.exposure == Exposure::Calls)
         .map(|(file, _)| *file)
         .collect();
-    let through = reverse.levels_through(&starts, &calling);
+    let told = origins
+        .iter()
+        .map(|(&f, t)| (f, t.as_ref().ok().cloned()))
+        .collect();
+    let walk = function_reach::Walk::new(&graph, &sources, &reverse.sources, related);
+    let through = walk.levels(&told, &calling, max_distance);
 
     Structural {
         origins: narrowing.iter().map(|n| n.file.clone()).collect(),
@@ -374,8 +372,10 @@ pub fn compute(
         narrowing,
         source_files: roles.iter().filter(|r| **r == Role::Source).count(),
         direct: direct.into_iter().map(|(_, d)| d).collect(),
-        by_distance: through.iter().map(Vec::len).collect(),
+        by_distance: through.levels.iter().map(Vec::len).collect(),
+        cut_at: through.cut.then_some(through.levels.len()),
         reached_files: through
+            .levels
             .iter()
             .map(|level| level.iter().map(|&f| graph.files[f].clone()).collect())
             .collect(),

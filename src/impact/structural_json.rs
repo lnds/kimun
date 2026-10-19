@@ -34,6 +34,9 @@ pub struct JsonStructural<'a> {
     radius: JsonRadius,
     reached: usize,
     by_distance: &'a [usize],
+    /// The distance `--max-distance` stopped the radius at, when files lay
+    /// beyond it; null when nothing was left out.
+    cut_at: Option<usize>,
     /// The files of the radius, distance by distance.
     reach: Vec<JsonReach<'a>>,
     /// Files reached if every use of a changed file counted.
@@ -70,6 +73,7 @@ impl<'a> From<&'a Structural> for JsonStructural<'a> {
             },
             reached,
             by_distance: &radius.by_distance,
+            cut_at: radius.cut_at,
             reach: radius
                 .reached_files
                 .iter()

@@ -86,7 +86,7 @@ fn change(path: &str, lines: &[usize]) -> FileDiffStat {
 
 fn radius(sources: Vec<(PathBuf, String)>, changes: &[FileDiffStat]) -> Structural {
     let changed: Vec<Changed> = changes.iter().collect();
-    compute(sources, &changed, &|_, _| false)
+    compute(sources, &changed, &|_, _| false, None)
 }
 
 /// The direct dependents as `(file name, exposure, tests, calls)`.

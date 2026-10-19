@@ -72,13 +72,17 @@ pub(super) fn reach_line(radius: &Structural) -> String {
         .map(|(i, files)| format!("{} at distance {}", files, i + 1))
         .collect();
     let further: usize = radius.by_distance.iter().skip(3).sum();
-    match further {
+    let reach = match further {
         0 => near.join(", "),
         _ => format!(
             "{}, {further} further (up to distance {})",
             near.join(", "),
             radius.by_distance.len()
         ),
+    };
+    match radius.cut_at {
+        Some(distance) => format!("{reach}; stopped at distance {distance} (--max-distance)"),
+        None => reach,
     }
 }
 

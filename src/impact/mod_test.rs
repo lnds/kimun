@@ -62,6 +62,7 @@ fn opts(since_ref: &str) -> ImpactOptions {
         min_confidence: 0.5,
         min_shared: 3,
         max_changeset: 30,
+        max_distance: None,
         top: 20,
         affected: false,
     }
