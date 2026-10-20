@@ -1518,7 +1518,14 @@ llm_risk     = 70  # below this score it is an LLM risk (default: 70)
 [impact]
 inert = ["scripts/**"]  # changed files that reach nothing, besides documentation
 entry_points = ["**/endpoint.ex"]  # files run rather than used, besides tasks and scripts
+
+[exclude]
+dirs       = ["vendor", "third_party"]  # directory names, at any depth (as --exclude-dir)
+extensions = ["sql", "proto"]           # file extensions (as --exclude-ext)
+patterns   = ["legacy/**", "*.min.js"]  # globs from the analyzed directory (as --exclude)
 ```
+
+`[exclude]` leaves files and directories out of every command, besides what `.gitignore` already does. Unlike other values it does not give way to flags: it adds to `--exclude-dir`, `--exclude-ext` and `--exclude`, and `--list-excluded` shows what it leaves out. Patterns are matched against the path relative to the analyzed directory, as `--exclude` is.
 
 All sections and fields are optional — omit any you don't need. A fully documented template is available at [`.kimun.toml.example`](.kimun.toml.example).
 

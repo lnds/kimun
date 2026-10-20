@@ -36,6 +36,11 @@
 /// [impact]
 /// inert = ["scripts/**"]  # changed files that reach nothing, besides documentation
 /// entry_points = ["**/endpoint.ex"]  # files run rather than used, besides tasks and scripts
+///
+/// [exclude]
+/// dirs       = ["vendor", "third_party"]  # directory names, at any depth (as --exclude-dir)
+/// extensions = ["sql", "proto"]          # file extensions (as --exclude-ext)
+/// patterns   = ["legacy/**", "*.min.js"] # globs from the analysis root (as --exclude)
 /// ```
 use serde::Deserialize;
 
@@ -57,6 +62,23 @@ pub struct KimunConfig {
     pub impact: ImpactConfig,
     #[serde(default)]
     pub map: MapConfig,
+    #[serde(default)]
+    pub exclude: ExcludeConfig,
+}
+
+/// Files and directories every command leaves out, added to the
+/// `--exclude-dir`, `--exclude-ext` and `--exclude` flags.
+#[derive(Debug, Default, Deserialize)]
+pub struct ExcludeConfig {
+    /// Directory names, matched at any depth, as `--exclude-dir`.
+    #[serde(default)]
+    pub dirs: Vec<String>,
+    /// File extensions, case-insensitive, as `--exclude-ext`.
+    #[serde(default)]
+    pub extensions: Vec<String>,
+    /// Globs against the path relative to the analysis root, as `--exclude`.
+    #[serde(default)]
+    pub patterns: Vec<String>,
 }
 
 /// Threshold overrides for `km smells`.
@@ -409,6 +431,17 @@ mod tests {
         assert_eq!(KimunConfig::default().map.llm_thresholds(), (95.0, 70.0));
         let cfg = parse("[map]\nllm_friendly = 90\nllm_risk = 60\n");
         assert_eq!(cfg.map.llm_thresholds(), (90.0, 60.0));
+    }
+
+    #[test]
+    fn exclude_config_is_parsed() {
+        let cfg = parse(
+            "[exclude]\ndirs = [\"vendor\"]\nextensions = [\"sql\"]\npatterns = [\"legacy/**\"]\n",
+        );
+        assert_eq!(cfg.exclude.dirs, ["vendor"]);
+        assert_eq!(cfg.exclude.extensions, ["sql"]);
+        assert_eq!(cfg.exclude.patterns, ["legacy/**"]);
+        assert!(KimunConfig::default().exclude.dirs.is_empty());
     }
 
     #[test]

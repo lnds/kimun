@@ -117,13 +117,20 @@ pub struct ExcludeArgs {
 }
 
 impl ExcludeArgs {
-    /// Build an `ExcludeFilter` from the parsed CLI flags.
+    /// Build an `ExcludeFilter` from the parsed CLI flags and the
+    /// `[exclude]` section of `.kimun.toml`.
     pub fn exclude_filter(&self) -> ExcludeFilter {
+        self.exclude_filter_with(&crate::config::KimunConfig::load().exclude)
+    }
+
+    /// The filter of the flags plus what `config` excludes: both apply.
+    pub fn exclude_filter_with(&self, config: &crate::config::ExcludeConfig) -> ExcludeFilter {
+        let joined = |cli: &[String], cfg: &[String]| [cli, cfg].concat();
         ExcludeFilter::new(
             &self.include_ext,
-            &self.exclude_ext,
-            &self.exclude_dir,
-            &self.exclude,
+            &joined(&self.exclude_ext, &config.extensions),
+            &joined(&self.exclude_dir, &config.dirs),
+            &joined(&self.exclude, &config.patterns),
         )
     }
 }
@@ -802,4 +809,33 @@ pub enum AiCommands {
         /// Provider for permissions (e.g. claude)
         provider: String,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::ExcludeConfig;
+    use std::path::Path;
+
+    #[test]
+    fn config_exclusions_add_to_the_flags() {
+        let cli = Cli::try_parse_from(["km", "loc", "--exclude-dir", "dist", "-E", "*.min.js"])
+            .expect("valid arguments");
+        let Commands::Loc { common, .. } = cli.command else {
+            panic!("not the loc command");
+        };
+        let config = ExcludeConfig {
+            dirs: vec!["vendor".into()],
+            extensions: vec!["sql".into()],
+            patterns: vec!["legacy/**".into()],
+        };
+        let filter = common.exclude_args.exclude_filter_with(&config);
+        let root = Path::new("");
+        assert!(filter.excludes_dir("dist"));
+        assert!(filter.excludes_dir("vendor"));
+        assert!(filter.excludes_file(Path::new("app.min.js"), root));
+        assert!(filter.excludes_file(Path::new("db/schema.sql"), root));
+        assert!(filter.excludes_file(Path::new("legacy/old.rs"), root));
+        assert!(!filter.excludes_file(Path::new("src/main.rs"), root));
+    }
 }
