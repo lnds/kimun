@@ -1,3 +1,9 @@
+## v0.40.0 (2026-10-20)
+
+### Feat
+
+- **config**: [exclude] in .kimun.toml leaves files and directories out of every command
+
 ## v0.39.0 (2026-10-19)
 
 ### Feat
