@@ -72,3 +72,12 @@ min_degree = 3  # default: 3
 # - cycom:             cyclomatic complexity
 # - cogcom:            cognitive complexity (SonarSource method)
 complexity = "indent"  # default: indent
+
+# ── Exclusions (every command) ───────────────────────────────────────────────
+
+[exclude]
+# Left out of every command, besides .gitignore, added to the --exclude-dir,
+# --exclude-ext and --exclude flags. Use --list-excluded to check them.
+# dirs       = ["vendor", "third_party"]  # directory names, at any depth
+# extensions = ["sql", "proto"]           # file extensions, case-insensitive
+# patterns   = ["legacy/**", "*.min.js"]  # globs from the analysis root

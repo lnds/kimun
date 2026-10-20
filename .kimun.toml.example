@@ -93,3 +93,14 @@ complexity = "indent"  # default: indent
 # source file uses always are. With no test they are listed apart instead of warned about as missing
 # an integration test.
 # entry_points = ["**/endpoint.ex"]
+
+[exclude]
+# Files and directories every command leaves out, besides .gitignore. They add
+# to the --exclude-dir, --exclude-ext and --exclude flags; --list-excluded
+# shows what they leave out.
+# Directory names, matched at any depth (as --exclude-dir).
+# dirs = ["vendor", "third_party"]
+# File extensions, case-insensitive, leading dot optional (as --exclude-ext).
+# extensions = ["sql", "proto"]
+# Globs against the path relative to the analysis root (as --exclude).
+# patterns = ["legacy/**", "*.min.js"]
