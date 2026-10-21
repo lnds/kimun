@@ -26,6 +26,14 @@ fn main() : Unit / Stdout = Stdout.print(\"hi\")
 }
 
 #[test]
+fn imports_on_one_line_are_separated_by_semicolons() {
+    let src = "import core.list; import mathlib.{add}\n\
+               import app.text # see app.old; import app.gone\n\
+               import ?store\n";
+    assert_eq!(extract(src), vec!["core.list", "mathlib", "app.text"]);
+}
+
+#[test]
 fn import_with_trailing_comment() {
     assert_eq!(
         extract("import compiler.ast # the tree\n"),

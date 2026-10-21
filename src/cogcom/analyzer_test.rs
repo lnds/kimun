@@ -444,3 +444,13 @@ end";
         ])
     );
 }
+
+#[test]
+fn kaikai_default_of_an_option_counts_as_a_boolean_operator() {
+    let markers = super::super::markers::cognitive_markers_for("Kaikai").unwrap();
+    let code = "fn port(env: Map[String, Int]) : Int {\n  \
+                env |> map.get(\"PORT\") ?? 8080\n}\n";
+    let (lines, kinds) = make_lines(code);
+    let result = analyze(&lines, &kinds, markers).unwrap();
+    assert_eq!(result.functions[0].complexity, 1);
+}

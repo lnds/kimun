@@ -303,10 +303,12 @@ static CLOJURE: ComplexityMarkers = ComplexityMarkers {
 /// Kaikai: functional language with brace-delimited blocks. Branching comes
 /// from `if`, `match` arms, multi-clause `case`, `when` guards, and effect
 /// `handle`/`with` clauses. Boolean operators `and`/`or`/`not` are keywords,
-/// not symbols. No `while`/`for` keywords — iteration is via stdlib helpers.
+/// not symbols; `??` takes the default of an empty `Option`, a branch as
+/// JavaScript's nullish coalescing is. No loops: `for` only names the type
+/// of an `impl`, and iteration is via pipes and stdlib helpers.
 static KAIKAI: ComplexityMarkers = ComplexityMarkers {
     keywords: &["if", "match", "case", "when", "handle", "with", "and", "or"],
-    operators: &[],
+    operators: &["??"],
     clause_arrow: None,
     function_markers: &["fn "],
     brace_scoped: true,
