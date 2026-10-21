@@ -54,3 +54,32 @@ Examples:
   km docs stale
   km docs stale kb/ --top 50
   km docs stale --format json";
+
+/// What the graph of notes is made of and what is reported.
+pub const LINKS: &str = "\
+The links between Markdown documents as a graph of notes, as a knowledge
+base, a docs site or a second brain is.
+
+Links:
+  [text](path.md)   a relative Markdown link, from the document, or from
+                    the walked directory for a path starting with /
+  [[Note]]          a wikilink (Obsidian, Foam, Logseq): by path from the
+                    root, else by note name, without case or extension;
+                    of several notes of that name, the nearest
+  URLs and anchors alone link to no note; links to files that are no
+  document are not edges.
+
+Reported:
+  Broken links   no file has the path, no note the name
+  Orphans        notes no note links to, besides entry points (README,
+                 index, SUMMARY, CLAUDE, AGENTS, ...)
+  Hubs           the notes most linked to
+  Islands        groups of notes linked among themselves and to no other
+
+km deps --kind docs draws the same graph with the dependency tools:
+--matrix, cycles, fan-in and fan-out.
+
+Examples:
+  km docs links
+  km docs links kb/ --top 50
+  km docs links --format json";

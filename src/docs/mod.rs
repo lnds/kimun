@@ -7,13 +7,15 @@
 
 pub mod describes;
 mod help;
+pub mod links;
+mod links_report;
 pub mod markdown;
 pub mod refs;
 mod report;
 pub mod stale;
 mod stale_report;
 
-pub use help::{REFS as REFS_HELP, STALE as STALE_HELP};
+pub use help::{LINKS as LINKS_HELP, REFS as REFS_HELP, STALE as STALE_HELP};
 
 use std::collections::HashSet;
 use std::error::Error;
@@ -72,6 +74,9 @@ pub fn dispatch(command: DocsCommands) {
         DocsCommands::Stale { common, top } => {
             on_documents(common, |cfg, output| stale(cfg, output, top))
         }
+        DocsCommands::Links { common, top } => {
+            on_documents(common, |cfg, output| links(cfg, output, top))
+        }
     }
 }
 
@@ -90,6 +95,27 @@ fn on_documents(common: CommonArgs, f: impl FnOnce(&WalkConfig<'_>, OutputMode) 
 }
 
 type CommandResult = Result<(), Box<dyn Error>>;
+
+/// The graph of links between the documents.
+pub fn links(cfg: &WalkConfig<'_>, output: OutputMode, top: Option<usize>) -> CommandResult {
+    let documents: Vec<(PathBuf, String)> = documents(cfg)?
+        .into_iter()
+        .map(|d| (d.walked, d.text))
+        .collect();
+    let graph = links::Graph::build(&documents, |path| path.exists());
+    let notes = documents.into_iter().map(|(path, _)| path).collect();
+    let report = links_report::LinksReport::new(notes, graph);
+    match output {
+        OutputMode::Json => links_report::print_json(&report, top)?,
+        OutputMode::Short => links_report::print_short(&report),
+        OutputMode::Terse => println!("{}", report.graph.broken.len()),
+        OutputMode::Github | OutputMode::Codeclimate => {
+            return Err(crate::cli::ERR_CI_FORMAT_ONLY.into());
+        }
+        OutputMode::Table => links_report::print_report(&report, top),
+    }
+    Ok(())
+}
 
 /// The documents behind the code they describe.
 pub fn stale(cfg: &WalkConfig<'_>, output: OutputMode, top: Option<usize>) -> CommandResult {

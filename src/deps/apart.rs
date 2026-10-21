@@ -10,8 +10,10 @@ use super::golang;
 use super::graph::{Found, Source, Use};
 use super::java;
 use super::layout::Layout;
+use super::markdown;
 use super::python_uses;
 use super::ruby_files;
+use crate::docs::links::Notes;
 
 /// The readers of those languages, each over the sources of a graph.
 pub struct Apart<'s> {
@@ -23,6 +25,7 @@ pub struct Apart<'s> {
     java: java::Classes,
     csharp: csharp::Namespaces,
     ruby: ruby_files::Files,
+    notes: Notes,
 }
 
 impl<'s> Apart<'s> {
@@ -42,6 +45,7 @@ impl<'s> Apart<'s> {
             java: java::Classes::of(sources),
             csharp: csharp::Namespaces::of(sources),
             ruby: ruby_files::Files::of(sources),
+            notes: Notes::new(&sources.iter().map(|s| s.path.clone()).collect::<Vec<_>>()),
         }
     }
 
@@ -55,6 +59,7 @@ impl<'s> Apart<'s> {
             .or_else(|| self.go.uses(source))
             .or_else(|| self.c.uses(source))
             .or_else(|| self.named(source).map(Found::from))
+            .or_else(|| markdown::linked(&self.notes, source, self.by_path, &self.layout.known))
     }
 
     /// The files a Java, C# or Ruby source names.

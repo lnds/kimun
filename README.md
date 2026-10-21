@@ -1527,6 +1527,37 @@ Example output:
 
 The JSON lists `documents`, `references` and every dead reference with its `document`, `line`, `reference`, `form` (`link`, `image` or `code`) and `missing` (`file`, `heading` or `path`). `km ai` offers the command to an LLM as the tool `km_docs_refs`.
 
+### `km docs links` -- The graph of notes
+
+A knowledge base, a docs site or a second brain is a graph of notes, and its health is a property of that graph: notes nothing links to, links that lead nowhere, a few notes everything depends on, groups of notes cut off from the rest. `km docs links` reads the links between Markdown documents and reports them.
+
+```bash
+km docs links [path]
+km docs links kb/ --top 50
+km deps --kind docs --matrix   # the same graph with the dependency tools
+```
+
+| Link | Leads to |
+|------|----------|
+| `[text](path.md)` | the document at that path, from the linking one (from the walked directory for a path starting with `/`) |
+| `[[Note]]`, `[[kb/Note\|text]]`, `![[Note]]` | a wikilink, as Obsidian, Foam and Logseq resolve it: by path from the root, else by note name, without case or extension; of several notes of that name, the nearest |
+
+URLs and anchors alone link to no note, and a link to a file that is no document is no edge. An absolute link without extension is a route of a site.
+
+| Reported | What |
+|----------|------|
+| Broken links | no file has the path, no note the name |
+| Orphans | notes no note links to, besides entry points: README, index, SUMMARY, CLAUDE, AGENTS, CHANGELOG, CONTRIBUTING and the like |
+| Hubs | the notes most linked to |
+| Islands | groups of notes linked among themselves and to no other group, besides the largest |
+
+With `--kind docs`, `km deps` builds the same graph: fan-in and fan-out of each note, cycles, `--matrix` and its HTML page, and broken links as unresolved imports. Without `--kind`, documents stay out of the dependency graph as before.
+
+| Flag | Description |
+|------|-------------|
+| `--top N` | Rows of each table (default: 20); JSON lists every entry unless given |
+| `--format {table,json,short,terse}` | Output format (default: table). `terse` prints the number of broken links |
+
 ### `km docs stale` -- Documents behind the code
 
 The audit of a knowledge base over time: the documents whose code changed after them. Where [`km impact`](#documentation-left-behind) watches one change before it is merged, `km docs stale` looks at the whole repository as it is.

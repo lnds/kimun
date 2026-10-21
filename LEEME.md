@@ -1527,6 +1527,37 @@ Ejemplo de salida:
 
 El JSON lista `documents`, `references` y cada referencia muerta con su `document`, `line`, `reference`, `form` (`link`, `image` o `code`) y `missing` (`file`, `heading` o `path`). `km ai` ofrece el comando a un LLM como la herramienta `km_docs_refs`.
 
+### `km docs links` -- El grafo de notas
+
+Una base de conocimiento, un sitio de documentación o un segundo cerebro es un grafo de notas, y su salud es una propiedad de ese grafo: notas a las que nada enlaza, links que no llevan a ninguna parte, unas pocas notas de las que todo depende, grupos de notas aislados del resto. `km docs links` lee los links entre documentos Markdown y los reporta.
+
+```bash
+km docs links [ruta]
+km docs links kb/ --top 50
+km deps --kind docs --matrix   # el mismo grafo con las herramientas de dependencias
+```
+
+| Link | Lleva a |
+|------|---------|
+| `[texto](ruta.md)` | el documento en esa ruta, desde el que enlaza (desde el directorio recorrido para una ruta que empieza con `/`) |
+| `[[Nota]]`, `[[kb/Nota\|texto]]`, `![[Nota]]` | un wikilink, como lo resuelven Obsidian, Foam y Logseq: por ruta desde la raíz, si no por nombre de nota, sin mayúsculas ni extensión; de varias notas con ese nombre, la más cercana |
+
+Las URLs y las anclas solas no enlazan a ninguna nota, y un link a un archivo que no es documento no es una arista. Un link absoluto sin extensión es una ruta de un sitio.
+
+| Se reporta | Qué |
+|------------|-----|
+| Links rotos | ningún archivo tiene la ruta, ninguna nota el nombre |
+| Huérfanas | notas a las que no enlaza ninguna nota, salvo los puntos de entrada: README, index, SUMMARY, CLAUDE, AGENTS, CHANGELOG, CONTRIBUTING y similares |
+| Hubs | las notas más enlazadas |
+| Islas | grupos de notas enlazadas entre sí y con ningún otro grupo, salvo el mayor |
+
+Con `--kind docs`, `km deps` construye el mismo grafo: fan-in y fan-out de cada nota, ciclos, `--matrix` y su página HTML, y los links rotos como imports sin resolver. Sin `--kind`, los documentos quedan fuera del grafo de dependencias como antes.
+
+| Flag | Descripción |
+|------|-------------|
+| `--top N` | Filas de cada tabla (por defecto: 20); el JSON lista todas las entradas salvo que se indique |
+| `--format {table,json,short,terse}` | Formato de salida (por defecto: table). `terse` imprime el número de links rotos |
+
 ### `km docs stale` -- Documentos atrasados respecto del código
 
 La auditoría de una base de conocimiento a lo largo del tiempo: los documentos cuyo código cambió después que ellos. Donde [`km impact`](#documentación-que-quedó-atrás) vigila un cambio antes de mergearlo, `km docs stale` mira el repositorio entero tal como está.

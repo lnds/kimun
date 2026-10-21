@@ -84,9 +84,9 @@ fn execute_tool_unknown_returns_error() {
 }
 
 #[test]
-fn tool_definitions_has_14_tools() {
+fn tool_definitions_has_15_tools() {
     let defs = tool_definitions();
-    assert_eq!(defs.len(), 14);
+    assert_eq!(defs.len(), 15);
     let impact = defs.iter().find(|d| d["name"] == "km_impact").unwrap();
     let props = impact["input_schema"]["properties"].as_object().unwrap();
     for name in ["path", "since_ref", "until_ref", "pr", "top"] {

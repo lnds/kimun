@@ -119,6 +119,12 @@ km docs refs [PATH] --format json --since-ref origin/main
 ```
 Links, images and anchors of Markdown documents that lead nowhere, and paths in code spans the repository once had and no longer has. `missing` is `file`, `heading` or `path`. With `--since-ref`, only documents changed since the ref and references to files the change touched: run it on a branch that moves or deletes files to learn which documents still name them.
 
+### Links Between Notes
+```bash
+km docs links [PATH] --format json
+```
+The graph of a knowledge base: `broken` links, `orphans` no note links to, `hubs` most linked to, and `groups` of notes linked among themselves (the first is the largest).
+
 ### Documents Behind the Code (requires git)
 ```bash
 km docs stale [PATH] --format json --top 20

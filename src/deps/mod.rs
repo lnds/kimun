@@ -31,6 +31,7 @@ mod javascript_config;
 mod javascript_imports;
 mod kaikai;
 pub mod layout;
+mod markdown;
 mod matrix;
 mod matrix_html;
 mod matrix_json;
@@ -93,6 +94,8 @@ pub(super) fn analyze(cfg: &WalkConfig<'_>) -> DepResult {
     // Collect all source files with their language. A file whose language has
     // no import extractor stays out of the graph: listing it with zero
     // dependencies would pass an unmeasured file off as a measured one.
+    // Documents and their links enter only when `--kind` asks for them.
+    let documents_chosen = cfg.filter.kinds().chose(crate::kind::Kind::Docs);
     let (all_files, skipped): (Vec<_>, Vec<_>) =
         walk::source_files(cfg.path, cfg.exclude_tests(), cfg.filter)
             .into_iter()
@@ -100,7 +103,9 @@ pub(super) fn analyze(cfg: &WalkConfig<'_>) -> DepResult {
                 let rel = p.strip_prefix(cfg.path).unwrap_or(&p).to_path_buf();
                 (rel, spec.name.to_string())
             })
-            .partition(|(_, language)| is_supported(language));
+            .partition(|(_, language)| {
+                is_supported(language) || (language == "Markdown" && documents_chosen)
+            });
     let unsupported = count_unsupported(&skipped);
 
     // Build a set of known project-relative paths for fast lookup during resolution.
