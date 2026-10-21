@@ -891,8 +891,9 @@ Opciones:
 | `--max-changeset N` | Ignora como evidencia los commits que tocan más de N archivos (por defecto: `30`) |
 | `--max-distance N` | Sigue el radio estructural a lo más N archivos desde el cambio (por defecto: sin límite) |
 | `--affected` | Imprime solo los proyectos que cambiaron y los alcanzados, uno por línea |
+| `--fail-on-stale-docs` | Termina con código 1 si no se actualizó un documento que cubre o nombra un archivo cambiado |
 | `--top N` | Muestra solo los N primeros archivos faltantes (por defecto: 20) |
-| `--format {table,json,short,terse}` | Formato de salida (por defecto: table) |
+| `--format {table,json,short,terse,github,codeclimate}` | Formato de salida (por defecto: table). `github` y `codeclimate` anotan los documentos que quedaron atrás |
 
 Ejemplo de salida:
 
@@ -925,6 +926,31 @@ Generated files ignored: 1
 
 Cuando las filas son demasiado anchas para una tabla (rutas largas), cada archivo faltante se lista en una línea propia con su evidencia debajo.
 
+#### Documentación que quedó atrás
+
+Los documentos que describen lo que tocó el cambio y no se actualizaron con él: la nota de una base de conocimiento, el runbook, las instrucciones de un agente que engañarán a quien las siga después. Cada documento se encuentra por la más fuerte de tres señales:
+
+| Señal | El documento describe un archivo cambiado cuando |
+|-------|--------------------------------------------------|
+| `declared` | lo dice: `covers:` en su front matter (`covers: ["apps/payments/**", lib/billing/invoice.ex]`), o `[docs] covers` en `.kimun.toml` le asigna el archivo |
+| `referenced` | nombra el archivo, como [`km docs refs`](#km-docs-refs----referencias-muertas-en-la-documentación) lee las referencias: un link, o una ruta en un code span, entera o por su final (`deps/graph.rs`), o un directorio de dos nombres o más sobre él (`lib/billing/`). Cuando el cambio borró o movió el archivo nombrado, la referencia además quedó muerta: `names it, now gone` |
+| `co_changed` | la historia dice que suele cambiar con el archivo (el radio lógico, que entonces deja los documentos a este bloque) |
+
+Un documento que el cambio toca está al día. Los changelogs (`CHANGELOG`, `CHANGES`, `HISTORY`) registran lo que fue y nunca se listan, ni los globs de `[docs] ignore`, como los registros de decisiones. Se leen los documentos Markdown (`.md`, `.mdx`, `.markdown`), tal como quedan después del cambio.
+
+```
+Documentation — documents that describe what changed and were not updated
+──────────────────────────────────────────────────────────────────────────────
+ Document                Describes                     Why
+──────────────────────────────────────────────────────────────────────────────
+ kb/payments/refunds.md  apps/payments/lib/refund.ex   covers apps/payments/**
+ kb/architecture.md      lib/billing/invoice.ex (+1)   names it (line 42)
+ docs/billing/README.md  lib/billing/invoice.ex        changed together 7 of 9 times
+──────────────────────────────────────────────────────────────────────────────
+```
+
+`--fail-on-stale-docs` termina con código 1 cuando quedó atrás un documento `declared` o `referenced`; la historia sola no hace fallar. `--format github` anota cada archivo cambiado con el documento a actualizar (un warning, un notice para `co_changed`), y `--format codeclimate` da lo mismo para GitLab.
+
 #### Salida JSON, para herramientas y LLM
 
 `--format json` lleva todo lo que muestra la tabla, y las listas que la tabla recorta. Un agente que revisa un cambio puede leerlo en este orden:
@@ -952,7 +978,8 @@ km impact --since-ref origin/main --format json
 | `projects.outside[]` | Archivos modificados que no pertenecen a ningún proyecto: su alcance es desconocido |
 | `projects.inert[]` | Archivos modificados que no alcanzan nada: documentación, y lo que `.kimun.toml` declara inerte |
 | `diffusion` | Archivos, directorios, subsistemas, líneas y entropía del cambio |
-| `logical_radius.missing[]` | Archivos que suelen cambiar con el cambio y no están en él, con cada uno de los archivos que los predicen |
+| `logical_radius.missing[]` | Archivos que suelen cambiar con el cambio y no están en él, con cada uno de los archivos que los predicen; los documentos van a `documentation` |
+| `documentation.stale[]` | Documentos que quedaron atrás: `document`, `signal` (`declared`, `referenced`, `co_changed`), `describes[]`, y `covers`, `line` y `gone`, o `shared_commits`, `commits` y `confidence` |
 
 `km ai` expone el comando a un LLM como la herramienta `km_impact`, y la skill que instala `km ai skill` lo documenta.
 
@@ -1573,6 +1600,10 @@ llm_risk     = 70  # bajo este puntaje es un riesgo para LLM (por defecto: 70)
 [impact]
 inert = ["scripts/**"]  # changed files that reach nothing, besides documentation
 entry_points = ["**/endpoint.ex"]  # files run rather than used, besides tasks and scripts
+
+[docs]
+covers = { "apps/payments/**" = "kb/payments/**", "lib/billing/**" = ["kb/billing.md"] }  # code and the documents that describe it
+ignore = ["docs/adr/**"]  # documents that never need to follow the code
 
 [exclude]
 dirs       = ["vendor", "third_party"]  # directory names, at any depth (as --exclude-dir)

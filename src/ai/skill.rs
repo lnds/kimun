@@ -110,6 +110,7 @@ How far a change reaches before it is merged. `--since-ref` measures the current
 - `structural.functions`: the public functions the change affects, or `null` when it touches code outside functions and cannot be narrowed.
 - `projects.reached` and `projects.affected`: projects of a monorepo that depend on the changed ones; `affected` is the list whose tests should run.
 - `logical_radius.missing`: files that usually change together with the changed ones and are not in the change.
+- `documentation.stale`: documents that describe what changed and were not updated. `signal` is `declared` (the document says it covers the file), `referenced` (it names the file; `gone` when the change deleted or moved it) or `co_changed` (history only). Recommend updating the declared and referenced ones.
 
 ### Dead References in Documentation
 ```bash

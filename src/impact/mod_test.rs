@@ -65,6 +65,7 @@ fn opts(since_ref: &str) -> ImpactOptions {
         max_distance: None,
         top: 20,
         affected: false,
+        fail_on_stale_docs: false,
     }
 }
 
@@ -354,18 +355,63 @@ fn runs_in_every_supported_format() {
 }
 
 #[test]
-fn ci_formats_are_rejected() {
+fn ci_formats_annotate_the_documents_left_behind() {
     let (dir, repo) = create_test_repo();
-    commit(&repo, &[("a.rs", "a\n")], &[]);
+    commit(&repo, &[("a.rs", "a\n"), ("doc.md", "See `a.rs`.\n")], &[]);
+    write(&repo, "a.rs", "changed\n");
 
     for output in [OutputMode::Github, OutputMode::Codeclimate] {
         let o = ImpactOptions {
             output,
             ..opts("HEAD")
         };
-        let err = run(dir.path(), &o).unwrap_err();
-        assert_eq!(err.to_string(), crate::cli::ERR_CI_FORMAT_ONLY);
+        run(dir.path(), &o).unwrap();
     }
+}
+
+#[test]
+fn documents_left_behind_by_the_change() {
+    let (dir, repo) = create_test_repo();
+    co_change(&repo, &["src/a.rs", "docs/a.md"], 4);
+    commit(
+        &repo,
+        &[
+            ("kb/b.md", "---\ncovers: [src/b.rs]\n---\n"),
+            ("kb/c.md", "Uses `src/c.rs`.\n"),
+            ("src/b.rs", "b\n"),
+            ("src/c.rs", "c\n"),
+        ],
+        &[],
+    );
+    for file in ["src/a.rs", "src/b.rs", "src/c.rs"] {
+        write(&repo, file, "changed\n");
+    }
+
+    let impact = analyze(dir.path(), &opts("HEAD")).unwrap();
+    let documents: Vec<(&Path, Signal)> = impact
+        .documentation
+        .iter()
+        .map(|s| (s.document.as_path(), s.signal))
+        .collect();
+    assert_eq!(
+        documents,
+        [
+            (Path::new("kb/b.md"), Signal::Declared),
+            (Path::new("kb/c.md"), Signal::Referenced),
+            (Path::new("docs/a.md"), Signal::CoChanged),
+        ]
+    );
+    assert!(
+        missing_paths(&impact).is_empty(),
+        "documents left the logical radius"
+    );
+
+    let failing = ImpactOptions {
+        fail_on_stale_docs: true,
+        ..opts("HEAD")
+    };
+    let err = run(dir.path(), &failing).unwrap_err();
+    assert!(err.to_string().starts_with("2 document(s)"), "{err}");
 }
 
 #[test]

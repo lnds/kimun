@@ -77,6 +77,15 @@ Logical radius -- files that usually change with the diff and are not in it
   more than --max-changeset (30) files are ignored: a reformat or a rename
   across the project relates its files to each other by accident.
 
+Documentation -- documents that describe what changed and were not updated:
+  declared     covers: in the front matter, or [docs] covers in .kimun.toml
+  referenced   names a changed file: a link, a path in a code span
+  co_changed   usually changes with a changed file (taken from the
+               logical radius)
+  A document in the change is up to date; changelogs and [docs] ignore
+  never are listed. --fail-on-stale-docs fails on a declared or referenced
+  one; --format github annotates the changed files.
+
 A changed file with no history (new, or outside --since) predicts nothing
 and is listed apart. Test files are part of the analysis: a test that usually
 changes with the code is a change worth expecting.
@@ -93,4 +102,5 @@ Examples:
   km impact --since-ref main --until-ref feature # a branch, without checkout
   git diff main... | km impact --diff -             # a patch from stdin
   km impact --pr 123                             # a pull request (needs gh)
-  km impact --since-ref main --format json   # everything, for tools and LLMs";
+  km impact --since-ref main --format json   # everything, for tools and LLMs
+  km impact --since-ref origin/main --fail-on-stale-docs   # docs follow code";
