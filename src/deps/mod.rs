@@ -51,6 +51,7 @@ mod ruby_literals;
 mod rust;
 mod rust_crates;
 pub(crate) mod rust_literals;
+mod terraform;
 mod types;
 
 use std::cmp::Reverse;
@@ -94,8 +95,13 @@ pub(super) fn analyze(cfg: &WalkConfig<'_>) -> DepResult {
     // Collect all source files with their language. A file whose language has
     // no import extractor stays out of the graph: listing it with zero
     // dependencies would pass an unmeasured file off as a measured one.
-    // Documents and their links enter only when `--kind` asks for them.
-    let documents_chosen = cfg.filter.kinds().chose(crate::kind::Kind::Docs);
+    // Documents and Terraform modules enter only when `--kind` asks for them.
+    let kinds = cfg.filter.kinds();
+    let chosen = |language: &str| match language {
+        "Markdown" => kinds.chose(crate::kind::Kind::Docs),
+        "Terraform" => kinds.chose(crate::kind::Kind::Infra),
+        _ => false,
+    };
     let (all_files, skipped): (Vec<_>, Vec<_>) =
         walk::source_files(cfg.path, cfg.exclude_tests(), cfg.filter)
             .into_iter()
@@ -103,9 +109,7 @@ pub(super) fn analyze(cfg: &WalkConfig<'_>) -> DepResult {
                 let rel = p.strip_prefix(cfg.path).unwrap_or(&p).to_path_buf();
                 (rel, spec.name.to_string())
             })
-            .partition(|(_, language)| {
-                is_supported(language) || (language == "Markdown" && documents_chosen)
-            });
+            .partition(|(_, language)| is_supported(language) || chosen(language));
     let unsupported = count_unsupported(&skipped);
 
     // Build a set of known project-relative paths for fast lookup during resolution.

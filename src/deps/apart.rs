@@ -13,6 +13,7 @@ use super::layout::Layout;
 use super::markdown;
 use super::python_uses;
 use super::ruby_files;
+use super::terraform;
 use crate::docs::links::Notes;
 
 /// The readers of those languages, each over the sources of a graph.
@@ -26,6 +27,7 @@ pub struct Apart<'s> {
     csharp: csharp::Namespaces,
     ruby: ruby_files::Files,
     notes: Notes,
+    terraform: terraform::Modules,
 }
 
 impl<'s> Apart<'s> {
@@ -46,13 +48,15 @@ impl<'s> Apart<'s> {
             csharp: csharp::Namespaces::of(sources),
             ruby: ruby_files::Files::of(sources),
             notes: Notes::new(&sources.iter().map(|s| s.path.clone()).collect::<Vec<_>>()),
+            terraform: terraform::Modules::of(sources),
         }
     }
 
     /// The files `source` uses, when its language is read here. Python
     /// tells the names taken too, a Go import leads to every file of a
-    /// package, a Java or C# file uses the types it names, and a Ruby file the
-    /// files it requires and the constants it names.
+    /// package, a Java or C# file uses the types it names, a Ruby file the
+    /// files it requires and the constants it names, a Markdown document what
+    /// it links to and a Terraform file the modules it calls.
     pub fn uses(&self, source: &Source) -> Option<Found> {
         self.python
             .uses(source, self.layout, self.by_path)
@@ -60,6 +64,7 @@ impl<'s> Apart<'s> {
             .or_else(|| self.c.uses(source))
             .or_else(|| self.named(source).map(Found::from))
             .or_else(|| markdown::linked(&self.notes, source, self.by_path, &self.layout.known))
+            .or_else(|| self.terraform.uses(source, self.by_path))
     }
 
     /// The files a Java, C# or Ruby source names.

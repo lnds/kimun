@@ -665,3 +665,41 @@ fn documents_enter_the_graph_only_when_kind_asks() {
         .unwrap();
     assert_eq!(readme.unresolved, ["gone.md"]);
 }
+
+#[test]
+fn terraform_modules_enter_the_graph_when_kind_asks() {
+    let dir = tempfile::tempdir().unwrap();
+    let module = |source: &str| format!("module \"m\" {{\n  source = \"{source}\"\n}}\n");
+    write(
+        dir.path(),
+        "modules/net/main.tf",
+        "resource \"x\" \"y\" {}\n",
+    );
+    write(dir.path(), "modules/net/outputs.tf", "output \"id\" {}\n");
+    write(
+        dir.path(),
+        "envs/prod/main.tf",
+        &module("../../modules/net"),
+    );
+    write(
+        dir.path(),
+        "envs/prod/gone.tf",
+        &module("../../modules/gone"),
+    );
+
+    let plain = ExcludeFilter::default();
+    let result = analyze(&WalkConfig::new(dir.path(), true, &plain));
+    assert!(result.entries.iter().all(|e| e.language != "Terraform"));
+
+    let kinds = crate::kind::Selection::new(&[crate::kind::Kind::Infra], &Default::default());
+    let infra = ExcludeFilter::default().with_kinds(kinds);
+    let result = analyze(&WalkConfig::new(dir.path(), true, &infra));
+    assert_eq!(metrics(&result, "envs/prod/main.tf"), (0, 2, false));
+    assert_eq!(metrics(&result, "modules/net/outputs.tf"), (1, 0, false));
+    let gone = result
+        .entries
+        .iter()
+        .find(|e| e.path == std::path::Path::new("envs/prod/gone.tf"))
+        .unwrap();
+    assert_eq!(gone.unresolved, ["../../modules/gone"]);
+}

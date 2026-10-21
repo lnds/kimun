@@ -14,6 +14,7 @@ mod mix;
 mod npm;
 mod pyproject;
 mod radius;
+mod terraform;
 
 use std::path::{Path, PathBuf};
 
@@ -39,6 +40,21 @@ pub fn python_roots(manifest: &Path, text: &str) -> Vec<PathBuf> {
         .collect()
 }
 
+/// The local modules a Terraform file at `file` calls: each `source` as
+/// written and the directory it leads to, relative to the repository like
+/// `file`; `None` when it leaves the repository.
+pub fn terraform_modules(file: &Path, text: &str) -> Vec<(String, Option<PathBuf>)> {
+    let dir = file.parent().unwrap_or(Path::new(""));
+    terraform::sources(text)
+        .into_iter()
+        .filter(|source| terraform::is_local(source))
+        .map(|source| {
+            let path = discover::normalize(&dir.join(&source));
+            (source, path)
+        })
+        .collect()
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Ecosystem {
     Cargo,
@@ -46,6 +62,7 @@ pub enum Ecosystem {
     Mix,
     Go,
     Python,
+    Terraform,
 }
 
 impl Ecosystem {
@@ -140,6 +157,7 @@ fn reader(file_name: &str) -> Option<(Ecosystem, Reader)> {
         "go.mod" => Some((Ecosystem::Go, gomod::read)),
         "go.work" => Some((Ecosystem::Go, gomod::read_work)),
         "pyproject.toml" => Some((Ecosystem::Python, pyproject::read)),
+        name if name.ends_with(".tf") => Some((Ecosystem::Terraform, terraform::read)),
         _ => None,
     }
 }
