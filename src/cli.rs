@@ -12,7 +12,7 @@ use crate::kind::{self, Kind, Selection};
 use crate::walk::ExcludeFilter;
 
 /// Error returned by commands that do not support CI annotation formats.
-pub const ERR_CI_FORMAT_ONLY: &str = "--format github and --format codeclimate are only supported by cycom, cogcom, smells, impact, and docs refs";
+pub const ERR_CI_FORMAT_ONLY: &str = "--format github and --format codeclimate are only supported by cycom, cogcom, smells, impact, docs refs and infra smells";
 
 fn parse_non_negative_f64(s: &str) -> Result<f64, String> {
     match s.parse::<f64>() {
@@ -753,6 +753,12 @@ pub enum Commands {
         command: DocsCommands,
     },
 
+    /// Measure infrastructure code: security smells of Terraform, Dockerfiles, CI and Kubernetes
+    Infra {
+        #[command(subcommand)]
+        command: InfraCommands,
+    },
+
     /// AI-powered code analysis and tooling
     Ai {
         #[command(subcommand)]
@@ -875,6 +881,31 @@ pub enum DocsCommands {
         /// Rows of the table (default: 20); JSON lists every document unless given
         #[arg(long)]
         top: Option<usize>,
+    },
+}
+
+/// Infrastructure subcommands.
+#[derive(Subcommand)]
+pub enum InfraCommands {
+    /// Find security smells in infrastructure code: secrets, root, open
+    /// addresses, plain HTTP, weak hashes, unpinned images and actions
+    #[command(long_about = crate::infra::SMELLS_HELP)]
+    Smells {
+        #[command(flatten)]
+        common: CommonArgs,
+
+        /// Rows of the table (default: 20); JSON lists every file unless given
+        #[arg(long)]
+        top: Option<usize>,
+
+        /// Only files changed since this git ref (e.g. origin/main)
+        #[arg(long, value_name = "REF")]
+        since_ref: Option<String>,
+
+        /// Exit with code 1 when one of these smells is found (for CI);
+        /// comma-separated
+        #[arg(long, value_enum, value_delimiter = ',', value_name = "SMELL")]
+        fail_on: Vec<crate::infra::Smell>,
     },
 }
 

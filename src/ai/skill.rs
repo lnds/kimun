@@ -137,6 +137,13 @@ km docs stale [PATH] --format json --top 20
 ```
 Documents whose described code (files they cover or name) changed after them, with `days_behind`, `commits` and the files. Suggest updating the furthest behind, or adding them to `[docs] ignore` when they record history.
 
+### Security Smells of Infrastructure
+```bash
+km infra smells [PATH] --format json
+km infra smells [PATH] --format json --since-ref origin/main
+```
+Terraform, Dockerfiles, CI workflows, Compose, Kubernetes and Ansible files, each with its `smells` (`kind`, `line`, `detail`). Report `hard_coded_secret`, `empty_password`, `admin_by_default`, `unrestricted_address` and `ci_permissions` first; `unpinned`, `http_without_tls` and `weak_cryptography` after; `suspicious_comment` last. Secret values are never in the output: point at the line and suggest a secret store or a variable.
+
 ## Analysis Workflow
 
 1. Start with `km score` for the overall health grade
@@ -148,6 +155,7 @@ Documents whose described code (files they cover or name) changed after them, wi
 7. Use `km score diff --git-ref HEAD~N` to track score changes over time
 8. To review a branch or a pull request, run `km impact` and report the unprotected files first
 9. Run `km docs refs` to find documentation that names files or headings that are gone, and `km docs stale` for documents behind their code
+10. Run `km infra smells` on repositories with Terraform, Dockerfiles, CI workflows or Kubernetes manifests
 
 ## Output Format
 

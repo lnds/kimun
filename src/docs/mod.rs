@@ -25,10 +25,10 @@ use std::collections::HashSet;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
-use crate::cli::{CommonArgs, DocsCommands, OutputMode};
+use crate::cli::{DocsCommands, OutputMode};
 use crate::config::KimunConfig;
 use crate::git::GitRepo;
-use crate::kind::{Kind, Selection};
+use crate::kind::Kind;
 use crate::walk::WalkConfig;
 use refs::{Dead, Repository};
 
@@ -73,36 +73,24 @@ pub fn dispatch(command: DocsCommands) {
                 fail_on_dead,
                 since_ref: since_ref.as_deref(),
             };
-            on_documents(common, |cfg, output| refs(cfg, output, &options))
+            crate::on_kind::run(Kind::Docs, common, |cfg, output| {
+                refs(cfg, output, &options)
+            })
         }
         DocsCommands::Stale { common, top } => {
-            on_documents(common, |cfg, output| stale(cfg, output, top))
+            crate::on_kind::run(Kind::Docs, common, |cfg, output| stale(cfg, output, top))
         }
         DocsCommands::Links { common, top } => {
-            on_documents(common, |cfg, output| links(cfg, output, top))
+            crate::on_kind::run(Kind::Docs, common, |cfg, output| links(cfg, output, top))
         }
         DocsCommands::Context {
             common,
             top,
             max_tokens,
-        } => on_documents(common, |cfg, output| {
+        } => crate::on_kind::run(Kind::Docs, common, |cfg, output| {
             context_report::run(cfg, output, top, max_tokens)
         }),
     }
-}
-
-/// Run `f` over a walk of the documents, whatever `--kind` says.
-fn on_documents(common: CommonArgs, f: impl FnOnce(&WalkConfig<'_>, OutputMode) -> CommandResult) {
-    let config = KimunConfig::load();
-    let filter = common
-        .exclude_args
-        .exclude_filter_with(&config.exclude)
-        .with_kinds(Selection::new(&[Kind::Docs], &config.kinds));
-    let include_tests = common.include_tests;
-    crate::maybe_list_excluded(&common.path, include_tests, &filter, common.list_excluded());
-    crate::run_command(common.path, |t| {
-        f(&WalkConfig::new(t, include_tests, &filter), common.format)
-    });
 }
 
 type CommandResult = Result<(), Box<dyn Error>>;
@@ -205,7 +193,7 @@ pub fn refs(
 }
 
 /// The root of the git repository holding `path`, or `path` itself.
-fn repository_root(path: &Path) -> Result<PathBuf, Box<dyn Error>> {
+pub(crate) fn repository_root(path: &Path) -> Result<PathBuf, Box<dyn Error>> {
     let root = git2::Repository::discover(path)
         .ok()
         .and_then(|repo| repo.workdir().map(Path::to_path_buf))
@@ -225,7 +213,7 @@ fn repository(root: &Path) -> Repository {
 
 /// The paths changed since `since`, relative to the root, old names of
 /// moved files included.
-fn changed_since(path: &Path, since: &str) -> Result<HashSet<PathBuf>, Box<dyn Error>> {
+pub(crate) fn changed_since(path: &Path, since: &str) -> Result<HashSet<PathBuf>, Box<dyn Error>> {
     let git = GitRepo::open(path).map_err(|e| format!("not a git repository: {e}"))?;
     let mut changed = HashSet::new();
     for stat in git.diff_stats_since(since)? {

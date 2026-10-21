@@ -325,6 +325,40 @@ pub fn weighted_mi(files: impl Iterator<Item = (f64, usize)>) -> f64 {
     if lines == 0 { 0.0 } else { sum / lines as f64 }
 }
 
+/// A titled table, when it has rows.
+pub fn table<const N: usize>(title: &str, header: [&str; N], rows: &[[String; N]]) {
+    if rows.is_empty() {
+        return;
+    }
+    let widths: Vec<usize> = (0..N)
+        .map(|i| {
+            rows.iter()
+                .map(|r| display_width(&r[i]))
+                .chain([display_width(header[i])])
+                .max()
+                .unwrap_or(0)
+        })
+        .collect();
+    let line = |cells: Vec<&str>| {
+        let padded: Vec<String> = cells
+            .iter()
+            .zip(&widths)
+            .map(|(cell, &width)| pad_to(cell, width))
+            .collect();
+        format!(" {}", padded.join("  ").trim_end())
+    };
+    let sep = separator(widths.iter().sum::<usize>() + 2 * N);
+    println!();
+    println!("{title}");
+    println!("{sep}");
+    println!("{}", line(header.to_vec()));
+    println!("{sep}");
+    for row in rows {
+        println!("{}", line(row.iter().map(String::as_str).collect()));
+    }
+    println!("{sep}");
+}
+
 #[cfg(test)]
 #[path = "report_helpers_test.rs"]
 mod tests;

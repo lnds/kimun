@@ -9,10 +9,9 @@ use chrono::DateTime;
 use serde::Serialize;
 
 use super::context::{Load, Repeated, Role};
-use super::links_report::table;
 use crate::cli::OutputMode;
 use crate::git::GitRepo;
-use crate::report_helpers;
+use crate::report_helpers::{self, table};
 use crate::walk::WalkConfig;
 
 /// A context file and what is measured of it.

@@ -33,7 +33,7 @@ mod cycom;
 mod deps;
 /// Shared function detection for complexity analyzers.
 mod detection;
-/// Measures of documentation: dead references.
+/// Measures of documentation: dead references, links, staleness, agent context.
 mod docs;
 /// Duplicate code detection using sliding-window fingerprinting.
 mod dups;
@@ -51,6 +51,8 @@ mod html;
 mod impact;
 /// Indentation complexity (stddev and max depth).
 mod indent;
+/// Measures of infrastructure code: security smells.
+mod infra;
 /// Interactive wizard: analyze current project state and write `.kimun.toml`.
 mod init;
 /// What a file is for: code, documentation, infrastructure or data.
@@ -65,6 +67,8 @@ mod map;
 mod mi;
 /// Maintainability Index (verifysoft variant, with comment weight).
 mod miv;
+/// Commands that read the files of one kind, whatever `--kind` says.
+mod on_kind;
 /// Projects of a repository and their dependencies, read from manifests.
 mod projects;
 /// Combined report (`km report`) aggregating all metrics.
@@ -589,6 +593,7 @@ fn main() {
             })
         }
         Commands::Docs { command } => docs::dispatch(command),
+        Commands::Infra { command } => infra::dispatch(command),
         Commands::Ai { command } => dispatch_ai(command),
         Commands::Init { path, yes } => run_command(path, |t| init::run(t, yes)),
         Commands::Completions { shell } => {
