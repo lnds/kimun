@@ -865,3 +865,26 @@ fn paths_in_history_include_deleted_files() {
     let expected: HashSet<PathBuf> = ["a.rs", "old/gone.rs", "b.rs"].map(PathBuf::from).into();
     assert_eq!(paths, expected);
 }
+
+#[test]
+fn commits_by_file_number_the_commits_and_keep_their_times() {
+    let (dir, repo) = create_test_repo();
+    make_commit_at(
+        &repo,
+        &[("a.rs", "a"), ("b.rs", "b")],
+        "first",
+        1_700_000_000,
+    );
+    make_commit_at(&repo, &[("a.rs", "a2")], "second", 1_700_000_100);
+    let git = GitRepo::open(dir.path()).unwrap();
+    let commits = git.commits_by_file().unwrap();
+    assert_eq!(
+        commits[Path::new("a.rs")]
+            .iter()
+            .map(|(_, t)| *t)
+            .collect::<Vec<_>>(),
+        [1_700_000_100, 1_700_000_000]
+    );
+    let first_of_a = commits[Path::new("a.rs")][1].0;
+    assert_eq!(commits[Path::new("b.rs")], [(first_of_a, 1_700_000_000)]);
+}

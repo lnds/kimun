@@ -119,6 +119,12 @@ km docs refs [PATH] --format json --since-ref origin/main
 ```
 Links, images and anchors of Markdown documents that lead nowhere, and paths in code spans the repository once had and no longer has. `missing` is `file`, `heading` or `path`. With `--since-ref`, only documents changed since the ref and references to files the change touched: run it on a branch that moves or deletes files to learn which documents still name them.
 
+### Documents Behind the Code (requires git)
+```bash
+km docs stale [PATH] --format json --top 20
+```
+Documents whose described code (files they cover or name) changed after them, with `days_behind`, `commits` and the files. Suggest updating the furthest behind, or adding them to `[docs] ignore` when they record history.
+
 ## Analysis Workflow
 
 1. Start with `km score` for the overall health grade
@@ -129,7 +135,7 @@ Links, images and anchors of Markdown documents that lead nowhere, and paths in 
 6. Optionally run `km knowledge` and `km tc` for team/architecture insights
 7. Use `km score diff --git-ref HEAD~N` to track score changes over time
 8. To review a branch or a pull request, run `km impact` and report the unprotected files first
-9. Run `km docs refs` to find documentation that names files or headings that are gone
+9. Run `km docs refs` to find documentation that names files or headings that are gone, and `km docs stale` for documents behind their code
 
 ## Output Format
 

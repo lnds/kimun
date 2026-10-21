@@ -41,6 +41,7 @@ pub fn execute_tool(tool_name: &str, input: &Value, project_path: &Path) -> Stri
             ),
         ),
         "km_docs_refs" => ("docs refs", build_args(input, &["since_ref"], project_path)),
+        "km_docs_stale" => ("docs stale", build_args(input, &["top"], project_path)),
         _ => return format!("Unknown tool: {tool_name}"),
     };
 

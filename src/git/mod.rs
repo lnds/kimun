@@ -18,11 +18,14 @@ use git2::{Delta, DiffOptions, ObjectType, Repository, Sort, Tree};
 
 mod blame;
 mod changeset;
+mod history;
 
 pub use changeset::{ChangeKind, CoChangeHistory, FileDiffStat, patch_stats};
 
 mod touched;
 mod tree;
+
+pub use history::CommitsByFile;
 
 /// Wrapper around a `git2::Repository` with its resolved root path.
 pub struct GitRepo {
@@ -145,7 +148,7 @@ impl GitRepo {
     }
 
     /// Like [`Self::walk_commits`], over the commits `revwalk` was seeded with.
-    fn walk(
+    pub(super) fn walk(
         &self,
         mut revwalk: git2::Revwalk<'_>,
         since: Option<i64>,
@@ -429,38 +432,11 @@ impl GitRepo {
         Ok(changes)
     }
 
-    /// Every file path the history up to HEAD has held, deleted ones
-    /// included: through `git log`, far faster on a long history, or,
-    /// failing that, libgit2.
-    pub fn paths_in_history(&self) -> Result<HashSet<PathBuf>, Box<dyn Error>> {
-        let output = std::process::Command::new("git")
-            .arg("-C")
-            .arg(&self.root)
-            .args(["-c", "core.quotePath=false", "log", "--name-only"])
-            .args(["--format=", "--no-renames", "HEAD"])
-            .output()
-            .ok()
-            .filter(|output| output.status.success());
-        if let Some(output) = output {
-            let text = String::from_utf8_lossy(&output.stdout);
-            return Ok(text
-                .lines()
-                .filter(|line| !line.is_empty())
-                .map(PathBuf::from)
-                .collect());
-        }
-        let mut revwalk = self.repo.revwalk()?;
-        revwalk.push_head()?;
-        let mut paths = HashSet::new();
-        self.walk(revwalk, None, |commit| {
-            paths.extend(self.changed_files(commit)?);
-            Ok(ControlFlow::Continue(()))
-        })?;
-        Ok(paths)
-    }
-
     /// Diff a commit against its parent to get the list of changed file paths.
-    fn changed_files(&self, commit: &git2::Commit) -> Result<Vec<PathBuf>, Box<dyn Error>> {
+    pub(super) fn changed_files(
+        &self,
+        commit: &git2::Commit,
+    ) -> Result<Vec<PathBuf>, Box<dyn Error>> {
         let tree = commit.tree()?;
         let parent_tree = if commit.parent_count() > 0 {
             Some(commit.parent(0)?.tree()?)

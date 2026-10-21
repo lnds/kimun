@@ -1527,6 +1527,34 @@ Example output:
 
 The JSON lists `documents`, `references` and every dead reference with its `document`, `line`, `reference`, `form` (`link`, `image` or `code`) and `missing` (`file`, `heading` or `path`). `km ai` offers the command to an LLM as the tool `km_docs_refs`.
 
+### `km docs stale` -- Documents behind the code
+
+The audit of a knowledge base over time: the documents whose code changed after them. Where [`km impact`](#documentation-left-behind) watches one change before it is merged, `km docs stale` looks at the whole repository as it is.
+
+```bash
+km docs stale [path]
+km docs stale kb/ --top 50
+```
+
+A document describes a file as `km impact` reads it: it covers it (`covers:` in its front matter, or `[docs] covers` in `.kimun.toml`) or it names it (a link, a path in a code span, whole or by its end, or a directory of two names or more above it). Documents are never described, and changelogs and the globs of `[docs] ignore` are left out. A document is behind when a file it describes changed after the document last did, in the committed history.
+
+```
+───────────────────────────────────────────────────────────────────────────────
+ Document                 Updated     Behind  Commits  Describes
+───────────────────────────────────────────────────────────────────────────────
+ kb/payments/refunds.md   2026-01-10    143d       12  apps/payments/lib/refund.ex (+3)
+ docs/architecture.md     2026-04-02     51d        3  lib/billing/invoice.ex
+───────────────────────────────────────────────────────────────────────────────
+ 2 of 38 documents are behind the code they describe
+```
+
+`Behind` is the time from the document's last change to the last change of what it describes, furthest first; `Commits` the distinct commits to those files since the document changed. The JSON lists every document behind, with `updated`, `days_behind`, `commits` and each file with `changed` and `commits`.
+
+| Flag | Description |
+|------|-------------|
+| `--top N` | Rows of the table (default: 20); JSON lists every document unless given |
+| `--format {table,json,short,terse}` | Output format (default: table). `terse` prints the number of documents behind |
+
 ### `km report` -- Comprehensive metrics report
 
 Generates a multi-section report combining all static code metrics in a single pass: lines of code, duplicates, indentation, Halstead, cyclomatic complexity, cognitive complexity, and maintainability index.

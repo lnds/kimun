@@ -747,7 +747,7 @@ pub enum Commands {
         since: Option<String>,
     },
 
-    /// Measure documentation: dead references in Markdown documents
+    /// Measure documentation: dead references, documents behind the code
     Docs {
         #[command(subcommand)]
         command: DocsCommands,
@@ -834,6 +834,18 @@ pub enum DocsCommands {
         /// files changed since it (e.g. origin/main)
         #[arg(long, value_name = "REF")]
         since_ref: Option<String>,
+    },
+
+    /// Find documents behind the code they describe: files a document
+    /// covers or names changed after it
+    #[command(long_about = crate::docs::STALE_HELP)]
+    Stale {
+        #[command(flatten)]
+        common: CommonArgs,
+
+        /// Rows of the table (default: 20); JSON lists every document unless given
+        #[arg(long)]
+        top: Option<usize>,
     },
 }
 
