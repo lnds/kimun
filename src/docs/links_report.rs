@@ -110,7 +110,7 @@ pub fn print_report(report: &LinksReport, top: Option<usize>) {
 }
 
 /// A titled table, when it has rows.
-fn table<const N: usize>(title: &str, header: [&str; N], rows: &[[String; N]]) {
+pub(super) fn table<const N: usize>(title: &str, header: [&str; N], rows: &[[String; N]]) {
     if rows.is_empty() {
         return;
     }

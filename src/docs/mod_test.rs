@@ -148,3 +148,24 @@ fn stale_needs_a_repository_and_runs_in_one() {
         stale(&cfg, output, None).unwrap();
     }
 }
+
+#[test]
+fn context_measures_the_files_of_agents_and_fails_over_max_tokens() {
+    let dir = tempfile::tempdir().unwrap();
+    write(dir.path(), "CLAUDE.md", "# Rules\nAlways run the tests.\n");
+    write(
+        dir.path(),
+        "apps/web/CLAUDE.md",
+        &"Never push to main. ".repeat(50),
+    );
+    write(dir.path(), ".claude/skills/ship/SKILL.md", "Ship it.\n");
+    write(dir.path(), "README.md", "Not a context file.\n");
+    let filter = docs_filter();
+    let cfg = WalkConfig::new(dir.path(), true, &filter);
+    for output in [OutputMode::Table, OutputMode::Json, OutputMode::Short] {
+        context_report::run(&cfg, output, None, None).unwrap();
+    }
+    context_report::run(&cfg, OutputMode::Terse, None, Some(1000)).unwrap();
+    let err = context_report::run(&cfg, OutputMode::Terse, None, Some(100)).unwrap_err();
+    assert!(err.to_string().contains("apps/web"), "{err}");
+}

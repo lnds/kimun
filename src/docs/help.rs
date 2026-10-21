@@ -83,3 +83,37 @@ Examples:
   km docs links
   km docs links kb/ --top 50
   km docs links --format json";
+
+/// Which files steer agents and what is measured of them.
+pub const CONTEXT: &str = "\
+Measure the files that steer coding agents, loaded into the model's context
+on every task: models use long contexts worse, and worst what sits in the
+middle (Liu et al., Lost in the Middle, 2024).
+
+Files:
+  instructions   CLAUDE.md, CLAUDE.local.md, AGENTS.md, GEMINI.md, read for
+                 every task under their directory
+  rules          .cursorrules, .cursor/rules/, .windsurfrules,
+                 .github/copilot-instructions.md, .github/instructions/
+  skill          .claude/skills/, SKILL.md
+  agent          .claude/agents/
+  command        .claude/commands/
+
+Measured:
+  Tokens     approximate: characters / 4
+  Loads      what an agent working in a directory reads together: the
+             instructions from the analyzed directory down to it
+  Rules      lines of prose that ask (must, never, always, do not, should,
+             debe, nunca, siempre, ...): how much is being asked
+  Repeated   lines of prose found in more than one context file
+  Dead       references km docs refs finds dead
+  Commits    commits and last change of each file, in a git repository
+
+No model is called. Files ignored by git are not read: .claude/ often is.
+
+--max-tokens N fails when a load goes over N tokens.
+
+Examples:
+  km docs context
+  km docs context --max-tokens 8000
+  km docs context --format json";
