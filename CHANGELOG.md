@@ -1,3 +1,12 @@
+## v0.41.0 (2026-10-21)
+
+### Feat
+
+- km docs stale, documents behind the code they describe
+- **impact**: documents left behind by a change
+- km docs refs, dead references in documentation
+- file kinds (code, docs, infra, data), chosen with --kind
+
 ## v0.40.0 (2026-10-20)
 
 ### Feat
