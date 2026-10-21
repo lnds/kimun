@@ -850,3 +850,18 @@ fn bot_accounts_are_told_apart() {
     );
     assert!(!blame("Ana", "123+ana@users.noreply.github.com").is_bot());
 }
+
+#[test]
+fn paths_in_history_include_deleted_files() {
+    let (dir, repo) = create_test_repo();
+    make_commit(&repo, &[("a.rs", "a"), ("old/gone.rs", "g")], "first");
+    fs::remove_file(dir.path().join("old/gone.rs")).unwrap();
+    let mut index = repo.index().unwrap();
+    index.remove_path(Path::new("old/gone.rs")).unwrap();
+    index.write().unwrap();
+    make_commit(&repo, &[("b.rs", "b")], "second");
+    let git = GitRepo::open(dir.path()).unwrap();
+    let paths = git.paths_in_history().unwrap();
+    let expected: HashSet<PathBuf> = ["a.rs", "old/gone.rs", "b.rs"].map(PathBuf::from).into();
+    assert_eq!(paths, expected);
+}

@@ -12,8 +12,7 @@ use crate::kind::{self, Kind, Selection};
 use crate::walk::ExcludeFilter;
 
 /// Error returned by commands that do not support CI annotation formats.
-pub const ERR_CI_FORMAT_ONLY: &str =
-    "--format github and --format codeclimate are only supported by cycom, cogcom, and smells";
+pub const ERR_CI_FORMAT_ONLY: &str = "--format github and --format codeclimate are only supported by cycom, cogcom, smells, and docs refs";
 
 fn parse_non_negative_f64(s: &str) -> Result<f64, String> {
     match s.parse::<f64>() {
@@ -179,8 +178,8 @@ pub struct CommonArgs {
     /// Output format: table (default), json, short, terse, github, or codeclimate.
     /// `short` emits a single compact line of key:value pairs (AI-friendly).
     /// `terse` emits a single headline metric value (for piping/embedding).
-    /// `github` emits GitHub Actions warning annotations (only cycom, cogcom, smells).
-    /// `codeclimate` (alias: `gitlab`) emits CodeClimate JSON for GitLab Code Quality (only cycom, cogcom, smells).
+    /// `github` emits GitHub Actions warning annotations (only cycom, cogcom, smells, docs refs).
+    /// `codeclimate` (alias: `gitlab`) emits CodeClimate JSON for GitLab Code Quality (only cycom, cogcom, smells, docs refs).
     #[arg(long, value_enum, default_value_t)]
     pub format: OutputMode,
 
@@ -743,6 +742,12 @@ pub enum Commands {
         since: Option<String>,
     },
 
+    /// Measure documentation: dead references in Markdown documents
+    Docs {
+        #[command(subcommand)]
+        command: DocsCommands,
+    },
+
     /// AI-powered code analysis and tooling
     Ai {
         #[command(subcommand)]
@@ -803,6 +808,27 @@ pub enum ScoreCommands {
         /// Overridable via .kimun.toml [score] model.
         #[arg(long, value_parser = ["cogcom", "cogcom-0.35", "legacy"])]
         model: Option<String>,
+    },
+}
+
+/// Documentation subcommands.
+#[derive(Subcommand)]
+pub enum DocsCommands {
+    /// Find references in Markdown documents that lead nowhere: links and
+    /// images to missing files or headings, paths in code spans
+    #[command(long_about = crate::docs::REFS_HELP)]
+    Refs {
+        #[command(flatten)]
+        common: CommonArgs,
+
+        /// Exit with code 1 when a dead reference is found (for CI)
+        #[arg(long)]
+        fail_on_dead: bool,
+
+        /// Only documents changed since this git ref, and references to
+        /// files changed since it (e.g. origin/main)
+        #[arg(long, value_name = "REF")]
+        since_ref: Option<String>,
     },
 }
 

@@ -325,6 +325,15 @@ Enclosure diagram of the code (Tornhill): directories as circles holding their f
 
 What each file is for: `Kind` (`Code`, `Docs`, `Infra`, `Data`), by language and path, and for YAML by its first lines (Kubernetes, CloudFormation, Ansible). `Selection` carries `--kind`, `[kinds] separate` and the globs `[kinds]` declares; it travels inside `walk::ExcludeFilter`, so every command reads it. `measures` decides what metrics of code read (without `--kind`, what they always read), `reads` what `loc` and `deps` read, `measures_path` the same for paths of history.
 
+### Module structure: `src/docs/`
+
+Measures of documentation, the files of kind `docs`. `km docs refs` reads Markdown documents whatever `--kind` says (`main::dispatch_docs`).
+
+- **`markdown.rs`** — `scan` reads a document by paragraphs (`Block`: code spans and link texts go on across lines, each character keeps its line), skipping front matter, fenced and indented code and HTML comments. It gives the `Reference`s (links, images, reference definitions, `href`/`src`, code spans) and the anchors: headings named as GitHub names them (`slug`, `-1` for a repeated one) and `id`/`name` of HTML elements.
+- **`refs.rs`** — `check` finds the dead references of a document against a `Repository`: the working tree (ignored files left out) with every trailing part of its paths, so `deps/graph.rs` names `src/deps/graph.rs`. A link is dead when its file or its heading is missing; an absolute link without extension is a route of a site and is not checked. A code span shaped like a path is dead when the history held it (`GitRepo::paths_in_history`, read only when a span names a path the tree lacks), or outside git when it starts at a name of the tree.
+- **`report.rs`** — Table, JSON, one line, GitHub and CodeClimate annotations.
+- **`mod.rs`** — Orchestration: the root of the repository, the documents of the walk, `--since-ref` (documents changed since the ref keep every dead reference, the rest only those that name a changed path, whole or by its end) and `--fail-on-dead`.
+
 ### Shared: `src/file_tree.rs`
 
 Files as a tree of directories, rooted at the deepest directory holding every file, a directory holding only another merged with it. `deps/matrix_tree.rs` orders it for the dependency matrix; `map/layout.rs` packs it.

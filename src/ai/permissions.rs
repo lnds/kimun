@@ -20,6 +20,7 @@ const KM_PERMISSIONS: &[&str] = &[
     "Bash(km knowledge*)",
     "Bash(km tc*)",
     "Bash(km impact*)",
+    "Bash(km docs*)",
 ];
 
 /// Install `km` bash permissions into `.claude/settings.local.json` at the

@@ -241,7 +241,7 @@ Every file is of one kind:
 | `infra` | Terraform, Dockerfiles, and YAML that is infrastructure: GitHub workflows, `.gitlab-ci.yml` and other CI pipelines, Compose files, Helm charts, Kustomize, Ansible (`playbooks/`, `roles/*/tasks/`, …), Kubernetes manifests (`apiVersion` and `kind`), CloudFormation templates |
 | `data` | JSON, TOML, XML, the rest of YAML, Properties and PO files |
 
-`--kind` chooses the kinds a command reads, on every command that reads files: `--kind docs`, `--kind code,infra`, `--kind all`. Without it nothing changes: each command reads what it always has, and infrastructure written in a language of code (Terraform, Dockerfiles) is measured as code. To measure code alone, use `--kind code`, or set `separate = true` under `[kinds]` in `.kimun.toml` to make that the default; `[kinds]` can also declare the kind of files by glob. `--list-excluded` names the files `--kind` leaves out.
+`--kind` chooses the kinds a command reads, on every command that reads files: `--kind docs`, `--kind code,infra`, `--kind all`. Without it nothing changes: each command reads what it always has, and infrastructure written in a language of code (Terraform, Dockerfiles) is measured as code. To measure code alone, use `--kind code`, or set `separate = true` under `[kinds]` in `.kimun.toml` to make that the default; `[kinds]` can also declare the kind of files by glob. `--list-excluded` names the files `--kind` leaves out. [`km docs refs`](#km-docs-refs----dead-references-in-documentation) reads the documents, whatever `--kind` says.
 
 ### `km indent` -- Indentation complexity
 
@@ -1457,6 +1457,48 @@ Files without a value (no history, a language with no dependency graph) are draw
 | `--color-by METRIC` | `score` (default), `hotspots`, `churn`, `age`, `knowledge`, `cycles` or `llm` |
 | `--since TIME` | Read history since this time (e.g. `6m`, `1y`, `30d`) |
 | `--format {table,json}` | `json` prints the laid out tree: every node with `x`, `y`, `r`, `depth`, `parent`, `lines`, and for files `heat` (-1 to 1) and `label` |
+
+### `km docs refs` -- Dead references in documentation
+
+Documentation refers to the code: files, directories, headings of other documents. When the code moves on, those references go dead and nobody notices, and an instruction file for coding agents that names a file no longer there sends the agent the wrong way. `km docs refs` reads the Markdown documents of the repository and lists the references that lead nowhere.
+
+```bash
+km docs refs [path]
+km docs refs --since-ref origin/main --fail-on-dead   # in CI
+km docs refs --format github                          # annotations on the pull request
+```
+
+| What | Dead when |
+|------|-----------|
+| Links and images: `[text](path)`, `![alt](path)`, `[label]: path`, `<a href>`, `<img src>` | the file does not exist, from the document, or from the repository root for a path that starts with `/` |
+| Anchors: `path.md#heading`, `#heading` | the Markdown document has no such heading, named as GitHub names it (`## Install` is `#install`), nor an element with that `id` or `name` |
+| Paths in code spans: `` `src/kind.rs` ``, `` `scripts/` ``, `` `src/kind.rs:42` `` | the repository held that path at some time and no longer does |
+
+A path in a code span is alive when it exists from the document or from the root, or when it is the end of a path of the repository (`` `deps/graph.rs` `` names `src/deps/graph.rs`). It counts as dead only if the history of the repository ever held it, so the layout of an example (`` `src/lib.rs` `` in a guide about Rust packages) or a file a plan has yet to create is not taken for one. Outside a git repository, a path is read when its first name is that of a file or directory of the tree. URLs are never fetched; an absolute link without an extension (`/docs/score/`) is a route of a site built from the documents, not a file. Fenced and indented code, front matter and HTML comments refer to nothing.
+
+With `--since-ref`, the documents changed since the ref keep every dead reference, and the others only those that name a file the change touched: a pull request that deletes or moves a file learns which documents still name it.
+
+| Flag | Description |
+|------|-------------|
+| `--since-ref REF` | Only documents changed since REF, and references to files changed since it |
+| `--fail-on-dead` | Exit with code 1 when a dead reference is found |
+| `--include-tests` | Read the documents under test directories too (left out by default, as fixtures) |
+| `--format {table,json,short,terse,github,codeclimate}` | Output format (default: table). `terse` prints the number of dead references |
+
+Example output:
+
+```
+────────────────────────────────────────────────────────────────────
+ Document            Line Reference               Problem
+────────────────────────────────────────────────────────────────────
+ docs/guide.md         42 src/parser/old.rs       no such path
+ docs/guide.md         57 ../README.md#install    no such heading
+ tools/README.md        9 baselines/run.sh        no such file
+────────────────────────────────────────────────────────────────────
+ 3 dead of 512 references, in 2 of 38 documents
+```
+
+The JSON lists `documents`, `references` and every dead reference with its `document`, `line`, `reference`, `form` (`link`, `image` or `code`) and `missing` (`file`, `heading` or `path`). `km ai` offers the command to an LLM as the tool `km_docs_refs`.
 
 ### `km report` -- Comprehensive metrics report
 
