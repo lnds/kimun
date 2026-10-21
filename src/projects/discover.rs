@@ -10,8 +10,9 @@ use super::{DepTarget, Ecosystem, Edge, Manifest, Project, ProjectGraph, Scope, 
 use crate::walk::TEST_DIRS;
 
 /// Directories that are never part of a project, wherever they are.
-/// `vendor` is the one people commit, so it is never taken for a module.
-const SKIPPED_DIRS: &[&str] = &["testdata", ".git", "node_modules", "vendor"];
+/// `vendor` is the one people commit, so it is never taken for a module;
+/// `.terraform` holds the modules `terraform init` fetched.
+const SKIPPED_DIRS: &[&str] = &["testdata", ".git", "node_modules", "vendor", ".terraform"];
 
 /// Directories that hold fetched dependencies or build output at the root
 /// of a project. Their manifests belong to other people's projects.
@@ -154,7 +155,8 @@ impl Resolver {
     ///
     /// A `package.json` has no way to say it is only a workspace root, so one
     /// at the root of a workspace is taken as that and nothing else; any
-    /// other is a project, even without a name.
+    /// other is a project, even without a name. A Terraform module is named
+    /// after its directory.
     fn project_name(&self, found: &Found) -> Option<String> {
         match found.ecosystem {
             Ecosystem::Npm if self.workspaces.contains_key(&found.dir) => None,
@@ -165,6 +167,7 @@ impl Resolver {
                     .clone()
                     .unwrap_or_else(|| dir_name(&found.dir)),
             ),
+            Ecosystem::Terraform => Some(dir_name(&found.dir)),
             _ => found.manifest.name.clone(),
         }
     }

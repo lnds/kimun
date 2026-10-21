@@ -815,3 +815,54 @@ fn python_roots_are_relative_to_the_repository() {
         ]
     );
 }
+
+#[test]
+fn terraform_modules_reach_the_stacks_that_call_them() {
+    let module = |source: &str| format!("module \"m\" {{\n  source = \"{source}\"\n}}\n");
+    let graph = discover(&[
+        ("modules/network/main.tf", "resource \"aws_vpc\" \"v\" {}\n"),
+        ("modules/network/variables.tf", "variable \"cidr\" {}\n"),
+        ("modules/eks/main.tf", &module("../network")),
+        ("envs/prod/main.tf", &module("../../modules/eks")),
+        ("envs/dev/main.tf", &module("../../modules/network")),
+        (
+            "envs/dev/remote.tf",
+            &module("terraform-aws-modules/vpc/aws"),
+        ),
+        ("modules/eks/.terraform/modules/x/main.tf", ""),
+    ]);
+    assert_eq!(
+        roots(&graph),
+        ["envs/dev", "envs/prod", "modules/eks", "modules/network"]
+    );
+    assert_eq!(
+        graph.projects[index(&graph, "modules/network")].name,
+        "network"
+    );
+    assert_eq!(
+        radius(&graph, &["modules/network"]),
+        [
+            reach(
+                "envs/dev",
+                "modules/network",
+                1,
+                "modules/network",
+                Scope::Runtime
+            ),
+            reach(
+                "modules/eks",
+                "modules/network",
+                1,
+                "modules/network",
+                Scope::Runtime
+            ),
+            reach(
+                "envs/prod",
+                "modules/network",
+                2,
+                "modules/eks",
+                Scope::Runtime
+            ),
+        ]
+    );
+}
