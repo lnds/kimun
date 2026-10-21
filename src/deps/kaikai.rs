@@ -29,15 +29,20 @@ pub fn extract(source: &str) -> Vec<String> {
         .zip(kinds)
         .zip(in_string)
         .filter(|((_, kind), masked)| *kind == LineKind::Code && !masked)
-        .filter_map(|((line, _), _)| import_path(line))
+        .flat_map(|((line, _), _)| statements(line).filter_map(import_path))
         .map(str::to_string)
         .collect()
 }
 
-/// The module path of an `import` line, without its alias or its
+/// The statements of a line of code: before its comment, separated by `;`.
+fn statements(line: &str) -> impl Iterator<Item = &str> {
+    line.split('#').next().unwrap_or(line).split(';')
+}
+
+/// The module path of an `import` statement, without its alias or its
 /// selective list: `import a.b.{f, g}` → `a.b`.
-fn import_path(line: &str) -> Option<&str> {
-    let rest = line.trim_start().strip_prefix("import")?;
+fn import_path(statement: &str) -> Option<&str> {
+    let rest = statement.trim_start().strip_prefix("import")?;
     if !rest.starts_with(char::is_whitespace) {
         return None;
     }

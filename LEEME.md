@@ -1186,6 +1186,7 @@ Notas sobre Kaikai:
 - `import a.b.c` nombra `a/b/c.kai` relativo a la raíz de un paquete, no al archivo que importa. Se prueba cada directorio ancestro del archivo que importa, del más cercano al más lejano, así que ejecuta `km deps` en un directorio que contenga la raíz del paquete.
 - Cuando ese archivo no existe, `import a` puede nombrar un directorio de paquete `a/` que tenga un `kai.toml`, donde el compilador busca: el import depende de `a/a.kai` o, cuando el paquete no tiene un archivo con su nombre, de cada archivo `.kai` que esté directamente dentro.
 - Un import que no se resuelve a ningún archivo analizado es externo y no agrega ninguna arista.
+- Varias sentencias en una línea van separadas por `;`, así que `import a; import b` lee ambos; lo que sigue a un `#` es comentario, e `import ?nombre` (un hueco de dependencia) no nombra ningún módulo.
 - Cada archivo es un módulo propio. Los archivos de un paquete no comparten nombres: se importan entre sí como cualquier otro módulo (`import store`, `import notes.store`), así que sus únicas aristas son sus imports, y un cambio en uno alcanza a los archivos de su paquete que lo importan. A diferencia de Go, donde los archivos de un paquete se ven sin importarse y un import los alcanza a todos.
 
 | Flag | Descripción |

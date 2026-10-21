@@ -272,13 +272,14 @@ static CLOJURE: CognitiveMarkers = CognitiveMarkers {
 
 /// Kaikai: `if`, `match`, multi-clause `case`, `when` guards, and effect
 /// `handle` blocks all introduce nesting. `else` is fundamental (+1, nests
-/// its body). Boolean operators `and`/`or` are keywords. `with` is omitted
-/// because it shares the `handle ... with` line and would double-count.
+/// its body). Boolean operators `and`/`or` are keywords, and `??` counts as
+/// JavaScript's does. `with` is omitted because it shares the
+/// `handle ... with` line and would double-count.
 static KAIKAI: CognitiveMarkers = CognitiveMarkers {
     structural_keywords: &["if", "match", "case", "when", "handle"],
     hybrid_keywords: &[],
     fundamental_keywords: &["else"],
-    boolean_operators: &["and", "or"],
+    boolean_operators: &["and", "or", "??"],
     function_markers: &["fn "],
     brace_scoped: true,
     function_syntax: FunctionSyntax::Keyword,

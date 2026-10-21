@@ -379,23 +379,26 @@ pub static SHELL: TokenRules = TokenRules {
 /// Functional language with algebraic effects. Control flow keywords
 /// (`if`, `match`, `case`, `when`, `handle`, `with`) and boolean keywords
 /// (`and`, `or`, `not`) are operators. `as` is an operator (capability/import
-/// alias binding). Pipeline operators (`|>`, `||`, `|?`, `|`) drive
-/// dataflow. `:=` is mutable cell write, `++` is concat, `=>` lambda arrow,
-/// `->` type/pattern arrow. Declarations (`fn`, `let`, `var`, `type`,
-/// `effect`, `protocol`, `impl`, `import`, `use`, visibility) are ignored.
+/// alias binding). Pipeline operators (`|>`, `|`, `||`, `|?`, `|!`) drive
+/// dataflow. `:=` is mutable cell write, `++` is concat, `??` the default of
+/// an `Option`, `&` makes a reference, `$` calls an intrinsic, `=>` lambda
+/// arrow, `->` type/pattern arrow. Declarations (`fn`, `let`, `var`, `type`,
+/// `effect`, `protocol`, `impl`, `import`, `use`, visibility, `for` of an
+/// `impl`, `lazy`) are ignored.
 pub static KAIKAI: TokenRules = TokenRules {
     operator_keywords: &[
         "if", "else", "match", "case", "when", "handle", "with", "and", "or", "not", "as",
     ],
     operator_symbols: &[
-        "|>", "|?", "...", "++", "==", "!=", "<=", ">=", ":=", "=>", "->", "||", "..", "+", "-",
-        "*", "/", "%", "^", "|", "!", "<", ">", "=", ";", ",", ".", ":", "(", ")", "[", "]", "{",
-        "}", "@", "?",
+        "|>", "|?", "|!", "...", "++", "??", "==", "!=", "<=", ">=", ":=", "=>", "->", "||", "..",
+        "+", "-", "*", "/", "%", "^", "|", "!", "<", ">", "=", ";", ",", ".", ":", "(", ")", "[",
+        "]", "{", "}", "@", "?", "&", "$",
     ],
     ignored_keywords: &[
         "fn", "let", "var", "const", "type", "effect", "protocol", "impl", "import", "use", "pub",
         "priv", "extern", "test", "bench", "axiom", "check", "where", "requires", "ensures",
-        "assert", "unit", "true", "false", "Int", "Real", "Bool", "String", "Char", "Unit",
+        "assert", "theory", "for", "lazy", "unit", "true", "false", "Int", "Real", "Bool",
+        "String", "Char", "Unit",
     ],
 };
 

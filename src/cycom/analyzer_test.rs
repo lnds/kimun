@@ -280,3 +280,13 @@ end";
     .collect();
     assert_eq!(found, expected);
 }
+
+#[test]
+fn kaikai_default_of_an_option_is_a_branch() {
+    let markers = super::super::markers::markers_for("Kaikai").unwrap();
+    let code = "fn port(env: Map[String, Int]) : Int {\n  \
+                let p = env |> map.get(\"PORT\") ?? 8080; p\n}\n";
+    let (lines, kinds) = make_lines(code);
+    let result = analyze(&lines, &kinds, markers).unwrap();
+    assert_eq!(result.functions[0].complexity, 2);
+}

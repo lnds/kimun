@@ -1186,6 +1186,7 @@ Kaikai notes:
 - `import a.b.c` names `a/b/c.kai` relative to a package root, not to the importing file. Each ancestor directory of the importing file is tried, nearest first, so run `km deps` on a directory that contains the package root.
 - When no such file exists, `import a` can name a package directory `a/` that carries a `kai.toml`, which the compiler searches: the import depends on `a/a.kai`, or, when the package has no file of its name, on every `.kai` file directly inside it.
 - An import that resolves to no analysed file is external and adds no edge.
+- Several statements on one line are separated by `;`, so `import a; import b` reads both; what follows a `#` is a comment, and `import ?name` (a dependency hole) names no module.
 - Each file is a module of its own. The files of a package do not share names: they import each other like any other module (`import store`, `import notes.store`), so their only edges are their imports, and a change to one reaches the files of its package that import it. Unlike Go, where the files of a package see each other without importing and an import reaches them all.
 
 | Flag | Description |

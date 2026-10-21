@@ -238,3 +238,15 @@ fn elixir_attribute_names_are_ignored() {
     assert!(counts.distinct_operators.contains("::"));
     assert!(counts.distinct_operators.contains("@"));
 }
+
+#[test]
+fn kaikai_coalesce_each_pipe_and_reference_are_operators() {
+    let rules = rules_for("Kaikai").unwrap();
+    let lines = vec!["let r = &cell", "xs |! log ?? 0"];
+    let counts = count_tokens(&lines, rules, &[]);
+    for op in ["&", "|!", "??"] {
+        assert!(counts.distinct_operators.contains(op), "{op}");
+    }
+    assert!(!counts.distinct_operators.contains("|"));
+    assert!(!counts.distinct_operators.contains("?"));
+}
