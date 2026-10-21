@@ -93,12 +93,12 @@ fn print_json_with_reports() {
             code: 100,
         },
     ];
-    print_json(reports);
+    print_json(reports, vec![]);
 }
 
 #[test]
 fn print_json_empty() {
-    print_json(vec![]);
+    print_json(vec![], vec![]);
 }
 
 #[test]

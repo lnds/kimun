@@ -51,6 +51,8 @@ mod impact;
 mod indent;
 /// Interactive wizard: analyze current project state and write `.kimun.toml`.
 mod init;
+/// What a file is for: code, documentation, infrastructure or data.
+mod kind;
 /// Knowledge maps: code ownership via git blame.
 mod knowledge;
 /// Lines of code counting with FSM-based line classification.

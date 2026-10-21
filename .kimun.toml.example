@@ -104,3 +104,16 @@ complexity = "indent"  # default: indent
 # extensions = ["sql", "proto"]
 # Globs against the path relative to the analysis root (as --exclude).
 # patterns = ["legacy/**", "*.min.js"]
+
+[kinds]
+# The kind of each file: code, docs, infra or data. --kind chooses the kinds a
+# command reads; without it each command reads what it always has.
+# true: infrastructure in a language of code (Terraform, Dockerfiles) is no
+# longer measured as code unless --kind asks for it (default: false).
+# separate = true
+# Globs against the path relative to the analysis root, before what the
+# language and path of a file say.
+# docs  = ["notes/**", "wiki/**"]
+# infra = ["deploy/**/*.yml"]
+# code  = []
+# data  = []

@@ -8,6 +8,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 pub use clap_complete::Shell;
 
 use crate::cli_help;
+use crate::kind::{self, Kind, Selection};
 use crate::walk::ExcludeFilter;
 
 /// Error returned by commands that do not support CI annotation formats.
@@ -110,6 +111,12 @@ pub struct ExcludeArgs {
     #[arg(long, short = 'E', value_name = "PATTERN")]
     pub exclude: Vec<String>,
 
+    /// Read only files of these kinds: code, docs, infra, data or all.
+    /// Without it each command reads what it always has.
+    /// Repeatable or comma-separated: --kind code,infra
+    #[arg(long, value_enum, value_delimiter = ',', value_name = "KIND")]
+    pub kind: Vec<KindArg>,
+
     /// Print files that would be excluded by the current filter and exit.
     /// Useful for debugging filter rules before running an analysis.
     #[arg(long)]
@@ -118,9 +125,11 @@ pub struct ExcludeArgs {
 
 impl ExcludeArgs {
     /// Build an `ExcludeFilter` from the parsed CLI flags and the
-    /// `[exclude]` section of `.kimun.toml`.
+    /// `[exclude]` and `[kinds]` sections of `.kimun.toml`.
     pub fn exclude_filter(&self) -> ExcludeFilter {
-        self.exclude_filter_with(&crate::config::KimunConfig::load().exclude)
+        let config = crate::config::KimunConfig::load();
+        self.exclude_filter_with(&config.exclude)
+            .with_kinds(self.kinds(&config.kinds))
     }
 
     /// The filter of the flags plus what `config` excludes: both apply.
@@ -133,6 +142,32 @@ impl ExcludeArgs {
             &joined(&self.exclude, &config.patterns),
         )
     }
+
+    /// The kinds of `--kind`, with what `config` declares.
+    pub fn kinds(&self, config: &crate::config::KindsConfig) -> Selection {
+        let chosen: Vec<Kind> = self
+            .kind
+            .iter()
+            .flat_map(|arg| match arg {
+                KindArg::Code => vec![Kind::Code],
+                KindArg::Docs => vec![Kind::Docs],
+                KindArg::Infra => vec![Kind::Infra],
+                KindArg::Data => vec![Kind::Data],
+                KindArg::All => kind::ALL.to_vec(),
+            })
+            .collect();
+        Selection::new(&chosen, config)
+    }
+}
+
+/// A value of `--kind`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub enum KindArg {
+    Code,
+    Docs,
+    Infra,
+    Data,
+    All,
 }
 
 /// Common arguments shared by most analysis commands.
@@ -837,5 +872,23 @@ mod tests {
         assert!(filter.excludes_file(Path::new("db/schema.sql"), root));
         assert!(filter.excludes_file(Path::new("legacy/old.rs"), root));
         assert!(!filter.excludes_file(Path::new("src/main.rs"), root));
+    }
+
+    #[test]
+    fn kind_takes_several_values_and_all() {
+        let kinds = |args: &[&str]| {
+            let cli =
+                Cli::try_parse_from([&["km", "loc"], args].concat()).expect("valid arguments");
+            let Commands::Loc { common, .. } = cli.command else {
+                panic!("not the loc command");
+            };
+            let selection = common.exclude_args.kinds(&Default::default());
+            crate::kind::ALL.map(|kind| selection.reads(kind))
+        };
+        assert_eq!(kinds(&[]), [true; 4]);
+        assert_eq!(kinds(&["--kind", "docs"]), [false, true, false, false]);
+        assert_eq!(kinds(&["--kind", "code,infra"]), [true, false, true, false]);
+        assert_eq!(kinds(&["--kind", "docs", "--kind", "all"]), [true; 4]);
+        assert!(Cli::try_parse_from(["km", "loc", "--kind", "prose"]).is_err());
     }
 }

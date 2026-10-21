@@ -20,6 +20,23 @@ pub struct LanguageReport {
     pub code: usize,
 }
 
+/// Line counts of the files of one kind.
+#[derive(Debug, Serialize)]
+pub struct KindReport {
+    pub kind: crate::kind::Kind,
+    #[serde(flatten)]
+    pub lines: KindLines,
+}
+
+/// The files of a kind and their lines.
+#[derive(Debug, Default, Serialize)]
+pub struct KindLines {
+    pub files: usize,
+    pub blank: usize,
+    pub comment: usize,
+    pub code: usize,
+}
+
 /// Timing and file-count statistics shown in verbose mode.
 pub struct VerboseStats {
     pub total_files: usize,
@@ -96,10 +113,36 @@ pub fn print_report(mut reports: Vec<LanguageReport>, verbose: Option<VerboseSta
     println!("{separator}");
 }
 
-/// JSON envelope with per-language details and aggregated totals.
+/// Print the lines of each kind below the table, when there is more than one.
+pub fn print_kinds(kinds: &[KindReport]) {
+    if kinds.len() < 2 {
+        return;
+    }
+    let separator = report_helpers::separator(SEP_WIDTH);
+    println!(
+        " {:<COL_LANG$} {:>COL_FILES$} {:>COL_NUM$} {:>COL_NUM$} {:>COL_NUM$}",
+        "Kind", "Files", "Blank", "Comment", "Code"
+    );
+    println!("{separator}");
+    for k in kinds {
+        println!(
+            " {:<COL_LANG$} {:>COL_FILES$} {:>COL_NUM$} {:>COL_NUM$} {:>COL_NUM$}",
+            k.kind.name(),
+            k.lines.files,
+            k.lines.blank,
+            k.lines.comment,
+            k.lines.code
+        );
+    }
+    println!("{separator}");
+}
+
+/// JSON envelope with per-language details, per-kind details and
+/// aggregated totals.
 #[derive(Serialize)]
 struct JsonOutput {
     languages: Vec<LanguageReport>,
+    kinds: Vec<KindReport>,
     totals: JsonTotals,
 }
 
@@ -113,7 +156,7 @@ struct JsonTotals {
 }
 
 /// Serialize line counts as pretty-printed JSON to stdout.
-pub fn print_json(mut reports: Vec<LanguageReport>) {
+pub fn print_json(mut reports: Vec<LanguageReport>, kinds: Vec<KindReport>) {
     reports.sort_by_key(|r| Reverse(r.code));
 
     let totals = JsonTotals {
@@ -125,6 +168,7 @@ pub fn print_json(mut reports: Vec<LanguageReport>) {
 
     let output = JsonOutput {
         languages: reports,
+        kinds,
         totals,
     };
 
