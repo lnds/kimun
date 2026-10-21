@@ -241,7 +241,7 @@ Cada archivo es de un tipo:
 | `infra` | Terraform, Dockerfiles, y el YAML que es infraestructura: workflows de GitHub, `.gitlab-ci.yml` y otros pipelines de CI, archivos de Compose, charts de Helm, Kustomize, Ansible (`playbooks/`, `roles/*/tasks/`, …), manifiestos de Kubernetes (`apiVersion` y `kind`), plantillas de CloudFormation |
 | `data` | JSON, TOML, XML, el resto del YAML, Properties y archivos PO |
 
-`--kind` elige los tipos que lee un comando, en todos los comandos que leen archivos: `--kind docs`, `--kind code,infra`, `--kind all`. Sin él nada cambia: cada comando lee lo que siempre ha leído, y la infraestructura escrita en un lenguaje de código (Terraform, Dockerfiles) se mide como código. Para medir solo código, usa `--kind code`, o pon `separate = true` bajo `[kinds]` en `.kimun.toml` para que sea lo habitual; `[kinds]` también puede declarar el tipo de archivos por glob. `--list-excluded` nombra los archivos que `--kind` deja fuera. Los comandos `km docs` leen los documentos y [`km infra smells`](#km-infra-smells----olores-de-seguridad-del-código-de-infraestructura) la infraestructura, diga lo que diga `--kind`.
+`--kind` elige los tipos que lee un comando, en todos los comandos que leen archivos: `--kind docs`, `--kind code,infra`, `--kind all`. Sin él nada cambia: cada comando lee lo que siempre ha leído, y la infraestructura escrita en un lenguaje de código (Terraform, Dockerfiles) se mide como código. Para medir solo código, usa `--kind code`, o pon `separate = true` bajo `[kinds]` en `.kimun.toml` para que sea lo habitual; `[kinds]` también puede declarar el tipo de archivos por glob. `--list-excluded` nombra los archivos que `--kind` deja fuera. Los comandos que leen el historial de git también lo aceptan: `km churn --kind docs` da los documentos que más se reescriben, `km age --kind docs` los que nadie toca hace un año, `km knowledge --kind infra` los módulos de Terraform que conoce una sola persona, y [`km tc --across`](#km-tc----análisis-de-acoplamiento-temporal) la documentación y la infraestructura que cambian con el código (Jiang & Adams, MSR 2015, sobre la infraestructura que coevoluciona con el código). Los comandos `km docs` leen los documentos y [`km infra smells`](#km-infra-smells----olores-de-seguridad-del-código-de-infraestructura) la infraestructura, diga lo que diga `--kind`.
 
 ### `km indent` -- Complejidad por indentación
 
@@ -488,7 +488,7 @@ Score = Commits × Complexity
 
 Los archivos con puntaje alto concentran el riesgo: cambian mucho y son complejos, así que son los candidatos más valiosos para refactorizar.
 
-Por defecto, la complejidad se mide con la **indentación total** (la suma de los niveles lógicos de indentación de todas las líneas de código), siguiendo el método original de Tornhill en "Your Code as a Crime Scene". Usa `--complexity cycom` para medirla con la complejidad ciclomática.
+Por defecto, la complejidad se mide con la **indentación total** (la suma de los niveles lógicos de indentación de todas las líneas de código), siguiendo el método original de Tornhill en "Your Code as a Crime Scene". Usa `--complexity cycom` para medirla con la complejidad ciclomática, o `--complexity cogcom` para la cognitiva. Los documentos (`--kind docs`) se miden por sus líneas de texto sea cual sea la métrica, porque la indentación y las ramas no dicen nada de la prosa: `km hotspots --kind docs` encuentra los documentos largos que más se reescriben, como un archivo de instrucciones para agentes que crece cada semana. La infraestructura conserva la métrica pedida, porque la indentación de YAML y HCL es su estructura.
 
 Requiere un repositorio git. Los commits de merge se excluyen de la cuenta.
 
@@ -501,7 +501,7 @@ Opciones:
 | `--top N` | Filas de la tabla (por defecto: 20); el JSON lista todos los archivos salvo que se indique `--top` |
 | `--sort-by METRIC` | Ordena por `score`, `commits` o `complexity` (por defecto: `score`) |
 | `--since DURATION` | Considera solo los commits desde este momento (p. ej. `30d`, `6m`, `1y`) |
-| `--complexity METRIC` | `indent` (por defecto, Tornhill) o `cycom` (ciclomática) |
+| `--complexity METRIC` | `indent` (por defecto, Tornhill), `cycom` (ciclomática) o `cogcom` (cognitiva); los documentos se miden por líneas |
 
 Unidades de duración: `d` (días), `m` (meses, aprox. 30 días), `y` (años, aprox. 365 días).
 
@@ -665,6 +665,7 @@ Opciones:
 | `--min-shared N` | Mínimo de commits que dos archivos deben compartir para formar un par (por defecto: 3) |
 | `--max-changeset N` | Ignora como evidencia de acoplamiento los commits que tocan más de N archivos (por defecto: 30) |
 | `--min-strength F` | Fuerza mínima de acoplamiento que se muestra (p. ej. `0.5` para ver solo el fuerte) |
+| `--across` | Solo pares de archivos de tipos distintos: código con documentación, código con infraestructura. Lee todos los tipos salvo datos, a menos que `--kind` diga cuáles |
 | `--include-ext`, `--exclude-ext`, `--exclude-dir`, `--exclude` | Filtros de ruta, aplicados a las rutas del historial |
 
 Solo se emparejan archivos que todavía existen en el árbol de trabajo, y solo código: los archivos lock, los manifiestos, el YAML de CI y la documentación quedan fuera. Un commit masivo (más de `--max-changeset` archivos) relaciona archivos por accidente y se omite, igual que un revert junto con el commit que revierte (un mensaje que empieza con `Revert "` y nombra el commit): juntos no cambiaron nada. Los renombres no se siguen: un archivo se empareja con la ruta que tiene hoy.

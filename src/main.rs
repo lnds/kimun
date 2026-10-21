@@ -162,6 +162,7 @@ struct TcArgs {
     min_strength: Option<f64>,
     min_shared: usize,
     max_changeset: usize,
+    across: bool,
 }
 
 fn dispatch_tc(common: cli::CommonArgs, args: TcArgs) {
@@ -181,6 +182,7 @@ fn dispatch_tc(common: cli::CommonArgs, args: TcArgs) {
                 min_shared: args.min_shared,
                 max_changeset: args.max_changeset,
                 filter: &filter,
+                across: args.across,
             },
         )
     });
@@ -507,12 +509,14 @@ fn main() {
             min_strength,
             min_shared,
             max_changeset,
+            across,
         } => dispatch_tc(
             common,
             TcArgs {
                 top,
                 sort_by,
                 since,
+                across,
                 min_degree,
                 min_strength,
                 min_shared,

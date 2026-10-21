@@ -29,6 +29,7 @@ fn opts<'a>(
         min_shared: 1,
         max_changeset: 30,
         filter: &NO_FILTER,
+        across: false,
     }
 }
 
@@ -273,4 +274,34 @@ fn path_filters_apply_to_history_paths() {
     assert!(kept_by(&filter, StdPath::new("src/a.rs")));
     assert!(!kept_by(&filter, StdPath::new("src/b.js")));
     assert!(!kept_by(&filter, StdPath::new("vendor/c.rs")));
+}
+
+#[test]
+fn across_kinds_reads_code_docs_and_infra_but_not_data() {
+    let across = TcOptions {
+        across: true,
+        ..opts(OutputMode::Json, false, 20, "strength", None, 1, None)
+    };
+    let code = opts(OutputMode::Json, false, 20, "strength", None, 1, None);
+    for path in [
+        "src/a.rs",
+        "README.md",
+        "main.tf",
+        ".github/workflows/ci.yml",
+    ] {
+        assert!(kinds::read(StdPath::new(path), &across), "{path}");
+    }
+    assert!(
+        !kinds::read(StdPath::new("Cargo.toml"), &across),
+        "data follows everything"
+    );
+    assert!(kinds::read(StdPath::new("src/a.rs"), &code));
+    assert!(
+        !kinds::read(StdPath::new("README.md"), &code),
+        "without across, code alone"
+    );
+    assert_ne!(
+        kinds::kind_of(StdPath::new("README.md"), &NO_FILTER),
+        kinds::kind_of(StdPath::new("src/a.rs"), &NO_FILTER)
+    );
 }

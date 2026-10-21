@@ -25,13 +25,16 @@ pub fn execute_tool(tool_name: &str, input: &Value, project_path: &Path) -> Stri
         "km_dups" => ("dups", build_args(input, &["min_lines"], project_path)),
         "km_hotspots" => (
             "hotspots",
-            build_args(input, &["top", "since"], project_path),
+            build_args(input, &["top", "since", "kind"], project_path),
         ),
         "km_knowledge" => (
             "knowledge",
-            build_args(input, &["top", "since"], project_path),
+            build_args(input, &["top", "since", "kind"], project_path),
         ),
-        "km_tc" => ("tc", build_args(input, &["top", "since"], project_path)),
+        "km_tc" => (
+            "tc",
+            build_args(input, &["top", "since", "kind", "across"], project_path),
+        ),
         "km_impact" => (
             "impact",
             build_args(
@@ -122,6 +125,8 @@ fn build_args(input: &Value, named: &[&str], project_path: &Path) -> Vec<String>
                     args.push(flag);
                     args.push(s.clone());
                 }
+                Value::Bool(true) => args.push(flag),
+                Value::Bool(false) => {}
                 _ => {
                     eprintln!("  Warning: ignoring invalid value for --{name}: {val}");
                 }

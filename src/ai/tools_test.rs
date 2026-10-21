@@ -28,6 +28,22 @@ fn build_args_with_named_string() {
 }
 
 #[test]
+fn build_args_with_named_flag() {
+    let project = PathBuf::from("/tmp/project");
+    let input = json!({"across": true, "kind": "code,docs"});
+    let args = build_args(&input, &["kind", "across"], &project);
+    assert_eq!(
+        args,
+        vec!["--kind", "code,docs", "--across", "/tmp/project"]
+    );
+    let input = json!({"across": false});
+    assert_eq!(
+        build_args(&input, &["across"], &project),
+        vec!["/tmp/project"]
+    );
+}
+
+#[test]
 fn build_args_ignores_missing_named() {
     let project = PathBuf::from("/tmp/project");
     let input = json!({});

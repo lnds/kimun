@@ -591,6 +591,12 @@ pub enum Commands {
         /// Ignore commits touching more than N files as evidence of coupling
         #[arg(long, default_value = "30", value_name = "N")]
         max_changeset: usize,
+
+        /// Only pairs of files of different kinds: code with documentation,
+        /// code with infrastructure. Reads every kind but data unless
+        /// --kind says which
+        #[arg(long)]
+        across: bool,
     },
 
     /// Measure the impact of a diff: how spread it is and which files usually change with it

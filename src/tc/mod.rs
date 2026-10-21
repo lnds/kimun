@@ -5,6 +5,7 @@
 //! hidden dependencies that should be made explicit or decoupled.
 
 pub mod analyzer;
+mod kinds;
 mod report;
 
 use std::cmp::Reverse;
@@ -48,6 +49,9 @@ pub struct TcOptions<'a> {
     pub max_changeset: usize,
     /// The path filters of the command line, applied to the paths of history.
     pub filter: &'a ExcludeFilter,
+    /// Only pairs of files of different kinds: code with documents, code
+    /// with infrastructure.
+    pub across: bool,
 }
 
 /// Whether the filters keep a path of history: no excluded directory on
@@ -61,7 +65,7 @@ fn kept_by(filter: &ExcludeFilter, path: &Path) -> bool {
 }
 
 /// The commits of each file that may be paired: one that still exists, is
-/// code, has `min_degree` commits, passes the filters and, unless asked
+/// read (`kinds::read`), has `min_degree` commits, passes the filters and, unless asked
 /// for, is no test.
 fn eligible_files(
     freqs: Vec<FileFrequency>,
@@ -71,7 +75,7 @@ fn eligible_files(
     freqs
         .into_iter()
         .filter(|f| f.commits >= opts.min_degree)
-        .filter(|f| walk::is_code_path(&f.path, opts.filter) && git_repo.has_file(&f.path))
+        .filter(|f| kinds::read(&f.path, opts) && git_repo.has_file(&f.path))
         .filter(|f| kept_by(opts.filter, &f.path))
         .filter(|f| opts.include_tests || !is_test_path(&f.path))
         .map(|f| (f.path, f.commits))
@@ -113,9 +117,7 @@ pub fn run(path: &Path, opts: &TcOptions<'_>) -> Result<(), Box<dyn Error>> {
 
     let mut results = compute_coupling(&co_changes, &freq_map, opts.min_degree, opts.min_shared);
 
-    if let Some(min_s) = opts.min_strength {
-        results.retain(|r| r.strength >= min_s);
-    }
+    kinds::keep_pairs(&mut results, opts);
 
     let total = results.len();
 

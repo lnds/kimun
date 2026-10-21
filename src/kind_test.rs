@@ -122,3 +122,20 @@ fn a_choice_reads_only_its_kinds() {
     let docs = Selection::new(&[Kind::Docs], &KindsConfig::default());
     assert!(!docs.measures_path(Path::new("assets/logo.png"), Path::new("")));
 }
+
+#[test]
+fn paths_of_history_have_a_kind_and_across_skips_data() {
+    let config = KindsConfig {
+        docs: vec!["notes/**".into()],
+        ..Default::default()
+    };
+    let selection = Selection::new(&[], &config);
+    let kind = |path: &str| selection.kind_of_path(Path::new(path), Path::new(""));
+    assert_eq!(kind("src/lib.rs"), Some(Kind::Code));
+    assert_eq!(kind("notes/run.py"), Some(Kind::Docs));
+    assert_eq!(kind("infra/main.tf"), Some(Kind::Infra));
+    assert_eq!(kind("assets/logo.png"), None);
+    assert!(selection.across(Kind::Infra) && !selection.across(Kind::Data));
+    let chosen = Selection::new(&[Kind::Code, Kind::Data], &KindsConfig::default());
+    assert!(chosen.across(Kind::Data) && !chosen.across(Kind::Docs));
+}

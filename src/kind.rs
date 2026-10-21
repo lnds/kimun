@@ -231,6 +231,23 @@ impl Selection {
         self.measures(kind, spec)
     }
 
+    /// The kind of a path, which may no longer exist, by its name alone;
+    /// none for a path of no known language.
+    pub fn kind_of_path(&self, path: &Path, root: &Path) -> Option<Kind> {
+        let spec = detect(path)?;
+        let declared = self.declared.kind(path, root);
+        Some(declared.unwrap_or_else(|| Kind::by_name(path, spec)))
+    }
+
+    /// Whether pairs of files of different kinds read a kind: those of
+    /// `--kind`, or else all but data, whose changes follow everything.
+    pub fn across(&self, kind: Kind) -> bool {
+        match &self.chosen {
+            Some(chosen) => chosen.contains(&kind),
+            None => kind != Kind::Data,
+        }
+    }
+
     /// Whether `--kind` names `kind`.
     pub fn chose(&self, kind: Kind) -> bool {
         self.chosen.as_ref().is_some_and(|c| c.contains(&kind))

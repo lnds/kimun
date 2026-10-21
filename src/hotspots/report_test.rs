@@ -8,6 +8,7 @@ fn sample_files() -> Vec<FileHotspot> {
             language: "Rust".to_string(),
             commits: 42,
             complexity: 34,
+            metric: "indent",
             score: 42 * 34,
         },
         FileHotspot {
@@ -15,6 +16,7 @@ fn sample_files() -> Vec<FileHotspot> {
             language: "Rust".to_string(),
             commits: 10,
             complexity: 3,
+            metric: "indent",
             score: 10 * 3,
         },
     ]
@@ -22,27 +24,40 @@ fn sample_files() -> Vec<FileHotspot> {
 
 #[test]
 fn print_report_does_not_panic_indent() {
-    print_report(&sample_files(), "indent");
+    print_report(&sample_files());
 }
 
 #[test]
-fn print_report_does_not_panic_cycom() {
-    print_report(&sample_files(), "cycom");
+fn print_report_does_not_panic_mixed() {
+    let mut files = sample_files();
+    files[1].metric = "lines";
+    print_report(&files);
+}
+
+#[test]
+fn the_label_is_the_metric_the_files_share() {
+    let mut files = sample_files();
+    assert_eq!(complexity_label(shared_metric(&files)), "Total Indent");
+    files.iter_mut().for_each(|f| f.metric = "lines");
+    assert_eq!(complexity_label(shared_metric(&files)), "Lines");
+    files[0].metric = "cogcom";
+    assert_eq!(shared_metric(&files), "mixed");
+    assert_eq!(complexity_label("cogcom"), "Cognitive");
 }
 
 #[test]
 fn print_report_empty() {
-    print_report(&[], "indent");
+    print_report(&[]);
 }
 
 #[test]
 fn print_json_does_not_panic() {
-    print_json(&sample_files(), "indent").unwrap();
+    print_json(&sample_files()).unwrap();
 }
 
 #[test]
 fn print_json_empty() {
-    print_json(&[], "indent").unwrap();
+    print_json(&[]).unwrap();
 }
 
 #[test]

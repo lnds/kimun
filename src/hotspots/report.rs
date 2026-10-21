@@ -7,30 +7,46 @@ use serde::Serialize;
 use super::FileHotspot;
 use crate::report_helpers;
 
-/// Map the metric flag to a human-readable column header.
+/// Map the metric to a human-readable column header.
 fn complexity_label(metric: &str) -> &'static str {
     match metric {
         "cycom" => "Cyclomatic",
+        "cogcom" => "Cognitive",
+        "lines" => "Lines",
+        "mixed" => "Complexity",
         _ => "Total Indent",
     }
 }
 
-/// Return a description of the scoring formula for the chosen metric.
+/// Return a description of the scoring formula for the metric.
 fn method_description(metric: &str) -> &'static str {
     match metric {
         "cycom" => "Score = Commits × Cyclomatic Complexity.",
+        "cogcom" => "Score = Commits × Cognitive Complexity.",
+        "lines" => "Score = Commits × Lines of text (documents).",
+        "mixed" => "Score = Commits × Complexity; lines of text for documents.",
         _ => "Score = Commits × Total Indentation (Tornhill method).",
+    }
+}
+
+/// The metric of the files shown: theirs when they share one.
+fn shared_metric(files: &[FileHotspot]) -> &'static str {
+    let first = files.first().map_or("indent", |f| f.metric);
+    match files.iter().all(|f| f.metric == first) {
+        true => first,
+        false => "mixed",
     }
 }
 
 /// Print a table of hotspots sorted by score descending with a
 /// footer explaining the scoring method.
-pub fn print_report(files: &[FileHotspot], metric: &str) {
+pub fn print_report(files: &[FileHotspot]) {
     if files.is_empty() {
         println!("No hotspots found.");
         return;
     }
 
+    let metric = shared_metric(files);
     let label = complexity_label(metric);
 
     let max_path_len = report_helpers::max_path_width(files.iter().map(|f| f.path.as_path()), 4);
@@ -38,7 +54,11 @@ pub fn print_report(files: &[FileHotspot], metric: &str) {
     let header_width = max_path_len + 45;
     let separator = report_helpers::separator(header_width.max(78));
 
-    println!("Hotspots (Commits × {label} Complexity)");
+    let title = match metric {
+        "lines" | "mixed" => label.to_string(),
+        _ => format!("{label} Complexity"),
+    };
+    println!("Hotspots (Commits × {title})");
     println!("{separator}");
     println!(
         " {:<width$}  {:>10} {:>7} {:>12} {:>10}",
@@ -66,7 +86,12 @@ pub fn print_report(files: &[FileHotspot], metric: &str) {
     println!("{separator}");
     println!();
     println!("{}", method_description(metric));
-    println!("High-score files are change-prone and complex — prime refactoring targets.");
+    match metric {
+        "lines" => {
+            println!("High-score documents are long and rewritten often — candidates to split.")
+        }
+        _ => println!("High-score files are change-prone and complex — prime refactoring targets."),
+    }
 }
 
 /// JSON-serializable representation of a single hotspot entry.
@@ -81,7 +106,7 @@ struct JsonEntry {
 }
 
 /// Serialize hotspot data as pretty-printed JSON to stdout.
-pub fn print_json(files: &[FileHotspot], metric: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub fn print_json(files: &[FileHotspot]) -> Result<(), Box<dyn std::error::Error>> {
     let entries: Vec<JsonEntry> = files
         .iter()
         .map(|f| JsonEntry {
@@ -89,7 +114,7 @@ pub fn print_json(files: &[FileHotspot], metric: &str) -> Result<(), Box<dyn std
             language: f.language.clone(),
             commits: f.commits,
             complexity: f.complexity,
-            complexity_metric: metric.to_string(),
+            complexity_metric: f.metric.to_string(),
             score: f.score,
         })
         .collect();

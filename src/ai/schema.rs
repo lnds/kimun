@@ -18,6 +18,11 @@ fn top_prop() -> Value {
     json!({"type": "integer", "description": "Show only the top N files (default: 20)"})
 }
 
+/// JSON schema property for the `kind` parameter (which files are read).
+fn kind_prop() -> Value {
+    json!({"type": "string", "description": "Kinds of file to read, comma-separated: code (default), docs, infra, data or all"})
+}
+
 /// JSON schema property for the `since` parameter (time range filter).
 fn since_prop() -> Value {
     json!({"type": "string", "description": "Only consider commits since this time (e.g. 6m, 1y, 30d)"})
@@ -91,8 +96,12 @@ pub fn tool_definitions() -> Vec<Value> {
         ),
         tool(
             "km_hotspots",
-            "Find hotspots: files that change frequently AND have high complexity. Score = commits x complexity. Requires git repository.",
-            &[("top", top_prop()), ("since", since_prop())],
+            "Find hotspots: files that change frequently AND have high complexity. Score = commits x complexity; for documents (kind docs) complexity is their lines of text. Requires git repository.",
+            &[
+                ("top", top_prop()),
+                ("since", since_prop()),
+                ("kind", kind_prop()),
+            ],
         ),
         tool(
             "km_knowledge",
@@ -103,17 +112,23 @@ pub fn tool_definitions() -> Vec<Value> {
                     "since",
                     json!({"type": "string", "description": "Only consider recent activity since this time for knowledge loss detection (e.g. 6m, 1y, 30d)"}),
                 ),
+                ("kind", kind_prop()),
             ],
         ),
         tool(
             "km_tc",
-            "Analyze temporal coupling: files that change together in commits. Shows coupling strength between file pairs. Requires git repository.",
+            "Analyze temporal coupling: files that change together in commits. Shows coupling strength between file pairs. With `across`, only pairs of files of different kinds: documentation or infrastructure that changes with the code it describes or deploys. Requires git repository.",
             &[
                 (
                     "top",
                     json!({"type": "integer", "description": "Show only the top N file pairs (default: 20)"}),
                 ),
                 ("since", since_prop()),
+                ("kind", kind_prop()),
+                (
+                    "across",
+                    json!({"type": "boolean", "description": "Only pairs of files of different kinds (code with docs, code with infra)"}),
+                ),
             ],
         ),
         tool(

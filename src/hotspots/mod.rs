@@ -13,6 +13,7 @@ use std::path::{Path, PathBuf};
 
 use crate::cli::OutputMode;
 use crate::git::GitRepo;
+use crate::kind::Kind;
 use crate::util::parse_since;
 use crate::walk::{self, WalkConfig};
 use report::{print_json, print_report, print_short, print_terse};
@@ -24,7 +25,26 @@ pub struct FileHotspot {
     pub language: String,
     pub commits: usize,
     pub complexity: usize,
+    /// What `complexity` measures: the metric asked for, or `lines` for a
+    /// document, where indentation and branches say nothing.
+    pub metric: &'static str,
     pub score: usize,
+}
+
+/// The metric of a file: lines for a document, else the one asked for.
+fn metric_of(kind: Kind, asked: &str) -> &'static str {
+    match (kind, asked) {
+        (Kind::Docs, _) => "lines",
+        (_, "cycom") => "cycom",
+        (_, "cogcom") => "cogcom",
+        _ => "indent",
+    }
+}
+
+/// The lines of a document that hold text.
+fn text_lines(file_path: &Path) -> Result<Option<usize>, Box<dyn Error>> {
+    let text = String::from_utf8_lossy(&std::fs::read(file_path)?).into_owned();
+    Ok(Some(text.lines().filter(|l| !l.trim().is_empty()).count()))
 }
 
 /// Compute complexity for a file using the chosen metric.
@@ -36,6 +56,7 @@ fn compute_complexity(
     exclude_tests: bool,
 ) -> Result<Option<usize>, Box<dyn Error>> {
     Ok(match metric {
+        "lines" => text_lines(file_path)?,
         "cycom" => crate::cycom::analyze_file(file_path, spec, exclude_tests)?
             .map(|file| file.total_complexity),
         "cogcom" => crate::cogcom::analyze_file(file_path, spec, exclude_tests)?
@@ -64,8 +85,7 @@ pub(crate) fn collect(
     let (walk_root, walk_prefix) = git_repo.walk_prefix(cfg.path)?;
 
     let exclude_tests = cfg.exclude_tests();
-    let complexity_of =
-        |path: &Path, spec| compute_complexity(path, spec, complexity_metric, exclude_tests);
+    let kinds = cfg.filter.kinds();
     let mut results: Vec<FileHotspot> = Vec::new();
 
     for (file_path, spec) in walk::code_files(&walk_root, cfg.exclude_tests(), cfg.filter) {
@@ -78,7 +98,8 @@ pub(crate) fn collect(
         };
 
         // Compute complexity (only for files with git history)
-        let complexity = match complexity_of(&file_path, spec) {
+        let metric = metric_of(kinds.kind(&file_path, spec, &walk_root), complexity_metric);
+        let complexity = match compute_complexity(&file_path, spec, metric, exclude_tests) {
             Ok(Some(c)) => c,
             Ok(None) => continue,
             Err(err) => {
@@ -92,6 +113,7 @@ pub(crate) fn collect(
             language: spec.name.to_string(),
             commits,
             complexity,
+            metric,
             score: commits * complexity,
         });
     }
@@ -127,15 +149,15 @@ pub fn run(
     }
 
     let shown = crate::report_helpers::shown_count(output, top, results.len());
-
+    let listed = &results[..shown];
     match output {
-        OutputMode::Json => print_json(&results[..shown], complexity_metric)?,
+        OutputMode::Json => print_json(listed)?,
         OutputMode::Short => print_short(&results),
         OutputMode::Terse => print_terse(&results),
         OutputMode::Github | OutputMode::Codeclimate => {
             return Err(crate::cli::ERR_CI_FORMAT_ONLY.into());
         }
-        OutputMode::Table => print_report(&results[..shown], complexity_metric),
+        OutputMode::Table => print_report(listed),
     }
 
     Ok(())
