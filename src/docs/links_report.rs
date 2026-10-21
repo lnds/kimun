@@ -7,7 +7,7 @@ use serde::Serialize;
 
 use super::links::{Graph, is_entry_point};
 use crate::cli::OutputMode;
-use crate::report_helpers::{self, display_width, pad_to};
+use crate::report_helpers::{self, table};
 
 /// What `km docs links` found in the graph of notes.
 pub struct LinksReport {
@@ -107,40 +107,6 @@ pub fn print_report(report: &LinksReport, top: Option<usize>) {
         ["Notes", "Group"],
         &groups,
     );
-}
-
-/// A titled table, when it has rows.
-pub(super) fn table<const N: usize>(title: &str, header: [&str; N], rows: &[[String; N]]) {
-    if rows.is_empty() {
-        return;
-    }
-    let widths: Vec<usize> = (0..N)
-        .map(|i| {
-            rows.iter()
-                .map(|r| display_width(&r[i]))
-                .chain([display_width(header[i])])
-                .max()
-                .unwrap_or(0)
-        })
-        .collect();
-    let line = |cells: Vec<&str>| {
-        let padded: Vec<String> = cells
-            .iter()
-            .zip(&widths)
-            .map(|(cell, &width)| pad_to(cell, width))
-            .collect();
-        format!(" {}", padded.join("  ").trim_end())
-    };
-    let sep = report_helpers::separator(widths.iter().sum::<usize>() + 2 * N);
-    println!();
-    println!("{title}");
-    println!("{sep}");
-    println!("{}", line(header.to_vec()));
-    println!("{sep}");
-    for row in rows {
-        println!("{}", line(row.iter().map(String::as_str).collect()));
-    }
-    println!("{sep}");
 }
 
 #[derive(Serialize)]

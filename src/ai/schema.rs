@@ -161,5 +161,16 @@ pub fn tool_definitions() -> Vec<Value> {
             "Read the links between Markdown documents (relative links and [[wikilinks]]) as a graph of notes: broken links, orphan notes no note links to, hubs, and islands of notes cut off from the rest.",
             &[("top", top_prop())],
         ),
+        tool(
+            "km_infra_smells",
+            "Find security smells in infrastructure code (Terraform, Dockerfiles, CI workflows, Compose, Kubernetes, Ansible): hard-coded secrets, empty passwords, running as root or privileged, 0.0.0.0/0, plain HTTP, MD5/SHA-1, images and actions not pinned, over-broad CI permissions, suspicious comments. Secret values are never shown.",
+            &[
+                ("top", top_prop()),
+                (
+                    "since_ref",
+                    json!({"type": "string", "description": "Only files changed since this git ref (e.g. origin/main)"}),
+                ),
+            ],
+        ),
     ]
 }
