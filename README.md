@@ -241,7 +241,7 @@ Every file is of one kind:
 | `infra` | Terraform, Dockerfiles, and YAML that is infrastructure: GitHub workflows, `.gitlab-ci.yml` and other CI pipelines, Compose files, Helm charts, Kustomize, Ansible (`playbooks/`, `roles/*/tasks/`, …), Kubernetes manifests (`apiVersion` and `kind`), CloudFormation templates |
 | `data` | JSON, TOML, XML, the rest of YAML, Properties and PO files |
 
-`--kind` chooses the kinds a command reads, on every command that reads files: `--kind docs`, `--kind code,infra`, `--kind all`. Without it nothing changes: each command reads what it always has, and infrastructure written in a language of code (Terraform, Dockerfiles) is measured as code. To measure code alone, use `--kind code`, or set `separate = true` under `[kinds]` in `.kimun.toml` to make that the default; `[kinds]` can also declare the kind of files by glob. `--list-excluded` names the files `--kind` leaves out. The `km docs` commands read the documents and [`km infra smells`](#km-infra-smells----security-smells-of-infrastructure-code) the infrastructure, whatever `--kind` says.
+`--kind` chooses the kinds a command reads, on every command that reads files: `--kind docs`, `--kind code,infra`, `--kind all`. Without it nothing changes: each command reads what it always has, and infrastructure written in a language of code (Terraform, Dockerfiles) is measured as code. To measure code alone, use `--kind code`, or set `separate = true` under `[kinds]` in `.kimun.toml` to make that the default; `[kinds]` can also declare the kind of files by glob. `--list-excluded` names the files `--kind` leaves out. The commands that read git history take it too: `km churn --kind docs` gives the documents rewritten most often, `km age --kind docs` those nobody touched in a year, `km knowledge --kind infra` the Terraform modules only one person knows, and [`km tc --across`](#km-tc----temporal-coupling-analysis) the documentation and infrastructure that change with the code (Jiang & Adams, MSR 2015, on infrastructure that co-evolves with code). The `km docs` commands read the documents and [`km infra smells`](#km-infra-smells----security-smells-of-infrastructure-code) the infrastructure, whatever `--kind` says.
 
 ### `km indent` -- Indentation complexity
 
@@ -488,7 +488,7 @@ Score = Commits × Complexity
 
 Files with high scores concentrate risk — they are both change-prone and complex, making them the highest-value refactoring targets.
 
-By default, complexity is measured by **total indentation** (sum of logical indentation levels across all code lines), following Tornhill's original method from "Your Code as a Crime Scene". Use `--complexity cycom` for cyclomatic complexity instead.
+By default, complexity is measured by **total indentation** (sum of logical indentation levels across all code lines), following Tornhill's original method from "Your Code as a Crime Scene". Use `--complexity cycom` for cyclomatic complexity instead, or `--complexity cogcom` for cognitive complexity. Documents (`--kind docs`) are measured by their lines of text whatever the metric, since indentation and branches say nothing about prose: `km hotspots --kind docs` finds the long documents rewritten most often, such as an agent instruction file that grows every week. Infrastructure keeps the metric asked for, as the indentation of YAML and HCL is its structure.
 
 Requires a git repository. Merge commits are excluded from the count.
 
@@ -501,7 +501,7 @@ Options:
 | `--top N` | Rows of the table (default: 20); JSON lists every file unless `--top` is given |
 | `--sort-by METRIC` | Sort by `score`, `commits`, or `complexity` (default: `score`) |
 | `--since DURATION` | Only consider commits since this time (e.g. `30d`, `6m`, `1y`) |
-| `--complexity METRIC` | `indent` (default, Tornhill) or `cycom` (cyclomatic) |
+| `--complexity METRIC` | `indent` (default, Tornhill), `cycom` (cyclomatic) or `cogcom` (cognitive); documents are measured by lines |
 
 Duration units: `d` (days), `m` (months, approx. 30 days), `y` (years, approx. 365 days).
 
@@ -665,6 +665,7 @@ Options:
 | `--min-shared N` | Minimum commits two files must share to be a pair (default: 3) |
 | `--max-changeset N` | Ignore commits touching more than N files as evidence of coupling (default: 30) |
 | `--min-strength F` | Minimum coupling strength to show (e.g. `0.5` for strong only) |
+| `--across` | Only pairs of files of different kinds: code with documentation, code with infrastructure. Reads every kind but data unless `--kind` says which |
 | `--include-ext`, `--exclude-ext`, `--exclude-dir`, `--exclude` | Path filters, applied to the paths of history |
 
 Only files that still exist in the working tree are paired, and only code: lock files, manifests, CI YAML and documentation are left out. A sweeping commit (more than `--max-changeset` files) relates files by accident and is skipped, as is a revert together with the commit it reverts (a message opening with `Revert "` that names the commit): together they changed nothing. Renames are not followed: a file is paired under the path it has now.

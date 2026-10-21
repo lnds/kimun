@@ -82,8 +82,9 @@ Duplicate blocks across the project.
 ### Hotspots (requires git)
 ```bash
 km hotspots [PATH] --format json --top 20
+km hotspots [PATH] --format json --kind docs
 ```
-Files that change frequently AND have high complexity — top refactoring targets.
+Files that change frequently AND have high complexity — top refactoring targets. With `--kind docs`, documents measured by their lines: the long ones rewritten most often. `--kind` works on every command that reads git history.
 
 ### Code Ownership (requires git)
 ```bash
@@ -94,8 +95,9 @@ Bus factor risk per file via git blame analysis.
 ### Temporal Coupling (requires git)
 ```bash
 km tc [PATH] --format json --top 20
+km tc [PATH] --format json --across
 ```
-Files that change together in commits — hidden dependencies.
+Files that change together in commits — hidden dependencies. With `--across`, only pairs of different kinds: the documents and infrastructure that change with the code they describe or deploy.
 
 ### Blast Radius of a Change (requires git)
 ```bash

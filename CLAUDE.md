@@ -101,7 +101,7 @@ Cognitive complexity (SonarSource method). Invoked via `km cogcom`.
 Hotspot analysis (Tornhill, change frequency × complexity). Invoked via `km hotspots`.
 
 - **`report.rs`** — Table and JSON output formatters.
-- **`mod.rs`** — Orchestration: opens git repo, counts commits per file, computes complexity (indent or cyclomatic), multiplies for hotspot score. Uses `util::parse_since` for `--since` flag.
+- **`mod.rs`** — Orchestration: opens git repo, counts commits per file, computes complexity (indent, cyclomatic or cognitive; lines of text for a document, `metric_of`), multiplies for hotspot score. Each `FileHotspot` carries its `metric`; the table is labelled by the one the files share. Uses `util::parse_since` for `--since` flag.
 
 ### Module structure: `src/knowledge/`
 
@@ -117,7 +117,7 @@ Temporal coupling analysis (Tornhill, files that change together). Invoked via `
 
 - **`analyzer.rs`** — `CouplingLevel` enum (Strong/Moderate/Weak), `FileCoupling` struct, `compute_coupling()` function that pairs co-changing files, calculates strength = shared_commits / min(commits_a, commits_b), and classifies by threshold (0.5 strong, 0.3 moderate).
 - **`report.rs`** — Table and JSON output formatters.
-- **`mod.rs`** — Orchestration: opens git repo, calls `file_frequencies()` (`eligible_files`: `min_degree`, still in the working tree, code, the path filters through `kept_by`), `co_changing_commits()` (skips commits over `--max-changeset` and reverts with the commit they undo), `compute_coupling()` (pairs sharing at least `--min-shared`), sorts/filters results. Uses `util::parse_since` for `--since` flag. No filesystem walk needed — works entirely from git data.
+- **`mod.rs`** — Orchestration: opens git repo, calls `file_frequencies()` (`eligible_files`: `min_degree`, still in the working tree, code (`read`; with `--across` every kind `Selection::across` takes, and only pairs whose kinds differ are kept), the path filters through `kept_by`), `co_changing_commits()` (skips commits over `--max-changeset` and reverts with the commit they undo), `compute_coupling()` (pairs sharing at least `--min-shared`), sorts/filters results. Uses `util::parse_since` for `--since` flag. No filesystem walk needed — works entirely from git data.
 
 ### Shared: `src/git/`
 
@@ -326,7 +326,7 @@ Enclosure diagram of the code (Tornhill): directories as circles holding their f
 
 ### Shared: `src/kind.rs`
 
-What each file is for: `Kind` (`Code`, `Docs`, `Infra`, `Data`), by language and path, and for YAML by its first lines (Kubernetes, CloudFormation, Ansible). `Selection` carries `--kind`, `[kinds] separate` and the globs `[kinds]` declares (`chose` tells whether `--kind` names a kind); it travels inside `walk::ExcludeFilter`, so every command reads it. `measures` decides what metrics of code read (without `--kind`, what they always read), `reads` what `loc` and `deps` read, `measures_path` the same for paths of history.
+What each file is for: `Kind` (`Code`, `Docs`, `Infra`, `Data`), by language and path, and for YAML by its first lines (Kubernetes, CloudFormation, Ansible). `Selection` carries `--kind`, `[kinds] separate` and the globs `[kinds]` declares (`chose` tells whether `--kind` names a kind); it travels inside `walk::ExcludeFilter`, so every command reads it. `measures` decides what metrics of code read (without `--kind`, what they always read), `reads` what `loc` and `deps` read, `measures_path` the same for paths of history, and `kind_of_path` their kind.
 
 ### Module structure: `src/docs/`
 

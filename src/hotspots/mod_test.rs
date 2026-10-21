@@ -405,3 +405,27 @@ fn complexity_leaves_inline_tests_out_when_they_are_excluded() {
         assert!(of(true) < of(false), "{metric}");
     }
 }
+
+#[test]
+fn documents_are_measured_by_their_lines() {
+    let (dir, repo) = create_test_repo();
+    let main = "fn main() {\n    if true {\n        println!(\"hi\");\n    }\n}\n";
+    let guide = "# Guide\n\n    indented prose\n\nmore\n";
+    make_commit(&repo, &[("main.rs", main), ("guide.md", guide)], "add");
+    make_commit(&repo, &[("guide.md", "# Guide\n\nshort\n")], "edit");
+
+    let kinds = crate::kind::Selection::new(
+        &[crate::kind::Kind::Code, crate::kind::Kind::Docs],
+        &Default::default(),
+    );
+    let filter = ExcludeFilter::default().with_kinds(kinds);
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let mut found = collect(&cfg, None, "cycom").unwrap().unwrap();
+    found.sort_by(|a, b| a.path.cmp(&b.path));
+    let summary: Vec<(&str, &str, usize, usize)> = found
+        .iter()
+        .map(|f| (f.path.to_str().unwrap(), f.metric, f.complexity, f.commits))
+        .collect();
+    assert_eq!(summary[0], ("guide.md", "lines", 2, 2));
+    assert_eq!((summary[1].0, summary[1].1), ("main.rs", "cycom"));
+}
