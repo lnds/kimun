@@ -1,3 +1,13 @@
+## v0.42.0 (2026-10-21)
+
+### Feat
+
+- git commands over docs and infra, km tc --across
+- Terraform modules as projects for km impact and km deps
+- km infra smells, security smells of infrastructure code
+- km docs context, the files that steer coding agents
+- km docs links, the graph of notes
+
 ## v0.41.0 (2026-10-21)
 
 ### Feat
