@@ -132,3 +132,19 @@ fn names_a_change_by_the_whole_path_or_its_end() {
     assert!(!names_a_change(Path::new("ps/graph.rs"), &changed));
     assert!(!names_a_change(Path::new(""), &changed));
 }
+
+#[test]
+fn stale_needs_a_repository_and_runs_in_one() {
+    let outside = tempfile::tempdir().unwrap();
+    write(outside.path(), "a.md", "`src/a.rs`\n");
+    let filter = docs_filter();
+    let cfg = WalkConfig::new(outside.path(), true, &filter);
+    let err = stale(&cfg, OutputMode::Table, None).unwrap_err();
+    assert!(err.to_string().contains("not a git repository"), "{err}");
+
+    let dir = repository_with_a_deletion();
+    let cfg = WalkConfig::new(dir.path(), true, &filter);
+    for output in [OutputMode::Table, OutputMode::Json, OutputMode::Short] {
+        stale(&cfg, output, None).unwrap();
+    }
+}

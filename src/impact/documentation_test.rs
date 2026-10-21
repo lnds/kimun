@@ -1,5 +1,5 @@
 use super::*;
-use crate::config::OneOrMany;
+use crate::config::{DocsConfig, OneOrMany};
 use crate::impact::analyzer::Trigger;
 
 fn change(path: &str, kind: ChangeKind, old: Option<&str>) -> FileDiffStat {
@@ -257,4 +257,11 @@ fn is_document_by_extension() {
     assert!(is_document(Path::new("kb/a.md")));
     assert!(is_document(Path::new("README.MDX")));
     assert!(!is_document(Path::new("notes.txt")));
+}
+
+#[test]
+fn a_changed_document_is_not_described_by_another() {
+    let docs = documents(&[("README.md", "See [the guide](docs/guide.md).\n")]);
+    let changes = [modified("docs/guide.md")];
+    assert!(stale(&docs, &changes, &[], &rules(&[], &[])).is_empty());
 }

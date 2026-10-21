@@ -2,20 +2,24 @@
 //!
 //! `km docs refs` finds the references of Markdown documents that lead
 //! nowhere: links and images to missing files or headings, and paths in
-//! code spans that the repository no longer has.
+//! code spans that the repository no longer has. `km docs stale` finds the
+//! documents whose code changed after them.
 
+pub mod describes;
 mod help;
 pub mod markdown;
 pub mod refs;
 mod report;
+pub mod stale;
+mod stale_report;
 
-pub use help::REFS as REFS_HELP;
+pub use help::{REFS as REFS_HELP, STALE as STALE_HELP};
 
 use std::collections::HashSet;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
-use crate::cli::{DocsCommands, OutputMode};
+use crate::cli::{CommonArgs, DocsCommands, OutputMode};
 use crate::config::KimunConfig;
 use crate::git::GitRepo;
 use crate::kind::{Kind, Selection};
@@ -51,14 +55,28 @@ impl RefsReport {
     }
 }
 
-/// Run a `km docs` subcommand: whatever `--kind` says, it reads the
-/// documents.
+/// Run a `km docs` subcommand.
 pub fn dispatch(command: DocsCommands) {
-    let DocsCommands::Refs {
-        common,
-        fail_on_dead,
-        since_ref,
-    } = command;
+    match command {
+        DocsCommands::Refs {
+            common,
+            fail_on_dead,
+            since_ref,
+        } => {
+            let options = RefsOptions {
+                fail_on_dead,
+                since_ref: since_ref.as_deref(),
+            };
+            on_documents(common, |cfg, output| refs(cfg, output, &options))
+        }
+        DocsCommands::Stale { common, top } => {
+            on_documents(common, |cfg, output| stale(cfg, output, top))
+        }
+    }
+}
+
+/// Run `f` over a walk of the documents, whatever `--kind` says.
+fn on_documents(common: CommonArgs, f: impl FnOnce(&WalkConfig<'_>, OutputMode) -> CommandResult) {
     let config = KimunConfig::load();
     let filter = common
         .exclude_args
@@ -66,17 +84,60 @@ pub fn dispatch(command: DocsCommands) {
         .with_kinds(Selection::new(&[Kind::Docs], &config.kinds));
     let include_tests = common.include_tests;
     crate::maybe_list_excluded(&common.path, include_tests, &filter, common.list_excluded());
-    let options = RefsOptions {
-        fail_on_dead,
-        since_ref: since_ref.as_deref(),
-    };
     crate::run_command(common.path, |t| {
-        refs(
-            &WalkConfig::new(t, include_tests, &filter),
-            common.format,
-            &options,
-        )
+        f(&WalkConfig::new(t, include_tests, &filter), common.format)
     });
+}
+
+type CommandResult = Result<(), Box<dyn Error>>;
+
+/// The documents behind the code they describe.
+pub fn stale(cfg: &WalkConfig<'_>, output: OutputMode, top: Option<usize>) -> CommandResult {
+    let root = repository_root(cfg.path)?;
+    let git =
+        GitRepo::open(&root).map_err(|e| format!("not a git repository (or any parent): {e}"))?;
+    let history = git.commits_by_file()?;
+    let present = history.keys().filter(|path| root.join(path).is_file());
+    let files = stale::Files::new(present.cloned());
+    let rules = describes::Rules::new(&KimunConfig::load_from(&root).docs)?;
+    let documents: Vec<(PathBuf, String)> = documents(cfg)?
+        .into_iter()
+        .filter_map(|d| Some((d.full.strip_prefix(&root).ok()?.to_path_buf(), d.text)))
+        .collect();
+    let found = stale::stale(&documents, &files, &history, &rules);
+    match output {
+        OutputMode::Json => stale_report::print_json(&found, top)?,
+        OutputMode::Short => stale_report::print_short(&found, documents.len()),
+        OutputMode::Terse => println!("{}", found.len()),
+        OutputMode::Github | OutputMode::Codeclimate => {
+            return Err(crate::cli::ERR_CI_FORMAT_ONLY.into());
+        }
+        OutputMode::Table => stale_report::print_report(&found, documents.len(), top),
+    }
+    Ok(())
+}
+
+/// A Markdown document of the walk.
+struct Document {
+    walked: PathBuf,
+    full: PathBuf,
+    text: String,
+}
+
+/// The Markdown documents of the walk.
+fn documents(cfg: &WalkConfig<'_>) -> Result<Vec<Document>, Box<dyn Error>> {
+    let mut documents = Vec::new();
+    for (walked, spec) in cfg.source_files() {
+        if spec.name != "Markdown" {
+            continue;
+        }
+        let full = walked.canonicalize()?;
+        match std::fs::read_to_string(&full) {
+            Ok(text) => documents.push(Document { walked, full, text }),
+            Err(err) => eprintln!("warning: {}: {err}", walked.display()),
+        }
+    }
+    Ok(documents)
 }
 
 pub fn refs(
@@ -147,18 +208,12 @@ fn collect(
         references: 0,
         with_dead: Vec::new(),
     };
-    for (path, spec) in cfg.source_files() {
-        if spec.name != "Markdown" {
-            continue;
-        }
-        let document = path.canonicalize()?;
-        let text = match std::fs::read_to_string(&document) {
-            Ok(text) => text,
-            Err(err) => {
-                eprintln!("warning: {}: {err}", path.display());
-                continue;
-            }
-        };
+    for Document {
+        walked: path,
+        full: document,
+        text,
+    } in documents(cfg)?
+    {
         let checked = refs::check(&document, &text, repository);
         report.documents += 1;
         report.references += checked.references;

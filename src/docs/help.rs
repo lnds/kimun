@@ -28,3 +28,29 @@ Examples:
   km docs refs
   km docs refs --since-ref origin/main --fail-on-dead
   km docs refs --format github";
+
+/// What makes a document stale and how it is measured.
+pub const STALE: &str = "\
+Find documents behind the code they describe: the files a document covers or
+names changed after the document last did.
+
+A document describes a file when:
+  it covers it    covers: in its front matter, or [docs] covers in
+                  .kimun.toml
+  it names it     a link, a path in a code span (whole or by its end), or
+                  a directory of two names or more above it
+
+Documents themselves are never described. Changelogs (CHANGELOG, CHANGES,
+HISTORY) and the globs of [docs] ignore are left out.
+
+Each document shows when it last changed, how far behind the last change of
+what it describes it is, how many commits changed that since, and the files.
+Furthest behind first. Committed history only: uncommitted work does not
+count. Requires a git repository.
+
+For a change not yet merged, km impact lists the documents it leaves behind.
+
+Examples:
+  km docs stale
+  km docs stale kb/ --top 50
+  km docs stale --format json";

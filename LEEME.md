@@ -1527,6 +1527,34 @@ Ejemplo de salida:
 
 El JSON lista `documents`, `references` y cada referencia muerta con su `document`, `line`, `reference`, `form` (`link`, `image` o `code`) y `missing` (`file`, `heading` o `path`). `km ai` ofrece el comando a un LLM como la herramienta `km_docs_refs`.
 
+### `km docs stale` -- Documentos atrasados respecto del código
+
+La auditoría de una base de conocimiento a lo largo del tiempo: los documentos cuyo código cambió después que ellos. Donde [`km impact`](#documentación-que-quedó-atrás) vigila un cambio antes de mergearlo, `km docs stale` mira el repositorio entero tal como está.
+
+```bash
+km docs stale [ruta]
+km docs stale kb/ --top 50
+```
+
+Un documento describe un archivo como lo lee `km impact`: lo cubre (`covers:` en su front matter, o `[docs] covers` en `.kimun.toml`) o lo nombra (un link, una ruta en un code span, entera o por su final, o un directorio de dos nombres o más sobre él). Los documentos nunca son descritos, y se omiten los changelogs y los globs de `[docs] ignore`. Un documento está atrasado cuando un archivo que describe cambió después del último cambio del documento, en la historia commiteada.
+
+```
+───────────────────────────────────────────────────────────────────────────────
+ Document                 Updated     Behind  Commits  Describes
+───────────────────────────────────────────────────────────────────────────────
+ kb/payments/refunds.md   2026-01-10    143d       12  apps/payments/lib/refund.ex (+3)
+ docs/architecture.md     2026-04-02     51d        3  lib/billing/invoice.ex
+───────────────────────────────────────────────────────────────────────────────
+ 2 of 38 documents are behind the code they describe
+```
+
+`Behind` es el tiempo entre el último cambio del documento y el último cambio de lo que describe, de mayor a menor; `Commits`, los commits distintos a esos archivos desde que cambió el documento. El JSON lista cada documento atrasado, con `updated`, `days_behind`, `commits` y cada archivo con `changed` y `commits`.
+
+| Flag | Descripción |
+|------|-------------|
+| `--top N` | Filas de la tabla (por defecto: 20); el JSON lista todos los documentos salvo que se indique |
+| `--format {table,json,short,terse}` | Formato de salida (por defecto: table). `terse` imprime el número de documentos atrasados |
+
 ### `km report` -- Informe completo de métricas
 
 Genera un informe de varias secciones que combina todas las métricas estáticas del código en una sola pasada: líneas de código, duplicados, indentación, Halstead, complejidad ciclomática, complejidad cognitiva e índice de mantenibilidad.

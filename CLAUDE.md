@@ -328,11 +328,13 @@ What each file is for: `Kind` (`Code`, `Docs`, `Infra`, `Data`), by language and
 
 ### Module structure: `src/docs/`
 
-Measures of documentation, the files of kind `docs`. `km docs refs` reads Markdown documents whatever `--kind` says (`main::dispatch_docs`).
+Measures of documentation, the files of kind `docs`. `km docs refs` and `km docs stale` read Markdown documents whatever `--kind` says (`dispatch`, `on_documents`).
 
 - **`markdown.rs`** — `scan` reads a document by paragraphs (`Block`: code spans and link texts go on across lines, each character keeps its line), skipping front matter, fenced and indented code and HTML comments. It gives the `Reference`s (links, images, reference definitions, `href`/`src`, code spans) and the anchors: headings named as GitHub names them (`slug`, `-1` for a repeated one) and `id`/`name` of HTML elements.
 - **`refs.rs`** — `check` finds the dead references of a document against a `Repository`: the working tree (ignored files left out) with every trailing part of its paths, so `deps/graph.rs` names `src/deps/graph.rs`. A link is dead when its file or its heading is missing; an absolute link without extension is a route of a site and is not checked. A code span shaped like a path is dead when the history held it (`GitRepo::paths_in_history`, read only when a span names a path the tree lacks), or outside git when it starts at a name of the tree.
 - **`report.rs`** — Table, JSON, one line, GitHub and CodeClimate annotations.
+- **`describes.rs`** — What a document describes, shared with `km impact`: `Rules` (`[docs] covers` and `ignore`, changelogs), the globs of `covers:` in a front matter (`declared_in`), and `names_of`/`names`: the path a reference names and whether it names a file, whole, by its end, or as a directory of two names or more above it.
+- **`stale.rs`** — `km docs stale`: `Files` indexes the files of the tree by every end of their paths and by their directories; a document is behind when a file it covers or names has commits after its last one (`GitRepo::commits_by_file`, through `git log`). **`stale_report.rs`** prints it.
 - **`mod.rs`** — Orchestration: the root of the repository, the documents of the walk, `--since-ref` (documents changed since the ref keep every dead reference, the rest only those that name a changed path, whole or by its end) and `--fail-on-dead`.
 
 ### Shared: `src/file_tree.rs`
