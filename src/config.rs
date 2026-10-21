@@ -64,6 +64,27 @@ pub struct KimunConfig {
     pub map: MapConfig,
     #[serde(default)]
     pub exclude: ExcludeConfig,
+    #[serde(default)]
+    pub kinds: KindsConfig,
+}
+
+/// What kind each file is, besides what its language and path say, and
+/// whether infrastructure is measured apart from code by default.
+#[derive(Debug, Default, Deserialize)]
+pub struct KindsConfig {
+    /// Infrastructure written in a language of code (Terraform,
+    /// Dockerfiles) is no longer measured as code unless `--kind` asks.
+    #[serde(default)]
+    pub separate: bool,
+    /// Globs against the path relative to the analysis root.
+    #[serde(default)]
+    pub code: Vec<String>,
+    #[serde(default)]
+    pub docs: Vec<String>,
+    #[serde(default)]
+    pub infra: Vec<String>,
+    #[serde(default)]
+    pub data: Vec<String>,
 }
 
 /// Files and directories every command leaves out, added to the

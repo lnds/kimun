@@ -10,7 +10,7 @@ pub(crate) mod language;
 mod raw;
 pub(crate) mod report;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::error::Error;
 use std::fs::File;
 use std::io::BufReader;
@@ -21,8 +21,9 @@ use crate::util::hash_file;
 use crate::walk::{self, WalkConfig};
 use counter::{FileStats, LineKind, classify_reader, count_lines};
 use report::{
-    AuthorReport, LanguageReport, VerboseStats, print_author_json, print_author_report,
-    print_author_short, print_author_terse, print_json, print_report, print_short, print_terse,
+    AuthorReport, KindLines, KindReport, LanguageReport, VerboseStats, print_author_json,
+    print_author_report, print_author_short, print_author_terse, print_json, print_kinds,
+    print_report, print_short, print_terse,
 };
 
 /// Walk source files, deduplicate by content hash, count lines per
@@ -34,6 +35,7 @@ pub fn run(
 ) -> Result<(), Box<dyn Error>> {
     let start = Instant::now();
     let mut stats_by_lang: HashMap<&'static str, (usize, FileStats)> = HashMap::new();
+    let mut lines_by_kind: BTreeMap<crate::kind::Kind, KindLines> = BTreeMap::new();
     let mut seen_hashes: HashSet<u64> = HashSet::new();
     let mut total_files: usize = 0;
     let mut unique_files: usize = 0;
@@ -61,6 +63,12 @@ pub fn run(
                 entry.1.blank += file_stats.blank;
                 entry.1.comment += file_stats.comment;
                 entry.1.code += file_stats.code;
+                let kind = cfg.filter.kinds().kind(&file_path, spec, cfg.path);
+                let lines = lines_by_kind.entry(kind).or_default();
+                lines.files += 1;
+                lines.blank += file_stats.blank;
+                lines.comment += file_stats.comment;
+                lines.code += file_stats.code;
             }
             Ok(None) => {
                 binary_files += 1;
@@ -82,12 +90,17 @@ pub fn run(
         })
         .collect();
 
+    let kinds: Vec<KindReport> = lines_by_kind
+        .into_iter()
+        .map(|(kind, lines)| KindReport { kind, lines })
+        .collect();
+
     if reports.is_empty() {
         match output {
             crate::cli::OutputMode::Json => {
                 println!(
                     "{}",
-                    serde_json::json!({"languages": [], "totals": {"files": 0, "blank": 0, "comment": 0, "code": 0}})
+                    serde_json::json!({"languages": [], "kinds": [], "totals": {"files": 0, "blank": 0, "comment": 0, "code": 0}})
                 );
             }
             _ => {
@@ -96,7 +109,7 @@ pub fn run(
         }
     } else {
         match output {
-            crate::cli::OutputMode::Json => print_json(reports),
+            crate::cli::OutputMode::Json => print_json(reports, kinds),
             crate::cli::OutputMode::Short => print_short(&reports),
             crate::cli::OutputMode::Terse => print_terse(&reports),
             crate::cli::OutputMode::Github | crate::cli::OutputMode::Codeclimate => {
@@ -115,6 +128,7 @@ pub fn run(
                     None
                 };
                 print_report(reports, verbose_stats);
+                print_kinds(&kinds);
             }
         }
     }

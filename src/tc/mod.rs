@@ -71,7 +71,7 @@ fn eligible_files(
     freqs
         .into_iter()
         .filter(|f| f.commits >= opts.min_degree)
-        .filter(|f| walk::is_code_path(&f.path) && git_repo.has_file(&f.path))
+        .filter(|f| walk::is_code_path(&f.path, opts.filter) && git_repo.has_file(&f.path))
         .filter(|f| kept_by(opts.filter, &f.path))
         .filter(|f| opts.include_tests || !is_test_path(&f.path))
         .map(|f| (f.path, f.commits))

@@ -100,7 +100,7 @@ Run on a specific path:
 km loc src/
 ```
 
-Test files are left out by default, so the totals are lower than those of `cloc` on the same directory. With `--include-tests` both count the same files.
+Test files are left out by default, so the totals are lower than those of `cloc` on the same directory. With `--include-tests` both count the same files. Below the table, when there is more than one, come the lines of each [kind of file](#file-kinds): code, docs, infra and data (`kinds` in the JSON).
 
 Options:
 
@@ -229,6 +229,19 @@ The commands that measure code (`dups`, `indent`, `hal`, `cycom`, `cogcom`, `mi`
 - **Data and prose**: JSON, YAML, TOML, XML, Markdown, Text, Properties and PO files. Their indentation is structure, not nesting, and they change with every release without being code.
 
 `km knowledge` and `km authors` leave out generated files. `km loc` and `km deps` read every file: lines are lines, and generated code is still imported.
+
+#### File kinds
+
+Every file is of one kind:
+
+| Kind | Files |
+|------|-------|
+| `code` | Source code |
+| `docs` | Markdown, reStructuredText and plain text |
+| `infra` | Terraform, Dockerfiles, and YAML that is infrastructure: GitHub workflows, `.gitlab-ci.yml` and other CI pipelines, Compose files, Helm charts, Kustomize, Ansible (`playbooks/`, `roles/*/tasks/`, …), Kubernetes manifests (`apiVersion` and `kind`), CloudFormation templates |
+| `data` | JSON, TOML, XML, the rest of YAML, Properties and PO files |
+
+`--kind` chooses the kinds a command reads, on every command that reads files: `--kind docs`, `--kind code,infra`, `--kind all`. Without it nothing changes: each command reads what it always has, and infrastructure written in a language of code (Terraform, Dockerfiles) is measured as code. To measure code alone, use `--kind code`, or set `separate = true` under `[kinds]` in `.kimun.toml` to make that the default; `[kinds]` can also declare the kind of files by glob. `--list-excluded` names the files `--kind` leaves out.
 
 ### `km indent` -- Indentation complexity
 
@@ -1526,6 +1539,15 @@ patterns   = ["legacy/**", "*.min.js"]  # globs from the analyzed directory (as 
 ```
 
 `[exclude]` leaves files and directories out of every command, besides what `.gitignore` already does. Unlike other values it does not give way to flags: it adds to `--exclude-dir`, `--exclude-ext` and `--exclude`, and `--list-excluded` shows what it leaves out. Patterns are matched against the path relative to the analyzed directory, as `--exclude` is.
+
+`[kinds]` declares the [kind](#file-kinds) of files by glob, against the path relative to the analyzed directory, before what their language and path say. With `separate = true`, infrastructure is no longer measured as code unless `--kind` asks for it.
+
+```toml
+[kinds]
+separate = false              # true: Terraform and Dockerfiles are not measured as code (default: false)
+docs     = ["notes/**"]       # these files are docs, whatever their extension
+infra    = ["deploy/**/*.yml"]
+```
 
 All sections and fields are optional — omit any you don't need. A fully documented template is available at [`.kimun.toml.example`](.kimun.toml.example).
 

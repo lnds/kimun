@@ -747,9 +747,108 @@ fn code_files_leave_out_data_prose_and_generated_files() {
 
 #[test]
 fn code_paths_by_name() {
-    assert!(is_code_path(Path::new("src/lib.rs")));
-    assert!(is_code_path(Path::new("assets/logo.png")));
-    assert!(!is_code_path(Path::new("package-lock.json")));
-    assert!(!is_code_path(Path::new("CHANGELOG.md")));
-    assert!(!is_code_path(Path::new(".github/workflows/ci.yml")));
+    let filter = ExcludeFilter::default();
+    let code = |path: &str| is_code_path(Path::new(path), &filter);
+    assert!(code("src/lib.rs"));
+    assert!(code("assets/logo.png"));
+    assert!(code("infra/main.tf"));
+    assert!(!code("package-lock.json"));
+    assert!(!code("CHANGELOG.md"));
+    assert!(!code(".github/workflows/ci.yml"));
+}
+
+#[test]
+fn code_paths_of_the_kinds_chosen() {
+    let config = crate::config::KindsConfig::default();
+    let filter = ExcludeFilter::default().with_kinds(Selection::new(&[Kind::Docs], &config));
+    assert!(is_code_path(Path::new("CHANGELOG.md"), &filter));
+    assert!(!is_code_path(Path::new("src/lib.rs"), &filter));
+    assert!(!is_code_path(Path::new("assets/logo.png"), &filter));
+}
+
+/// A tree with code, documentation, infrastructure and data.
+fn kinds_tree(root: &Path) {
+    tree(
+        root,
+        &[
+            ("src/lib.rs", "pub fn f() {}\n"),
+            ("README.md", "# Demo\n"),
+            ("infra/main.tf", "resource \"a\" \"b\" {}\n"),
+            ("Dockerfile", "FROM alpine\n"),
+            ("k8s/svc.yaml", "apiVersion: v1\nkind: Service\n"),
+            ("settings.yaml", "a: 1\n"),
+        ],
+    );
+}
+
+fn kinds_filter(chosen: &[Kind], separate: bool) -> ExcludeFilter {
+    let config = crate::config::KindsConfig {
+        separate,
+        ..Default::default()
+    };
+    ExcludeFilter::default().with_kinds(Selection::new(chosen, &config))
+}
+
+#[test]
+fn code_files_measure_infrastructure_in_a_language_of_code_by_default() {
+    let dir = tempdir().unwrap();
+    kinds_tree(dir.path());
+    assert_eq!(
+        names(
+            &code_files(dir.path(), true, &kinds_filter(&[], false)),
+            dir.path()
+        ),
+        ["Dockerfile", "infra/main.tf", "src/lib.rs"]
+    );
+}
+
+#[test]
+fn code_files_leave_infrastructure_apart_when_separate() {
+    let dir = tempdir().unwrap();
+    kinds_tree(dir.path());
+    assert_eq!(
+        names(
+            &code_files(dir.path(), true, &kinds_filter(&[], true)),
+            dir.path()
+        ),
+        ["src/lib.rs"]
+    );
+}
+
+#[test]
+fn code_files_of_the_kinds_chosen() {
+    let dir = tempdir().unwrap();
+    kinds_tree(dir.path());
+    let files = |chosen: &[Kind]| {
+        names(
+            &code_files(dir.path(), true, &kinds_filter(chosen, false)),
+            dir.path(),
+        )
+    };
+    assert_eq!(files(&[Kind::Code]), ["src/lib.rs"]);
+    assert_eq!(
+        files(&[Kind::Infra]),
+        ["Dockerfile", "infra/main.tf", "k8s/svc.yaml"]
+    );
+    assert_eq!(
+        files(&[Kind::Docs, Kind::Data]),
+        ["README.md", "settings.yaml"]
+    );
+}
+
+#[test]
+fn source_files_read_every_kind_unless_chosen() {
+    let dir = tempdir().unwrap();
+    kinds_tree(dir.path());
+    assert_eq!(
+        source_files(dir.path(), true, &kinds_filter(&[], true)).len(),
+        6
+    );
+    assert_eq!(
+        names(
+            &source_files(dir.path(), true, &kinds_filter(&[Kind::Docs], false)),
+            dir.path()
+        ),
+        ["README.md"]
+    );
 }

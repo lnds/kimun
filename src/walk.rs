@@ -12,7 +12,8 @@ use std::path::{Path, PathBuf};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use ignore::WalkBuilder;
 
-use crate::loc::language::{LanguageSpec, detect, detect_by_shebang, detect_file};
+use crate::kind::{Kind, Selection};
+use crate::loc::language::{LanguageSpec, detect_by_shebang, detect_file};
 use crate::test_blocks::rust_test_modules;
 use crate::util::is_generated_file;
 
@@ -32,6 +33,8 @@ pub struct ExcludeFilter {
     dirs: HashSet<Box<str>>,
     /// Compiled glob patterns for file path matching.
     globs: Option<GlobSet>,
+    /// The kinds of file read, from `--kind` and `[kinds]`.
+    kinds: Selection,
 }
 
 impl ExcludeFilter {
@@ -67,7 +70,19 @@ impl ExcludeFilter {
             extensions,
             dirs,
             globs,
+            kinds: Selection::default(),
         }
+    }
+
+    /// This filter reading only the kinds of `kinds`.
+    pub fn with_kinds(mut self, kinds: Selection) -> Self {
+        self.kinds = kinds;
+        self
+    }
+
+    /// The kinds of file this filter reads.
+    pub fn kinds(&self) -> &Selection {
+        &self.kinds
     }
 
     /// Returns `true` if no filters have been configured.
@@ -366,7 +381,9 @@ pub fn source_files(
         let Some(spec) = detect_file(file_path).or_else(|| try_detect_shebang(file_path)) else {
             continue;
         };
-        result.push((file_path.to_path_buf(), spec));
+        if filter.kinds.reads(filter.kinds.kind(file_path, spec, path)) {
+            result.push((file_path.to_path_buf(), spec));
+        }
     }
     if exclude_tests {
         without_test_modules(&mut result);
@@ -395,23 +412,27 @@ fn in_test_module(path: &Path, test_modules: &HashSet<PathBuf>) -> bool {
     })
 }
 
-/// Whether a path, which may no longer exist, is code by its name alone:
-/// not data or prose and not generated. For the paths of git history.
-pub fn is_code_path(path: &Path) -> bool {
-    !crate::util::is_generated(path) && detect(path).is_none_or(LanguageSpec::is_code)
+/// Whether the metrics of code read a path of git history, which may no
+/// longer exist, by its name alone: of a kind they read
+/// ([`Selection::measures_path`]) and not generated.
+pub fn is_code_path(path: &Path, filter: &ExcludeFilter) -> bool {
+    !crate::util::is_generated(path) && filter.kinds.measures_path(path, Path::new(""))
 }
 
-/// The source files that metrics of code read: [`source_files`] without
-/// data and prose ([`LanguageSpec::is_code`]) or generated files
-/// ([`is_generated_file`]). Line counts and the dependency graph read
-/// every source file instead.
+/// The source files that metrics of code read: [`source_files`] of the
+/// kinds they read ([`Selection::measures`]: code unless `--kind` says
+/// otherwise), without generated files ([`is_generated_file`]). Line
+/// counts and the dependency graph read every source file instead.
 pub fn code_files(
     path: &Path,
     exclude_tests: bool,
     filter: &ExcludeFilter,
 ) -> Vec<(PathBuf, &'static LanguageSpec)> {
     let mut files = source_files(path, exclude_tests, filter);
-    files.retain(|(path, spec)| spec.is_code() && !is_generated_file(path));
+    let kinds = &filter.kinds;
+    files.retain(|(file, spec)| {
+        kinds.measures(kinds.kind(file, spec, path), spec) && !is_generated_file(file)
+    });
     files
 }
 
@@ -567,7 +588,22 @@ fn exclusion_reasons(
     if in_test_module(file_path, test_modules) {
         reasons.push("test module");
     }
+    if let Some(spec) = detect_file(file_path).or_else(|| try_detect_shebang(file_path))
+        && !filter.kinds.reads(filter.kinds.kind(file_path, spec, root))
+    {
+        reasons.push(kind_reason(filter.kinds.kind(file_path, spec, root)));
+    }
     reasons
+}
+
+/// The reason `--list-excluded` gives for a file `--kind` leaves out.
+fn kind_reason(kind: Kind) -> &'static str {
+    match kind {
+        Kind::Code => "kind code",
+        Kind::Docs => "kind docs",
+        Kind::Infra => "kind infra",
+        Kind::Data => "kind data",
+    }
 }
 
 #[cfg(test)]

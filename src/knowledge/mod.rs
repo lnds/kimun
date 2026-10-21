@@ -15,7 +15,7 @@ use std::collections::HashSet;
 use std::error::Error;
 
 use crate::git::{BlameInfo, GitRepo};
-use crate::util::{is_generated_file, parse_since};
+use crate::util::parse_since;
 use crate::walk::{self, WalkConfig};
 
 use crate::cli::OutputMode;
@@ -81,9 +81,7 @@ pub(crate) fn collect(
     let (walk_root, walk_prefix) = git_repo.walk_prefix(cfg.path)?;
     let mut results = Vec::new();
     let mut file_blames = Vec::new();
-    let files = walk::source_files(&walk_root, cfg.exclude_tests(), cfg.filter)
-        .into_iter()
-        .filter(|(path, spec)| spec.is_code() && !is_generated_file(path));
+    let files = walk::code_files(&walk_root, cfg.exclude_tests(), cfg.filter);
     for (file_path, spec) in files {
         let rel_path = GitRepo::to_git_path(&walk_root, &walk_prefix, &file_path);
         let mut blames = match git_repo.blame_file(&rel_path) {

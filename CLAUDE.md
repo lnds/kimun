@@ -46,7 +46,7 @@ CLI tool for code metrics: lines of code (like `cloc`), duplicate detection, Hal
 
 ### Shared: `src/walk.rs`
 
-`source_files` is every recognized file (language by `detect_file`); with tests excluded it also leaves out `EXAMPLE_DIRS` (examples, benchmarks) and the Rust modules declared under `#[cfg(test)]` (`test_blocks::rust_test_modules`). `code_files` is what metrics of code read: no data or prose (`LanguageSpec::is_code`) and no generated files (`util::is_generated_file`, by name, header marker or source map). `collect_analysis`, `score`, `report`, `dups`, `init`, `hotspots` and `churn` use it; `loc` and `deps` read `source_files`; `tc` filters history paths with `is_code_path`.
+`source_files` is every recognized file (language by `detect_file`) of the kinds `--kind` reads; with tests excluded it also leaves out `EXAMPLE_DIRS` (examples, benchmarks) and the Rust modules declared under `#[cfg(test)]` (`test_blocks::rust_test_modules`). `code_files` is what metrics of code read: the kinds `kind::Selection::measures` keeps (code, and infrastructure in a language of code unless `[kinds] separate`) and no generated files (`util::is_generated_file`, by name, header marker or source map). `collect_analysis`, `score`, `report`, `dups`, `init`, `hotspots` and `churn` use it; `loc` and `deps` read `source_files`; `tc` filters history paths with `is_code_path`.
 
 ### Adding a new language
 
@@ -320,6 +320,10 @@ Enclosure diagram of the code (Tornhill): directories as circles holding their f
 - **`callout.rs`** — The share of the lines on each side of the scale, and the directory where each side gathers (many such lines, a large share of the directory, a part of the code rather than nearly all), labelled with the `Words` of the metric.
 - **`page.rs`** — The page of `crate::html`, with `map.js` (SVG, zoom by view box, tooltip, legend), `map_callouts.js` (the labels) and `map.css`.
 - **`mod.rs`** — Orchestration: scores the files once (`score::measure`/`snapshot_of`) for their lines and the `score` colour, adds the shades, lays out and writes the page or the JSON.
+
+### Shared: `src/kind.rs`
+
+What each file is for: `Kind` (`Code`, `Docs`, `Infra`, `Data`), by language and path, and for YAML by its first lines (Kubernetes, CloudFormation, Ansible). `Selection` carries `--kind`, `[kinds] separate` and the globs `[kinds]` declares; it travels inside `walk::ExcludeFilter`, so every command reads it. `measures` decides what metrics of code read (without `--kind`, what they always read), `reads` what `loc` and `deps` read, `measures_path` the same for paths of history.
 
 ### Shared: `src/file_tree.rs`
 

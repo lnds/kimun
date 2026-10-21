@@ -100,7 +100,7 @@ Ejecútalo en una ruta específica:
 km loc src/
 ```
 
-Los archivos de tests quedan fuera por defecto, así que los totales son menores que los de `cloc` sobre el mismo directorio. Con `--include-tests` ambos cuentan los mismos archivos.
+Los archivos de tests quedan fuera por defecto, así que los totales son menores que los de `cloc` sobre el mismo directorio. Con `--include-tests` ambos cuentan los mismos archivos. Bajo la tabla, cuando hay más de uno, van las líneas de cada [tipo de archivo](#tipos-de-archivo): code, docs, infra y data (`kinds` en el JSON).
 
 Opciones:
 
@@ -229,6 +229,19 @@ Los comandos que miden código (`dups`, `indent`, `hal`, `cycom`, `cogcom`, `mi`
 - **Datos y prosa**: JSON, YAML, TOML, XML, Markdown, Text, Properties y archivos PO. Su indentación es estructura, no anidamiento, y cambian en cada versión sin ser código.
 
 `km knowledge` y `km authors` dejan fuera los archivos generados. `km loc` y `km deps` leen todos los archivos: las líneas son líneas, y el código generado igual se importa.
+
+#### Tipos de archivo
+
+Cada archivo es de un tipo:
+
+| Tipo | Archivos |
+|------|----------|
+| `code` | Código fuente |
+| `docs` | Markdown, reStructuredText y texto plano |
+| `infra` | Terraform, Dockerfiles, y el YAML que es infraestructura: workflows de GitHub, `.gitlab-ci.yml` y otros pipelines de CI, archivos de Compose, charts de Helm, Kustomize, Ansible (`playbooks/`, `roles/*/tasks/`, …), manifiestos de Kubernetes (`apiVersion` y `kind`), plantillas de CloudFormation |
+| `data` | JSON, TOML, XML, el resto del YAML, Properties y archivos PO |
+
+`--kind` elige los tipos que lee un comando, en todos los comandos que leen archivos: `--kind docs`, `--kind code,infra`, `--kind all`. Sin él nada cambia: cada comando lee lo que siempre ha leído, y la infraestructura escrita en un lenguaje de código (Terraform, Dockerfiles) se mide como código. Para medir solo código, usa `--kind code`, o pon `separate = true` bajo `[kinds]` en `.kimun.toml` para que sea lo habitual; `[kinds]` también puede declarar el tipo de archivos por glob. `--list-excluded` nombra los archivos que `--kind` deja fuera.
 
 ### `km indent` -- Complejidad por indentación
 
@@ -1526,6 +1539,15 @@ patterns   = ["legacy/**", "*.min.js"]  # globs from the analyzed directory (as 
 ```
 
 `[exclude]` deja fuera de todos los comandos archivos y directorios, además de lo que ya deja `.gitignore`. A diferencia de los demás valores, no cede ante los flags: se suma a `--exclude-dir`, `--exclude-ext` y `--exclude`, y `--list-excluded` muestra lo que deja fuera. Los patrones se comparan con la ruta relativa al directorio analizado, como `--exclude`.
+
+`[kinds]` declara el [tipo](#tipos-de-archivo) de archivos por glob, contra la ruta relativa al directorio analizado, antes de lo que digan su lenguaje y su ruta. Con `separate = true`, la infraestructura deja de medirse como código salvo que `--kind` lo pida.
+
+```toml
+[kinds]
+separate = false              # true: Terraform y los Dockerfiles no se miden como código (por defecto: false)
+docs     = ["notes/**"]       # estos archivos son docs, sea cual sea su extensión
+infra    = ["deploy/**/*.yml"]
+```
 
 Todas las secciones y todos los campos son opcionales: omite los que no necesites. Hay una plantilla completamente documentada en [`.kimun.toml.example`](.kimun.toml.example).
 
