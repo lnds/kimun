@@ -148,6 +148,15 @@ impl Block {
     }
 }
 
+/// The lines of a YAML front matter, without its fences.
+pub fn front_matter(text: &str) -> Vec<&str> {
+    let lines: Vec<&str> = text.lines().collect();
+    match front_matter_end(&lines) {
+        0 => Vec::new(),
+        end => lines[1..end - 1].to_vec(),
+    }
+}
+
 /// The line where the body starts, past a YAML front matter.
 fn front_matter_end(lines: &[&str]) -> usize {
     if lines.first().map(|l| l.trim_end()) != Some("---") {

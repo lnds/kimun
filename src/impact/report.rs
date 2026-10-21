@@ -6,6 +6,7 @@ use serde::Serialize;
 
 use super::Impact;
 use super::analyzer::{MissingCoChange, Trigger};
+use super::documentation_report::{self, JsonDocumentation};
 use super::projects::{self, JsonProjects};
 use super::structural_json::JsonStructural;
 use super::structural_report as structural;
@@ -49,6 +50,11 @@ fn render_report(impact: &Impact, top: usize) -> String {
     lines.push(String::new());
     lines.extend(structural::render(&impact.structural, top));
     lines.push(String::new());
+    let documentation = documentation_report::render(&impact.documentation);
+    if !documentation.is_empty() {
+        lines.extend(documentation);
+        lines.push(String::new());
+    }
     lines.extend(diffusion_lines(impact));
     lines.push(String::new());
     lines.push(
@@ -245,6 +251,7 @@ struct JsonImpact<'a> {
     structural: JsonStructural<'a>,
     diffusion: JsonDiffusion,
     logical_radius: JsonLogicalRadius,
+    documentation: JsonDocumentation,
     generated_skipped: usize,
 }
 
@@ -285,6 +292,7 @@ fn to_json(impact: &Impact, top: usize) -> JsonImpact<'_> {
                 .map(|p| p.display().to_string())
                 .collect(),
         },
+        documentation: JsonDocumentation::from(impact.documentation.as_slice()),
         generated_skipped: impact.generated_skipped,
     }
 }
@@ -299,7 +307,7 @@ fn render_short(impact: &Impact) -> String {
     let d = &impact.diffusion;
     let max_confidence = impact.missing.first().map_or(0.0, |m| m.best().confidence);
     format!(
-        "impact projects_reached:{}/{} structural:{}/{} unprotected:{} files:{} dirs:{} subsystems:{} added:{} deleted:{} entropy:{:.2} missing:{} max_confidence:{:.2}",
+        "impact projects_reached:{}/{} structural:{}/{} unprotected:{} files:{} dirs:{} subsystems:{} added:{} deleted:{} entropy:{:.2} missing:{} max_confidence:{:.2} stale_docs:{}",
         impact.projects.reached.len(),
         impact.projects.total(),
         impact.structural.reached(),
@@ -313,6 +321,7 @@ fn render_short(impact: &Impact) -> String {
         d.entropy,
         impact.missing.len(),
         max_confidence,
+        impact.documentation.len(),
     )
 }
 

@@ -6,6 +6,8 @@
 //! consulted ends at that merge base: the change is never evidence for itself.
 
 mod analyzer;
+mod documentation;
+mod documentation_report;
 mod entry;
 mod function_reach;
 mod help;
@@ -37,6 +39,7 @@ use crate::util::{is_generated, parse_since};
 use analyzer::{
     Diffusion, MissingCoChange, Target, Thresholds, compute_diffusion, missing_co_changes,
 };
+use documentation::{Signal, Stale};
 use entry::EntryPoints;
 pub use help::HELP;
 use inert::Inert;
@@ -62,6 +65,9 @@ pub struct ImpactOptions {
     pub top: usize,
     /// Print only the projects the diff changes or reaches, one per line.
     pub affected: bool,
+    /// Fail when a document that covers or names a changed file was not
+    /// updated.
+    pub fail_on_stale_docs: bool,
 }
 
 /// The options the command line asks for. A pull request comes first, then
@@ -89,6 +95,7 @@ pub fn options(args: &crate::cli::ImpactArgs) -> ImpactOptions {
         max_distance: args.max_distance.map(|d| d as usize),
         top: args.top,
         affected: args.affected,
+        fail_on_stale_docs: args.fail_on_stale_docs,
     }
 }
 
@@ -103,7 +110,10 @@ pub struct Impact {
     pub diffusion: Diffusion,
     pub thresholds: Thresholds,
     /// Files expected to change with the diff, strongest evidence first.
+    /// Documents are in `documentation` instead.
     pub missing: Vec<MissingCoChange>,
+    /// Documents that describe what changed and were not updated.
+    pub documentation: Vec<Stale>,
     /// Changed files with no commits in the history consulted, so nothing
     /// can be expected of them.
     pub without_history: Vec<PathBuf>,
@@ -229,12 +239,17 @@ fn analyze(path: &Path, opts: &ImpactOptions) -> Result<Impact, Box<dyn Error>> 
         min_confidence: opts.min_confidence,
         min_shared: opts.min_shared,
     };
-    let missing = missing_co_changes(
+    let (documents_missing, missing): (Vec<_>, Vec<_>) = missing_co_changes(
         &history,
         &targets,
         |p| !in_diff.contains(p) && !is_generated(p) && change.has_file(&git_repo, p),
         thresholds,
-    );
+    )
+    .into_iter()
+    .partition(|m| documentation::is_document(&m.path));
+    let rules = documentation::Rules::new(&KimunConfig::load_from(git_repo.root()).docs)?;
+    let documents = change.sources(&git_repo, documentation::is_document)?;
+    let documentation = documentation::stale(&documents, &changes, &documents_missing, &rules);
 
     let with_history: HashSet<&Path> = targets
         .iter()
@@ -255,6 +270,7 @@ fn analyze(path: &Path, opts: &ImpactOptions) -> Result<Impact, Box<dyn Error>> 
         diffusion: compute_diffusion(&changes),
         thresholds,
         missing,
+        documentation,
         without_history,
         generated_skipped: generated.len(),
         max_changeset: opts.max_changeset,
@@ -292,12 +308,21 @@ pub fn run(path: &Path, opts: &ImpactOptions) -> Result<(), Box<dyn Error>> {
         OutputMode::Json => report::print_json(&impact, opts.top)?,
         OutputMode::Short => report::print_short(&impact),
         OutputMode::Terse => report::print_terse(&impact),
-        OutputMode::Github | OutputMode::Codeclimate => {
-            return Err(crate::cli::ERR_CI_FORMAT_ONLY.into());
-        }
+        OutputMode::Github => documentation_report::print_github(&impact.documentation),
+        OutputMode::Codeclimate => documentation_report::print_codeclimate(&impact.documentation)?,
         OutputMode::Table => report::print_report(&impact, opts.top),
     }
-    Ok(())
+    let left_behind = impact
+        .documentation
+        .iter()
+        .filter(|s| s.signal != Signal::CoChanged)
+        .count();
+    match left_behind {
+        n if opts.fail_on_stale_docs && n > 0 => {
+            Err(format!("{n} document(s) describe what changed and were not updated").into())
+        }
+        _ => Ok(()),
+    }
 }
 
 #[cfg(test)]

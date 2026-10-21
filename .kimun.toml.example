@@ -94,6 +94,18 @@ complexity = "indent"  # default: indent
 # an integration test.
 # entry_points = ["**/endpoint.ex"]
 
+[docs]
+# Which documents describe which code, for the documentation block of
+# km impact: a changed file covered here, with its document left as it was,
+# is listed (and fails --fail-on-stale-docs). A document may also declare it
+# in its front matter: covers: ["apps/payments/**"].
+# Keys are globs of code, values the globs of documents, relative to the
+# repository.
+# covers = { "apps/payments/**" = "kb/payments/**", "lib/billing/**" = ["kb/billing.md", "docs/billing/**"] }
+# Documents that never need to follow the code, such as decision records.
+# Changelogs (CHANGELOG, CHANGES, HISTORY) always are.
+# ignore = ["docs/adr/**"]
+
 [exclude]
 # Files and directories every command leaves out, besides .gitignore. They add
 # to the --exclude-dir, --exclude-ext and --exclude flags; --list-excluded

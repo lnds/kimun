@@ -247,7 +247,7 @@ fn check_path(dir: &Path, span: &str, repository: &Repository) -> Verdict {
 
 /// The path a code span holds, without a trailing `:line` or `:line:col`;
 /// none when it holds anything but a relative path with a `/`.
-fn path_in(span: &str) -> Option<&str> {
+pub(crate) fn path_in(span: &str) -> Option<&str> {
     let mut path = span;
     for _ in 0..2 {
         if let Some((head, tail)) = path.rsplit_once(':')
@@ -272,7 +272,7 @@ fn path_in(span: &str) -> Option<&str> {
     (shaped && whole).then_some(path)
 }
 
-fn is_external(target: &str) -> bool {
+pub(crate) fn is_external(target: &str) -> bool {
     let scheme = target.split_once(':').is_some_and(|(scheme, _)| {
         scheme.len() > 1
             && scheme.starts_with(|c: char| c.is_ascii_alphabetic())
@@ -290,7 +290,7 @@ fn is_markdown(path: &Path) -> bool {
 }
 
 /// `%XX` escapes of a link decoded.
-fn decode(target: &str) -> String {
+pub(crate) fn decode(target: &str) -> String {
     let bytes = target.as_bytes();
     let mut decoded = Vec::with_capacity(bytes.len());
     let mut i = 0;
@@ -314,7 +314,7 @@ fn decode(target: &str) -> String {
 }
 
 /// `path` relative to `root`, with `.` and `..` resolved by name.
-fn relative(path: &Path, root: &Path) -> PathBuf {
+pub(crate) fn relative(path: &Path, root: &Path) -> PathBuf {
     let mut parts: Vec<Component> = Vec::new();
     for component in path.strip_prefix(root).unwrap_or(path).components() {
         match component {

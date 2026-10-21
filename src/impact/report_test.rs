@@ -51,6 +51,7 @@ fn sample() -> Impact {
             ),
             missing("README.md", vec![trigger("src/cli.rs", 6, 12)]),
         ],
+        documentation: Vec::new(),
         without_history: vec![PathBuf::from("src/impact/mod.rs")],
         generated_skipped: 1,
         max_changeset: 30,
@@ -185,9 +186,9 @@ fn report_of_a_diff_with_only_generated_files() {
 fn short_line() {
     assert_eq!(
         render_short(&sample()),
-        "impact projects_reached:0/1 structural:0/0 unprotected:0 files:5 dirs:3 subsystems:2 added:120 deleted:30 entropy:0.82 missing:2 max_confidence:0.80"
+        "impact projects_reached:0/1 structural:0/0 unprotected:0 files:5 dirs:3 subsystems:2 added:120 deleted:30 entropy:0.82 missing:2 max_confidence:0.80 stale_docs:0"
     );
-    assert!(render_short(&empty()).ends_with("missing:0 max_confidence:0.00"));
+    assert!(render_short(&empty()).ends_with("missing:0 max_confidence:0.00 stale_docs:0"));
 }
 
 #[test]

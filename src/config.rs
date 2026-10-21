@@ -66,6 +66,38 @@ pub struct KimunConfig {
     pub exclude: ExcludeConfig,
     #[serde(default)]
     pub kinds: KindsConfig,
+    #[serde(default)]
+    pub docs: DocsConfig,
+}
+
+/// Which documents describe which code, for the documentation block of
+/// `km impact`.
+#[derive(Debug, Default, Deserialize)]
+pub struct DocsConfig {
+    /// Globs of code, relative to the repository, and the documents that
+    /// describe them: `"apps/payments/**" = "kb/payments/**"`.
+    #[serde(default)]
+    pub covers: std::collections::BTreeMap<String, OneOrMany>,
+    /// Globs of documents that never need to follow the code.
+    #[serde(default)]
+    pub ignore: Vec<String>,
+}
+
+/// A value of `.kimun.toml` given as one string or as a list of them.
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum OneOrMany {
+    One(String),
+    Many(Vec<String>),
+}
+
+impl OneOrMany {
+    pub fn as_slice(&self) -> &[String] {
+        match self {
+            OneOrMany::One(value) => std::slice::from_ref(value),
+            OneOrMany::Many(values) => values,
+        }
+    }
 }
 
 /// What kind each file is, besides what its language and path say, and

@@ -12,7 +12,7 @@ use crate::kind::{self, Kind, Selection};
 use crate::walk::ExcludeFilter;
 
 /// Error returned by commands that do not support CI annotation formats.
-pub const ERR_CI_FORMAT_ONLY: &str = "--format github and --format codeclimate are only supported by cycom, cogcom, smells, and docs refs";
+pub const ERR_CI_FORMAT_ONLY: &str = "--format github and --format codeclimate are only supported by cycom, cogcom, smells, impact, and docs refs";
 
 fn parse_non_negative_f64(s: &str) -> Result<f64, String> {
     match s.parse::<f64>() {
@@ -178,8 +178,8 @@ pub struct CommonArgs {
     /// Output format: table (default), json, short, terse, github, or codeclimate.
     /// `short` emits a single compact line of key:value pairs (AI-friendly).
     /// `terse` emits a single headline metric value (for piping/embedding).
-    /// `github` emits GitHub Actions warning annotations (only cycom, cogcom, smells, docs refs).
-    /// `codeclimate` (alias: `gitlab`) emits CodeClimate JSON for GitLab Code Quality (only cycom, cogcom, smells, docs refs).
+    /// `github` emits GitHub Actions warning annotations (only cycom, cogcom, smells, impact, docs refs).
+    /// `codeclimate` (alias: `gitlab`) emits CodeClimate JSON for GitLab Code Quality (only cycom, cogcom, smells, impact, docs refs).
     #[arg(long, value_enum, default_value_t)]
     pub format: OutputMode,
 
@@ -295,6 +295,11 @@ pub struct ImpactArgs {
     /// Print only the projects the diff changes or reaches, one per line (for CI)
     #[arg(long)]
     pub affected: bool,
+
+    /// Exit with code 1 when a document that covers or names a changed file
+    /// was not updated (for CI)
+    #[arg(long)]
+    pub fail_on_stale_docs: bool,
 
     /// Show only the top N missing files (default: 20)
     #[arg(long, default_value = "20")]
