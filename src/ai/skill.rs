@@ -111,6 +111,13 @@ How far a change reaches before it is merged. `--since-ref` measures the current
 - `projects.reached` and `projects.affected`: projects of a monorepo that depend on the changed ones; `affected` is the list whose tests should run.
 - `logical_radius.missing`: files that usually change together with the changed ones and are not in the change.
 
+### Dead References in Documentation
+```bash
+km docs refs [PATH] --format json
+km docs refs [PATH] --format json --since-ref origin/main
+```
+Links, images and anchors of Markdown documents that lead nowhere, and paths in code spans the repository once had and no longer has. `missing` is `file`, `heading` or `path`. With `--since-ref`, only documents changed since the ref and references to files the change touched: run it on a branch that moves or deletes files to learn which documents still name them.
+
 ## Analysis Workflow
 
 1. Start with `km score` for the overall health grade
@@ -121,6 +128,7 @@ How far a change reaches before it is merged. `--since-ref` measures the current
 6. Optionally run `km knowledge` and `km tc` for team/architecture insights
 7. Use `km score diff --git-ref HEAD~N` to track score changes over time
 8. To review a branch or a pull request, run `km impact` and report the unprotected files first
+9. Run `km docs refs` to find documentation that names files or headings that are gone
 
 ## Output Format
 

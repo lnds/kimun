@@ -1,6 +1,6 @@
 //! Tool schema definitions for the AI analysis module.
 //!
-//! Defines the 12 `km` subcommands as Claude tool-use schemas in JSON Schema
+//! Defines the 13 `km` subcommands as Claude tool-use schemas in JSON Schema
 //! format. Each tool has a name, description, and an `input_schema` object
 //! with the shared `path` property plus any tool-specific parameters.
 //! Shared property builders (`path_prop`, `top_prop`, `since_prop`) avoid
@@ -42,7 +42,7 @@ fn tool(name: &str, desc: &str, extra_props: &[(&str, Value)]) -> Value {
     })
 }
 
-/// Return the list of all 12 `km` tool definitions for the AI provider,
+/// Return the list of all 13 `km` tool definitions for the AI provider,
 /// each with name, description, and input JSON schema.
 pub fn tool_definitions() -> Vec<Value> {
     vec![
@@ -137,6 +137,14 @@ pub fn tool_definitions() -> Vec<Value> {
                     json!({"type": "integer", "description": "Show only the top N missing co-change files (default: 20)"}),
                 ),
             ],
+        ),
+        tool(
+            "km_docs_refs",
+            "Find dead references in Markdown documentation: links and images to missing files or headings, and paths in code spans the repository no longer has. With `since_ref`, only documents changed since the ref and references to files changed since it.",
+            &[(
+                "since_ref",
+                json!({"type": "string", "description": "Git ref to compare against (e.g. origin/main)"}),
+            )],
         ),
     ]
 }

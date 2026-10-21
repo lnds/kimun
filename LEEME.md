@@ -241,7 +241,7 @@ Cada archivo es de un tipo:
 | `infra` | Terraform, Dockerfiles, y el YAML que es infraestructura: workflows de GitHub, `.gitlab-ci.yml` y otros pipelines de CI, archivos de Compose, charts de Helm, Kustomize, Ansible (`playbooks/`, `roles/*/tasks/`, …), manifiestos de Kubernetes (`apiVersion` y `kind`), plantillas de CloudFormation |
 | `data` | JSON, TOML, XML, el resto del YAML, Properties y archivos PO |
 
-`--kind` elige los tipos que lee un comando, en todos los comandos que leen archivos: `--kind docs`, `--kind code,infra`, `--kind all`. Sin él nada cambia: cada comando lee lo que siempre ha leído, y la infraestructura escrita en un lenguaje de código (Terraform, Dockerfiles) se mide como código. Para medir solo código, usa `--kind code`, o pon `separate = true` bajo `[kinds]` en `.kimun.toml` para que sea lo habitual; `[kinds]` también puede declarar el tipo de archivos por glob. `--list-excluded` nombra los archivos que `--kind` deja fuera.
+`--kind` elige los tipos que lee un comando, en todos los comandos que leen archivos: `--kind docs`, `--kind code,infra`, `--kind all`. Sin él nada cambia: cada comando lee lo que siempre ha leído, y la infraestructura escrita en un lenguaje de código (Terraform, Dockerfiles) se mide como código. Para medir solo código, usa `--kind code`, o pon `separate = true` bajo `[kinds]` en `.kimun.toml` para que sea lo habitual; `[kinds]` también puede declarar el tipo de archivos por glob. `--list-excluded` nombra los archivos que `--kind` deja fuera. [`km docs refs`](#km-docs-refs----referencias-muertas-en-la-documentación) lee los documentos, diga lo que diga `--kind`.
 
 ### `km indent` -- Complejidad por indentación
 
@@ -1457,6 +1457,48 @@ Los archivos sin valor (sin historia, un lenguaje sin grafo de dependencias) se 
 | `--color-by METRIC` | `score` (por defecto), `hotspots`, `churn`, `age`, `knowledge`, `cycles` o `llm` |
 | `--since TIME` | Lee la historia desde este momento (p. ej. `6m`, `1y`, `30d`) |
 | `--format {table,json}` | `json` imprime el árbol dispuesto: cada nodo con `x`, `y`, `r`, `depth`, `parent`, `lines`, y para los archivos `heat` (-1 a 1) y `label` |
+
+### `km docs refs` -- Referencias muertas en la documentación
+
+La documentación se refiere al código: archivos, directorios, encabezados de otros documentos. Cuando el código avanza, esas referencias mueren sin que nadie lo note, y un archivo de instrucciones para agentes de código que nombra un archivo que ya no está manda al agente por el camino equivocado. `km docs refs` lee los documentos Markdown del repositorio y lista las referencias que no llevan a ninguna parte.
+
+```bash
+km docs refs [ruta]
+km docs refs --since-ref origin/main --fail-on-dead   # en CI
+km docs refs --format github                          # anotaciones en el pull request
+```
+
+| Qué | Muerta cuando |
+|-----|---------------|
+| Links e imágenes: `[texto](ruta)`, `![alt](ruta)`, `[etiqueta]: ruta`, `<a href>`, `<img src>` | el archivo no existe, desde el documento, o desde la raíz del repositorio para una ruta que empieza con `/` |
+| Anclas: `ruta.md#encabezado`, `#encabezado` | el documento Markdown no tiene ese encabezado, nombrado como lo nombra GitHub (`## Instalación` es `#instalación`), ni un elemento con ese `id` o `name` |
+| Rutas en code spans: `` `src/kind.rs` ``, `` `scripts/` ``, `` `src/kind.rs:42` `` | el repositorio tuvo esa ruta alguna vez y ya no la tiene |
+
+Una ruta en un code span está viva cuando existe desde el documento o desde la raíz, o cuando es el final de una ruta del repositorio (`` `deps/graph.rs` `` nombra `src/deps/graph.rs`). Cuenta como muerta solo si la historia del repositorio la tuvo alguna vez, así que la estructura de un ejemplo (`` `src/lib.rs` `` en una guía sobre paquetes de Rust) o un archivo que un plan aún no crea no se toman por una. Fuera de un repositorio git, una ruta se lee cuando su primer nombre es el de un archivo o directorio del árbol. Las URLs nunca se descargan; un link absoluto sin extensión (`/docs/score/`) es una ruta de un sitio construido con los documentos, no un archivo. El código en bloques (con cercas o indentado), el front matter y los comentarios HTML no se refieren a nada.
+
+Con `--since-ref`, los documentos cambiados desde la ref conservan todas sus referencias muertas, y los demás solo las que nombran un archivo que el cambio tocó: un pull request que borra o mueve un archivo sabe qué documentos aún lo nombran.
+
+| Flag | Descripción |
+|------|-------------|
+| `--since-ref REF` | Solo los documentos cambiados desde REF, y las referencias a archivos cambiados desde ella |
+| `--fail-on-dead` | Termina con código 1 si encuentra una referencia muerta |
+| `--include-tests` | Lee también los documentos bajo directorios de tests (se omiten por defecto, como fixtures) |
+| `--format {table,json,short,terse,github,codeclimate}` | Formato de salida (por defecto: table). `terse` imprime el número de referencias muertas |
+
+Ejemplo de salida:
+
+```
+────────────────────────────────────────────────────────────────────
+ Document            Line Reference               Problem
+────────────────────────────────────────────────────────────────────
+ docs/guide.md         42 src/parser/old.rs       no such path
+ docs/guide.md         57 ../README.md#install    no such heading
+ tools/README.md        9 baselines/run.sh        no such file
+────────────────────────────────────────────────────────────────────
+ 3 dead of 512 references, in 2 of 38 documents
+```
+
+El JSON lista `documents`, `references` y cada referencia muerta con su `document`, `line`, `reference`, `form` (`link`, `image` o `code`) y `missing` (`file`, `heading` o `path`). `km ai` ofrece el comando a un LLM como la herramienta `km_docs_refs`.
 
 ### `km report` -- Informe completo de métricas
 

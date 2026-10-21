@@ -33,6 +33,8 @@ mod cycom;
 mod deps;
 /// Shared function detection for complexity analyzers.
 mod detection;
+/// Measures of documentation: dead references.
+mod docs;
 /// Duplicate code detection using sliding-window fingerprinting.
 mod dups;
 /// Files as a tree of directories, for the views that nest them.
@@ -586,6 +588,7 @@ fn main() {
                 )
             })
         }
+        Commands::Docs { command } => docs::dispatch(command),
         Commands::Ai { command } => dispatch_ai(command),
         Commands::Init { path, yes } => run_command(path, |t| init::run(t, yes)),
         Commands::Completions { shell } => {

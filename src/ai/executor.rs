@@ -40,11 +40,12 @@ pub fn execute_tool(tool_name: &str, input: &Value, project_path: &Path) -> Stri
                 project_path,
             ),
         ),
+        "km_docs_refs" => ("docs refs", build_args(input, &["since_ref"], project_path)),
         _ => return format!("Unknown tool: {tool_name}"),
     };
 
     let mut cmd = Command::new(&km_binary);
-    cmd.arg(subcmd).args(["--format", "json"]);
+    cmd.args(subcmd.split(' ')).args(["--format", "json"]);
     for arg in &args {
         cmd.arg(arg);
     }
