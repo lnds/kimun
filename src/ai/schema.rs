@@ -1,6 +1,6 @@
 //! Tool schema definitions for the AI analysis module.
 //!
-//! Defines the 15 `km` subcommands as Claude tool-use schemas in JSON Schema
+//! Defines the 16 `km` subcommands as Claude tool-use schemas in JSON Schema
 //! format. Each tool has a name, description, and an `input_schema` object
 //! with the shared `path` property plus any tool-specific parameters.
 //! Shared property builders (`path_prop`, `top_prop`, `since_prop`) avoid
@@ -42,7 +42,7 @@ fn tool(name: &str, desc: &str, extra_props: &[(&str, Value)]) -> Value {
     })
 }
 
-/// Return the list of all 15 `km` tool definitions for the AI provider,
+/// Return the list of all 16 `km` tool definitions for the AI provider,
 /// each with name, description, and input JSON schema.
 pub fn tool_definitions() -> Vec<Value> {
     vec![
@@ -149,6 +149,11 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "km_docs_stale",
             "Find Markdown documents behind the code they describe: files a document covers (front matter `covers:`, `[docs] covers`) or names changed after the document last did. Furthest behind first. Requires git repository.",
+            &[("top", top_prop())],
+        ),
+        tool(
+            "km_docs_context",
+            "Measure the files that steer coding agents (CLAUDE.md, AGENTS.md, Cursor and Copilot rules, skills, agents, commands): approximate tokens per file and per load (what an agent reads together in a directory), lines that ask (rules), lines repeated across files, dead references, churn.",
             &[("top", top_prop())],
         ),
         tool(

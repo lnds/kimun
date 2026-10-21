@@ -747,7 +747,7 @@ pub enum Commands {
         since: Option<String>,
     },
 
-    /// Measure documentation: dead references, links between notes, documents behind the code
+    /// Measure documentation: dead references, links between notes, documents behind the code, agent context
     Docs {
         #[command(subcommand)]
         command: DocsCommands,
@@ -834,6 +834,23 @@ pub enum DocsCommands {
         /// files changed since it (e.g. origin/main)
         #[arg(long, value_name = "REF")]
         since_ref: Option<String>,
+    },
+
+    /// The context files of coding agents (CLAUDE.md, AGENTS.md, rules,
+    /// skills): tokens per file and per load, rules, repetition, change
+    #[command(long_about = crate::docs::CONTEXT_HELP)]
+    Context {
+        #[command(flatten)]
+        common: CommonArgs,
+
+        /// Rows of each table (default: 20); JSON lists every entry
+        #[arg(long)]
+        top: Option<usize>,
+
+        /// Exit with code 1 when what an agent reads in a directory goes
+        /// over N tokens (for CI)
+        #[arg(long, value_name = "N")]
+        max_tokens: Option<usize>,
     },
 
     /// The links between documents as a graph: broken links, orphan

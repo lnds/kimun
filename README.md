@@ -1558,6 +1558,38 @@ With `--kind docs`, `km deps` builds the same graph: fan-in and fan-out of each 
 | `--top N` | Rows of each table (default: 20); JSON lists every entry unless given |
 | `--format {table,json,short,terse}` | Output format (default: table). `terse` prints the number of broken links |
 
+### `km docs context` -- Files that steer coding agents
+
+`CLAUDE.md`, `AGENTS.md`, rules of Cursor and Copilot, skills, agent and command definitions are loaded into the model's context. They grow, they repeat each other and their rules pile up, while models use long contexts worse, and worst what sits in the middle (Liu et al., *Lost in the Middle*, TACL 2024). `km docs context` measures them. No model is called.
+
+```bash
+km docs context [path]
+km docs context --max-tokens 8000   # in CI
+```
+
+| Role | Files |
+|------|-------|
+| `instructions` | `CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `GEMINI.md`, read for every task under their directory |
+| `rules` | `.cursorrules`, `.cursor/rules/`, `.windsurfrules`, `.github/copilot-instructions.md`, `.github/instructions/` |
+| `skill`, `agent`, `command` | `.claude/skills/` (and any `SKILL.md`), `.claude/agents/`, `.claude/commands/` |
+
+| Measure | What |
+|---------|------|
+| Tokens | approximate: characters / 4 |
+| Loads | what an agent working in a directory reads together: the instructions of its family (`claude`, `agents`, `gemini`) from the analyzed directory down to it, so a deep directory shows its real budget |
+| Rules | lines of prose that ask (`must`, `never`, `always`, `do not`, `should`, `debe`, `nunca`, `siempre`, …): a rough measure of how much is asked |
+| Repeated | lines of prose found in more than one context file; a link such as `AGENTS.md → CLAUDE.md` repeats nothing |
+| Dead | the references [`km docs refs`](#km-docs-refs----dead-references-in-documentation) finds dead |
+| Commits, Changed | how often each file changed and when last, in a git repository |
+
+`--max-tokens N` exits with code 1 when a load goes over N tokens. Files ignored by git are not read, and `.claude/` often is; `--kind` does not apply, the exclude flags do.
+
+| Flag | Description |
+|------|-------------|
+| `--max-tokens N` | Exit with code 1 when a load goes over N tokens |
+| `--top N` | Rows of each table (default: 20); JSON lists every entry |
+| `--format {table,json,short,terse}` | Output format (default: table). `terse` prints the tokens of the largest load |
+
 ### `km docs stale` -- Documents behind the code
 
 The audit of a knowledge base over time: the documents whose code changed after them. Where [`km impact`](#documentation-left-behind) watches one change before it is merged, `km docs stale` looks at the whole repository as it is.

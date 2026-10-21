@@ -119,6 +119,12 @@ km docs refs [PATH] --format json --since-ref origin/main
 ```
 Links, images and anchors of Markdown documents that lead nowhere, and paths in code spans the repository once had and no longer has. `missing` is `file`, `heading` or `path`. With `--since-ref`, only documents changed since the ref and references to files the change touched: run it on a branch that moves or deletes files to learn which documents still name them.
 
+### Context of Coding Agents
+```bash
+km docs context [PATH] --format json
+```
+CLAUDE.md, AGENTS.md, rules, skills: `tokens` per file, `loads` (what an agent reads together in a directory, by `agent` family), `rules` (lines that ask), `repeated` lines across files, `dead_references`. Point at the largest loads and at what is repeated.
+
 ### Links Between Notes
 ```bash
 km docs links [PATH] --format json

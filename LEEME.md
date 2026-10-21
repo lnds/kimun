@@ -1558,6 +1558,38 @@ Con `--kind docs`, `km deps` construye el mismo grafo: fan-in y fan-out de cada 
 | `--top N` | Filas de cada tabla (por defecto: 20); el JSON lista todas las entradas salvo que se indique |
 | `--format {table,json,short,terse}` | Formato de salida (por defecto: table). `terse` imprime el número de links rotos |
 
+### `km docs context` -- Archivos que dirigen a los agentes de código
+
+`CLAUDE.md`, `AGENTS.md`, las reglas de Cursor y Copilot, las skills y las definiciones de agentes y comandos se cargan en el contexto del modelo. Crecen, se repiten entre sí y sus reglas se acumulan, mientras los modelos usan peor los contextos largos, y peor aún lo que queda al medio (Liu et al., *Lost in the Middle*, TACL 2024). `km docs context` los mide. No llama a ningún modelo.
+
+```bash
+km docs context [ruta]
+km docs context --max-tokens 8000   # en CI
+```
+
+| Rol | Archivos |
+|-----|----------|
+| `instructions` | `CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `GEMINI.md`, leídos en cada tarea bajo su directorio |
+| `rules` | `.cursorrules`, `.cursor/rules/`, `.windsurfrules`, `.github/copilot-instructions.md`, `.github/instructions/` |
+| `skill`, `agent`, `command` | `.claude/skills/` (y cualquier `SKILL.md`), `.claude/agents/`, `.claude/commands/` |
+
+| Medida | Qué |
+|--------|-----|
+| Tokens | aproximados: caracteres / 4 |
+| Cargas | lo que lee junto un agente que trabaja en un directorio: las instrucciones de su familia (`claude`, `agents`, `gemini`) desde el directorio analizado hasta él, así un directorio profundo muestra su presupuesto real |
+| Reglas | líneas de prosa que piden algo (`must`, `never`, `always`, `do not`, `should`, `debe`, `nunca`, `siempre`, …): una medida gruesa de cuánto se pide |
+| Repetidas | líneas de prosa presentes en más de un archivo de contexto; un enlace como `AGENTS.md → CLAUDE.md` no repite nada |
+| Muertas | las referencias que [`km docs refs`](#km-docs-refs----referencias-muertas-en-la-documentación) encuentra muertas |
+| Commits, Cambio | cuántas veces cambió cada archivo y cuándo fue la última, en un repositorio git |
+
+`--max-tokens N` termina con código 1 cuando una carga pasa de N tokens. Los archivos ignorados por git no se leen, y `.claude/` suele estarlo; `--kind` no aplica, los flags de exclusión sí.
+
+| Flag | Descripción |
+|------|-------------|
+| `--max-tokens N` | Termina con código 1 cuando una carga pasa de N tokens |
+| `--top N` | Filas de cada tabla (por defecto: 20); el JSON lista todas las entradas |
+| `--format {table,json,short,terse}` | Formato de salida (por defecto: table). `terse` imprime los tokens de la carga mayor |
+
 ### `km docs stale` -- Documentos atrasados respecto del código
 
 La auditoría de una base de conocimiento a lo largo del tiempo: los documentos cuyo código cambió después que ellos. Donde [`km impact`](#documentación-que-quedó-atrás) vigila un cambio antes de mergearlo, `km docs stale` mira el repositorio entero tal como está.

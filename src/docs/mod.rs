@@ -5,6 +5,8 @@
 //! code spans that the repository no longer has. `km docs stale` finds the
 //! documents whose code changed after them.
 
+pub mod context;
+mod context_report;
 pub mod describes;
 mod help;
 pub mod links;
@@ -15,7 +17,9 @@ mod report;
 pub mod stale;
 mod stale_report;
 
-pub use help::{LINKS as LINKS_HELP, REFS as REFS_HELP, STALE as STALE_HELP};
+pub use help::{
+    CONTEXT as CONTEXT_HELP, LINKS as LINKS_HELP, REFS as REFS_HELP, STALE as STALE_HELP,
+};
 
 use std::collections::HashSet;
 use std::error::Error;
@@ -77,6 +81,13 @@ pub fn dispatch(command: DocsCommands) {
         DocsCommands::Links { common, top } => {
             on_documents(common, |cfg, output| links(cfg, output, top))
         }
+        DocsCommands::Context {
+            common,
+            top,
+            max_tokens,
+        } => on_documents(common, |cfg, output| {
+            context_report::run(cfg, output, top, max_tokens)
+        }),
     }
 }
 
