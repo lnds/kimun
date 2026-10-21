@@ -1,3 +1,9 @@
+## v0.43.0 (2026-10-21)
+
+### Feat
+
+- **kaikai**: the operators and syntax of kaikai 0.170
+
 ## v0.42.0 (2026-10-21)
 
 ### Feat
