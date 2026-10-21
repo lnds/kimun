@@ -15,6 +15,9 @@ pub enum Form {
     Image,
     /// A code span: `` `src/main.rs` ``.
     Code,
+    /// A wikilink to a note by its name: `[[Note]]`, `[[Note|text]]`,
+    /// `![[Note]]`; the target keeps a `#heading`.
+    Note,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -287,6 +290,7 @@ fn inline(chars: &[char], lines: &[usize], scan: &mut Scan) {
                 }
                 i = end;
             }
+            '[' if chars.get(i + 1) == Some(&'[') => i = wikilink(chars, lines, i, scan),
             '[' => i = link(chars, lines, i, scan),
             '<' => i = html_tag(chars, lines, i, scan),
             _ => i += 1,
@@ -315,6 +319,29 @@ fn code_span(chars: &[char], start: usize) -> (Option<String>, usize) {
         }
     }
     (None, start + run)
+}
+
+/// The wikilink opened by the `[[` at `start`; returns where scanning goes
+/// on. Its target ends at `|`, before the text shown.
+fn wikilink(chars: &[char], lines: &[usize], start: usize, scan: &mut Scan) -> usize {
+    let inner = &chars[start + 2..];
+    let Some(len) = inner
+        .windows(2)
+        .position(|w| w == [']', ']'])
+        .filter(|len| !inner[..*len].contains(&'\n'))
+    else {
+        return start + 2;
+    };
+    let text: String = inner[..len].iter().collect();
+    let target = text.split('|').next().unwrap_or("").trim().to_string();
+    if !target.is_empty() {
+        scan.references.push(Reference {
+            line: lines[start],
+            target,
+            form: Form::Note,
+        });
+    }
+    start + 2 + len + 2
 }
 
 /// The link or image opened by the `[` at `start`, recorded with what its

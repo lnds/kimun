@@ -168,3 +168,15 @@ fn slug_keeps_letters_digits_hyphens_and_underscores() {
         "snake_case-and-kebab-case"
     );
 }
+
+#[test]
+fn wikilinks_name_notes() {
+    assert_eq!(
+        targets("See [[Payments]], [[kb/Refunds|refunds]] and ![[diagram.png]].\n[[unclosed\n"),
+        vec![
+            (1, "Payments".to_string(), Form::Note),
+            (1, "kb/Refunds".to_string(), Form::Note),
+            (1, "diagram.png".to_string(), Form::Note),
+        ]
+    );
+}

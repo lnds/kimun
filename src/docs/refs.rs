@@ -165,6 +165,7 @@ pub fn check(document: &Path, text: &str, repository: &Repository) -> Checked {
                 check_link(dir, &reference.target, &scan.anchors, repository)
             }
             Form::Code => check_path(dir, &reference.target, repository),
+            Form::Note => None,
         };
         let Some(verdict) = verdict else {
             continue;

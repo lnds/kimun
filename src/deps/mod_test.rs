@@ -636,3 +636,32 @@ fn matrix_html_is_written_to_the_file_given() {
     assert!(html.contains(r#"a.py",""#) && html.contains(r#"b.py"],"#));
     assert!(html.contains(r#""edges":[[0,1,true,false]]"#));
 }
+
+#[test]
+fn documents_enter_the_graph_only_when_kind_asks() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        "README.md",
+        "[guide](docs/guide.md) [[notes]] [x](gone.md)\n",
+    );
+    write(dir.path(), "docs/guide.md", "[back](../README.md)\n");
+    write(dir.path(), "docs/notes.md", "# Notes\n");
+    write(dir.path(), "src/main.rs", "fn main() {}\n");
+
+    let plain = ExcludeFilter::default();
+    let result = analyze(&WalkConfig::new(dir.path(), true, &plain));
+    assert!(result.entries.iter().all(|e| e.language != "Markdown"));
+
+    let kinds = crate::kind::Selection::new(&[crate::kind::Kind::Docs], &Default::default());
+    let docs = ExcludeFilter::default().with_kinds(kinds);
+    let result = analyze(&WalkConfig::new(dir.path(), true, &docs));
+    assert_eq!(metrics(&result, "README.md"), (1, 2, true));
+    assert_eq!(metrics(&result, "docs/notes.md"), (1, 0, false));
+    let readme = result
+        .entries
+        .iter()
+        .find(|e| e.path == std::path::Path::new("README.md"))
+        .unwrap();
+    assert_eq!(readme.unresolved, ["gone.md"]);
+}

@@ -114,6 +114,7 @@ pub fn names_of(document: &Path, reference: &markdown::Reference) -> Option<(Pat
                 None => (from_document(path), true),
             })
         }
+        Form::Note => None,
         Form::Code => {
             let path = path_in(&reference.target)?;
             Some(match path.starts_with("./") || path.starts_with("../") {

@@ -747,7 +747,7 @@ pub enum Commands {
         since: Option<String>,
     },
 
-    /// Measure documentation: dead references, documents behind the code
+    /// Measure documentation: dead references, links between notes, documents behind the code
     Docs {
         #[command(subcommand)]
         command: DocsCommands,
@@ -834,6 +834,18 @@ pub enum DocsCommands {
         /// files changed since it (e.g. origin/main)
         #[arg(long, value_name = "REF")]
         since_ref: Option<String>,
+    },
+
+    /// The links between documents as a graph: broken links, orphan
+    /// notes, hubs and islands
+    #[command(long_about = crate::docs::LINKS_HELP)]
+    Links {
+        #[command(flatten)]
+        common: CommonArgs,
+
+        /// Rows of each table (default: 20); JSON lists every entry unless given
+        #[arg(long)]
+        top: Option<usize>,
     },
 
     /// Find documents behind the code they describe: files a document

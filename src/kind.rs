@@ -231,6 +231,11 @@ impl Selection {
         self.measures(kind, spec)
     }
 
+    /// Whether `--kind` names `kind`.
+    pub fn chose(&self, kind: Kind) -> bool {
+        self.chosen.as_ref().is_some_and(|c| c.contains(&kind))
+    }
+
     /// Whether the commands that read every source file (line counts, the
     /// dependency graph) read a file of this kind.
     pub fn reads(&self, kind: Kind) -> bool {
