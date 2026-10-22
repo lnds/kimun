@@ -1,5 +1,7 @@
 # Kimün (km)
 
+[![km score](.github/km-score.svg)](https://kimun.tools)
+
 Una herramienta de línea de comandos rápida para analizar código, escrita en Rust. Ejecuta `km score` en cualquier proyecto para obtener una nota general de salud (de A++ a F--) en cinco dimensiones de calidad (complejidad cognitiva, duplicación, profundidad de indentación, esfuerzo de Halstead y tamaño de archivo), junto con la lista de los archivos que más atención necesitan.
 
 ```
