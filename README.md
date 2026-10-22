@@ -1449,7 +1449,7 @@ km score --badge .github/km-score.svg
 [![km score](.github/km-score.svg)](https://kimun.tools)
 ```
 
-A badge in the repository is as fresh as its last run. To keep it current, regenerate it in CI on every push to the main branch and commit it, or write the JSON form, publish it (GitHub Pages, a gist) and point `https://img.shields.io/endpoint?url=` at its URL.
+A badge in the repository is as fresh as its last run, and a workflow cannot commit to a protected branch. To keep it current, [kimun-action](https://github.com/lnds/kimun-action) does it in GitHub Actions: it installs `km`, writes both forms of the badge, and with `actions/deploy-pages` publishes them on GitHub Pages on every push. The README then points at `https://OWNER.github.io/REPO/km-score.svg`, or at `https://img.shields.io/endpoint?url=https://OWNER.github.io/REPO/km-score.json`. Its README has the whole workflow.
 
 #### `km score diff` — Compare score against a git ref
 
