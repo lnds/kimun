@@ -10,7 +10,7 @@ fn run_on_empty_dir() {
     let dir = tempfile::tempdir().unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Table, 10, 6, "cogcom").unwrap();
+    run(&cfg, OutputMode::Table, 10, 6, "cogcom", None).unwrap();
 }
 
 #[test]
@@ -69,7 +69,7 @@ fn run_json_output() {
     .unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Json, 10, 6, "cogcom").unwrap();
+    run(&cfg, OutputMode::Json, 10, 6, "cogcom", None).unwrap();
 }
 
 #[test]
@@ -109,7 +109,7 @@ fn run_on_current_repo() {
     // Smoke test on the actual repo
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(Path::new("."), false, &filter);
-    run(&cfg, OutputMode::Table, 5, 6, "cogcom").unwrap();
+    run(&cfg, OutputMode::Table, 5, 6, "cogcom", None).unwrap();
 }
 
 #[test]
@@ -117,7 +117,7 @@ fn run_on_current_repo_legacy() {
     // Smoke test on the actual repo with legacy model
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(Path::new("."), false, &filter);
-    run(&cfg, OutputMode::Table, 5, 6, "legacy").unwrap();
+    run(&cfg, OutputMode::Table, 5, 6, "legacy", None).unwrap();
 }
 
 #[test]
@@ -622,14 +622,14 @@ fn run_on_current_repo_with_target() {
     // Test with an explicit non-"." path to exercise the target display branch
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(Path::new("src"), false, &filter);
-    run(&cfg, OutputMode::Table, 5, 6, "cogcom").unwrap();
+    run(&cfg, OutputMode::Table, 5, 6, "cogcom", None).unwrap();
 }
 
 #[test]
 fn run_json_with_target_path() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(Path::new("src"), false, &filter);
-    run(&cfg, OutputMode::Json, 5, 6, "cogcom").unwrap();
+    run(&cfg, OutputMode::Json, 5, 6, "cogcom", None).unwrap();
 }
 
 #[test]
@@ -638,7 +638,7 @@ fn run_short_format() {
     fs::write(dir.path().join("main.rs"), "fn main() { let x = 1; }\n").unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Short, 10, 6, "cogcom").unwrap();
+    run(&cfg, OutputMode::Short, 10, 6, "cogcom", None).unwrap();
 }
 
 #[test]
@@ -647,7 +647,7 @@ fn run_terse_format() {
     fs::write(dir.path().join("main.rs"), "fn main() { let x = 1; }\n").unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    run(&cfg, OutputMode::Terse, 10, 6, "cogcom").unwrap();
+    run(&cfg, OutputMode::Terse, 10, 6, "cogcom", None).unwrap();
 }
 
 #[test]

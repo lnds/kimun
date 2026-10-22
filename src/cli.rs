@@ -692,6 +692,11 @@ pub enum Commands {
         /// Overridable via .kimun.toml [score] fail_below.
         #[arg(long, value_name = "GRADE", requires = "trend")]
         fail_below: Option<String>,
+
+        /// Write a badge of the score for a README: an SVG, or the JSON of a
+        /// shields.io endpoint badge when FILE ends in .json
+        #[arg(long, value_name = "FILE", conflicts_with_all = ["trend", "experimental"])]
+        badge: Option<PathBuf>,
     },
 
     /// Analyze code age: classify files as active, stale, or frozen by last git modification

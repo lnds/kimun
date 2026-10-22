@@ -220,10 +220,11 @@ fn dispatch_smells(
     });
 }
 
-/// The scoring model `km score` was asked for.
+/// The scoring model `km score` was asked for, and where to write its badge.
 struct ScoreModel {
     model: Option<String>,
     experimental: bool,
+    badge: Option<PathBuf>,
 }
 
 /// Dispatch `score` (no subcommand). Parses `--fail-below` early so errors
@@ -257,7 +258,14 @@ fn dispatch_score(
         } else if let Some(ref git_ref) = trend {
             score::run_diff(&cfg, git_ref, output, bottom, min_lines, &model, gate)
         } else {
-            score::run(&cfg, output, bottom, min_lines, &model)
+            score::run(
+                &cfg,
+                output,
+                bottom,
+                min_lines,
+                &model,
+                choice.badge.as_deref(),
+            )
         }
     });
 }
@@ -547,6 +555,7 @@ fn main() {
             gate_tolerance,
             gate_scope,
             fail_below,
+            badge,
         } => dispatch_score(
             common,
             bottom,
@@ -554,6 +563,7 @@ fn main() {
             ScoreModel {
                 model,
                 experimental,
+                badge,
             },
             trend,
             score::ScoreGate {

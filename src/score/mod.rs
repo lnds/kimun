@@ -15,6 +15,8 @@
 
 /// Grading system: letter grades, dimension/file/project scores.
 pub(crate) mod analyzer;
+/// The badge of the score for a README.
+mod badge;
 /// Per-file comparison behind `--gate-scope changed`.
 pub(crate) mod changed;
 /// Single-file metric extraction (reads once, computes all dimensions).
@@ -102,9 +104,13 @@ pub fn run(
     bottom: usize,
     min_lines: usize,
     model: &str,
+    badge: Option<&Path>,
 ) -> Result<(), Box<dyn Error>> {
     let scoring_model = ScoringModel::from_arg(model);
     let score = compute_score(cfg, bottom, min_lines, &scoring_model)?;
+    if let Some(path) = badge {
+        badge::write(path, &score)?;
+    }
 
     // Show target in header when user specified an explicit path (not ".")
     let target = cfg
