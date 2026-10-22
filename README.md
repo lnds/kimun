@@ -1771,6 +1771,7 @@ All sections and fields are optional — omit any you don't need. A fully docume
 - Supports nested block comments (Rust, Haskell, OCaml, etc.)
 - Handles pragmas (e.g., Haskell `{-# LANGUAGE ... #-}`) as code
 - Mixed lines (code + comment) are counted as code, matching `cloc` behavior
+- A comment marker inside a string opens no comment: `let glob = "crates/*";` is a line of code. Here kimun parts from `cloc`, which reads the `/*` of a string as the start of a block comment and counts every line up to the next `*/` as comment. On code that writes globs or paths in strings the difference adds up: on kimun's own sources, tests included, `cloc` counts 1,719 lines of code as comment. `tokei` reads them as kimun does
 - Reads sources in any 8-bit encoding (Latin-1, Windows-1252) whole: bytes that are not UTF-8 are replaced, not taken for the end of the file
 
 ## Supported Languages

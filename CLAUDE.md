@@ -61,7 +61,7 @@ Optional flags: `nested: true`, `sq: true` (single-quote strings), `tq: true` (t
 
 ## Conventions
 
-- The tool's output should match `cloc` as closely as possible — use `cloc` as the reference when validating changes.
+- The tool's output should match `cloc` as closely as possible — use `cloc` as the reference when validating changes. Where cloc misreads, kimun parts from it on purpose and the README says so: a comment marker inside a string (`"crates/*"`) opens no comment, while cloc takes it for one.
 - Always run `cargo fmt` before `cargo clippy`. Then validate with `cargo clippy` (zero warnings required) and `cargo test` before considering a change complete.
 - When adding or modifying a feature (new command, new flag, changed behavior), update `README.md` to reflect the change before considering the work done.
 - `LEEME.md` is the Spanish edition of `README.md`, section by section. A change to one goes into the other.

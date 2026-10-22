@@ -1771,6 +1771,7 @@ Todas las secciones y todos los campos son opcionales: omite los que no necesite
 - Soporta comentarios de bloque anidados (Rust, Haskell, OCaml, etc.)
 - Trata los pragmas (p. ej., `{-# LANGUAGE ... #-}` de Haskell) como código
 - Las líneas mixtas (código + comentario) se cuentan como código, igual que en `cloc`
+- Un marcador de comentario dentro de un string no abre ningún comentario: `let glob = "crates/*";` es una línea de código. Aquí kimun se aparta de `cloc`, que lee el `/*` de un string como el inicio de un comentario de bloque y cuenta como comentario todas las líneas hasta el siguiente `*/`. En código que escribe globs o rutas en strings la diferencia se acumula: sobre el propio código de kimun, tests incluidos, `cloc` cuenta 1.719 líneas de código como comentario. `tokei` las lee como kimun
 - Lee enteras las fuentes en cualquier codificación de 8 bits (Latin-1, Windows-1252): los bytes que no son UTF-8 se reemplazan, no se toman por el fin del archivo
 
 ## Lenguajes soportados
