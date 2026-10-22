@@ -1,3 +1,9 @@
+## v0.44.0 (2026-10-21)
+
+### Feat
+
+- **score**: --badge writes a badge of the score for a README
+
 ## v0.43.0 (2026-10-21)
 
 ### Feat
