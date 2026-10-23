@@ -17,40 +17,21 @@ function fill(node) {
   return `color-mix(in srgb, ${colour} ${share}%, var(--neutral))`;
 }
 
-// The side of the scale a heat stands on, none when it is grey.
-function side(heat) {
-  if (heat === undefined || Math.abs(heat) < 0.05) return null;
-  return heat < 0 ? "risk" : "good";
-}
-
 function svgEl(tag, attrs) {
   const e = document.createElementNS(NS, tag);
   Object.entries(attrs).forEach(([k, v]) => e.setAttribute(k, v));
   return e;
 }
 
-// Patterns that tell the sides apart without colour: lines for risk, dots
-// for good, drawn over the files when asked for.
-const defs = svgEl("defs", {});
-const hatches = [
-  ["risk", svgEl("path", { d: "M-2 2L2 -2M0 8L8 0M6 10L10 6" })],
-  ["good", svgEl("circle", { cx: 4, cy: 4, r: 1.3 })],
-].map(([kind, mark]) => {
-  const pattern = svgEl("pattern", { id: "hatch-" + kind, patternUnits: "userSpaceOnUse", viewBox: "0 0 8 8" });
-  pattern.append(mark);
-  defs.append(pattern);
-  return pattern;
-});
-svg.append(defs);
 
+const hatches = drawPatterns();
 const labels = [];
 nodes.forEach((node, i) => {
   const circle = svgEl("circle", { cx: node.x, cy: node.y, r: node.r, class: node.dir ? "dir" : "file" });
   if (!node.dir) circle.style.fill = fill(node);
   circle.dataset.node = i;
   svg.append(circle);
-  const kind = node.dir ? null : side(node.heat);
-  if (kind) svg.append(svgEl("circle", { cx: node.x, cy: node.y, r: node.r, class: "hatch", fill: `url(#hatch-${kind})` }));
+  if (!node.dir) hatch(node);
 });
 nodes.forEach((node, i) => {
   if (!node.dir || i === 0) return;
@@ -71,7 +52,7 @@ function inside(node) {
 // Directory names large enough at the present zoom, near the top of their circle.
 function relabel() {
   const k = SIZE / view[2];
-  hatches.forEach((p) => ["width", "height"].forEach((a) => p.setAttribute(a, 8 / k)));
+  scalePatterns(hatches, k);
   labels.forEach(({ node, text }) => {
     const near = node.depth - nodes[focus].depth <= 2;
     const shown = node.r * k > 34 && near && inside(node);
@@ -116,9 +97,6 @@ svg.addEventListener("click", (event) => {
   zoomTo(i === focus ? nodes[focus].parent ?? 0 : i);
 });
 document.getElementById("up").addEventListener("click", () => zoomTo(nodes[focus].parent ?? 0));
-document.getElementById("patterns").addEventListener("change", (event) => {
-  document.body.classList.toggle("patterns", event.target.checked);
-});
 
 svg.addEventListener("mousemove", (event) => {
   const target = event.target.closest("[data-node]");

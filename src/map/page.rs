@@ -10,7 +10,11 @@ use super::metric::Key;
 use crate::html;
 
 const STYLE: &str = include_str!("map.css");
-const SCRIPT: &str = concat!(include_str!("map_callouts.js"), include_str!("map.js"));
+const SCRIPT: &str = concat!(
+    include_str!("map_callouts.js"),
+    include_str!("map_patterns.js"),
+    include_str!("map.js")
+);
 
 /// What every map builds on.
 const CREDITS: &str = "The enclosure diagram follows Adam Tornhill, <i>Your Code as a Crime \
