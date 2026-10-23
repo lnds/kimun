@@ -1484,15 +1484,17 @@ km map --format json [path]   # the laid out tree, for other tools
 
 The page is one HTML file that needs nothing else, in light and dark themes. A click on a directory zooms into it, a click outside it or on **Up** zooms out; hovering a file shows its path, its lines and its value. Directory names show when their circle is large enough. The foot of the page credits what it builds on.
 
+The two ends of the scale are vermilion orange and blue (Okabe-Ito), which stay apart for every kind of colour blindness. **Patterns** draws them without colour as well, lines over the orange files and dots over the blue ones, for a print in black and white; the page prints with its colours and without its controls.
+
 | `--color-by` | Colours | As |
 |---|---|---|
-| `score` (default) | red below 70, grey from 70 to 90, green from 90 | `km score`, per file |
-| `hotspots` | red by share of the largest hotspot, grey under a tenth of it | `km hotspots` |
-| `churn` | high red, medium pale red, low grey | `km churn` |
-| `age` | active green, stale grey, frozen pale red | `km age` |
-| `knowledge` | critical red to low grey; red when the owner is inactive | `km knowledge` |
-| `cycles` | red when the file is in a dependency cycle | `km deps` |
-| `llm` | green from 95 (LLM-friendly), grey from 70 (needs care), red below 70 (LLM risk) | readiness for coding agents, by `km score` |
+| `score` (default) | orange below 70, grey from 70 to 90, blue from 90 | `km score`, per file |
+| `hotspots` | orange by share of the largest hotspot, grey under a tenth of it | `km hotspots` |
+| `churn` | high orange, medium pale orange, low grey | `km churn` |
+| `age` | active blue, stale grey, frozen pale orange | `km age` |
+| `knowledge` | critical orange to low grey; orange when the owner is inactive | `km knowledge` |
+| `cycles` | orange when the file is in a dependency cycle | `km deps` |
+| `llm` | blue from 95 (LLM-friendly), grey from 70 (needs care), orange below 70 (LLM risk) | readiness for coding agents, by `km score` |
 
 Above the map, the share of the lines on each side of the scale (`85% an LLM risk · 9% needing care · 5% LLM-friendly`), and on it a label with the path of the directory where each side gathers most (`Most LLM risk: src/tui/`), not the only place of that side: the directory below the root with the most such lines and the largest share of them, a directory that is a part of the code rather than nearly all of it. `--color-by llm` follows the claim that coding agents work well only on healthy code: CodeScene puts the bar at 9.5 of its Code Health, and 95 is its counterpart on the 0–100 scale of `km score`, which is measured otherwise. Both thresholds can be changed in `.kimun.toml` (`[map] llm_friendly = 95`, `llm_risk = 70`).
 

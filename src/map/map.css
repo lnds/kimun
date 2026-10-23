@@ -23,8 +23,19 @@ main { padding: 0 16px 16px; }
   margin: 0 auto;
 }
 :root {
+  /* The two ends of the scale, Okabe-Ito vermilion and blue: they stay
+     apart for every kind of colour blindness. */
+  --bad: #c25400;
+  --good: #0072b2;
   --neutral: color-mix(in srgb, var(--muted) 45%, var(--surface));
   --nodata: color-mix(in srgb, var(--muted) 18%, var(--surface));
+  --hatch: rgb(0 0 0 / 55%);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bad: #f0844a;
+    --good: #56b4e9;
+  }
 }
 #map circle { vector-effect: non-scaling-stroke; }
 #map circle.dir {
@@ -63,11 +74,27 @@ main { padding: 0 16px 16px; }
 .callout rect { fill: var(--surface); stroke-width: 1.5; }
 .callout line { stroke-width: 1.5; }
 .callout text { font-weight: 600; stroke: none; }
-.callout.risk rect, .callout.risk line { stroke: var(--red); }
-.callout.risk text { fill: var(--red); }
-.callout.good rect, .callout.good line { stroke: var(--uses); }
-.callout.good text { fill: var(--uses); }
+.callout.risk rect, .callout.risk line { stroke: var(--bad); }
+.callout.risk text { fill: var(--bad); }
+.callout.good rect, .callout.good line { stroke: var(--good); }
+.callout.good text { fill: var(--good); }
 #summary { font-weight: 500; color: var(--fg); }
 #map circle.marked { stroke-width: 2.5; stroke-dasharray: 6 4; }
-#map circle.marked.risk { stroke: var(--red); }
-#map circle.marked.good { stroke: var(--uses); }
+#map circle.marked.risk { stroke: var(--bad); }
+#map circle.marked.good { stroke: var(--good); }
+#map .hatch { display: none; pointer-events: none; }
+.patterns #map .hatch { display: inline; }
+#hatch-risk path { stroke: var(--hatch); stroke-width: 1.4; }
+#hatch-good circle { fill: var(--hatch); }
+.patterns .swatch.risk {
+  background-image: repeating-linear-gradient(-45deg, var(--hatch) 0 1px, transparent 1px 3px);
+}
+.patterns .swatch.good {
+  background-image: radial-gradient(var(--hatch) 0.8px, transparent 1px);
+  background-size: 3px 3px;
+}
+.toolbar label { color: var(--muted); }
+@media print {
+  * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  #up, #tip, .toolbar label { display: none; }
+}

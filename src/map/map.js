@@ -13,7 +13,7 @@ function fill(node) {
   if (node.heat === undefined) return "var(--nodata)";
   const share = Math.round(35 + Math.abs(node.heat) * 65);
   if (Math.abs(node.heat) < 0.05) return "var(--neutral)";
-  const colour = node.heat < 0 ? "var(--red)" : "var(--uses)";
+  const colour = node.heat < 0 ? "var(--bad)" : "var(--good)";
   return `color-mix(in srgb, ${colour} ${share}%, var(--neutral))`;
 }
 
@@ -23,12 +23,15 @@ function svgEl(tag, attrs) {
   return e;
 }
 
+
+const hatches = drawPatterns();
 const labels = [];
 nodes.forEach((node, i) => {
   const circle = svgEl("circle", { cx: node.x, cy: node.y, r: node.r, class: node.dir ? "dir" : "file" });
   if (!node.dir) circle.style.fill = fill(node);
   circle.dataset.node = i;
   svg.append(circle);
+  if (!node.dir) hatch(node);
 });
 nodes.forEach((node, i) => {
   if (!node.dir || i === 0) return;
@@ -49,6 +52,7 @@ function inside(node) {
 // Directory names large enough at the present zoom, near the top of their circle.
 function relabel() {
   const k = SIZE / view[2];
+  scalePatterns(hatches, k);
   labels.forEach(({ node, text }) => {
     const near = node.depth - nodes[focus].depth <= 2;
     const shown = node.r * k > 34 && near && inside(node);
@@ -119,8 +123,8 @@ const legend = document.getElementById("legend");
 legend.append(document.createTextNode(data.metric + ":"));
 data.legend.forEach((key) => {
   const swatch = document.createElement("i");
-  swatch.className = "swatch";
-  swatch.style.background = fill({ heat: key.heat });
+  swatch.className = ["swatch", side(key.heat)].filter(Boolean).join(" ");
+  swatch.style.backgroundColor = fill({ heat: key.heat });
   legend.append(swatch, document.createTextNode(key.label));
 });
 // The share of the lines on each side of the scale.
@@ -132,6 +136,6 @@ const callouts = drawCallouts(data.callouts);
 
 const none = document.createElement("i");
 none.className = "swatch";
-none.style.background = "var(--nodata)";
+none.style.backgroundColor = "var(--nodata)";
 legend.append(none, document.createTextNode("no value"));
 relabel();
