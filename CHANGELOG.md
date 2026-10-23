@@ -1,3 +1,13 @@
+## v0.45.0 (2026-10-23)
+
+### Fix
+
+- **map**: colours that survive colour blindness, and optional patterns for print
+
+### Refactor
+
+- **map**: the patterns in a script of their own
+
 ## v0.44.0 (2026-10-21)
 
 ### Feat
