@@ -46,7 +46,7 @@ pub fn render(name: &str, data: &Data<'_>) -> serde_json::Result<String> {
 <p>Each circle is a directory holding its files, a file's area grows with its lines of code. Coloured by {metric}. Click a directory to zoom in, outside it to zoom out.</p>
 <p id="summary"></p>
 </header>
-<div class="toolbar"><button id="up">Up</button><span id="crumb" class="mono"></span><span id="legend" class="legend"></span></div>
+<div class="toolbar"><button id="up">Up</button><span id="crumb" class="mono"></span><span id="legend" class="legend"></span><label><input type="checkbox" id="patterns"> Patterns</label></div>
 <main><svg id="map" viewBox="0 0 1000 1000" role="img" aria-label="{title}"></svg></main>
 <div id="tip" hidden></div>"#,
         title = html::escape(&title),

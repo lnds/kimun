@@ -1,6 +1,6 @@
 //! What colours the files of the map: one metric, read for every file as a
-//! heat from -1 (stands out as a problem, red) through 0 (fine, grey) to 1
-//! (stands out as healthy or alive, green), with the text a viewer reads.
+//! heat from -1 (stands out as a problem, orange) through 0 (fine, grey) to 1
+//! (stands out as healthy or alive, blue), with the text a viewer reads.
 
 use std::collections::HashMap;
 use std::error::Error;
@@ -113,7 +113,7 @@ fn key(label: &'static str, heat: f64) -> Key {
     Key { label, heat }
 }
 
-/// Red below 70, green from 90, the deeper the further.
+/// Orange below 70, blue from 90, the deeper the further.
 pub fn score_heat(score: f64) -> f64 {
     match score {
         s if s < 70.0 => -((70.0 - s) / 40.0).clamp(0.25, 1.0),
@@ -122,7 +122,7 @@ pub fn score_heat(score: f64) -> f64 {
     }
 }
 
-/// Green from `friendly`, red below `risk`, grey between.
+/// Blue from `friendly`, orange below `risk`, grey between.
 pub fn llm_heat(score: f64, (friendly, risk): (f64, f64)) -> f64 {
     match score {
         s if s >= friendly => 1.0,
