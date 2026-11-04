@@ -15,6 +15,7 @@ mod function_reach;
 mod help;
 mod inert;
 mod narrowing;
+mod origins;
 mod pr;
 mod projects;
 mod protection;
