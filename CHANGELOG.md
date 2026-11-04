@@ -1,3 +1,18 @@
+## v0.46.0 (2026-11-04)
+
+### Feat
+
+- **impact**: --http links changed routes to the client calls that ask for them
+- **impact**: copies of changed values left behind outside the diff
+- **impact**: removed functions and deleted files are origins of the radius
+- **impact**: module attributes narrowed over every line of their value
+
+### Refactor
+
+- **impact**: the origins of the radius in a module of their own
+- **impact**: the removal origins read and listed in removed.rs
+- **impact**: attributes and narrowing in modules of their own
+
 ## v0.45.0 (2026-10-23)
 
 ### Fix
