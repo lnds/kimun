@@ -11,6 +11,7 @@ fn change(path: &str, kind: ChangeKind, removed: &[&str]) -> FileDiffStat {
         old_lines: vec![1],
         probe: Vec::new(),
         removed: removed.iter().map(|l| l.to_string()).collect(),
+        inserted: Vec::new(),
     }
 }
 

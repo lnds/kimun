@@ -155,7 +155,7 @@ Terraform, Dockerfiles, CI workflows, Compose, Kubernetes and Ansible files, eac
 5. Check `km dups` for code duplication opportunities
 6. Optionally run `km knowledge` and `km tc` for team/architecture insights
 7. Use `km score diff --git-ref HEAD~N` to track score changes over time
-8. To review a branch or a pull request, run `km impact` and report the unprotected files first
+8. To review a branch or a pull request, run `km impact` and report first the files that still use what the change removes (`structural.removed`), then the unprotected files, then the copies of changed values (`copies`)
 9. Run `km docs refs` to find documentation that names files or headings that are gone, and `km docs stale` for documents behind their code
 10. Run `km infra smells` on repositories with Terraform, Dockerfiles, CI workflows or Kubernetes manifests
 

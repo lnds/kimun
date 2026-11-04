@@ -84,6 +84,7 @@ fn change(path: &str, lines: &[usize]) -> FileDiffStat {
         old_lines: lines.to_vec(),
         probe: Vec::new(),
         removed: Vec::new(),
+        inserted: Vec::new(),
     }
 }
 

@@ -41,6 +41,8 @@ pub struct FileDiffStat {
     /// The text of the lines the change deletes, in order: the whole file
     /// as it was, when the change deletes it.
     pub removed: Vec<String>,
+    /// The text of the lines the change adds, in order.
+    pub inserted: Vec<String>,
 }
 
 impl FileDiffStat {
@@ -129,6 +131,7 @@ fn stats_of(diff: &Diff) -> Result<Vec<FileDiffStat>, Box<dyn Error>> {
             old_lines: touched.old,
             probe: touched.probe,
             removed: touched.removed,
+            inserted: touched.inserted,
         });
     }
     Ok(stats)

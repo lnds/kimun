@@ -956,6 +956,23 @@ Documentation — documents that describe what changed and were not updated
 
 `--fail-on-stale-docs` exits with code 1 when a `declared` or `referenced` document was left behind; history alone does not fail. `--format github` annotates each changed file with the document to update (a warning, a notice for `co_changed`), and `--format codeclimate` gives the same for GitLab.
 
+#### Copies of changed values
+
+Some values are kept in step by hand: a list of country codes, a map of time zones, the states of an order, copied into another project "in sync" with the first. When the change modifies such a group of values, the rest of the repository is searched for the copy it left behind. A **group** is a run of consecutive lines holding literal values: quoted strings without interpolation, the words of an Elixir word sigil (`~w(CL PE)`), atoms (`:pending` matches `"pending"`) and numbers; values of one character, punctuation and common words (`true`, `nil`, `ok`, `id`...) are left out. The change's group is read as it is after the change, so every line of it counts, not only the lines touched; the values the change added and took out tell what it was before.
+
+A group of at least 3 values before the change is looked for. A group elsewhere, outside the change and the documents, is a copy when it holds at least 60% of those values (3 at least) and still lacks a value the change added or holds one it took out. A comment within the three lines above it that says it mirrors the changed file (`mirrors`, `copy of`, `keep in sync`, `same as`...) and names it (the file's stem or a module it defines) puts it first: `says it mirrors it`.
+
+```
+Copies of changed values — groups outside the change that hold the old ones
+──────────────────────────────────────────────────────────────────────────────
+ apps/billing/lib/codes.ex:3  4 of 5 values of apps/geo/lib/countries.ex:2, says it mirrors it
+            lacks US
+──────────────────────────────────────────────────────────────────────────────
+Matched by their values alone: a hint, not a proof.
+```
+
+The rest of the repository is read only when the change modifies a group large enough. Values built at run time, or kept under other names (`"Chile"` for `"CL"`), are not seen.
+
 #### JSON output, for tools and LLMs
 
 `--format json` carries everything the table shows, and the lists the table cuts short. An agent reviewing a change can read it in this order:
@@ -986,6 +1003,7 @@ km impact --since-ref origin/main --format json
 | `diffusion` | Files, directories, subsystems, lines and entropy of the change |
 | `logical_radius.missing[]` | Files that usually change with the change and are not in it, with every trigger; documents go to `documentation` |
 | `documentation.stale[]` | Documents left behind: `document`, `signal` (`declared`, `referenced`, `co_changed`), `describes[]`, and `covers`, `line` and `gone`, or `shared_commits`, `commits` and `confidence` |
+| `copies.copies[]` | Groups of values that look like a copy the change left behind (`copies.heuristic` is always true): `file`, `line`, `of`, `of_line`, `matched`, `missing` (added by the change, absent here), `kept` (taken out by the change, still here), `mentions` |
 
 `km ai` exposes the command to an LLM as the tool `km_impact`, and the skill installed by `km ai skill` documents it.
 
