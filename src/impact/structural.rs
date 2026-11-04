@@ -12,9 +12,10 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 
 use crate::deps::graph::{EdgeKind, FileGraph, Narrowed, Related, Unnarrowed, Use};
-use crate::git::{ChangeKind, FileDiffStat};
+use crate::git::FileDiffStat;
 
 use super::function_reach;
+pub use super::narrowing::Narrowing;
 use super::protection::{Protection, Tests};
 use super::reading::{self, graphed_language};
 use super::role::{self, Role, roles_of};
@@ -59,48 +60,6 @@ pub struct Dependent {
     /// Whether a source file uses it.
     #[serde(skip)]
     pub used: bool,
-}
-
-/// What a change comes to in one changed file: the public functions it
-/// affects, or why they cannot be told and every use of the file counts.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct Narrowing {
-    pub file: PathBuf,
-    pub functions: Option<Vec<String>>,
-    /// Why not, when `functions` is `None`.
-    pub reason: Option<String>,
-    /// The module attributes the change touches that functions read, each
-    /// with those functions: why they are among `functions`.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub attributes: Vec<AttributeRead>,
-}
-
-/// A module attribute a change touches, and the functions that read it.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct AttributeRead {
-    pub name: String,
-    pub read_by: Vec<String>,
-}
-
-/// Why the change to `source` cannot be narrowed, in words.
-fn reason(stat: &FileDiffStat, why: &Unnarrowed) -> String {
-    if stat.kind == ChangeKind::Added {
-        return "new file".to_string();
-    }
-    match why {
-        Unnarrowed::Language => "its language does not tell functions".to_string(),
-        Unnarrowed::NoLines => "no changed line is known".to_string(),
-        Unnarrowed::Outside(line) => format!("line {line} is outside every function"),
-        Unnarrowed::CompileTime(line, name) => {
-            format!("line {line} sets {name}, read when the module compiles")
-        }
-        Unnarrowed::Unread(line, name) => {
-            format!("line {line} sets {name}, which no function reads")
-        }
-        Unnarrowed::Routes(line) => {
-            format!("line {line} declares routes, read when the router compiles")
-        }
-    }
 }
 
 /// A changed file, and where the change touches it.
@@ -351,28 +310,7 @@ pub fn compute(
         .iter()
         .map(|(&file, told)| {
             let path = &graph.files[file];
-            Narrowing {
-                file: path.clone(),
-                functions: told
-                    .as_ref()
-                    .ok()
-                    .map(|n| n.functions.iter().cloned().collect()),
-                reason: told
-                    .as_ref()
-                    .err()
-                    .map(|why| reason(stat_of[path.as_path()], why)),
-                attributes: told
-                    .as_ref()
-                    .map(|n| {
-                        let read = n.attributes.iter();
-                        read.map(|(name, by)| AttributeRead {
-                            name: name.clone(),
-                            read_by: by.iter().cloned().collect(),
-                        })
-                        .collect()
-                    })
-                    .unwrap_or_default(),
-            }
+            Narrowing::of(path, stat_of[path.as_path()], told)
         })
         .collect();
     narrowing.sort_by(|a, b| a.file.cmp(&b.file));

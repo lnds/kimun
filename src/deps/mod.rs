@@ -14,6 +14,7 @@ mod csharp;
 mod csharp_extensions;
 mod edges;
 mod elixir;
+mod elixir_attributes;
 mod elixir_calls;
 mod elixir_compile;
 mod elixir_directives;

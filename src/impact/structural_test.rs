@@ -1,5 +1,6 @@
 use super::*;
 use crate::git::ChangeKind;
+use crate::impact::narrowing::AttributeRead;
 use crate::impact::protection::Protection;
 use crate::impact::role::role;
 use crate::impact::structural_json::JsonStructural;
