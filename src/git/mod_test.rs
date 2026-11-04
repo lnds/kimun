@@ -705,6 +705,22 @@ fn the_lines_of_a_change_follow_the_text_they_are_looked_up_in() {
     // The text before it does not: the change touches it where it inserts.
     assert_eq!(stat.lines_in(before), [2]);
     assert_eq!(stat.lines_in(""), [2]);
+    assert_eq!(stat.before(after), before);
+}
+
+#[test]
+fn the_text_before_a_change_is_put_back_from_the_text_after_it() {
+    let (dir, repo) = create_test_repo();
+    let before = "one\ntwo\nthree\nfour\nfive\nsix\n";
+    make_commit(&repo, &[("a.txt", before)], "base");
+    let after = "zero\none\nthree\nFOUR\nfive\nsix\nseven\n";
+    fs::write(dir.path().join("a.txt"), after).unwrap();
+
+    let git_repo = GitRepo::open(dir.path()).unwrap();
+    let stat = &git_repo.diff_stats_since("HEAD").unwrap()[0];
+
+    assert_eq!(stat.before(after), before);
+    assert_eq!(stat.removed_at, [2, 4]);
 }
 
 #[test]

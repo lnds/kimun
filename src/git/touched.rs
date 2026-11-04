@@ -14,10 +14,10 @@ pub(super) struct Touched {
     pub new: Vec<usize>,
     pub old: Vec<usize>,
     pub probe: Vec<(usize, String)>,
-    /// The text of the lines it deletes, in order.
-    pub removed: Vec<String>,
-    /// The text of the lines it adds, in order.
-    pub inserted: Vec<String>,
+    /// The lines it deletes, each where it was in the file before.
+    pub deletions: Vec<(usize, String)>,
+    /// The lines it adds, each where it is in the file after.
+    pub additions: Vec<(usize, String)>,
 }
 
 /// The next line to come on each side while a hunk is read.
@@ -38,13 +38,13 @@ impl Touched {
         }
         if origin == '-' {
             let text = String::from_utf8_lossy(line.content());
-            self.removed
-                .push(text.trim_end_matches(['\n', '\r']).to_string());
+            let text = text.trim_end_matches(['\n', '\r']).to_string();
+            self.deletions.push((at.old, text));
         }
         if origin == '+' {
             let text = String::from_utf8_lossy(line.content());
-            self.inserted
-                .push(text.trim_end_matches(['\n', '\r']).to_string());
+            let written = text.trim_end_matches(['\n', '\r']).to_string();
+            self.additions.push((at.new, written));
             self.probe.push((at.new, text.trim_end().to_string()));
         }
         at.new += usize::from(matches!(origin, '+' | ' '));

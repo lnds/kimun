@@ -106,3 +106,30 @@ fn a_request_is_read_from_a_line_with_text_beyond_ascii() {
     let test = "assert html =~ \"Sesión\" and get(conn, \"/orders\")\nrevisión(conn)\n";
     assert_eq!(requests(test), ["/orders"]);
 }
+
+#[test]
+fn each_route_is_declared_with_its_verb_action_and_line() {
+    let found = declared(ROUTER);
+    let show = |d: &Declared| {
+        format!(
+            "{} {} {}#{} @{}",
+            d.verb,
+            d.path,
+            d.module.rsplit('.').next().unwrap(),
+            d.action.as_deref().unwrap_or("-"),
+            d.line
+        )
+    };
+    let lines: Vec<String> = found.iter().map(show).collect();
+    assert_eq!(lines[0], "get / PageController#home @8");
+    assert_eq!(lines[1], "get /orders Index#index @12");
+    assert_eq!(lines[3], "get /admin DashboardLive#- @17");
+    assert!(lines.contains(&"delete /admin/users/:id UserController#delete @18".to_string()));
+    assert!(lines.contains(&"post /api/orders OrderController#create @23".to_string()));
+    let any = declared("scope \"/x\" do\n  match :*, \"/hook\", HookController, :any\nend\n");
+    assert_eq!(
+        (any[0].verb.as_str(), any[0].path.as_str()),
+        ("*", "/x/hook")
+    );
+    assert_eq!(any[0].action.as_deref(), Some("any"));
+}

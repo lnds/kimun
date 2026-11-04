@@ -53,6 +53,7 @@ fn sample() -> Impact {
         ],
         documentation: Vec::new(),
         copies: Vec::new(),
+        http: None,
         without_history: vec![PathBuf::from("src/impact/mod.rs")],
         generated_skipped: 1,
         max_changeset: 30,

@@ -43,6 +43,10 @@ pub struct FileDiffStat {
     pub removed: Vec<String>,
     /// The text of the lines the change adds, in order.
     pub inserted: Vec<String>,
+    /// Where each line of `removed` was in the file before, from 1.
+    pub removed_at: Vec<usize>,
+    /// Where each line of `inserted` is in the file after, from 1.
+    pub inserted_at: Vec<usize>,
 }
 
 impl FileDiffStat {
@@ -121,6 +125,8 @@ fn stats_of(diff: &Diff) -> Result<Vec<FileDiffStat>, Box<dyn Error>> {
             continue;
         };
         let (added, deleted, touched) = line_counts(diff, idx)?;
+        let (removed_at, removed) = touched.deletions.into_iter().unzip();
+        let (inserted_at, inserted) = touched.additions.into_iter().unzip();
         stats.push(FileDiffStat {
             path,
             old_path,
@@ -130,8 +136,10 @@ fn stats_of(diff: &Diff) -> Result<Vec<FileDiffStat>, Box<dyn Error>> {
             lines: touched.new,
             old_lines: touched.old,
             probe: touched.probe,
-            removed: touched.removed,
-            inserted: touched.inserted,
+            removed_at,
+            removed,
+            inserted_at,
+            inserted,
         });
     }
     Ok(stats)

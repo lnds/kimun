@@ -301,6 +301,11 @@ pub struct ImpactArgs {
     #[arg(long)]
     pub fail_on_stale_docs: bool,
 
+    /// Add the HTTP level: the routes the change removes or changes, and the
+    /// client calls anywhere in the repository that ask for them (heuristic)
+    #[arg(long)]
+    pub http: bool,
+
     /// Show only the top N missing files (default: 20)
     #[arg(long, default_value = "20")]
     pub top: usize,

@@ -59,6 +59,9 @@ Blast radius -- source files that use what changed:
   less so when it only carries its name, or tests what uses it. Past the
   files that call what changed, Elixir is followed function by function;
   --max-distance N stops the radius N files away from the change.
+  What the change removes is an origin too: a deleted file, a public
+  function gone from a file that remains. The files that still use it are
+  listed apart, since they break.
   Measured for Elixir, Go, JavaScript/TypeScript, Kaikai, Python and Rust.
 
 Diffusion -- how spread the change is (Kamei et al., 2013):
@@ -86,6 +89,16 @@ Documentation -- documents that describe what changed and were not updated:
   never are listed. --fail-on-stale-docs fails on a declared or referenced
   one; --format github annotates the changed files.
 
+Copies of changed values -- groups of literals elsewhere that still hold
+what the change replaced (a list of codes kept in sync by hand), first those
+a comment says mirror the changed file. A hint, by values alone.
+
+HTTP level (--http, heuristic) -- routes a Phoenix router no longer
+declares, declares otherwise, or serves with an action that changed, and
+the client calls of the repository that ask for them (Tesla, Req, Finch,
+HTTPoison, fetch, axios, requests, httpx), by verb and the end of the path.
+Calls whose path is built at run time are counted as unknown.
+
 A changed file with no history (new, or outside --since) predicts nothing
 and is listed apart. Test files are part of the analysis: a test that usually
 changes with the code is a change worth expecting.
@@ -103,4 +116,5 @@ Examples:
   git diff main... | km impact --diff -             # a patch from stdin
   km impact --pr 123                             # a pull request (needs gh)
   km impact --since-ref main --format json   # everything, for tools and LLMs
-  km impact --since-ref origin/main --fail-on-stale-docs   # docs follow code";
+  km impact --since-ref origin/main --fail-on-stale-docs   # docs follow code
+  km impact --since-ref origin/main --http   # clients of changed routes";

@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 
 use git2::{Delta, DiffOptions, ObjectType, Repository, Sort, Tree};
 
+mod before;
 mod blame;
 mod changeset;
 mod history;

@@ -39,7 +39,7 @@ pub fn execute_tool(tool_name: &str, input: &Value, project_path: &Path) -> Stri
             "impact",
             build_args(
                 input,
-                &["since_ref", "until_ref", "pr", "top"],
+                &["since_ref", "until_ref", "pr", "top", "http"],
                 project_path,
             ),
         ),
