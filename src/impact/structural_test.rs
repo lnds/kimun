@@ -1222,3 +1222,66 @@ fn an_import_tells_the_calls_it_names_and_otherwise_refers() {
     );
     assert_eq!(exposure("other.ex"), (Exposure::Elsewhere, vec![]));
 }
+
+fn countries() -> Vec<(PathBuf, String)> {
+    [
+        (
+            "lib/geo.ex",
+            "defmodule Geo do\n  @valid_countries [\n    \"CL\",\n    \"PE\"\n  ]\n  @derive Jason.Encoder\n\n  def valid_countries, do: @valid_countries\n\n  def name(code), do: code\nend\n",
+        ),
+        (
+            "lib/signup.ex",
+            "defmodule Signup do\n  def check(c), do: c in Geo.valid_countries()\nend\n",
+        ),
+        (
+            "lib/label.ex",
+            "defmodule Label do\n  def of(c), do: Geo.name(c)\nend\n",
+        ),
+    ]
+    .iter()
+    .map(|(path, text)| (PathBuf::from(path), text.to_string()))
+    .collect()
+}
+
+#[test]
+fn a_changed_attribute_reaches_the_callers_of_its_readers() {
+    let radius = radius(countries(), &[change("lib/geo.ex", &[4])]);
+
+    assert_eq!(radius.functions, Some(vec!["valid_countries".to_string()]));
+    assert_eq!(
+        radius.narrowing[0].attributes,
+        [AttributeRead {
+            name: "@valid_countries".to_string(),
+            read_by: vec!["valid_countries".to_string()],
+        }]
+    );
+    assert_eq!(
+        direct(&radius),
+        [
+            ("signup.ex", Exposure::Calls, 0, vec!["Geo.valid_countries"]),
+            ("label.ex", Exposure::Elsewhere, 0, vec![]),
+        ]
+    );
+    assert!(
+        summary(&radius)
+            .contains(&" Attributes: @valid_countries (read by valid_countries)".to_string())
+    );
+    let json = serde_json::to_value(JsonStructural::from(&radius)).unwrap();
+    assert_eq!(
+        json["narrowing"][0]["attributes"],
+        serde_json::json!([{"name": "@valid_countries", "read_by": ["valid_countries"]}])
+    );
+}
+
+#[test]
+fn an_attribute_read_when_compiling_says_so() {
+    let radius = radius(countries(), &[change("lib/geo.ex", &[6])]);
+
+    assert_eq!(radius.functions, None);
+    assert_eq!(
+        radius.narrowing[0].reason.as_deref(),
+        Some("line 6 sets @derive, read when the module compiles")
+    );
+    let json = serde_json::to_value(JsonStructural::from(&radius)).unwrap();
+    assert!(json["narrowing"][0].get("attributes").is_none());
+}

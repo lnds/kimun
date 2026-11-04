@@ -126,7 +126,7 @@ impl From<BTreeMap<usize, BTreeSet<String>>> for Found {
 
 /// Why a change to a file cannot be narrowed to functions, so that every
 /// use of the file has to count.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Unnarrowed {
     /// Functions are not told for the language of the file.
     Language,
@@ -134,30 +134,62 @@ pub enum Unnarrowed {
     NoLines,
     /// The change touches this line, which may concern every function.
     Outside(usize),
+    /// The line sets a module attribute the compiler or a macro reads, such
+    /// as `@derive` or `@behaviour`.
+    CompileTime(usize, String),
+    /// The line sets a module attribute no function reads: a macro may.
+    Unread(usize, String),
+    /// The line declares routes of a router, which its macros read when the
+    /// module compiles.
+    Routes(usize),
 }
 
-/// Tells the functions of a source a change to some lines affects, or the
-/// line that may concern all of them.
-type Teller = fn(&str, &[usize]) -> Result<BTreeSet<String>, usize>;
+/// What a change to some lines of a source comes to, when it can be
+/// narrowed: the public functions it affects, and the module attributes it
+/// touches with the functions that read each.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Narrowed {
+    pub functions: BTreeSet<String>,
+    pub attributes: BTreeMap<String, BTreeSet<String>>,
+}
+
+impl From<BTreeSet<String>> for Narrowed {
+    fn from(functions: BTreeSet<String>) -> Self {
+        Narrowed {
+            functions,
+            attributes: BTreeMap::new(),
+        }
+    }
+}
+
+/// Tells what a change to some lines of a source comes to, or why every
+/// function may be concerned.
+type Teller = fn(&str, &[usize]) -> Result<Narrowed, Unnarrowed>;
+
+fn python_teller(source: &str, lines: &[usize]) -> Result<Narrowed, Unnarrowed> {
+    python_names::changed(source, lines)
+        .map(Narrowed::from)
+        .map_err(Unnarrowed::Outside)
+}
 
 /// What tells the changed functions of a language, if anything does.
 fn teller(language: &str) -> Option<Teller> {
     match language {
-        "Python" => Some(python_names::changed),
+        "Python" => Some(python_teller),
         "Elixir" | "Elixir Script" => Some(super::elixir_functions::changed_functions),
         _ => None,
     }
 }
 
 impl Source {
-    /// The public functions of this file a change to `lines` affects, by
-    /// name, or why they cannot be told.
-    pub fn changed_functions(&self, lines: &[usize]) -> Result<BTreeSet<String>, Unnarrowed> {
+    /// What a change to `lines` of this file comes to, or why the functions
+    /// it affects cannot be told.
+    pub fn changed_functions(&self, lines: &[usize]) -> Result<Narrowed, Unnarrowed> {
         let told = teller(&self.language).ok_or(Unnarrowed::Language)?;
         if lines.is_empty() {
             return Err(Unnarrowed::NoLines);
         }
-        told(&self.text, lines).map_err(Unnarrowed::Outside)
+        told(&self.text, lines)
     }
 
     /// For each public function, the functions of other modules it calls,

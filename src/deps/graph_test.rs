@@ -297,6 +297,7 @@ fn changed_functions_are_told_for_elixir_and_python() {
         elixir
             .changed_functions(&[4])
             .unwrap()
+            .functions
             .into_iter()
             .collect::<Vec<_>>(),
         ["f"]
@@ -313,6 +314,7 @@ fn changed_functions_are_told_for_elixir_and_python() {
         python
             .changed_functions(&[1])
             .unwrap()
+            .functions
             .into_iter()
             .collect::<Vec<_>>(),
         ["RATE", "tax"]
