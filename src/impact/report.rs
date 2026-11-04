@@ -6,6 +6,7 @@ use serde::Serialize;
 
 use super::Impact;
 use super::analyzer::{MissingCoChange, Trigger};
+use super::copies_report::{self, JsonCopies};
 use super::documentation_report::{self, JsonDocumentation};
 use super::projects::{self, JsonProjects};
 use super::structural_json::JsonStructural;
@@ -53,6 +54,11 @@ fn render_report(impact: &Impact, top: usize) -> String {
     let documentation = documentation_report::render(&impact.documentation);
     if !documentation.is_empty() {
         lines.extend(documentation);
+        lines.push(String::new());
+    }
+    let copies = copies_report::render(&impact.copies);
+    if !copies.is_empty() {
+        lines.extend(copies);
         lines.push(String::new());
     }
     lines.extend(diffusion_lines(impact));
@@ -252,6 +258,7 @@ struct JsonImpact<'a> {
     diffusion: JsonDiffusion,
     logical_radius: JsonLogicalRadius,
     documentation: JsonDocumentation,
+    copies: JsonCopies<'a>,
     generated_skipped: usize,
 }
 
@@ -293,6 +300,7 @@ fn to_json(impact: &Impact, top: usize) -> JsonImpact<'_> {
                 .collect(),
         },
         documentation: JsonDocumentation::from(impact.documentation.as_slice()),
+        copies: JsonCopies::from(impact.copies.as_slice()),
         generated_skipped: impact.generated_skipped,
     }
 }
@@ -307,7 +315,7 @@ fn render_short(impact: &Impact) -> String {
     let d = &impact.diffusion;
     let max_confidence = impact.missing.first().map_or(0.0, |m| m.best().confidence);
     format!(
-        "impact projects_reached:{}/{} structural:{}/{} unprotected:{} files:{} dirs:{} subsystems:{} added:{} deleted:{} entropy:{:.2} missing:{} max_confidence:{:.2} stale_docs:{}",
+        "impact projects_reached:{}/{} structural:{}/{} unprotected:{} files:{} dirs:{} subsystems:{} added:{} deleted:{} entropy:{:.2} missing:{} max_confidence:{:.2} stale_docs:{} copies:{}",
         impact.projects.reached.len(),
         impact.projects.total(),
         impact.structural.reached(),
@@ -322,6 +330,7 @@ fn render_short(impact: &Impact) -> String {
         impact.missing.len(),
         max_confidence,
         impact.documentation.len(),
+        impact.copies.len(),
     )
 }
 

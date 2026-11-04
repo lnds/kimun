@@ -133,7 +133,7 @@ pub fn tool_definitions() -> Vec<Value> {
         ),
         tool(
             "km_impact",
-            "Measure the blast radius of a change: which projects of the repository it reaches, which source files call the functions that changed, and which of those no test protects. Give either `since_ref` or `pr`. Requires git repository; `pr` requires the GitHub CLI.",
+            "Measure the blast radius of a change: which projects of the repository it reaches, which source files call the functions that changed or still use what it removes, which of those no test protects, and groups of values elsewhere that look like copies it left behind. Give either `since_ref` or `pr`. Requires git repository; `pr` requires the GitHub CLI.",
             &[
                 (
                     "since_ref",

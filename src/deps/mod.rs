@@ -64,11 +64,14 @@ use crate::util::read_lossy;
 use crate::walk::{self, WalkConfig};
 
 use analyzer::{DepEntry, DepResult, Totals, UnsupportedLanguage, build_graph};
+pub use elixir::defines as elixir_modules;
 pub use elixir_calls::Calls;
+pub use elixir_functions::functions as elixir_functions;
 pub use extractor::is_supported;
 use graph::{FileGraph, Source};
 use layout::{Layout, is_manifest};
 pub use matrix::Expand;
+pub use python_names::defined as python_names;
 
 /// Count the skipped files per language, largest group first.
 fn count_unsupported(skipped: &[(PathBuf, String)]) -> Vec<UnsupportedLanguage> {

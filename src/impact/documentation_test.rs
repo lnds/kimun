@@ -12,6 +12,8 @@ fn change(path: &str, kind: ChangeKind, old: Option<&str>) -> FileDiffStat {
         lines: Vec::new(),
         old_lines: Vec::new(),
         probe: Vec::new(),
+        removed: Vec::new(),
+        inserted: Vec::new(),
     }
 }
 

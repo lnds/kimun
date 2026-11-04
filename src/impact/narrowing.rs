@@ -32,8 +32,10 @@ pub struct AttributeRead {
 
 /// Why the change to `source` cannot be narrowed, in words.
 fn reason(stat: &FileDiffStat, why: &Unnarrowed) -> String {
-    if stat.kind == ChangeKind::Added {
-        return "new file".to_string();
+    match stat.kind {
+        ChangeKind::Added => return "new file".to_string(),
+        ChangeKind::Deleted => return "deleted".to_string(),
+        _ => {}
     }
     match why {
         Unnarrowed::Language => "its language does not tell functions".to_string(),

@@ -3,11 +3,12 @@
 use std::path::Path;
 
 use super::protection::Protection;
+use super::removed_report;
 use super::structural::{Dependent, Exposure, Structural};
 
 const TITLE: &str = "Structural radius — source files that use what changed";
 
-fn names(paths: impl Iterator<Item = impl AsRef<Path>>, limit: usize) -> String {
+pub(super) fn names(paths: impl Iterator<Item = impl AsRef<Path>>, limit: usize) -> String {
     let all: Vec<String> = paths.map(|p| p.as_ref().display().to_string()).collect();
     let shown = all[..all.len().min(limit)].join(", ");
     match all.len().saturating_sub(limit) {
@@ -132,8 +133,11 @@ impl Structural {
             ),
             self.changed_line(),
             format!(" Every use counts: {}", unnarrowed(self)),
-            format!(" Reach: {}", reach_line(self)),
         ]
+        .into_iter()
+        .chain(removed_report::summary(&self.removed))
+        .chain([format!(" Reach: {}", reach_line(self))])
+        .collect()
     }
 
     /// The line that gives the radius as a number.
@@ -179,6 +183,7 @@ impl Structural {
             format!(" Functions: {}", names(functions.iter(), 8)),
         ];
         lines.extend(self.attributes_line());
+        lines.extend(removed_report::summary(&self.removed));
         lines.extend(partly.then(|| format!(" Every use counts for: {}", unnarrowed(self))));
         lines.push(self.radius_line());
         lines.extend((referring > 0).then(|| {
@@ -228,7 +233,7 @@ fn body(radius: &Structural, top: usize) -> Vec<String> {
 
 /// The warnings the radius is measured for.
 fn warnings(radius: &Structural) -> Vec<String> {
-    let mut lines = Vec::new();
+    let mut lines = removed_report::warning(&radius.removed);
     let unprotected: Vec<&Path> = radius.unprotected().map(|d| d.file.as_path()).collect();
     if !unprotected.is_empty() {
         lines.push(format!(

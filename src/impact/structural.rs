@@ -6,19 +6,21 @@
 //! files. A dependent that no test file refers to is unprotected: the change
 //! can break it without any test noticing.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-use crate::deps::graph::{EdgeKind, FileGraph, Narrowed, Related, Unnarrowed, Use};
+use crate::deps::graph::{EdgeKind, FileGraph, Related, Use};
 use crate::git::FileDiffStat;
 
 use super::function_reach;
 pub use super::narrowing::Narrowing;
+use super::origins::origins_of;
 use super::protection::{Protection, Tests};
-use super::reading::{self, graphed_language};
-use super::role::{self, Role, roles_of};
+use super::reading::graphed_language;
+use super::removed::{self, Deleted, Removed};
+use super::role::{self, Role};
 use super::routes;
 
 /// Whether the radius is measured for the language of `path`: every
@@ -93,6 +95,8 @@ pub struct Structural {
     pub upper_bound: usize,
     /// Elixir module references left out for naming several files.
     pub ambiguous: usize,
+    /// What the change removes, with the files that still use it.
+    pub removed: Vec<Removed>,
 }
 
 impl Structural {
@@ -210,7 +214,7 @@ impl Reverse {
 
 /// `Tip.apply` for `Booking.Tip.apply`: the module's own name is enough
 /// next to the file it is in.
-fn short_call(call: &str) -> String {
+pub(super) fn short_call(call: &str) -> String {
     let mut parts: Vec<&str> = call.rsplitn(3, '.').collect();
     parts.truncate(2);
     parts.reverse();
@@ -218,7 +222,7 @@ fn short_call(call: &str) -> String {
 }
 
 /// The function a call names: `apply` in `Booking.Tip.apply`.
-fn function_of(call: &str) -> &str {
+pub(super) fn function_of(call: &str) -> &str {
     call.rsplit('.').next().unwrap_or(call)
 }
 
@@ -250,21 +254,13 @@ pub fn compute(
     related: Related,
     max_distance: Option<usize>,
 ) -> Structural {
-    let (sources, graph) = reading::read(sources, related);
-    let roles = roles_of(&graph);
+    let (sources, graph, roles, deleted) = Deleted::read(sources, changed, related);
     let requesting = routes::requesting(&sources, &graph, |f| roles[f] == Role::Test, related);
     let reverse = Reverse::of(&graph, &roles, requesting);
 
     let stat_of: HashMap<&Path, Changed> = changed.iter().map(|c| (c.path.as_path(), *c)).collect();
     let in_diff = |file: usize| stat_of.contains_key(graph.files[file].as_path());
-    // Each origin with the functions the change affects in it, if known.
-    let origins: BTreeMap<usize, Result<Narrowed, Unnarrowed>> = (0..graph.files.len())
-        .filter(|&f| roles[f] == Role::Source && in_diff(f))
-        .map(|f| {
-            let lines = stat_of[graph.files[f].as_path()].lines_in(&sources[f].text);
-            (f, sources[f].changed_functions(lines))
-        })
-        .collect();
+    let (origins, gone) = origins_of(&graph, &sources, &roles, &deleted, &stat_of);
     let starts: Vec<usize> = origins.keys().copied().collect();
     let levels = reverse.levels(&starts);
 
@@ -339,6 +335,13 @@ pub fn compute(
         .collect();
     let walk = function_reach::Walk::new(&graph, &sources, &reverse.sources, related);
     let through = walk.levels(&told, &calling, max_distance);
+    let removed = removed::still_used(
+        &graph,
+        &reverse.sources,
+        &reverse.tests,
+        &deleted.sources,
+        &gone,
+    );
 
     Structural {
         origins: narrowing.iter().map(|n| n.file.clone()).collect(),
@@ -355,6 +358,7 @@ pub fn compute(
             .collect(),
         upper_bound: levels.iter().map(Vec::len).sum(),
         ambiguous: graph.ambiguous,
+        removed,
     }
 }
 

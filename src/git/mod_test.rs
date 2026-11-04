@@ -717,9 +717,23 @@ fn a_change_that_only_deletes_has_nothing_to_probe() {
     let stat = &git_repo.diff_stats_since("HEAD").unwrap()[0];
 
     assert!(stat.probe.is_empty());
+    assert_eq!(stat.removed, ["two"]);
     assert_eq!(stat.old_lines, [2]);
     // With nothing to tell the texts apart, the lines after the change are used.
     assert_eq!(stat.lines_in("one\ntwo\nthree\n"), [2]);
+}
+
+#[test]
+fn a_deleted_file_keeps_its_text_in_the_lines_removed() {
+    let (dir, repo) = create_test_repo();
+    make_commit(&repo, &[("a.txt", "one\ntwo\n")], "base");
+    fs::remove_file(dir.path().join("a.txt")).unwrap();
+
+    let git_repo = GitRepo::open(dir.path()).unwrap();
+    let stat = &git_repo.diff_stats_since("HEAD").unwrap()[0];
+
+    assert_eq!(stat.kind, ChangeKind::Deleted);
+    assert_eq!(stat.removed, ["one", "two"]);
 }
 
 /// Commit `files` as `name <email>` on top of HEAD.
