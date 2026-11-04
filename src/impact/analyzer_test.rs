@@ -11,6 +11,7 @@ fn change(path: &str, added: usize, deleted: usize) -> FileDiffStat {
         lines: Vec::new(),
         old_lines: Vec::new(),
         probe: Vec::new(),
+        removed: Vec::new(),
     }
 }
 

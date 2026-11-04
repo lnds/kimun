@@ -286,6 +286,11 @@ pub(super) fn references(code: &str, aliases: &Aliases) -> Vec<Reference> {
     refs
 }
 
+/// The modules and protocols an Elixir source defines, by full name.
+pub fn defines(source: &str) -> Vec<String> {
+    modules_of(&code_only(source)).0
+}
+
 /// Read an Elixir source file that renders no template kept apart.
 #[cfg(test)]
 pub fn parse(source: &str) -> ElixirFile {

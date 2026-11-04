@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use serde::Serialize;
 
 use super::protection::Protection;
+use super::removed::Removed;
 use super::structural::{Dependent, Exposure, Narrowing, Structural};
 
 /// The radius as a number: the files the change concerns, over those measured.
@@ -54,6 +55,9 @@ pub struct JsonStructural<'a> {
     /// what changed.
     change_tests_a_dependent: bool,
     ambiguous: usize,
+    /// What the change removes (a public function, or a whole file when
+    /// `function` is null) and the source files that still use it.
+    removed: &'a [Removed],
 }
 
 impl<'a> From<&'a Structural> for JsonStructural<'a> {
@@ -98,6 +102,7 @@ impl<'a> From<&'a Structural> for JsonStructural<'a> {
                 .collect(),
             change_tests_a_dependent: radius.exposed().any(|d| d.tests_in_diff > 0),
             ambiguous: radius.ambiguous,
+            removed: &radius.removed,
         }
     }
 }

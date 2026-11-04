@@ -17,6 +17,8 @@ mod pr;
 mod projects;
 mod protection;
 mod reading;
+mod removed;
+mod removed_report;
 mod report;
 mod role;
 mod routes;

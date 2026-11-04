@@ -82,6 +82,7 @@ fn change(path: &str, lines: &[usize]) -> FileDiffStat {
         lines: lines.to_vec(),
         old_lines: lines.to_vec(),
         probe: Vec::new(),
+        removed: Vec::new(),
     }
 }
 
@@ -1285,4 +1286,88 @@ fn an_attribute_read_when_compiling_says_so() {
     );
     let json = serde_json::to_value(JsonStructural::from(&radius)).unwrap();
     assert!(json["narrowing"][0].get("attributes").is_none());
+}
+
+fn deleted(path: &str, text: &str) -> FileDiffStat {
+    FileDiffStat {
+        kind: ChangeKind::Deleted,
+        removed: text.lines().map(str::to_string).collect(),
+        ..change(path, &[1])
+    }
+}
+
+#[test]
+fn a_deleted_file_reaches_the_files_that_still_use_it() {
+    let mut sources = countries();
+    sources.retain(|(path, _)| path != Path::new("lib/geo.ex"));
+    let geo = countries().remove(0).1;
+    let radius = radius(sources, &[deleted("lib/geo.ex", &geo)]);
+
+    assert_eq!(radius.origins, [PathBuf::from("lib/geo.ex")]);
+    assert_eq!(radius.narrowing[0].reason.as_deref(), Some("deleted"));
+    // The deleted file is not measured.
+    assert_eq!(radius.source_files, 2);
+    assert_eq!(radius.reached(), 2);
+    assert_eq!(radius.removed.len(), 1);
+    assert_eq!(radius.removed[0].function, None);
+    let callers: Vec<&Path> = radius.removed[0]
+        .callers
+        .iter()
+        .map(|c| c.file.as_path())
+        .collect();
+    assert_eq!(
+        callers,
+        [Path::new("lib/label.ex"), Path::new("lib/signup.ex")]
+    );
+
+    let lines = render(&radius, 20);
+    assert!(lines.contains(&" Removed: lib/geo.ex (deleted)".to_string()));
+    let warning = lines
+        .iter()
+        .position(|l| l == "2 files still use what the change removes, and will break:")
+        .unwrap();
+    assert_eq!(lines[warning + 1], "  lib/label.ex (Geo.name)");
+}
+
+#[test]
+fn a_removed_function_reaches_those_who_still_call_it() {
+    let mut sources = countries();
+    // `valid_countries` is gone from Geo; Signup still calls it.
+    sources[0].1 = sources[0]
+        .1
+        .replace("  def valid_countries, do: @valid_countries\n", "");
+    let stat = FileDiffStat {
+        removed: vec!["  def valid_countries, do: @valid_countries".to_string()],
+        ..change("lib/geo.ex", &[8])
+    };
+    let radius = radius(sources, &[stat]);
+
+    assert_eq!(radius.functions, Some(vec!["valid_countries".to_string()]));
+    assert_eq!(
+        direct(&radius),
+        [
+            ("signup.ex", Exposure::Calls, 0, vec!["Geo.valid_countries"]),
+            ("label.ex", Exposure::Elsewhere, 0, vec![]),
+        ]
+    );
+    assert_eq!(
+        radius.removed,
+        [Removed {
+            file: PathBuf::from("lib/geo.ex"),
+            function: Some("valid_countries".to_string()),
+            callers: vec![Caller {
+                file: PathBuf::from("lib/signup.ex"),
+                calls: vec!["Geo.valid_countries".to_string()],
+                protection: Protection::None,
+            }],
+        }]
+    );
+    let json = serde_json::to_value(JsonStructural::from(&radius)).unwrap();
+    assert_eq!(json["removed"][0]["function"], "valid_countries");
+    assert_eq!(json["removed"][0]["callers"][0]["file"], "lib/signup.ex");
+    let lines = render(&radius, 20);
+    assert!(
+        lines.contains(&"1 file still uses what the change removes, and will break:".to_string())
+    );
+    assert!(lines.contains(&"  lib/signup.ex (Geo.valid_countries)".to_string()));
 }
