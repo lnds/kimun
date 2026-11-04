@@ -90,3 +90,15 @@ fn script_and_python_clients_are_read_too() {
         ]
     );
 }
+
+#[test]
+fn a_parenthesis_after_a_multibyte_character_is_read() {
+    let source = r##"defmodule Billing.Client do
+  def items(n), do: Tesla.get(client(), "/v1/items") |> tag("N°(#{n})")
+end
+"##;
+    assert_eq!(
+        paths("Elixir", source),
+        vec![call("Tesla", Some("get"), Some("/v1/items"))]
+    );
+}

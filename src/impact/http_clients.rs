@@ -113,8 +113,9 @@ fn method_option(line: &str) -> Option<String> {
 fn callee(line: &str, open: usize) -> &str {
     let before = line[..open].trim_end_matches('!');
     let start = before
-        .rfind(|c: char| !is_ident(c) && c != '.')
-        .map_or(0, |i| i + 1);
+        .char_indices()
+        .rfind(|&(_, c)| !is_ident(c) && c != '.')
+        .map_or(0, |(i, c)| i + c.len_utf8());
     &before[start..]
 }
 
