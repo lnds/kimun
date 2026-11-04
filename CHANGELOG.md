@@ -1,3 +1,9 @@
+## v0.46.1 (2026-11-04)
+
+### Fix
+
+- **impact**: a callee after a multibyte character is read without a panic
+
 ## v0.46.0 (2026-11-04)
 
 ### Feat
