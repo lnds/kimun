@@ -897,6 +897,7 @@ Options:
 | `--max-distance N` | Follow the structural radius at most N files away from the change (default: no limit) |
 | `--affected` | Print only the changed and reached projects, one per line |
 | `--fail-on-stale-docs` | Exit with code 1 when a document that covers or names a changed file was not updated |
+| `--http` | Add the HTTP level: the routes the change removes or changes, and the client calls that ask for them (heuristic) |
 | `--top N` | Show only the top N missing files (default: 20) |
 | `--format {table,json,short,terse,github,codeclimate}` | Output format (default: table). `github` and `codeclimate` annotate the documents left behind |
 
@@ -973,6 +974,29 @@ Matched by their values alone: a hint, not a proof.
 
 The rest of the repository is read only when the change modifies a group large enough. Values built at run time, or kept under other names (`"Chile"` for `"CL"`), are not seen.
 
+#### HTTP level
+
+With `--http`, `km impact` follows the change across services that talk over HTTP, where neither manifests nor calls relate them: one project serves a route, another calls it with a client. It is heuristic, and the report says so.
+
+- **Routes** are read from Phoenix routers, with the path and alias of every `scope`, the verb (`live` is a `get`, `resources` the seven routes it declares) and the action behind each. A route is **removed** when the router no longer declares it, **changed** when its line was rewritten or the module or action behind it differ, and **action** when the change affects the controller action that serves it (the functions the structural radius narrowed it to; every action when the file could not be narrowed).
+- **Client calls** are read from every file of the repository outside tests: Tesla (`Tesla.get`, or a bare `get` in a module that `use Tesla`), Req (`url:` or the first literal), Finch (`Finch.build(:get, url)`) and HTTPoison in Elixir, `fetch` and `axios` in JavaScript and TypeScript, `requests` and `httpx` in Python. The path is the literal the call is given: a scheme and host are dropped, an interpolation or a `{placeholder}` is a parameter, and so is a base URL written at run time (`"#{base}/v1/items"` asks for `/v1/items`).
+- A call **asks for a route** when its verb fits (or it tells none) and its path matches the end of the route's, segment by segment, a parameter on either side matching any one: the rest of the route may be in the base URL of the client, which configuration holds. A call of a single segment must match the whole route. Each caller says its project, whether it asks for the whole path, and whether a test is named after its file.
+- Calls whose path is built at run time (`Req.get!(url: path)`) cannot be matched: they are counted as **unknown**, not dropped.
+
+```
+HTTP level — client calls to the routes the change removes or changes
+──────────────────────────────────────────────────────────────────────────────
+ removed  GET /api/v1/items  ShopWeb.ItemController.index (apps/shop/lib/shop_web/router.ex:5)
+          apps/billing/lib/shop.ex:2  Req, billing, no test
+ action   GET /api/v1/items/:id  ShopWeb.ItemController.show (apps/shop/lib/shop_web/router.ex:5)
+          apps/billing/lib/shop.ex:3  Req, billing, asks for /v1/items/:param, no test
+──────────────────────────────────────────────────────────────────────────────
+Matched by method and the end of the path, over 3 client calls: a heuristic.
+Unknown: 1 calls build their path at run time: apps/billing/lib/shop.ex:4
+```
+
+Without `--http` nothing of this is read, and the JSON gives `http: null`.
+
 #### JSON output, for tools and LLMs
 
 `--format json` carries everything the table shows, and the lists the table cuts short. An agent reviewing a change can read it in this order:
@@ -1004,6 +1028,7 @@ km impact --since-ref origin/main --format json
 | `logical_radius.missing[]` | Files that usually change with the change and are not in it, with every trigger; documents go to `documentation` |
 | `documentation.stale[]` | Documents left behind: `document`, `signal` (`declared`, `referenced`, `co_changed`), `describes[]`, and `covers`, `line` and `gone`, or `shared_commits`, `commits` and `confidence` |
 | `copies.copies[]` | Groups of values that look like a copy the change left behind (`copies.heuristic` is always true): `file`, `line`, `of`, `of_line`, `matched`, `missing` (added by the change, absent here), `kept` (taken out by the change, still here), `mentions` |
+| `http` | With `--http`: `routes[]` (`verb`, `path`, `router`, `line`, `change`: `removed`, `changed` or `action`, `serves`, `callers[]` with `file`, `line`, `client`, `path`, `project`, `exact`, `tested`), `unresolved[]` (calls whose path is built at run time), `calls`, `heuristic`; `null` otherwise |
 
 `km ai` exposes the command to an LLM as the tool `km_impact`, and the skill installed by `km ai skill` documents it.
 

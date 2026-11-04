@@ -66,6 +66,7 @@ fn opts(since_ref: &str) -> ImpactOptions {
         top: 20,
         affected: false,
         fail_on_stale_docs: false,
+        http: false,
     }
 }
 

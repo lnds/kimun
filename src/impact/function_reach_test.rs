@@ -44,6 +44,8 @@ fn radius(max_distance: Option<usize>) -> Structural {
         probe: Vec::new(),
         removed: Vec::new(),
         inserted: Vec::new(),
+        removed_at: Vec::new(),
+        inserted_at: Vec::new(),
     };
     let changed: Vec<Changed> = vec![&change];
     compute(chain(), &changed, &|_, _| false, max_distance)

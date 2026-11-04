@@ -13,7 +13,11 @@ mod documentation_report;
 mod entry;
 mod function_reach;
 mod help;
+mod http;
+mod http_clients;
+mod http_report;
 mod inert;
+mod lexical;
 mod narrowing;
 mod origins;
 mod pr;
@@ -75,6 +79,8 @@ pub struct ImpactOptions {
     /// Fail when a document that covers or names a changed file was not
     /// updated.
     pub fail_on_stale_docs: bool,
+    /// Whether to measure the HTTP level.
+    pub http: bool,
 }
 
 /// The options the command line asks for. A pull request comes first, then
@@ -103,6 +109,7 @@ pub fn options(args: &crate::cli::ImpactArgs) -> ImpactOptions {
         top: args.top,
         affected: args.affected,
         fail_on_stale_docs: args.fail_on_stale_docs,
+        http: args.http,
     }
 }
 
@@ -123,6 +130,8 @@ pub struct Impact {
     pub documentation: Vec<Stale>,
     /// Groups of values outside the change that hold what it replaced.
     pub copies: Vec<copies::Copy>,
+    /// The HTTP level, when it was asked for.
+    pub http: Option<http::Http>,
     /// Changed files with no commits in the history consulted, so nothing
     /// can be expected of them.
     pub without_history: Vec<PathBuf>,
@@ -210,44 +219,6 @@ fn structural_radius(
     Ok(radius)
 }
 
-/// Whether a file outside a change may hold a copy of its values: one of a
-/// known language, not a document nor a generated file.
-fn may_hold_copies(path: &Path) -> bool {
-    crate::loc::language::detect(path)
-        .is_some_and(|spec| crate::kind::Kind::by_name(path, spec) != crate::kind::Kind::Docs)
-        && !is_generated(path)
-}
-
-/// The groups of values outside the change that hold what it replaced.
-/// The rest of the repository is read only when the change modifies such a
-/// group.
-fn copies_of(
-    git_repo: &GitRepo,
-    change: &Change,
-    changes: &[FileDiffStat],
-    in_diff: &HashSet<&Path>,
-) -> Result<Vec<copies::Copy>, Box<dyn Error>> {
-    let kept: Vec<&FileDiffStat> = changes
-        .iter()
-        .filter(|c| c.kind != ChangeKind::Deleted && may_hold_copies(&c.path))
-        .collect();
-    let wanted: HashSet<&Path> = kept.iter().map(|c| c.path.as_path()).collect();
-    let heads = change.sources(git_repo, |p| wanted.contains(p))?;
-    let edits: Vec<copies::Edit> = kept
-        .iter()
-        .flat_map(|c| {
-            let head = heads.iter().find(|(p, _)| *p == c.path);
-            head.map(|(_, text)| copies::edits(c, text))
-                .unwrap_or_default()
-        })
-        .collect();
-    if edits.is_empty() {
-        return Ok(Vec::new());
-    }
-    let files = change.sources(git_repo, |p| !in_diff.contains(p) && may_hold_copies(p))?;
-    Ok(copies::copies(&edits, &files))
-}
-
 /// Compute the impact of the change `opts.source` names.
 fn analyze(path: &Path, opts: &ImpactOptions) -> Result<Impact, Box<dyn Error>> {
     if !(opts.min_confidence > 0.0 && opts.min_confidence <= 1.0) {
@@ -297,7 +268,11 @@ fn analyze(path: &Path, opts: &ImpactOptions) -> Result<Impact, Box<dyn Error>> 
     let rules = documentation::Rules::new(&KimunConfig::load_from(git_repo.root()).docs)?;
     let documents = change.sources(&git_repo, documentation::is_document)?;
     let documentation = documentation::stale(&documents, &changes, &documents_missing, &rules);
-    let copies = copies_of(&git_repo, &change, &changes, &in_diff)?;
+    let copies = lexical::copies_of(&git_repo, &change, &changes, &in_diff)?;
+    let http = opts
+        .http
+        .then(|| lexical::http_level(&git_repo, &change, &graph, &changes, &structural))
+        .transpose()?;
 
     let with_history: HashSet<&Path> = targets
         .iter()
@@ -320,6 +295,7 @@ fn analyze(path: &Path, opts: &ImpactOptions) -> Result<Impact, Box<dyn Error>> 
         missing,
         documentation,
         copies,
+        http,
         without_history,
         generated_skipped: generated.len(),
         max_changeset: opts.max_changeset,

@@ -151,6 +151,10 @@ pub fn tool_definitions() -> Vec<Value> {
                     "top",
                     json!({"type": "integer", "description": "Show only the top N missing co-change files (default: 20)"}),
                 ),
+                (
+                    "http",
+                    json!({"type": "boolean", "description": "Add the HTTP level: routes the change removes or changes, and the client calls in the repository that ask for them (heuristic)"}),
+                ),
             ],
         ),
         tool(

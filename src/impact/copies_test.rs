@@ -13,6 +13,8 @@ fn change(path: &str, lines: &[usize], removed: &[&str], inserted: &[&str]) -> F
         probe: Vec::new(),
         removed: removed.iter().map(|l| l.to_string()).collect(),
         inserted: inserted.iter().map(|l| l.to_string()).collect(),
+        removed_at: Vec::new(),
+        inserted_at: Vec::new(),
     }
 }
 

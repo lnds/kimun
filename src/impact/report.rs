@@ -8,6 +8,7 @@ use super::Impact;
 use super::analyzer::{MissingCoChange, Trigger};
 use super::copies_report::{self, JsonCopies};
 use super::documentation_report::{self, JsonDocumentation};
+use super::http_report::{self, JsonHttp};
 use super::projects::{self, JsonProjects};
 use super::structural_json::JsonStructural;
 use super::structural_report as structural;
@@ -51,14 +52,17 @@ fn render_report(impact: &Impact, top: usize) -> String {
     lines.push(String::new());
     lines.extend(structural::render(&impact.structural, top));
     lines.push(String::new());
-    let documentation = documentation_report::render(&impact.documentation);
-    if !documentation.is_empty() {
-        lines.extend(documentation);
-        lines.push(String::new());
-    }
-    let copies = copies_report::render(&impact.copies);
-    if !copies.is_empty() {
-        lines.extend(copies);
+    let blocks = [
+        documentation_report::render(&impact.documentation),
+        copies_report::render(&impact.copies),
+        impact
+            .http
+            .as_ref()
+            .map(http_report::render)
+            .unwrap_or_default(),
+    ];
+    for block in blocks.into_iter().filter(|b| !b.is_empty()) {
+        lines.extend(block);
         lines.push(String::new());
     }
     lines.extend(diffusion_lines(impact));
@@ -259,6 +263,8 @@ struct JsonImpact<'a> {
     logical_radius: JsonLogicalRadius,
     documentation: JsonDocumentation,
     copies: JsonCopies<'a>,
+    /// `null` unless `--http` asked for it.
+    http: Option<JsonHttp<'a>>,
     generated_skipped: usize,
 }
 
@@ -301,6 +307,7 @@ fn to_json(impact: &Impact, top: usize) -> JsonImpact<'_> {
         },
         documentation: JsonDocumentation::from(impact.documentation.as_slice()),
         copies: JsonCopies::from(impact.copies.as_slice()),
+        http: impact.http.as_ref().map(JsonHttp::from),
         generated_skipped: impact.generated_skipped,
     }
 }

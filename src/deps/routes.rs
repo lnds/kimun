@@ -69,14 +69,57 @@ struct Scope<'a> {
     alias: Option<&'a str>,
 }
 
-/// The routes a router declares. Each `scope` adds its path and its alias
-/// to what is inside it; nesting is told by indentation.
-pub fn routes(source: &str) -> Vec<Route> {
+/// A route as a router declares it: the request it answers, the module and
+/// action that serve it, and the line it is declared on.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Declared {
+    /// `get`, `post`... in lower case; `*` for `match :*`.
+    pub verb: String,
+    pub path: String,
+    pub module: String,
+    pub action: Option<String>,
+    /// From 1.
+    pub line: usize,
+}
+
+/// What `resources` serves: the verb, the tail of the path and the action.
+const RESOURCES: [(&str, &str, &str); 8] = [
+    ("get", "", "index"),
+    ("get", "new", "new"),
+    ("get", ":id", "show"),
+    ("get", ":id/edit", "edit"),
+    ("post", "", "create"),
+    ("patch", ":id", "update"),
+    ("put", ":id", "update"),
+    ("delete", ":id", "delete"),
+];
+
+/// The first atom of a line of code: the action of a route, the verb of a
+/// `match`.
+fn first_atom(code: &str) -> Option<&str> {
+    let at = code.find(':')?;
+    let name = &code[at + 1..];
+    let end = name.find(|c: char| !is_ident(c)).unwrap_or(name.len());
+    (end > 0).then(|| &name[..end])
+}
+
+/// The verb a route macro answers: `live` serves a `get`.
+fn verb_of(word: &str, after: &str) -> String {
+    match word {
+        "live" => "get".to_string(),
+        "match" => first_atom(after).unwrap_or("*").to_string(),
+        _ => word.to_string(),
+    }
+}
+
+/// The routes a router declares, one for each verb. Each `scope` adds its
+/// path and its alias to what is inside it; nesting is told by indentation.
+pub fn declared(source: &str) -> Vec<Declared> {
     let code = code_only(source);
     let mut scopes: Vec<Scope> = Vec::new();
     let mut routes = Vec::new();
 
-    for (raw, line) in source.lines().zip(code.lines()) {
+    for (number, (raw, line)) in source.lines().zip(code.lines()).enumerate() {
         let content = line.trim_start();
         if content.is_empty() {
             continue;
@@ -93,22 +136,50 @@ pub fn routes(source: &str) -> Vec<Route> {
                 path: first_string(raw).unwrap_or_default(),
                 alias: first_module(after),
             });
-        } else if VERBS.contains(&word) || word == "resources" {
-            let (Some(path), Some(module)) = (first_string(raw), first_module(after)) else {
-                continue;
-            };
-            let aliases = scopes.iter().filter_map(|scope| scope.alias);
-            let module = aliases.chain([module]).collect::<Vec<_>>().join(".");
-            let under = |tail: &str| join(scopes.iter().map(|s| s.path).chain([path, tail]));
-            // What `resources` serves besides the collection itself.
-            let tails: &[&str] = match word {
-                "resources" => &["", "new", ":id", ":id/edit"],
-                _ => &[""],
-            };
-            routes.extend(tails.iter().map(|tail| Route {
-                path: under(tail),
-                module: module.clone(),
-            }));
+            continue;
+        }
+        if !VERBS.contains(&word) && word != "resources" && word != "match" {
+            continue;
+        }
+        let (Some(path), Some(module)) = (first_string(raw), first_module(after)) else {
+            continue;
+        };
+        let aliases = scopes.iter().filter_map(|scope| scope.alias);
+        let module = aliases.chain([module]).collect::<Vec<_>>().join(".");
+        let under = |tail: &str| join(scopes.iter().map(|s| s.path).chain([path, tail]));
+        let after_module = &after[after
+            .find(module.rsplit('.').next().unwrap_or_default())
+            .unwrap_or(0)..];
+        let action = first_atom(after_module).map(str::to_string);
+        let served: Vec<(String, &str, Option<String>)> = match word {
+            "resources" => RESOURCES
+                .iter()
+                .map(|(verb, tail, action)| (verb.to_string(), *tail, Some(action.to_string())))
+                .collect(),
+            _ => vec![(verb_of(word, after), "", action)],
+        };
+        routes.extend(served.into_iter().map(|(verb, tail, action)| Declared {
+            verb,
+            path: under(tail),
+            module: module.clone(),
+            action,
+            line: number + 1,
+        }));
+    }
+    routes
+}
+
+/// The paths a router serves, each with the module it hands the request
+/// to, whatever the verb.
+pub fn routes(source: &str) -> Vec<Route> {
+    let mut routes: Vec<Route> = Vec::new();
+    for declared in declared(source) {
+        let route = Route {
+            path: declared.path,
+            module: declared.module,
+        };
+        if !routes.contains(&route) {
+            routes.push(route);
         }
     }
     routes
