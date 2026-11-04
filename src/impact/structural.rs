@@ -6,16 +6,17 @@
 //! files. A dependent that no test file refers to is unprotected: the change
 //! can break it without any test noticing.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-use crate::deps::graph::{EdgeKind, FileGraph, Narrowed, Related, Source, Unnarrowed, Use};
+use crate::deps::graph::{EdgeKind, FileGraph, Related, Use};
 use crate::git::FileDiffStat;
 
 use super::function_reach;
 pub use super::narrowing::Narrowing;
+use super::origins::origins_of;
 use super::protection::{Protection, Tests};
 use super::reading::graphed_language;
 use super::removed::{self, Deleted, Removed};
@@ -244,38 +245,6 @@ fn exposure_of(used: &Use, changed: Option<&BTreeSet<String>>) -> (Exposure, Vec
         (true, true) => (Exposure::Refers, Vec::new()),
         (true, false) => (Exposure::Elsewhere, Vec::new()),
     }
-}
-
-/// Each origin with the functions the change affects in it, if known, and
-/// the public functions it removes, which count among them.
-type Origins = BTreeMap<usize, Result<Narrowed, Unnarrowed>>;
-
-/// The origins of the radius: the changed sources and the deleted ones,
-/// and what each file that remains has removed.
-fn origins_of(
-    graph: &FileGraph,
-    sources: &[Source],
-    roles: &[Role],
-    deleted: &Deleted,
-    stat_of: &HashMap<&Path, Changed>,
-) -> (Origins, BTreeMap<usize, BTreeSet<String>>) {
-    let mut gone = BTreeMap::new();
-    let changed =
-        |f: usize| roles[f] == Role::Source && stat_of.contains_key(graph.files[f].as_path());
-    let origins = (0..graph.files.len())
-        .filter(|&f| changed(f) || deleted.sources.contains(&f))
-        .map(|f| {
-            if deleted.all.contains(&f) {
-                return (f, Err(Unnarrowed::NoLines));
-            }
-            let (told, removed) = removed::told(&sources[f], stat_of[graph.files[f].as_path()]);
-            if !removed.is_empty() {
-                gone.insert(f, removed);
-            }
-            (f, told)
-        })
-        .collect();
-    (origins, gone)
 }
 
 /// Measure the structural radius of `changed` over `sources`.

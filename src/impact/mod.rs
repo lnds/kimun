@@ -19,6 +19,7 @@ mod http_report;
 mod inert;
 mod lexical;
 mod narrowing;
+mod origins;
 mod pr;
 mod projects;
 mod protection;
