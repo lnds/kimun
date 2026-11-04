@@ -4,16 +4,19 @@
 //! A caller left behind breaks at run time, or when another project is
 //! built, and nothing else in the report points at it.
 
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
+use crate::deps::graph::{FileGraph, Narrowed, Related, Source, Unnarrowed};
 use crate::deps::{elixir_functions, elixir_modules, python_names};
 use crate::git::{ChangeKind, FileDiffStat};
 
-use super::protection::Protection;
-use super::reading::graphed_language;
+use super::protection::{Protection, Tests};
+use super::reading::{self, graphed_language};
+use super::role::{Role, roles_of};
+use super::structural::{function_of, short_call};
 
 /// Something the change removes, and the files that still use it.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -99,6 +102,116 @@ pub fn deleted_files(
                     .any(|module| !defined.contains(module))
         })
         .collect()
+}
+
+/// What a change to `source` comes to, with the public functions it
+/// removes counted among those it changes, and those functions apart.
+pub fn told(
+    source: &Source,
+    stat: &FileDiffStat,
+) -> (Result<Narrowed, Unnarrowed>, BTreeSet<String>) {
+    let removed = functions_removed(&source.language, stat, &source.text);
+    let mut told = source.changed_functions(stat.lines_in(&source.text));
+    if let Ok(narrowed) = &mut told {
+        narrowed.functions.extend(removed.iter().cloned());
+    }
+    (told, removed)
+}
+
+/// The deleted files in a graph. Each is there only for the files that
+/// still use it: no one's user, no test, and not measured.
+pub struct Deleted {
+    pub all: HashSet<usize>,
+    /// Those that were sources: the origins among them.
+    pub sources: HashSet<usize>,
+}
+
+impl Deleted {
+    /// Read `sources` into a graph, with the files `changes` deletes as they
+    /// were, and the role of each file.
+    pub fn read(
+        sources: Vec<(PathBuf, String)>,
+        changes: &[&FileDiffStat],
+        related: Related,
+    ) -> (Vec<Source>, FileGraph, Vec<Role>, Deleted) {
+        let deleted = deleted_files(changes, &sources);
+        let paths: HashSet<PathBuf> = deleted.iter().map(|(p, _)| p.clone()).collect();
+        let (sources, graph) = reading::read(sources.into_iter().chain(deleted).collect(), related);
+        let mut roles = roles_of(&graph);
+        let deleted = Deleted::mark(&graph, &mut roles, &paths);
+        (sources, graph, roles, deleted)
+    }
+
+    /// Find the files of `paths` in `graph`, and make each `Role::Other`.
+    fn mark(graph: &FileGraph, roles: &mut [Role], paths: &HashSet<PathBuf>) -> Self {
+        let all: HashSet<usize> = (0..graph.files.len())
+            .filter(|&f| paths.contains(&graph.files[f]))
+            .collect();
+        let sources = all
+            .iter()
+            .copied()
+            .filter(|&f| roles[f] == Role::Source)
+            .collect();
+        for &f in &all {
+            roles[f] = Role::Other;
+        }
+        Deleted { all, sources }
+    }
+}
+
+/// The sources that still use `origin`, or `function` of it, with the
+/// calls that tell. `users` holds, for each file, the sources that use it.
+fn callers(
+    graph: &FileGraph,
+    users: &[Vec<usize>],
+    tests: &Tests,
+    origin: usize,
+    function: Option<&str>,
+) -> Vec<Caller> {
+    let mut callers: Vec<Caller> = users[origin]
+        .iter()
+        .filter_map(|&user| {
+            let used = graph.uses_of(user).find(|u| u.to == origin)?;
+            let calls: Vec<String> = used
+                .calls
+                .iter()
+                .filter(|c| function.is_none_or(|name| function_of(c) == name))
+                .map(|c| short_call(c))
+                .collect();
+            (function.is_none() || !calls.is_empty()).then(|| Caller {
+                file: graph.files[user].clone(),
+                calls,
+                protection: tests.protection(user, &users[user]),
+            })
+        })
+        .collect();
+    callers.sort_by(|a, b| a.file.cmp(&b.file));
+    callers
+}
+
+/// What the change removes, each with the sources that still use it: the
+/// `deleted` files, and the functions `gone` from each file that remains.
+pub fn still_used(
+    graph: &FileGraph,
+    users: &[Vec<usize>],
+    tests: &Tests,
+    deleted: &HashSet<usize>,
+    gone: &BTreeMap<usize, BTreeSet<String>>,
+) -> Vec<Removed> {
+    let whole = deleted.iter().map(|&f| (f, None));
+    let functions = gone
+        .iter()
+        .flat_map(|(&f, names)| names.iter().map(move |n| (f, Some(n.as_str()))));
+    let mut removed: Vec<Removed> = whole
+        .chain(functions)
+        .map(|(f, function)| Removed {
+            file: graph.files[f].clone(),
+            function: function.map(str::to_string),
+            callers: callers(graph, users, tests, f, function),
+        })
+        .collect();
+    removed.sort_by(|a, b| (&a.file, &a.function).cmp(&(&b.file, &b.function)));
+    removed
 }
 
 #[cfg(test)]

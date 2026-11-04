@@ -11,15 +11,15 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-use crate::deps::graph::{EdgeKind, FileGraph, Narrowed, Related, Unnarrowed, Use};
+use crate::deps::graph::{EdgeKind, FileGraph, Narrowed, Related, Source, Unnarrowed, Use};
 use crate::git::FileDiffStat;
 
 use super::function_reach;
 pub use super::narrowing::Narrowing;
 use super::protection::{Protection, Tests};
-use super::reading::{self, graphed_language};
-use super::removed::{self, Caller, Removed};
-use super::role::{self, Role, roles_of};
+use super::reading::graphed_language;
+use super::removed::{self, Deleted, Removed};
+use super::role::{self, Role};
 use super::routes;
 
 /// Whether the radius is measured for the language of `path`: every
@@ -213,7 +213,7 @@ impl Reverse {
 
 /// `Tip.apply` for `Booking.Tip.apply`: the module's own name is enough
 /// next to the file it is in.
-fn short_call(call: &str) -> String {
+pub(super) fn short_call(call: &str) -> String {
     let mut parts: Vec<&str> = call.rsplitn(3, '.').collect();
     parts.truncate(2);
     parts.reverse();
@@ -221,7 +221,7 @@ fn short_call(call: &str) -> String {
 }
 
 /// The function a call names: `apply` in `Booking.Tip.apply`.
-fn function_of(call: &str) -> &str {
+pub(super) fn function_of(call: &str) -> &str {
     call.rsplit('.').next().unwrap_or(call)
 }
 
@@ -246,6 +246,38 @@ fn exposure_of(used: &Use, changed: Option<&BTreeSet<String>>) -> (Exposure, Vec
     }
 }
 
+/// Each origin with the functions the change affects in it, if known, and
+/// the public functions it removes, which count among them.
+type Origins = BTreeMap<usize, Result<Narrowed, Unnarrowed>>;
+
+/// The origins of the radius: the changed sources and the deleted ones,
+/// and what each file that remains has removed.
+fn origins_of(
+    graph: &FileGraph,
+    sources: &[Source],
+    roles: &[Role],
+    deleted: &Deleted,
+    stat_of: &HashMap<&Path, Changed>,
+) -> (Origins, BTreeMap<usize, BTreeSet<String>>) {
+    let mut gone = BTreeMap::new();
+    let changed =
+        |f: usize| roles[f] == Role::Source && stat_of.contains_key(graph.files[f].as_path());
+    let origins = (0..graph.files.len())
+        .filter(|&f| changed(f) || deleted.sources.contains(&f))
+        .map(|f| {
+            if deleted.all.contains(&f) {
+                return (f, Err(Unnarrowed::NoLines));
+            }
+            let (told, removed) = removed::told(&sources[f], stat_of[graph.files[f].as_path()]);
+            if !removed.is_empty() {
+                gone.insert(f, removed);
+            }
+            (f, told)
+        })
+        .collect();
+    (origins, gone)
+}
+
 /// Measure the structural radius of `changed` over `sources`.
 pub fn compute(
     sources: Vec<(PathBuf, String)>,
@@ -253,50 +285,13 @@ pub fn compute(
     related: Related,
     max_distance: Option<usize>,
 ) -> Structural {
-    let deleted = removed::deleted_files(changed, &sources);
-    let deleted_paths: HashSet<PathBuf> = deleted.iter().map(|(p, _)| p.clone()).collect();
-    let (sources, graph) = reading::read(sources.into_iter().chain(deleted).collect(), related);
-    // A deleted file is in the graph only for the files that still use it:
-    // it is no one's user, no test, and not measured.
-    let mut roles = roles_of(&graph);
-    let deleted: HashSet<usize> = (0..graph.files.len())
-        .filter(|&f| deleted_paths.contains(&graph.files[f]))
-        .collect();
-    let deleted_sources: HashSet<usize> = deleted
-        .iter()
-        .copied()
-        .filter(|&f| roles[f] == Role::Source)
-        .collect();
-    for &f in &deleted {
-        roles[f] = Role::Other;
-    }
+    let (sources, graph, roles, deleted) = Deleted::read(sources, changed, related);
     let requesting = routes::requesting(&sources, &graph, |f| roles[f] == Role::Test, related);
     let reverse = Reverse::of(&graph, &roles, requesting);
 
     let stat_of: HashMap<&Path, Changed> = changed.iter().map(|c| (c.path.as_path(), *c)).collect();
     let in_diff = |file: usize| stat_of.contains_key(graph.files[file].as_path());
-    // Each origin with the functions the change affects in it, if known,
-    // and the public functions it removes, which count among them.
-    let mut gone: BTreeMap<usize, BTreeSet<String>> = BTreeMap::new();
-    let origins: BTreeMap<usize, Result<Narrowed, Unnarrowed>> = (0..graph.files.len())
-        .filter(|&f| (roles[f] == Role::Source && in_diff(f)) || deleted_sources.contains(&f))
-        .map(|f| {
-            if deleted.contains(&f) {
-                return (f, Err(Unnarrowed::NoLines));
-            }
-            let stat = stat_of[graph.files[f].as_path()];
-            let source = &sources[f];
-            let removed = removed::functions_removed(&source.language, stat, &source.text);
-            let mut told = source.changed_functions(stat.lines_in(&source.text));
-            if let Ok(narrowed) = &mut told {
-                narrowed.functions.extend(removed.iter().cloned());
-            }
-            if !removed.is_empty() {
-                gone.insert(f, removed);
-            }
-            (f, told)
-        })
-        .collect();
+    let (origins, gone) = origins_of(&graph, &sources, &roles, &deleted, &stat_of);
     let starts: Vec<usize> = origins.keys().copied().collect();
     let levels = reverse.levels(&starts);
 
@@ -371,43 +366,13 @@ pub fn compute(
         .collect();
     let walk = function_reach::Walk::new(&graph, &sources, &reverse.sources, related);
     let through = walk.levels(&told, &calling, max_distance);
-    let still_used = |origin: usize, function: Option<&str>| -> Vec<Caller> {
-        let mut callers: Vec<Caller> = reverse.sources[origin]
-            .iter()
-            .filter_map(|&user| {
-                let used = graph.uses_of(user).find(|u| u.to == origin)?;
-                let calls: Vec<String> = used
-                    .calls
-                    .iter()
-                    .filter(|c| function.is_none_or(|name| function_of(c) == name))
-                    .map(|c| short_call(c))
-                    .collect();
-                (function.is_none() || !calls.is_empty()).then(|| Caller {
-                    file: graph.files[user].clone(),
-                    calls,
-                    protection: reverse.tests.protection(user, &reverse.sources[user]),
-                })
-            })
-            .collect();
-        callers.sort_by(|a, b| a.file.cmp(&b.file));
-        callers
-    };
-    let mut removed: Vec<Removed> = deleted_sources
-        .iter()
-        .map(|&f| Removed {
-            file: graph.files[f].clone(),
-            function: None,
-            callers: still_used(f, None),
-        })
-        .collect();
-    for (&f, names) in &gone {
-        removed.extend(names.iter().map(|name| Removed {
-            file: graph.files[f].clone(),
-            function: Some(name.clone()),
-            callers: still_used(f, Some(name)),
-        }));
-    }
-    removed.sort_by(|a, b| (&a.file, &a.function).cmp(&(&b.file, &b.function)));
+    let removed = removed::still_used(
+        &graph,
+        &reverse.sources,
+        &reverse.tests,
+        &deleted.sources,
+        &gone,
+    );
 
     Structural {
         origins: narrowing.iter().map(|n| n.file.clone()).collect(),
