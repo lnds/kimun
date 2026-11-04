@@ -1,5 +1,10 @@
 use super::*;
 
+/// The public functions a change to `lines` affects, in order.
+fn told(source: &str, lines: &[usize]) -> Result<Vec<String>, Unnarrowed> {
+    changed_functions(source, lines).map(|n| n.functions.into_iter().collect())
+}
+
 const CONTEXT: &str = r#"defmodule Booking.Insights do
   @moduledoc """
   Insights.
@@ -48,9 +53,9 @@ fn line_of(needle: &str) -> usize {
         + 1
 }
 
-fn changed(needles: &[&str]) -> Result<Vec<String>, usize> {
+fn changed(needles: &[&str]) -> Result<Vec<String>, Unnarrowed> {
     let lines: Vec<usize> = needles.iter().map(|n| line_of(n)).collect();
-    changed_functions(CONTEXT, &lines).map(|names| names.into_iter().collect())
+    told(CONTEXT, &lines)
 }
 
 #[test]
@@ -103,14 +108,17 @@ fn a_change_to_a_private_function_affects_the_public_ones_that_reach_it() {
 #[test]
 fn a_change_that_may_concern_every_function_cannot_be_narrowed() {
     // The line is told, to say why.
-    assert_eq!(changed(&["defmodule Booking.Insights"]), Err(1));
+    assert_eq!(
+        changed(&["defmodule Booking.Insights"]),
+        Err(Unnarrowed::Outside(1))
+    );
 
     let with_use = "defmodule A do\n  use GenServer\n  import Ecto.Query\n  defstruct [:id]\n\n  def f, do: 1\nend\n";
-    assert_eq!(changed_functions(with_use, &[2]), Err(2));
-    assert_eq!(changed_functions(with_use, &[3]), Err(3));
-    assert_eq!(changed_functions(with_use, &[4]), Err(4));
+    assert_eq!(told(with_use, &[2]), Err(Unnarrowed::Outside(2)));
+    assert_eq!(told(with_use, &[3]), Err(Unnarrowed::Outside(3)));
+    assert_eq!(told(with_use, &[4]), Err(Unnarrowed::Outside(4)));
     // Even next to a change inside a function: the first such line wins.
-    assert_eq!(changed_functions(with_use, &[6, 4, 3]), Err(4));
+    assert_eq!(told(with_use, &[6, 4, 3]), Err(Unnarrowed::Outside(4)));
 }
 
 #[test]
@@ -129,7 +137,7 @@ fn naming_what_the_functions_use_changes_no_function() {
     let grouped = "defmodule A do\n  alias B.{\n    C,\n    D\n  }\n  require Logger\n\n  def f, do: C.x()\nend\n";
     for line in 2..=6 {
         assert_eq!(
-            changed_functions(grouped, &[line]).unwrap().len(),
+            told(grouped, &[line]).unwrap().len(),
             0,
             "line {line} should change no function"
         );
@@ -143,24 +151,25 @@ fn a_module_attribute_changes_the_functions_that_read_it() {
 
     let source = "defmodule A do\n  @moduledoc false\n  @type t :: map()\n  @timeout 5_000\n  @timeouts %{a: 1}\n  @unused :x\n  @behaviour Runner\n\n  def wait, do: sleep(@timeout)\n  def all, do: @timeouts\n  def other, do: :ok\nend\n";
     // What describes the module or its types changes no function.
-    assert_eq!(changed_functions(source, &[2, 3]).unwrap().len(), 0);
+    assert_eq!(told(source, &[2, 3]).unwrap().len(), 0);
     // A longer name is another attribute.
-    let names = |lines: &[usize]| {
-        changed_functions(source, lines).map(|n| n.into_iter().collect::<Vec<_>>())
-    };
+    let names = |lines: &[usize]| told(source, lines);
     assert_eq!(names(&[4]).unwrap(), ["wait"]);
     assert_eq!(names(&[5]).unwrap(), ["all"]);
     // One that no function reads may be read by the compiler or a macro.
-    assert_eq!(names(&[6]), Err(6));
-    assert_eq!(names(&[7]), Err(7));
+    assert_eq!(names(&[6]), Err(Unnarrowed::Unread(6, "@unused".into())));
+    assert_eq!(
+        names(&[7]),
+        Err(Unnarrowed::CompileTime(7, "@behaviour".into()))
+    );
 }
 
 #[test]
 fn a_change_to_comments_or_the_module_doc_affects_nothing() {
     assert_eq!(changed(&["Insights."]).unwrap(), Vec::<String>::new());
-    assert_eq!(changed_functions(CONTEXT, &[]).unwrap().len(), 0);
+    assert_eq!(told(CONTEXT, &[]).unwrap().len(), 0);
     // A line past the end of the file is ignored.
-    assert_eq!(changed_functions(CONTEXT, &[9_999]).unwrap().len(), 0);
+    assert_eq!(told(CONTEXT, &[9_999]).unwrap().len(), 0);
 }
 
 #[test]
@@ -210,8 +219,8 @@ fn component_line(needle: &str) -> usize {
     COMPONENTS.lines().position(|l| l.contains(needle)).unwrap() + 1
 }
 
-fn changed_component(needle: &str) -> Result<Vec<String>, usize> {
-    changed_functions(COMPONENTS, &[component_line(needle)]).map(|n| n.into_iter().collect())
+fn changed_component(needle: &str) -> Result<Vec<String>, Unnarrowed> {
+    told(COMPONENTS, &[component_line(needle)])
 }
 
 #[test]
@@ -227,7 +236,10 @@ fn the_assigns_a_component_declares_are_part_of_it() {
     }
     assert_eq!(changed_component("attr(:kind").unwrap(), ["badge"]);
     // What the module uses is still the module's.
-    assert_eq!(changed_component("use Phoenix.Component"), Err(2));
+    assert_eq!(
+        changed_component("use Phoenix.Component"),
+        Err(Unnarrowed::Outside(2))
+    );
 }
 
 #[test]
@@ -259,4 +271,98 @@ fn a_declaration_above_does_not_reach_past_another_function() {
         spans,
         [("one".to_string(), 2, 5), ("two".to_string(), 7, 7)]
     );
+}
+
+const COUNTRIES: &str = r#"defmodule Geo do
+  @valid_countries [
+    "CL",
+    # Peru joined later.
+    "PE"
+  ]
+  @codes ~w(
+    CL
+    PE
+  )
+  @all_codes @codes ++ ["AR"]
+  @pattern ~r/^[A-Z]{2}$/
+
+  def valid_countries, do: @valid_countries
+
+  def valid?(code), do: code in valid_countries()
+
+  def known?(code), do: code in @all_codes
+
+  defp shape?(code), do: code =~ @pattern
+
+  def check(code), do: shape?(code) and known?(code)
+end
+"#;
+
+fn country_line(needle: &str) -> usize {
+    COUNTRIES.lines().position(|l| l.contains(needle)).unwrap() + 1
+}
+
+#[test]
+fn every_line_of_an_attribute_value_changes_its_readers() {
+    for needle in ["\"PE\"", "# Peru", "  ]", "@valid_countries ["] {
+        assert_eq!(
+            told(COUNTRIES, &[country_line(needle)]).unwrap(),
+            ["valid?", "valid_countries"],
+            "{needle}"
+        );
+    }
+    // Inside a sigil, the words are blank once literals are set aside.
+    assert_eq!(
+        told(COUNTRIES, &[country_line("    PE")]).unwrap(),
+        ["check", "known?"]
+    );
+}
+
+#[test]
+fn an_attribute_that_reads_a_changed_one_changes_too() {
+    let narrowed = changed_functions(COUNTRIES, &[country_line("    CL")]).unwrap();
+    assert_eq!(
+        narrowed.functions.into_iter().collect::<Vec<_>>(),
+        ["check", "known?"]
+    );
+    // What reads each attribute, private functions too.
+    let read: Vec<(String, Vec<String>)> = narrowed
+        .attributes
+        .into_iter()
+        .map(|(name, by)| (name, by.into_iter().collect()))
+        .collect();
+    assert_eq!(
+        read,
+        [("@all_codes".to_string(), vec!["known?".to_string()])]
+    );
+
+    let pattern = changed_functions(COUNTRIES, &[country_line("@pattern")]).unwrap();
+    assert_eq!(pattern.functions.into_iter().collect::<Vec<_>>(), ["check"]);
+    assert_eq!(pattern.attributes.keys().collect::<Vec<_>>(), ["@pattern"]);
+}
+
+#[test]
+fn an_attribute_the_compiler_reads_concerns_every_function() {
+    let schema = "defmodule A do\n  use Ecto.Schema\n  @derive {Jason.Encoder, only: [\n    :id\n  ]}\n  @primary_key {:id, :binary_id, autogenerate: true}\n\n  def f, do: 1\nend\n";
+    let derive = Err(Unnarrowed::CompileTime(3, "@derive".into()));
+    assert_eq!(told(schema, &[3]), derive);
+    assert_eq!(
+        told(schema, &[4]),
+        Err(Unnarrowed::CompileTime(4, "@derive".into()))
+    );
+    assert_eq!(
+        told(schema, &[6]),
+        Err(Unnarrowed::CompileTime(6, "@primary_key".into()))
+    );
+}
+
+#[test]
+fn the_routes_of_a_router_are_told_apart() {
+    let router = "defmodule Web.Router do\n  use Web, :router\n\n  scope \"/api\", Web do\n    pipe_through :api\n    get \"/items\", ItemController, :index\n  end\n\n  def helper, do: :ok\nend\n";
+    assert_eq!(told(router, &[6]), Err(Unnarrowed::Routes(6)));
+    assert_eq!(told(router, &[5]), Err(Unnarrowed::Routes(5)));
+    assert_eq!(told(router, &[9]).unwrap(), ["helper"]);
+    // The same line elsewhere is just outside every function.
+    let plain = router.replace("use Web, :router", "use Web, :controller");
+    assert_eq!(told(&plain, &[6]), Err(Unnarrowed::Outside(6)));
 }

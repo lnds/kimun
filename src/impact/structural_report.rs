@@ -149,6 +149,18 @@ impl Structural {
         }
     }
 
+    /// The module attributes the change touches, each with the functions
+    /// that read it: why those are among the functions that changed.
+    fn attributes_line(&self) -> Option<String> {
+        let read: Vec<String> = self
+            .narrowing
+            .iter()
+            .flat_map(|n| &n.attributes)
+            .map(|a| format!("{} (read by {})", a.name, names(a.read_by.iter(), 3)))
+            .collect();
+        (!read.is_empty()).then(|| format!(" Attributes: {}", names(read.iter(), 3)))
+    }
+
     /// The summary when the change is narrowed to `functions`.
     fn summary_of_functions(&self, functions: &[String]) -> Vec<String> {
         let calling = match self.count(Exposure::Calls) {
@@ -166,6 +178,7 @@ impl Structural {
             self.changed_line(),
             format!(" Functions: {}", names(functions.iter(), 8)),
         ];
+        lines.extend(self.attributes_line());
         lines.extend(partly.then(|| format!(" Every use counts for: {}", unnarrowed(self))));
         lines.push(self.radius_line());
         lines.extend((referring > 0).then(|| {

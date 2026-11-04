@@ -12,6 +12,7 @@ mod entry;
 mod function_reach;
 mod help;
 mod inert;
+mod narrowing;
 mod pr;
 mod projects;
 mod protection;

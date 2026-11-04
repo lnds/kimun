@@ -4,8 +4,10 @@
 use std::collections::BTreeSet;
 
 use super::elixir::{Aliases, is_ident};
+use super::elixir_attributes::{Attributes, Readers};
 use super::elixir_directives::ident_of;
 use super::elixir_literals::code_only;
+use super::graph::{Narrowed, Unnarrowed};
 
 /// Keywords that define something callable, and whether it is public.
 const DEFINITIONS: [(&str, bool); 7] = [
@@ -28,7 +30,7 @@ pub struct Function {
     pub last_line: usize,
 }
 
-fn indent_of(line: &str) -> usize {
+pub(super) fn indent_of(line: &str) -> usize {
     line.len() - line.trim_start().len()
 }
 
@@ -132,56 +134,52 @@ pub(super) fn calls_local(body: &str, name: &str) -> bool {
     })
 }
 
-/// Module attributes that describe the module or its types. A change to one
-/// alters no function.
-const DESCRIPTIVE_ATTRIBUTES: [&str; 5] = ["moduledoc", "typedoc", "type", "typep", "opaque"];
-
-/// What a touched line outside every function means for the functions.
-enum Outside<'a> {
-    /// Nothing: a blank or a comment, an `alias` or a `require` (which only
-    /// name what the functions use), a descriptive attribute.
-    Neutral,
-    /// A module attribute: the functions that read it change with it.
-    Attribute(&'a str),
-    /// Anything else (`use`, `import`, `defstruct`, a schema): it may
-    /// concern every function.
-    Module,
+/// Whether a touched line outside every function and every attribute
+/// changes none of them: a blank or a comment, an `alias` or a `require`,
+/// which only name what the functions use. Anything else (`use`, `import`,
+/// `defstruct`, a schema) may concern every function. `line` is the code as
+/// written and `used` the same line once `alias` statements are blanked.
+fn is_neutral(line: &str, used: &str) -> bool {
+    used.trim().is_empty() || line.trim().starts_with("require ")
 }
 
-/// Classify a line outside every function. `line` is the code as written
-/// and `used` the same line once `alias` statements are blanked.
-fn outside<'a>(line: &'a str, used: &str) -> Outside<'a> {
-    let content = line.trim();
-    if used.trim().is_empty() || content.starts_with("require ") {
-        return Outside::Neutral;
-    }
-    match content.strip_prefix('@').map(ident_of) {
-        Some(name) if DESCRIPTIVE_ATTRIBUTES.contains(&name) => Outside::Neutral,
-        Some(name) if !name.is_empty() => Outside::Attribute(name),
-        _ => Outside::Module,
+/// Add to `changed` every function of `bodies` that reaches one of them
+/// through local calls: it behaves differently too.
+fn carry_to_callers<'a>(bodies: &'a [(&Function, String)], changed: &mut BTreeSet<&'a str>) {
+    loop {
+        let callers: Vec<&str> = bodies
+            .iter()
+            .filter(|(f, _)| !changed.contains(f.name.as_str()))
+            .filter(|(_, body)| changed.iter().any(|name| calls_local(body, name)))
+            .map(|(f, _)| f.name.as_str())
+            .collect();
+        if callers.is_empty() {
+            return;
+        }
+        changed.extend(callers);
     }
 }
 
-/// Whether `body` reads the module attribute `name`.
-fn reads_attribute(body: &str, name: &str) -> bool {
-    body.match_indices(name)
-        .any(|(at, _)| body[..at].ends_with('@') && !body[at + name.len()..].starts_with(is_ident))
-}
-
-/// The public functions a change to `lines` affects: the ones it touches,
-/// those that read a module attribute it touches, and those that reach any
-/// of them through local calls.
+/// What a change to `lines` comes to: the public functions it touches,
+/// those that read a module attribute it touches (or an attribute that
+/// reads it), and those that reach any of them through local calls.
 ///
 /// `Err` with the first line that may concern every function, when the
-/// change touches one: a `use`, an `import`, a struct, an attribute no
-/// function reads. Then nothing tells which callers are affected.
-pub fn changed_functions(source: &str, lines: &[usize]) -> Result<BTreeSet<String>, usize> {
+/// change touches one: a `use`, an `import`, a struct, an attribute the
+/// compiler reads or that no function reads, the routes of a router. Then
+/// nothing tells which callers are affected.
+pub fn changed_functions(source: &str, lines: &[usize]) -> Result<Narrowed, Unnarrowed> {
     let code = code_only(source);
     let (_, without_aliases) = Aliases::of(&code);
     let text: Vec<&str> = code.lines().collect();
+    let raw: Vec<&str> = source.lines().collect();
     let used: Vec<&str> = without_aliases.lines().collect();
     let functions = functions(source);
-    let body = |f: &Function| text[f.first_line - 1..f.last_line].join("\n");
+    let bodies: Vec<(&Function, String)> = functions
+        .iter()
+        .map(|f| (f, text[f.first_line - 1..f.last_line].join("\n")))
+        .collect();
+    let attributes = Attributes::of(&text, &raw, &functions);
     let holder = |line: usize| {
         functions
             .iter()
@@ -189,50 +187,38 @@ pub fn changed_functions(source: &str, lines: &[usize]) -> Result<BTreeSet<Strin
     };
 
     let mut changed: BTreeSet<&str> = BTreeSet::new();
-    for &line in lines {
-        let Some(written) = text.get(line.wrapping_sub(1)) else {
-            continue;
-        };
+    let mut read = Readers::new();
+    for &line in lines.iter().filter(|&&l| (1..=text.len()).contains(&l)) {
         if let Some(function) = holder(line) {
             changed.insert(&function.name);
-            continue;
-        }
-        match outside(written, used.get(line - 1).copied().unwrap_or_default()) {
-            Outside::Neutral => {}
-            Outside::Module => return Err(line),
-            Outside::Attribute(name) => {
-                let readers: Vec<&str> = functions
-                    .iter()
-                    .filter(|f| reads_attribute(&body(f), name))
-                    .map(|f| f.name.as_str())
-                    .collect();
-                if readers.is_empty() {
-                    return Err(line);
-                }
-                changed.extend(readers);
+        } else if let Some(readers) = attributes.readers(line, &bodies) {
+            for (attribute, by) in readers? {
+                read.entry(attribute).or_default().extend(by);
             }
+        } else if !is_neutral(
+            text[line - 1],
+            used.get(line - 1).copied().unwrap_or_default(),
+        ) {
+            return Err(attributes.outside(line));
         }
     }
-
-    // A function that calls a changed one behaves differently too.
-    loop {
-        let callers: Vec<&str> = functions
+    let readers = read.values().flatten();
+    changed.extend(
+        functions
             .iter()
-            .filter(|f| !changed.contains(f.name.as_str()))
-            .filter(|f| changed.iter().any(|name| calls_local(&body(f), name)))
-            .map(|f| f.name.as_str())
-            .collect();
-        if callers.is_empty() {
-            break;
-        }
-        changed.extend(callers);
-    }
+            .filter(|f| readers.clone().any(|r| *r == f.name))
+            .map(|f| f.name.as_str()),
+    );
+    carry_to_callers(&bodies, &mut changed);
 
-    Ok(functions
-        .iter()
-        .filter(|f| f.public && changed.contains(f.name.as_str()))
-        .map(|f| f.name.clone())
-        .collect())
+    Ok(Narrowed {
+        functions: functions
+            .iter()
+            .filter(|f| f.public && changed.contains(f.name.as_str()))
+            .map(|f| f.name.clone())
+            .collect(),
+        attributes: read,
+    })
 }
 
 #[cfg(test)]
