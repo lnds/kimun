@@ -1844,6 +1844,7 @@ All sections and fields are optional — omit any you don't need. A fully docume
 - Handles pragmas (e.g., Haskell `{-# LANGUAGE ... #-}`) as code
 - Mixed lines (code + comment) are counted as code, matching `cloc` behavior
 - A comment marker inside a string opens no comment: `let glob = "crates/*";` is a line of code. Here kimun parts from `cloc`, which reads the `/*` of a string as the start of a block comment and counts every line up to the next `*/` as comment. On code that writes globs or paths in strings the difference adds up: on kimun's own sources, tests included, `cloc` counts 1,719 lines of code as comment. `tokei` reads them as kimun does
+- Strings are read as each language writes them, also when they span lines: template literals (JavaScript, TypeScript), Go raw strings, text blocks and `"""` strings (Java, Kotlin, Swift, Scala, Groovy, Dart), C# verbatim strings (`@"…"`), C++ raw strings (`R"(…)"`), heredocs (Ruby, PHP, shells, Perl), and a `"` string that goes on past its line where the language allows it or after a `\`. Their lines are code, whatever comment markers they hold: a `` glob(`${root}/*.js`) `` opens no comment. A character literal holding a quote (`'"'`) opens no string, and `$#` and `${#x}` are no comment in a shell. PHP comments with `#` as well as `//`
 - Reads sources in any 8-bit encoding (Latin-1, Windows-1252) whole: bytes that are not UTF-8 are replaced, not taken for the end of the file
 
 ## Supported Languages

@@ -7,21 +7,14 @@
 //! many bytes to advance, any state transition, and whether the
 //! current line contains code or comment content.
 use super::language::LanguageSpec;
-use super::raw;
+use super::literals::character_len;
+use super::literals::heredoc::{Heredoc, heredoc_at};
+use super::literals::syntax::Syntax;
+pub(super) use super::strings::StringKind;
+use super::strings::{literal_open, scan};
 
 /// The opening and closing delimiters of a block comment.
 pub(super) type Block = (&'static str, &'static str);
-
-/// The kind of string literal currently being parsed.
-#[derive(Debug, PartialEq)]
-pub(super) enum StringKind {
-    Double,
-    Single,
-    TripleDouble,
-    TripleSingle,
-    /// A raw string, with the number of `#` that opened it.
-    Raw(usize),
-}
 
 /// FSM state for the line classifier. Tracks whether we are in normal code,
 /// inside a string literal, or inside a (possibly nested) block comment.
@@ -39,6 +32,9 @@ pub(super) enum State {
     /// Inside a triple-quoted string that counts as comment (Python's
     /// docstrings, as cloc counts them), with the kind that closes it.
     InDocString(StringKind),
+    /// Inside the text of a heredoc, which ends at a line holding its
+    /// terminator.
+    InHeredoc(Heredoc),
 }
 
 /// Result of processing one FSM step: how many bytes to advance, optional
@@ -49,6 +45,8 @@ pub(super) struct StepResult {
     pub has_code: bool,
     pub has_comment: bool,
     pub break_line: bool,
+    /// A heredoc whose text starts on the next line.
+    pub heredoc: Option<Heredoc>,
 }
 
 impl StepResult {
@@ -60,6 +58,7 @@ impl StepResult {
             has_code: true,
             has_comment: false,
             break_line: false,
+            heredoc: None,
         }
     }
 
@@ -71,6 +70,7 @@ impl StepResult {
             has_code: false,
             has_comment: true,
             break_line: false,
+            heredoc: None,
         }
     }
 
@@ -82,6 +82,7 @@ impl StepResult {
             has_code: false,
             has_comment: true,
             break_line: true,
+            heredoc: None,
         }
     }
 }
@@ -118,73 +119,121 @@ fn skip_pragma(bytes: &[u8], start: usize, pclose: &str) -> usize {
 pub(super) fn step_normal(
     rest: &[u8],
     spec: &LanguageSpec,
+    syntax: &Syntax,
     full_bytes: &[u8],
     pos: usize,
 ) -> StepResult {
-    // String delimiters — triple quotes are matched before the single-byte
-    // ones, so `"""` never reads as an empty string followed by a quote.
-    if let Some((width, kind)) = literal_open(full_bytes, pos, spec) {
-        return open_literal(width, kind, spec);
-    }
+    let at = At {
+        bytes: full_bytes,
+        pos,
+    };
+    literal_step(at, spec, syntax)
+        .or_else(|| comment_step(at, spec, syntax))
+        .unwrap_or_else(|| StepResult {
+            advance: 1,
+            new_state: None,
+            has_code: !rest[0].is_ascii_whitespace(),
+            has_comment: false,
+            break_line: false,
+            heredoc: None,
+        })
+}
 
-    // Documentation attribute (e.g. Kaikai `#[doc(`) — before the line comment
-    // check, since the marker starts with the `#` comment character.
+/// A position on a line.
+#[derive(Clone, Copy)]
+struct At<'l> {
+    bytes: &'l [u8],
+    pos: usize,
+}
+
+impl<'l> At<'l> {
+    fn rest(&self) -> &'l [u8] {
+        &self.bytes[self.pos..]
+    }
+}
+
+/// The step of a literal that starts at `pos`: a string (triple quotes are
+/// matched before the single-byte ones, so `"""` never reads as an empty
+/// string followed by a quote), a quote that opens none, or the marker of a
+/// heredoc.
+fn literal_step(at: At, spec: &LanguageSpec, syntax: &Syntax) -> Option<StepResult> {
+    let (rest, full_bytes, pos) = (at.rest(), at.bytes, at.pos);
+    if let Some((width, kind)) = literal_open(full_bytes, pos, spec, syntax) {
+        return Some(open_literal(width, kind, spec));
+    }
+    if let Some(width) = quote_as_code(rest, syntax, full_bytes, pos) {
+        return Some(StepResult::code(width, None));
+    }
+    let (heredoc, width) = heredoc_at(full_bytes, pos, syntax.heredocs)?;
+    let mut step = StepResult::code(width, None);
+    step.heredoc = Some(heredoc);
+    Some(step)
+}
+
+/// The step of what opens at `pos` among a documentation attribute (before
+/// line comments, as Kaikai's `#[doc(` starts with `#`), a pragma (before
+/// block comments, as `{-#` starts with `{-`), a block comment and a line
+/// comment.
+fn comment_step(at: At, spec: &LanguageSpec, syntax: &Syntax) -> Option<StepResult> {
+    let (rest, full_bytes, pos) = (at.rest(), at.bytes, at.pos);
     if let Some((open, close)) = spec
         .doc_attributes
         .iter()
         .find(|(open, _)| bytes_start_with(rest, open))
     {
-        return StepResult::comment(open.len(), Some(State::InDocAttribute(close, None)));
+        return Some(StepResult::comment(
+            open.len(),
+            Some(State::InDocAttribute(close, None)),
+        ));
     }
-
-    // Pragma (e.g. Haskell {-# ... #-}) — must check before block comment
     if let Some((popen, pclose)) = spec.pragma
         && bytes_start_with(rest, popen)
     {
         let end = skip_pragma(full_bytes, pos + popen.len(), pclose);
-        return StepResult::code(end - pos, None);
+        return Some(StepResult::code(end - pos, None));
     }
-
-    // Block comment open
     let mut blocks = spec
         .block_comment
         .into_iter()
         .chain(spec.other_block_comment);
     if let Some(block) = blocks.find(|(open, _)| bytes_start_with(rest, open)) {
-        return StepResult::comment(block.0.len(), Some(State::InBlockComment(block, 1)));
+        return Some(StepResult::comment(
+            block.0.len(),
+            Some(State::InBlockComment(block, 1)),
+        ));
     }
+    let comments = spec.line_comments.iter();
+    let mut markers = comments.filter(|marker| bytes_start_with(rest, marker));
+    markers
+        .any(|marker| opens_line_comment(rest, marker, spec, syntax.hash_is_code(full_bytes, pos)))
+        .then(StepResult::line_comment)
+}
 
-    // Line comment
-    let is_line_comment = spec.line_comments.iter().any(|lc| {
-        if !bytes_start_with(rest, lc) {
-            return false;
-        }
-        if !spec.line_comment_not_before.is_empty()
-            && let Some(&next_byte) = rest.get(lc.len())
-            && spec.line_comment_not_before.as_bytes().contains(&next_byte)
-        {
-            return false;
-        }
-        !is_directive(&rest[lc.len()..], spec)
-    });
-    if is_line_comment {
-        return StepResult::line_comment();
-    }
+/// Whether `marker`, which `rest` starts with, opens a line comment: not
+/// when a character that makes an operator of it follows (Haskell's `-->`),
+/// when a directive follows, nor for a `#` that is code.
+fn opens_line_comment(rest: &[u8], marker: &str, spec: &LanguageSpec, hash_is_code: bool) -> bool {
+    let after = &rest[marker.len()..];
+    let operator = after
+        .first()
+        .is_some_and(|b| spec.line_comment_not_before.as_bytes().contains(b));
+    !(operator || is_directive(after, spec) || (marker == "#" && hash_is_code))
+}
 
-    StepResult {
-        advance: 1,
-        new_state: None,
-        has_code: !rest[0].is_ascii_whitespace(),
-        has_comment: false,
-        break_line: false,
+/// The width of a quote that opens no string: a character literal where
+/// `'` opens no string (`'"'`), the quote of a lifetime or a label, or the
+/// code of a quote character (`?"`).
+fn quote_as_code(rest: &[u8], syntax: &Syntax, full_bytes: &[u8], pos: usize) -> Option<usize> {
+    if rest[0] == b'\'' && !syntax.single_quotes {
+        return Some(1 + character_len(&rest[1..]));
     }
+    syntax.char_code_len(full_bytes, pos)
 }
 
 /// The step that opens a string literal: code, or comment for a
 /// triple-quoted string in a language that counts those as comment.
 fn open_literal(width: usize, kind: StringKind, spec: &LanguageSpec) -> StepResult {
-    let triple = matches!(kind, StringKind::TripleDouble | StringKind::TripleSingle);
-    if triple && spec.triple_quote_comments {
+    if kind.is_triple() && spec.triple_quote_comments {
         StepResult::comment(width, Some(State::InDocString(kind)))
     } else {
         StepResult::code(width, Some(State::InString(kind)))
@@ -209,73 +258,10 @@ pub(super) fn is_column_one_comment(line: &str, spec: &LanguageSpec) -> bool {
     }
 }
 
-/// The delimiter of a string kind and how many bytes it spans.
-fn string_delimiter(kind: &StringKind) -> &'static [u8] {
-    match kind {
-        StringKind::TripleDouble => b"\"\"\"",
-        StringKind::TripleSingle => b"'''",
-        StringKind::Double | StringKind::Raw(_) => b"\"",
-        StringKind::Single => b"'",
-    }
-}
-
-/// Detect a string literal opening at `rest`, honouring the spec's opt-in
-/// flags. Triple quotes win over single-byte ones so `"""` is not read as an
-/// empty string. Returns the delimiter width and the kind that was opened.
-fn string_open(rest: &[u8], spec: &LanguageSpec) -> Option<(usize, StringKind)> {
-    let candidates = [
-        (spec.triple_quote_strings, StringKind::TripleDouble),
-        (
-            spec.triple_quote_strings && spec.single_quote_strings,
-            StringKind::TripleSingle,
-        ),
-        (true, StringKind::Double),
-        (spec.single_quote_strings, StringKind::Single),
-    ];
-    candidates.into_iter().find_map(|(enabled, kind)| {
-        let delim = string_delimiter(&kind);
-        (enabled && rest.starts_with(delim)).then_some((delim.len(), kind))
-    })
-}
-
-/// Detect the string literal that opens at `pos`, raw or not.
-fn literal_open(bytes: &[u8], pos: usize, spec: &LanguageSpec) -> Option<(usize, StringKind)> {
-    let raw = spec.raw_strings.then(|| raw::open(bytes, pos));
-    raw.flatten().or_else(|| string_open(&bytes[pos..], spec))
-}
-
-/// Scan one byte inside a string literal: how far to advance, and whether the
-/// literal closes here. Escapes are only honoured in single-byte-delimited
-/// strings; a triple-quoted body ends at its delimiter, and a raw string at
-/// a quote followed by the `#` that opened it.
-fn string_scan(rest: &[u8], kind: &StringKind, spec: &LanguageSpec) -> (usize, bool) {
-    match kind {
-        StringKind::Raw(hashes) => raw::scan(rest, *hashes),
-        _ => quoted_scan(rest, kind, spec.backslash_escapes),
-    }
-}
-
-/// `string_scan` inside a string that ends at its delimiter.
-fn quoted_scan(rest: &[u8], kind: &StringKind, escapes: bool) -> (usize, bool) {
-    let delim = string_delimiter(kind);
-    if rest.starts_with(delim) {
-        return (delim.len(), true);
-    }
-    if escapes && delim.len() == 1 && rest[0] == b'\\' {
-        return (rest.len().min(2), false);
-    }
-    (1, false)
-}
-
 /// Process one byte inside a string literal: code, or comment inside a
 /// triple-quoted string a language counts as comment (`doc`).
-pub(super) fn step_in_string(
-    rest: &[u8],
-    kind: &StringKind,
-    spec: &LanguageSpec,
-    doc: bool,
-) -> StepResult {
-    let (advance, closed) = string_scan(rest, kind, spec);
+pub(super) fn step_in_string(rest: &[u8], kind: &mut StringKind, doc: bool) -> StepResult {
+    let (advance, closed) = scan(rest, kind);
     let new_state = closed.then_some(State::Normal);
     if doc {
         StepResult::comment(advance, new_state)
@@ -291,11 +277,12 @@ pub(super) fn step_in_string(
 pub(super) fn step_in_doc_attribute(
     rest: &[u8],
     spec: &LanguageSpec,
+    syntax: &Syntax,
     close: &'static str,
-    inner: &Option<StringKind>,
+    inner: &mut Option<StringKind>,
 ) -> StepResult {
     if let Some(kind) = inner {
-        let (advance, closed) = string_scan(rest, kind, spec);
+        let (advance, closed) = scan(rest, kind);
         return StepResult::comment(
             advance,
             closed.then_some(State::InDocAttribute(close, None)),
@@ -306,7 +293,7 @@ pub(super) fn step_in_doc_attribute(
         return StepResult::comment(close.len(), Some(State::Normal));
     }
 
-    match string_open(rest, spec) {
+    match literal_open(rest, 0, spec, syntax) {
         Some((width, kind)) => {
             StepResult::comment(width, Some(State::InDocAttribute(close, Some(kind))))
         }

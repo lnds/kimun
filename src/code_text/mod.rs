@@ -9,15 +9,14 @@
 //! it on the lines it continues on.
 
 mod cursor;
-mod heredoc;
-mod openers;
-mod syntax;
 
 use crate::loc::language::LanguageSpec;
+use crate::loc::literals::character_len;
+use crate::loc::literals::heredoc::{self, Heredoc, terminator_end};
+use crate::loc::literals::openers::{Delimited, Literal, opener_at};
+use crate::loc::literals::regex::{regex_end, value_may_start};
+use crate::loc::literals::syntax::Syntax;
 use cursor::Cursor;
-use heredoc::{Heredoc, terminator_end};
-use openers::{Delimited, Literal, opener_at};
-use syntax::Syntax;
 
 /// A line as code: its text, whether code is left on it, whether a
 /// literal opens on it, and whether it lies inside one that opened before
@@ -150,11 +149,8 @@ impl<'s> Lexer<'s> {
         let blocked = rest
             .get(marker.len())
             .is_some_and(|b| not_before.contains(b));
-        let before = cur.i.checked_sub(1).map(|at| cur.bytes[at]);
-        let in_word =
-            self.syntax.hash_at_word_start && before.is_some_and(|b| !b" \t;&|()".contains(&b));
-        let dollar = self.syntax.dollar_hash && before == Some(b'$');
-        !(blocked || (*marker == "#" && (in_word || dollar)))
+        let code = *marker == "#" && self.syntax.hash_is_code(cur.bytes, cur.i);
+        !(blocked || code)
     }
 
     fn comment_step(&mut self, cur: &mut Cursor, mut comment: Comment) {
@@ -229,33 +225,22 @@ impl<'s> Lexer<'s> {
     /// A quote that opens no string: a character literal, the quote of a
     /// lifetime or a label, or the code of a quote character (`?"`).
     fn quote_mark(&self, cur: &mut Cursor) -> bool {
-        let rest = cur.rest();
-        let before = cur.i.checked_sub(1).map(|at| cur.bytes[at]);
-        match rest[0] {
-            b'\'' if !self.syntax.single_quotes => {
-                cur.char_literal(character_len(&rest[1..]));
-                true
-            }
-            b'?' if self.syntax.char_codes
-                && matches!(rest.get(1), Some(b'"' | b'\'' | b'\\'))
-                && !before.is_some_and(|b| heredoc::is_word_byte(b) || b")]".contains(&b)) =>
-            {
-                cur.keep();
-                cur.blank_n(if rest[1] == b'\\' { 2 } else { 1 });
-                true
-            }
-            _ => false,
+        if cur.bytes[cur.i] == b'\'' && !self.syntax.single_quotes {
+            cur.char_literal(character_len(&cur.rest()[1..]));
+            return true;
         }
+        let Some(len) = self.syntax.char_code_len(cur.bytes, cur.i) else {
+            return false;
+        };
+        cur.keep();
+        cur.blank_n(len - 1);
+        true
     }
 
     fn regex(&self, cur: &mut Cursor) -> bool {
-        let opens = self.syntax.regex
-            && cur.bytes[cur.i] == b'/'
-            && crate::detection::value_may_start(&cur.out[..cur.i]);
-        let Some(end) = opens
-            .then(|| crate::detection::regex_end(cur.bytes, cur.i + 1))
-            .flatten()
-        else {
+        let opens =
+            self.syntax.regex && cur.bytes[cur.i] == b'/' && value_may_start(&cur.out[..cur.i]);
+        let Some(end) = opens.then(|| regex_end(cur.bytes, cur.i + 1)).flatten() else {
             return false;
         };
         cur.keep();
@@ -288,21 +273,6 @@ impl<'s> Lexer<'s> {
         if let Some(heredoc) = self.pending.take() {
             self.state = State::Heredoc(heredoc);
         }
-    }
-}
-
-/// The length of the character literal whose opening quote precedes
-/// `rest`, closing quote included: 0 when the quote is that of a lifetime
-/// or a label (`'a`, `'outer:`), or closes nothing nearby.
-fn character_len(rest: &[u8]) -> usize {
-    let name = rest
-        .iter()
-        .take_while(|b| heredoc::is_word_byte(**b))
-        .count();
-    if name > 0 && rest.get(name) != Some(&b'\'') {
-        0
-    } else {
-        crate::detection::literal_len(rest)
     }
 }
 

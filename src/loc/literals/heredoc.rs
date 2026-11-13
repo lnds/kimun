@@ -1,18 +1,19 @@
 //! Heredocs: a marker on a line, the text on the lines after it, up to a
 //! line that holds the terminator.
 
+use super::is_word_byte;
 use super::syntax::Heredocs;
 
 /// A heredoc whose text starts on the next line.
 #[derive(Clone, Debug, PartialEq)]
-pub(super) struct Heredoc {
+pub(crate) struct Heredoc {
     pub terminator: String,
     /// The terminator may be indented.
     pub indented: bool,
 }
 
 /// The heredoc whose marker starts at `at`, with the length of the marker.
-pub(super) fn heredoc_at(bytes: &[u8], at: usize, flavor: Heredocs) -> Option<(Heredoc, usize)> {
+pub(crate) fn heredoc_at(bytes: &[u8], at: usize, flavor: Heredocs) -> Option<(Heredoc, usize)> {
     let rest = &bytes[at..];
     let (arrows, bare_needs_upper) = match flavor {
         Heredocs::None => return None,
@@ -55,7 +56,7 @@ pub(super) fn heredoc_at(bytes: &[u8], at: usize, flavor: Heredocs) -> Option<(H
 }
 
 /// Where the terminator of `heredoc` ends on `line`, when the line holds it.
-pub(super) fn terminator_end(line: &str, heredoc: &Heredoc) -> Option<usize> {
+pub(crate) fn terminator_end(line: &str, heredoc: &Heredoc) -> Option<usize> {
     let start = if heredoc.indented {
         line.len() - line.trim_start().len()
     } else {
@@ -75,8 +76,4 @@ fn word_len(bytes: &[u8]) -> usize {
         return 0;
     }
     bytes.iter().take_while(|b| is_word_byte(**b)).count()
-}
-
-pub(super) fn is_word_byte(b: u8) -> bool {
-    b.is_ascii_alphanumeric() || b == b'_'
 }
