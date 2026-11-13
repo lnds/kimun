@@ -18,6 +18,11 @@ pub struct ComplexityMarkers {
     /// and an `fn` of several clauses. An arrow after `fn` on its own line is
     /// the one clause of an anonymous function, not a branch.
     pub clause_arrow: Option<&'static str>,
+    /// Whether `cond ? a : b` is a branch.
+    pub ternary: bool,
+    /// Whether a keyword that names a key or a symbol (`if:`, `:if`) is no
+    /// keyword: Ruby, Elixir, JavaScript object keys, Swift argument labels.
+    pub keys: bool,
     /// Tokens that mark function definitions (e.g. "fn ", "def ").
     /// Each function starts with a base complexity of 1.
     pub function_markers: &'static [&'static str],
@@ -31,14 +36,16 @@ pub struct ComplexityMarkers {
     pub line_comments: &'static [&'static str],
 }
 
-/// Rust: `loop` is a keyword (unconditional loop = 1 path). `match` adds
-/// 1 per arm via the `match` keyword itself (arms are counted separately
-/// by the analyzer). `&&`/`||` are short-circuit operators that create
-/// additional decision points within boolean expressions.
+/// Rust: `loop` is a keyword (unconditional loop = 1 path). Each arm of a
+/// `match` is a branch, as each `case` of C is, except the catch-all `_`, as
+/// `default` is not (`clause_arrow`). `&&`/`||` are short-circuit operators
+/// that create additional decision points within boolean expressions.
 static RUST: ComplexityMarkers = ComplexityMarkers {
-    keywords: &["else if", "if", "for", "while", "loop", "match"],
+    ternary: false,
+    keys: false,
+    keywords: &["else if", "if", "for", "while", "loop"],
     operators: &["&&", "||"],
-    clause_arrow: None,
+    clause_arrow: Some("=>"),
     function_markers: &["fn "],
     brace_scoped: true,
     function_syntax: FunctionSyntax::KeywordWithLifetimes,
@@ -51,6 +58,8 @@ static RUST: ComplexityMarkers = ComplexityMarkers {
 /// `except` is a branch (exception handler path). `async def` must
 /// appear before `def` in function_markers to match first.
 static PYTHON: ComplexityMarkers = ComplexityMarkers {
+    ternary: false,
+    keys: false,
     keywords: &["elif", "if", "for", "while", "except", "and", "or"],
     operators: &[],
     clause_arrow: None,
@@ -61,13 +70,13 @@ static PYTHON: ComplexityMarkers = ComplexityMarkers {
 };
 
 /// JavaScript/TypeScript: `??` (nullish coalescing) is an operator that
-/// creates a branch (null check path). `case` in switch statements each
-/// adds a decision point. Arrow functions are detected separately by the
+/// creates a branch (null check path). Each `case` adds a decision point,
+/// the `switch` none; a `do … while` loop counts once, by its `while`. Arrow functions are detected separately by the
 /// analyzer, so only `function` appears in function_markers.
 static JAVASCRIPT: ComplexityMarkers = ComplexityMarkers {
-    keywords: &[
-        "else if", "if", "for", "while", "do", "switch", "case", "catch",
-    ],
+    ternary: true,
+    keys: true,
+    keywords: &["else if", "if", "for", "while", "case", "catch"],
     operators: &["&&", "||", "??"],
     clause_arrow: None,
     function_markers: &["function ", "function("],
@@ -76,15 +85,19 @@ static JAVASCRIPT: ComplexityMarkers = ComplexityMarkers {
     line_comments: &["//"],
 };
 
-/// C-family (C, C++, Java, C#, Objective-C, PHP, Dart): no function_markers
+/// C-family (C, C++, Java, C#, Objective-C, PHP, Dart): `foreach` (C#,
+/// PHP) and `elseif` (PHP) are branches, as `for` and `else if` are; `??`
+/// as in JavaScript. No function_markers
 /// because function definitions vary too widely across these languages
 /// (return type before name in C/C++, annotations in Java, etc.).
 /// Function detection falls back to brace-counting heuristics instead.
 static C_FAMILY: ComplexityMarkers = ComplexityMarkers {
+    ternary: true,
+    keys: false,
     keywords: &[
-        "else if", "if", "for", "while", "do", "switch", "case", "catch",
+        "else if", "elseif", "if", "foreach", "for", "while", "case", "catch",
     ],
-    operators: &["&&", "||"],
+    operators: &["&&", "||", "??"],
     clause_arrow: None,
     function_markers: &[],
     brace_scoped: true,
@@ -92,11 +105,13 @@ static C_FAMILY: ComplexityMarkers = ComplexityMarkers {
     line_comments: &["//"],
 };
 
-/// Go: `select` is included because it multiplexes channel operations,
-/// creating one path per `case`. Go has no `while` or `do` — `for` covers
-/// all loop forms. There is no ternary operator in Go.
+/// Go: each `case` of a `switch` or a `select` is a branch, the `switch` or
+/// `select` itself none. Go has no `while` or `do` — `for` covers all loop
+/// forms. There is no ternary operator in Go.
 static GO: ComplexityMarkers = ComplexityMarkers {
-    keywords: &["else if", "if", "for", "switch", "case", "select"],
+    ternary: false,
+    keys: false,
+    keywords: &["else if", "if", "for", "case"],
     operators: &["&&", "||"],
     clause_arrow: None,
     function_markers: &["func "],
@@ -110,6 +125,8 @@ static GO: ComplexityMarkers = ComplexityMarkers {
 /// a branch. `when` is Ruby's case-arm keyword. `rescue` handles
 /// exceptions (an alternative execution path).
 static RUBY: ComplexityMarkers = ComplexityMarkers {
+    ternary: true,
+    keys: true,
     keywords: &[
         "elsif", "if", "unless", "for", "while", "until", "when", "rescue",
     ],
@@ -122,6 +139,8 @@ static RUBY: ComplexityMarkers = ComplexityMarkers {
 };
 
 static KOTLIN: ComplexityMarkers = ComplexityMarkers {
+    ternary: false,
+    keys: false,
     keywords: &["else if", "if", "for", "while", "when", "catch"],
     operators: &["&&", "||"],
     clause_arrow: None,
@@ -133,10 +152,10 @@ static KOTLIN: ComplexityMarkers = ComplexityMarkers {
 };
 
 static SWIFT: ComplexityMarkers = ComplexityMarkers {
-    keywords: &[
-        "else if", "if", "for", "while", "switch", "case", "catch", "guard",
-    ],
-    operators: &["&&", "||"],
+    ternary: true,
+    keys: true,
+    keywords: &["else if", "if", "for", "while", "case", "catch", "guard"],
+    operators: &["&&", "||", "??"],
     clause_arrow: None,
     function_markers: &["func "],
     brace_scoped: true,
@@ -145,7 +164,9 @@ static SWIFT: ComplexityMarkers = ComplexityMarkers {
 };
 
 static SCALA: ComplexityMarkers = ComplexityMarkers {
-    keywords: &["else if", "if", "for", "while", "match", "case", "catch"],
+    ternary: false,
+    keys: false,
+    keywords: &["else if", "if", "for", "while", "case", "catch"],
     operators: &["&&", "||"],
     clause_arrow: None,
     function_markers: &["def "],
@@ -170,6 +191,8 @@ static SCALA: ComplexityMarkers = ComplexityMarkers {
 /// single-line class declarations in JS/TS/Java. Multi-line function bodies
 /// (the dominant style in real shell code) work correctly.
 static SHELL: ComplexityMarkers = ComplexityMarkers {
+    ternary: false,
+    keys: false,
     keywords: &["elif", "if", "for", "while", "until", "case"],
     operators: &["&&", "||"],
     clause_arrow: None,
@@ -185,6 +208,8 @@ static SHELL: ComplexityMarkers = ComplexityMarkers {
 /// definitions are identified by the `=` sign at the top level, which
 /// is too ambiguous for simple keyword matching.
 static HASKELL: ComplexityMarkers = ComplexityMarkers {
+    ternary: false,
+    keys: false,
     keywords: &["if", "case"],
     operators: &[],
     clause_arrow: None,
@@ -200,6 +225,8 @@ static HASKELL: ComplexityMarkers = ComplexityMarkers {
 /// (`clause_arrow`), not by their keyword; `and`/`or` are words, so they are
 /// keywords rather than operators.
 static ELIXIR: ComplexityMarkers = ComplexityMarkers {
+    ternary: false,
+    keys: true,
     keywords: &[
         "if", "unless", "with", "for", "rescue", "catch", "and", "or",
     ],
@@ -212,6 +239,8 @@ static ELIXIR: ComplexityMarkers = ComplexityMarkers {
 };
 
 static LUA: ComplexityMarkers = ComplexityMarkers {
+    ternary: false,
+    keys: false,
     keywords: &["elseif", "if", "for", "while"],
     operators: &[],
     clause_arrow: None,
@@ -222,6 +251,8 @@ static LUA: ComplexityMarkers = ComplexityMarkers {
 };
 
 static PERL: ComplexityMarkers = ComplexityMarkers {
+    ternary: true,
+    keys: false,
     keywords: &["elsif", "if", "for", "foreach", "while", "unless"],
     operators: &["&&", "||"],
     clause_arrow: None,
@@ -232,6 +263,8 @@ static PERL: ComplexityMarkers = ComplexityMarkers {
 };
 
 static ERLANG: ComplexityMarkers = ComplexityMarkers {
+    ternary: false,
+    keys: false,
     keywords: &["if", "case", "receive"],
     operators: &[],
     clause_arrow: None,
@@ -242,6 +275,8 @@ static ERLANG: ComplexityMarkers = ComplexityMarkers {
 };
 
 static OCAML: ComplexityMarkers = ComplexityMarkers {
+    ternary: false,
+    keys: false,
     keywords: &["if", "match", "with"],
     operators: &[],
     clause_arrow: None,
@@ -252,6 +287,8 @@ static OCAML: ComplexityMarkers = ComplexityMarkers {
 };
 
 static R: ComplexityMarkers = ComplexityMarkers {
+    ternary: false,
+    keys: false,
     keywords: &["else if", "if", "for", "while", "repeat"],
     operators: &["&&", "||"],
     clause_arrow: None,
@@ -262,6 +299,8 @@ static R: ComplexityMarkers = ComplexityMarkers {
 };
 
 static JULIA: ComplexityMarkers = ComplexityMarkers {
+    ternary: false,
+    keys: false,
     keywords: &["elseif", "if", "for", "while"],
     operators: &["&&", "||"],
     clause_arrow: None,
@@ -272,6 +311,8 @@ static JULIA: ComplexityMarkers = ComplexityMarkers {
 };
 
 static NIM: ComplexityMarkers = ComplexityMarkers {
+    ternary: false,
+    keys: false,
     keywords: &["elif", "if", "for", "while", "case", "except"],
     operators: &[],
     clause_arrow: None,
@@ -282,6 +323,8 @@ static NIM: ComplexityMarkers = ComplexityMarkers {
 };
 
 static ZIG: ComplexityMarkers = ComplexityMarkers {
+    ternary: false,
+    keys: false,
     keywords: &["else", "if", "for", "while", "switch"],
     operators: &[],
     clause_arrow: None,
@@ -292,6 +335,8 @@ static ZIG: ComplexityMarkers = ComplexityMarkers {
 };
 
 static CLOJURE: ComplexityMarkers = ComplexityMarkers {
+    ternary: false,
+    keys: false,
     keywords: &["if", "cond", "case", "when"],
     operators: &[],
     clause_arrow: None,
@@ -308,6 +353,8 @@ static CLOJURE: ComplexityMarkers = ComplexityMarkers {
 /// JavaScript's nullish coalescing is. No loops: `for` only names the type
 /// of an `impl`, and iteration is via pipes and stdlib helpers.
 static KAIKAI: ComplexityMarkers = ComplexityMarkers {
+    ternary: false,
+    keys: false,
     keywords: &["if", "match", "case", "when", "handle", "with", "and", "or"],
     operators: &["??"],
     clause_arrow: None,
@@ -321,6 +368,8 @@ static KAIKAI: ComplexityMarkers = ComplexityMarkers {
 /// joined (`case_fold`), so a construct's end is no branch. `select case`
 /// counts once, as a `switch` does, and each `case` adds one.
 static FORTRAN: ComplexityMarkers = ComplexityMarkers {
+    ternary: false,
+    keys: false,
     keywords: &["else if", "select case", "elseif", "if", "do", "case"],
     operators: &[".and.", ".or."],
     clause_arrow: None,
@@ -333,6 +382,8 @@ static FORTRAN: ComplexityMarkers = ComplexityMarkers {
 /// Pascal, read in lower case. `and`/`or` are keywords; `except` is the
 /// handler path, as `catch` is.
 static PASCAL: ComplexityMarkers = ComplexityMarkers {
+    ternary: false,
+    keys: false,
     keywords: &[
         "else if", "if", "for", "while", "repeat", "case", "except", "and", "or",
     ],

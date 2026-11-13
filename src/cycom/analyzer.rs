@@ -150,7 +150,7 @@ fn count_singleword_keywords(masked_line: &str, markers: &ComplexityMarkers) -> 
     let mut count = 0;
     for kw in markers.keywords {
         if !kw.contains(' ') {
-            count += count_keyword(masked_line, kw);
+            count += count_keyword_as(masked_line, kw, markers.keys);
         }
     }
     count
@@ -178,19 +178,44 @@ fn count_line_complexity(line: &str, markers: &ComplexityMarkers) -> usize {
         + count_singleword_keywords(&masked, markers)
         + count_operators_in_line(&stripped, markers)
         + count_clause(&stripped, markers)
+        + if markers.ternary {
+            count_ternaries(&stripped)
+        } else {
+            0
+        }
 }
 
-/// 1 when the line is a clause of a construct whose clauses branch
-/// (`ComplexityMarkers::clause_arrow`), unless the arrow is that of an
-/// anonymous function opened on the same line.
+/// Ternary operators of a line: a `?` with a space on each side, other
+/// than a wildcard of Java generics (`<?`, `, ? extends T`).
+fn count_ternaries(stripped: &str) -> usize {
+    stripped
+        .match_indices(" ? ")
+        .filter(|(at, _)| {
+            let after = stripped[at + 3..].trim_start();
+            !(after.starts_with(['>', ','])
+                || after.starts_with("extends")
+                || after.starts_with("super"))
+        })
+        .count()
+}
+
+/// The clauses of a construct whose clauses branch on a line
+/// (`ComplexityMarkers::clause_arrow`), one per arrow: not a catch-all
+/// (`_`), as `default` is no branch, nor the arrow of an anonymous function
+/// opened on the same line.
 fn count_clause(stripped: &str, markers: &ComplexityMarkers) -> usize {
     let Some(arrow) = markers.clause_arrow else {
         return 0;
     };
-    let Some(at) = stripped.find(arrow) else {
-        return 0;
-    };
-    usize::from(count_keyword(&stripped[..at], "fn") == 0)
+    let mut from = 0;
+    let mut count = 0;
+    for (at, _) in stripped.match_indices(arrow) {
+        let pattern = stripped[from..at].rsplit([',', '{']).next().unwrap_or("");
+        let anonymous = count_keyword(&stripped[..at], "fn") > 0;
+        count += usize::from(pattern.trim() != "_" && !anonymous);
+        from = at + arrow.len();
+    }
+    count
 }
 
 /// Count whole-word occurrences of a keyword in a line.
@@ -199,27 +224,34 @@ fn count_clause(stripped: &str, markers: &ComplexityMarkers) -> usize {
 /// when the characters immediately before and after the keyword are not
 /// alphanumeric or underscore. This prevents `notify` from matching `if`.
 fn count_keyword(line: &str, keyword: &str) -> usize {
-    let kw_bytes = keyword.as_bytes();
-    let kw_len = kw_bytes.len();
-    let line_bytes = line.as_bytes();
-    let line_len = line_bytes.len();
-    let mut count = 0;
-    let mut i = 0;
+    count_keyword_as(line, keyword, false)
+}
 
-    while i + kw_len <= line_len {
-        if &line_bytes[i..i + kw_len] == kw_bytes {
-            let before_ok = i == 0 || !is_word_char(line_bytes[i - 1]);
-            let after_ok = i + kw_len >= line_len || !is_word_char(line_bytes[i + kw_len]);
-            if before_ok && after_ok {
-                count += 1;
-                i += kw_len;
-                continue;
-            }
-        }
-        i += 1;
-    }
+/// Count whole-word occurrences of a keyword, other than a method of that
+/// name (`.catch(`) and, with `keys`, a key or a symbol of that name
+/// (`if:`, `:if`).
+fn count_keyword_as(line: &str, keyword: &str, keys: bool) -> usize {
+    let bytes = line.as_bytes();
+    let len = keyword.len();
+    line.match_indices(keyword)
+        .filter(|(at, _)| is_word_at(bytes, *at, len) && !named(bytes, *at, len, keys))
+        .count()
+}
 
-    count
+/// Whether the `len` bytes at `at` are a whole word.
+fn is_word_at(line: &[u8], at: usize, len: usize) -> bool {
+    let before = at.checked_sub(1).map(|b| line[b]);
+    !before.is_some_and(is_word_char) && !line.get(at + len).is_some_and(|b| is_word_char(*b))
+}
+
+/// Whether the word at `at` names something rather than being a keyword:
+/// a method after a single `.`, or with `keys` a symbol (`:if`) or a key
+/// (`if:`, but not `if::`).
+fn named(line: &[u8], at: usize, len: usize, keys: bool) -> bool {
+    let (before, after) = (&line[..at], &line[at + len..]);
+    let ends_alone = |c: u8| before.ends_with(&[c]) && !before.ends_with(&[c, c]);
+    let key = after.starts_with(b":") && !after.starts_with(b"::");
+    ends_alone(b'.') || (keys && (ends_alone(b':') || key))
 }
 
 /// Check whether a byte is a word character (alphanumeric or underscore).

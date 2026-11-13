@@ -318,7 +318,16 @@ Rust, Python, JavaScript, JSX, TypeScript, Go, C, C++, C#, Java, Objective-C, PH
 
 ### `km cycom` -- Complejidad ciclomática
 
-Calcula la complejidad ciclomática por archivo y por función contando los puntos de decisión (`if`, `for`, `while`, `match`, `&&`, `||`, etc.).
+Calcula la complejidad ciclomática por archivo y por función contando los puntos de decisión (`if`, `for`, `while`, `&&`, `||`, etc.).
+
+Qué cuenta, igual en todo lenguaje que lo tenga:
+
+- cada condición y cada bucle: `if`, `else if` (`elif`, `elsif`, `elseif`), `for`, `foreach`, `while`, `unless`, `until`, `guard`, y un `do … while` una vez, por su `while`;
+- cada `case` de un `switch` o un `select`, y cada brazo de un `match` de Rust o cláusula de un `case`, `cond` o `receive` de Elixir; el `switch` mismo no, ni una cláusula que acepta todo (`default`, `_`);
+- cada `catch`, `except` y `rescue`;
+- cada `&&`, `||`, `and`, `or`, `??` y operador ternario (`a ? b : c`).
+
+Una palabra clave que nombra algo no es una rama: un método (`p.catch(f)`) y, en Ruby, Elixir, JavaScript y Swift, un símbolo o una clave (`:if`, `if: true`). Un `when` de Kotlin y una expresión `switch` de C# cuentan una vez sean cuantos sean sus brazos, porque ahí `->` y `=>` también son lambdas.
 
 ```bash
 km cycom [path]

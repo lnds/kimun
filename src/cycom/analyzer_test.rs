@@ -312,7 +312,8 @@ end";
         ("with_it", 2),
         ("unless_it", 2),
         ("receive_it", 3),
-        ("case_it", 4),
+        // `1` and `2` branch; the catch-all `_` does not, as `default`.
+        ("case_it", 3),
         ("bool_it", 4),
         ("map_it", 1),
     ]
@@ -404,5 +405,69 @@ end
         .iter()
         .map(|f| (f.name.as_str(), f.complexity))
         .collect();
-    assert_eq!(found, [("with_rescue", 7), ("next_one", 1)]);
+    // if, and, <, the `e in ArgumentError` clause and the `if` in it; the
+    // catch-all `_` clause is no branch.
+    assert_eq!(found, [("with_rescue", 6), ("next_one", 1)]);
+}
+
+fn complexity_of(language: &str, code: &str) -> Vec<usize> {
+    let markers = super::super::markers::markers_for(language).unwrap();
+    let (lines, kinds) = make_lines(code);
+    analyze(&lines, &kinds, markers)
+        .unwrap()
+        .functions
+        .iter()
+        .map(|f| f.complexity)
+        .collect()
+}
+
+#[test]
+fn a_switch_counts_its_cases_and_not_itself() {
+    let go = "func f(x int) int {\n\tswitch x {\n\tcase 1:\n\t\treturn 1\n\tcase 2:\n\t\treturn 2\n\tdefault:\n\t\treturn 0\n\t}\n}\n";
+    assert_eq!(complexity_of("Go", go), [3]);
+}
+
+#[test]
+fn a_do_while_loop_counts_once() {
+    let c = "int f(int x) {\n    do {\n        x--;\n    } while (x > 0);\n    return x;\n}\n";
+    assert_eq!(complexity_of("C", c), [2]);
+}
+
+#[test]
+fn foreach_and_elseif_are_branches() {
+    let cs = "void F(int[] xs) {\n    foreach (var x in xs) {\n        if (x > 0) { }\n    }\n}\n";
+    assert_eq!(complexity_of("C#", cs), [3]);
+    let php = "function f($x) {\n    if ($x) {\n    } elseif ($x > 1) {\n    }\n}\n";
+    assert_eq!(complexity_of("PHP", php), [3]);
+}
+
+#[test]
+fn a_ternary_is_a_branch() {
+    let js = "function f(a) {\n  return a > 0 ? 1 : 2;\n}\n";
+    assert_eq!(complexity_of("JavaScript", js), [2]);
+    let java = "void f(List<? extends T> a, Map<K, ? super V> b) {\n    g(a);\n}\n";
+    assert_eq!(complexity_of("Java", java), [1]);
+}
+
+#[test]
+fn null_coalescing_is_a_branch_in_csharp() {
+    let cs = "string F(string a) {\n    return a ?? \"x\";\n}\n";
+    assert_eq!(complexity_of("C#", cs), [2]);
+}
+
+#[test]
+fn each_arm_of_a_rust_match_but_the_catch_all_is_a_branch() {
+    let rust = "fn f(x: u8) -> u8 {\n    match x {\n        0 => 1,\n        1 | 2 => 2,\n        n if n > 9 => 3,\n        _ => 4,\n    }\n}\n";
+    // three arms and a guard
+    assert_eq!(complexity_of("Rust", rust), [5]);
+}
+
+#[test]
+fn a_keyword_naming_a_key_a_symbol_or_a_method_is_no_branch() {
+    let ruby = "def f(opts)\n  opts[:if] || opts[:unless]\nend\n";
+    assert_eq!(complexity_of("Ruby", ruby), [2]);
+    let elixir = "def f(q) do\n  validate(q, if: true, for: :x, with: MyMod)\nend\n";
+    assert_eq!(complexity_of("Elixir", elixir), [1]);
+    let js = "function f(p) {\n  return p.then(g).catch(h);\n}\n";
+    assert_eq!(complexity_of("JavaScript", js), [1]);
 }
