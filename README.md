@@ -341,9 +341,14 @@ Options:
 - parameters on several lines, the name alone on the line above them (GNU style), the `{` on the next line;
 - a line that starts inside parentheses left open (the continuation of a condition, a parameter with an attribute) is never a declaration, nor is an annotation (`@Override`, `[HttpGet]`) or an anonymous class (`new Adapter() {`);
 - preprocessor directives and the lines a trailing `\` joins to them are not code: they neither declare functions nor add complexity;
-- Go methods are named without their receiver;
-- in JavaScript and TypeScript, functions bound to a name (`res.send = function`, `const f = (x) => {`, `name: Type = <T>(x) => {`) take that name, a function passed as an argument is `<anonymous>`, and the braces of a regular expression literal are not blocks;
+- a type is never a function, even with parentheses: `class Repo(private val db: Db) {`, `data class`, `enum class Color(val rgb: Int)`, `object Cache : Base(16) {`, `fun interface`, a Java or C# `record Point(int x, int y) {` and a C# primary constructor. Its methods are found on their own. A C function that returns a type (`struct node *make(int v) {`) is still a function;
+- Kotlin functions are declared with `fun` only: a call with a trailing lambda (`check(ready) {`) has the shape of a C function and is none. A one-line declaration with nothing after it to open a body, as an abstract member of a Kotlin interface (`fun get(id: Int): Row?`), has no body;
+- C++ and C# operators are functions (`Box::operator==`, `operator=`, `operator()`, `operator ==`), and so is a Java method whose `throws` clause sits on the line after its parameters;
+- Go methods are named without their receiver, Kotlin extensions without the type they extend (`fun <T> List<T>.second()` is `second`);
+- in JavaScript and TypeScript, functions bound to a name (`res.send = function`, `const f = (x) => {`, `name: Type = <T>(x) => {`) take that name, a function passed as an argument is `<anonymous>`, a private method (`#count(x) {`) is a function, and the braces of a regular expression literal are not blocks;
 - in Elixir, the code inside a `quote` block is not part of the function that holds it, and the functions it declares are measured on their own.
+
+The code outside every function (a script's top level, a class field initialised with a condition, a static block) is measured as one more entry, `<file>`: always when the file has no function, and otherwise only when that code has a decision point (`km cycom`) or adds complexity (`km cogcom`). It counts in the file's total, maximum and average like any function. In `km cogcom` it has no declaration: its first block may be that of an `if`, and a statement at the left margin is not nested. The `for` of a Rust trait implementation (`impl Display for Level`) is no loop.
 
 ### `km cogcom` -- Cognitive complexity
 
