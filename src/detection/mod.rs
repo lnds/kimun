@@ -6,16 +6,25 @@
 //! of duplication between `cycom/detection.rs` and `cogcom/detection.rs`.
 
 mod body;
+mod declarations;
 mod indented;
+mod names;
 mod script;
 mod shape;
+mod signature;
 
 pub(crate) use body::literal_len;
 use body::*;
+pub(crate) use declarations::without_impl_for;
+use declarations::*;
 use indented::*;
+pub(crate) use names::closing_paren;
+pub use names::extract_function_name;
+use names::*;
 use script::*;
 pub(crate) use script::{regex_end, value_may_start};
 use shape::*;
+use signature::*;
 
 use crate::loc::counter::LineKind;
 use crate::util::{indent_level, mask_strings};
@@ -110,6 +119,23 @@ pub fn code_lines<'a>(
     code
 }
 
+/// The code lines that belong to no function body: what a file runs or
+/// declares outside its functions.
+pub fn outside_functions<'a>(
+    code_lines: &[(usize, &'a str)],
+    bodies: &[FunctionBody<'_>],
+) -> Vec<(usize, &'a str)> {
+    let inside: std::collections::HashSet<usize> = bodies
+        .iter()
+        .flat_map(|body| body.code_lines.iter().map(|(i, _)| *i))
+        .collect();
+    code_lines
+        .iter()
+        .filter(|(i, _)| !inside.contains(i))
+        .copied()
+        .collect()
+}
+
 /// Whether a line holds one of the markers of a declaration, as the start
 /// of a word: `myfunction(` holds no `function(`.
 fn has_marker(trimmed: &str, markers: &dyn FunctionDetectionMarkers) -> bool {
@@ -118,74 +144,6 @@ fn has_marker(trimmed: &str, markers: &dyn FunctionDetectionMarkers) -> bool {
             !trimmed[..at].ends_with(|c: char| c.is_alphanumeric() || c == '_' || c == '$')
         })
     })
-}
-
-/// Extract the function name from a declaration (one line, or a signature
-/// joined over its lines) using language-specific markers or the C-family
-/// heuristic (token before the first `(`).
-pub fn extract_function_name(trimmed: &str, markers: &dyn FunctionDetectionMarkers) -> String {
-    if markers.function_syntax() == FunctionSyntax::Script {
-        return script_name(trimmed);
-    }
-    let mut function_markers = markers.function_markers().iter();
-    function_markers
-        .find_map(|marker| name_after(trimmed, marker))
-        .or_else(|| name_before_paren(trimmed))
-        .unwrap_or_else(|| "<anonymous>".to_string())
-}
-
-/// The identifier that follows `marker` in a declaration, if any. A Go
-/// receiver, `func (n *node) name(`, is skipped.
-fn name_after(trimmed: &str, marker: &str) -> Option<String> {
-    let mut after = &trimmed[trimmed.find(marker)? + marker.len()..];
-    if after.starts_with('(') {
-        after = after[closing_paren(after)? + 1..].trim_start();
-    }
-    let name: String = after
-        .chars()
-        .take_while(|c| c.is_alphanumeric() || *c == '_')
-        .collect();
-    (!name.is_empty()).then_some(name)
-}
-
-/// Where the `<` that opens the type arguments ending `text` is.
-fn type_arguments_start(text: &str) -> Option<usize> {
-    let mut depth = 0;
-    for (i, ch) in text.char_indices().rev() {
-        match ch {
-            '>' => depth += 1,
-            '<' if depth == 1 => return Some(i),
-            '<' => depth -= 1,
-            _ => {}
-        }
-    }
-    None
-}
-
-/// Where the parenthesis that opens `text` closes.
-pub(crate) fn closing_paren(text: &str) -> Option<usize> {
-    let mut depth = 0;
-    for (i, ch) in text.char_indices() {
-        match ch {
-            '(' => depth += 1,
-            ')' if depth == 1 => return Some(i),
-            ')' => depth -= 1,
-            _ => {}
-        }
-    }
-    None
-}
-
-/// C-family heuristic: the name is the token before the first `(`, without
-/// the type arguments of a generic (`basePath<P extends string>(`).
-fn name_before_paren(trimmed: &str) -> Option<String> {
-    let mut before = trimmed[..trimmed.find('(')?].trim();
-    if let Some(start) = type_arguments_start(before).filter(|_| before.ends_with('>')) {
-        before = before[..start].trim_end();
-    }
-    let name = before.split_whitespace().next_back()?;
-    let name = name.trim_start_matches('*');
-    (!name.is_empty()).then(|| name.to_string())
 }
 
 /// Detect function boundaries and return their bodies.
@@ -225,7 +183,11 @@ fn detect_brace_scoped<'a>(
         // In JavaScript a `=` binds the function to a name: it never
         // introduces an expression body.
         let expression_bodies = markers.function_syntax() != FunctionSyntax::Script;
-        let (body, end) = find_function_body(code_lines, &masked, i, expression_bodies);
+        // A member declared by its keyword may have no body: an abstract
+        // method of a Kotlin or Swift interface ends without `;`.
+        let optional_body = has_marker(masked[i].trim(), markers);
+        let (body, end) =
+            find_function_body(code_lines, &masked, i, expression_bodies, optional_body);
         // A declaration without a body is no function to measure.
         if !body.is_empty() {
             functions.push(FunctionBody {
@@ -254,35 +216,14 @@ fn declaration_at(
         return None;
     }
     if has_marker(line, markers) {
-        return Some(line.to_string());
+        // `fun interface Action {` declares a type.
+        return (!is_type_declaration(line)).then(|| line.to_string());
     }
-    if !markers.function_syntax().by_shape() {
-        return None;
-    }
-    let (sig, end) = shaped_signature(masked, i);
-    let next_opens = masked
-        .get(end + 1)
-        .is_some_and(|next| next.trim_start().starts_with('{'));
-    let script = markers.function_syntax() == FunctionSyntax::Script;
-    let declared = is_c_family_function(&sig, next_opens)
-        || (script && sig.ends_with('{') && script_binding(&sig).is_some());
-    declared.then_some(sig)
-}
-
-/// The signature at line `i`, with a name alone on its line joined to the
-/// parameters on the next (`jvp_strtod` above `(struct ...)`), and the index
-/// of its last line.
-fn shaped_signature(masked: &[String], i: usize) -> (String, usize) {
-    let line = masked[i].trim();
-    let params_below = masked
-        .get(i + 1)
-        .is_some_and(|next| next.trim_start().starts_with('('));
-    if is_identifier(line) && params_below {
-        let (params, end) = signature(masked, i + 1);
-        (format!("{line} {params}"), end)
-    } else {
-        signature(masked, i)
-    }
+    let syntax = markers.function_syntax();
+    syntax
+        .by_shape()
+        .then(|| shaped_declaration(masked, i, syntax))
+        .flatten()
 }
 
 #[cfg(test)]

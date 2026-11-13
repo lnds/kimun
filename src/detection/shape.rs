@@ -1,11 +1,7 @@
-//! Declarations recognised by their shape: signatures joined over the
-//! lines they span, the C-family heuristic, and the lines that continue a
-//! statement rather than start one.
+//! Declarations recognised by their shape: the C-family heuristic, and the
+//! lines that continue a statement rather than start one.
 
 use super::*;
-
-/// How many lines a signature may span before it is given up on.
-pub(super) const MAX_SIGNATURE_LINES: usize = 30;
 
 /// Control-flow keywords that should NOT be treated as function definitions
 /// in the C-family heuristic. If the first word of a line matches one of
@@ -45,13 +41,10 @@ pub(super) const CONTROL_KEYWORDS: &[&str] = &[
 /// Known limitations:
 /// - Function pointers (e.g., `void (*fp)(int)`) may be misdetected.
 pub(super) fn is_c_family_function(sig: &str, next_opens: bool) -> bool {
-    // Preprocessor directives (`#define`, `#if`, `#include`, ...) are not
-    // functions. A function-like `#define NAME(args) body` otherwise looks
-    // like a C function (`identifier (params) body`) and would be misdetected,
-    // absorbing the cognitive complexity of the code that follows it.
-    if sig.starts_with('#') {
+    if declares_no_function(sig) {
         return false;
     }
+    let sig = &without_operator_symbols(sig);
     let paren_pos = match sig.find('(') {
         Some(p) => p,
         None => return false,
@@ -79,6 +72,28 @@ pub(super) fn is_c_family_function(sig: &str, next_opens: bool) -> bool {
         .unwrap_or("");
     let first_word = first_word.trim_start_matches('*');
     !CONTROL_KEYWORDS.contains(&first_word)
+}
+
+/// The signature of the function the line at `i` declares by its shape, if
+/// it does.
+pub(super) fn shaped_declaration(
+    masked: &[String],
+    i: usize,
+    syntax: FunctionSyntax,
+) -> Option<String> {
+    let (sig, end) = shaped_signature(masked, i);
+    let next_opens = masked
+        .get(end + 1)
+        .is_some_and(|next| next.trim_start().starts_with('{'));
+    let declared = match syntax {
+        // In a script a leading `#` names a private member, not a directive.
+        FunctionSyntax::Script => {
+            is_c_family_function(sig.trim_start_matches('#'), next_opens)
+                || (sig.ends_with('{') && script_binding(&sig).is_some())
+        }
+        _ => is_c_family_function(&sig, next_opens),
+    };
+    declared.then_some(sig)
 }
 
 /// For each line, whether it starts inside parentheses or brackets that
@@ -111,25 +126,4 @@ pub(super) fn paren_balance(line: &str) -> isize {
             _ => 0,
         })
         .sum()
-}
-
-/// The line at `i` joined with those after it until its parentheses
-/// close, and the index of its last line. Type parameters that a line
-/// leaves open at its end (`<`) are followed to the line that closes them
-/// (`>`).
-pub(super) fn signature(masked: &[String], i: usize) -> (String, usize) {
-    let last = (i + MAX_SIGNATURE_LINES).min(masked.len()) - 1;
-    let mut parts = Vec::new();
-    let mut depth = 0;
-    let mut generics = false;
-    for (j, line) in masked.iter().enumerate().take(last + 1).skip(i) {
-        let line = line.trim();
-        parts.push(line);
-        depth += paren_balance(line);
-        generics = (generics && !line.starts_with('>')) || line.ends_with('<');
-        if depth <= 0 && !generics {
-            return (parts.join(" "), j);
-        }
-    }
-    (parts.join(" "), last)
 }

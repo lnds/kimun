@@ -114,6 +114,47 @@ fn file_with_no_functions_uses_implicit() {
 }
 
 #[test]
+fn code_outside_functions_that_branches_is_file() {
+    let (lines, kinds) = make_lines(
+        "import sys\n\ndef f(x):\n    return x\n\nif len(sys.argv) > 1 and sys.argv[1]:\n    for a in sys.argv:\n        print(f(a))\n",
+    );
+    let result = analyze(&lines, &kinds, python_markers()).unwrap();
+    let found: Vec<_> = result
+        .functions
+        .iter()
+        .map(|f| (f.name.as_str(), f.complexity))
+        .collect();
+    assert_eq!(found, vec![("<file>", 4), ("f", 1)]);
+    assert_eq!(result.total_complexity, 5);
+    assert_eq!(result.max_complexity, 4);
+}
+
+#[test]
+fn code_outside_functions_without_branches_is_not_measured() {
+    let (lines, kinds) = make_lines(
+        "use std::io;\nconst N: u32 = 1;\nimpl Display for Level {\n    fn fmt(&self) {\n        if x {}\n    }\n}\nunsafe impl<T> Send for Box<T> {}\n",
+    );
+    let result = analyze(&lines, &kinds, rust_markers()).unwrap();
+    assert_eq!(result.functions.len(), 1);
+    assert_eq!(result.functions[0].name, "fmt");
+}
+
+#[test]
+fn methods_of_a_kotlin_class_with_a_constructor_are_measured_apart() {
+    let (lines, kinds) = make_lines(
+        "class Repo(private val db: Db) {\n    fun find(id: Int): Row? {\n        if (id < 0) return null\n        return db.get(id)\n    }\n    fun all(limit: Int): List<Row> {\n        if (limit <= 0) return emptyList()\n        for (r in db.rows()) { if (r.ok) out.add(r) }\n        return out\n    }\n}\n",
+    );
+    let markers = super::super::markers::markers_for("Kotlin").unwrap();
+    let result = analyze(&lines, &kinds, markers).unwrap();
+    let found: Vec<_> = result
+        .functions
+        .iter()
+        .map(|f| (f.name.as_str(), f.complexity))
+        .collect();
+    assert_eq!(found, vec![("find", 2), ("all", 4)]);
+}
+
+#[test]
 fn threshold_boundaries() {
     assert_eq!(CyclomaticLevel::from_complexity(1), CyclomaticLevel::Simple);
     assert_eq!(CyclomaticLevel::from_complexity(5), CyclomaticLevel::Simple);

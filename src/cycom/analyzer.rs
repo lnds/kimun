@@ -77,8 +77,9 @@ pub struct FileComplexity {
 ///
 /// Detects functions via language-specific markers, then computes per-function
 /// complexity by counting decision points (keywords like `if`, `for`, `while`,
-/// `match`, and operators like `&&`, `||`). If no functions are detected,
-/// treats the entire file as a single implicit `<file>` function.
+/// `match`, and operators like `&&`, `||`). The code outside functions is
+/// one more, `<file>`: always when no function is detected, else when it
+/// has a decision point.
 ///
 /// Returns `None` if the input is empty or contains no code lines.
 pub fn analyze(
@@ -97,24 +98,6 @@ pub fn analyze(
     }
 
     let functions = detect_functions(lines, &code_lines, markers);
-
-    if functions.is_empty() {
-        let complexity = count_complexity_for_lines(&code_lines, markers);
-        let level = CyclomaticLevel::from_complexity(complexity);
-        return Some(FileComplexity {
-            functions: vec![FunctionComplexity {
-                name: "<file>".to_string(),
-                start_line: 1,
-                complexity,
-                level,
-            }],
-            total_complexity: complexity,
-            max_complexity: complexity,
-            avg_complexity: complexity as f64,
-            level,
-        });
-    }
-
     let total: usize = functions.iter().map(|f| f.complexity).sum();
     let max = functions.iter().map(|f| f.complexity).max().unwrap_or(0);
     let avg = total as f64 / functions.len() as f64;
@@ -189,6 +172,7 @@ fn count_operators_in_line(stripped: &str, markers: &ComplexityMarkers) -> usize
 /// boolean operators (`&&`, `||`).
 fn count_line_complexity(line: &str, markers: &ComplexityMarkers) -> usize {
     let stripped = mask_strings(line, markers.line_comments);
+    let stripped = crate::detection::without_impl_for(&stripped);
     let (mw_count, masked) = count_multiword_keywords(&stripped, markers);
     mw_count
         + count_singleword_keywords(&masked, markers)

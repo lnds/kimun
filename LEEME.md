@@ -341,9 +341,14 @@ Opciones:
 - parámetros en varias líneas, el nombre solo en la línea de arriba (estilo GNU), la `{` en la línea siguiente;
 - una línea que empieza dentro de paréntesis abiertos (la continuación de una condición, un parámetro con atributo) nunca es una declaración, ni tampoco una anotación (`@Override`, `[HttpGet]`) o una clase anónima (`new Adapter() {`);
 - las directivas de preprocesador y las líneas que un `\` final les une no son código: no declaran funciones ni suman complejidad;
-- los métodos de Go se nombran sin su receptor;
-- en JavaScript y TypeScript, las funciones asignadas a un nombre (`res.send = function`, `const f = (x) => {`, `name: Type = <T>(x) => {`) toman ese nombre, una función pasada como argumento es `<anonymous>`, y las llaves de una expresión regular literal no son bloques;
+- un tipo nunca es una función, aunque lleve paréntesis: `class Repo(private val db: Db) {`, `data class`, `enum class Color(val rgb: Int)`, `object Cache : Base(16) {`, `fun interface`, un `record Point(int x, int y) {` de Java o C# y un constructor primario de C#. Sus métodos se encuentran por separado. Una función de C que devuelve un tipo (`struct node *make(int v) {`) sigue siendo una función;
+- en Kotlin las funciones se declaran solo con `fun`: una llamada con una lambda al final (`check(ready) {`) tiene la forma de una función de C y no lo es. Una declaración de una línea sin nada después que abra un cuerpo, como un miembro abstracto de una interfaz de Kotlin (`fun get(id: Int): Row?`), no tiene cuerpo;
+- los operadores de C++ y C# son funciones (`Box::operator==`, `operator=`, `operator()`, `operator ==`), y también un método de Java cuya cláusula `throws` está en la línea siguiente a sus parámetros;
+- los métodos de Go se nombran sin su receptor, y las extensiones de Kotlin sin el tipo que extienden (`fun <T> List<T>.second()` es `second`);
+- en JavaScript y TypeScript, las funciones asignadas a un nombre (`res.send = function`, `const f = (x) => {`, `name: Type = <T>(x) => {`) toman ese nombre, una función pasada como argumento es `<anonymous>`, un método privado (`#count(x) {`) es una función, y las llaves de una expresión regular literal no son bloques;
 - en Elixir, el código dentro de un bloque `quote` no es parte de la función que lo contiene, y las funciones que declara se miden por separado.
+
+El código que queda fuera de toda función (el nivel superior de un script, un campo de una clase inicializado con una condición, un bloque estático) se mide como una entrada más, `<file>`: siempre cuando el archivo no tiene funciones, y si las tiene, solo cuando ese código tiene un punto de decisión (`km cycom`) o suma complejidad (`km cogcom`). Cuenta en el total, el máximo y el promedio del archivo como cualquier función. En `km cogcom` no tiene declaración: su primer bloque puede ser el de un `if`, y una instrucción en el margen izquierdo no está anidada. El `for` de una implementación de un trait de Rust (`impl Display for Level`) no es un ciclo.
 
 ### `km cogcom` -- Complejidad cognitiva
 

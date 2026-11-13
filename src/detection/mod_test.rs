@@ -678,3 +678,230 @@ function real() {
 }";
     assert_eq!(functions_in("JavaScript", src), at(&[("real", 2)]));
 }
+
+#[test]
+fn kotlin_types_with_parentheses_are_not_functions() {
+    let src = "\
+class Repo(private val db: Db) {
+    fun find(id: Int): Row? {
+        if (id < 0) return null
+        return db.get(id)
+    }
+}
+data class P(val x: Int) {
+    fun ok(): Boolean {
+        return x > 0
+    }
+}
+enum class Color(val rgb: Int) {
+    RED(0xFF0000);
+    fun hex(): String {
+        return \"\"
+    }
+}
+object Cache : Base(16) {
+    fun size(): Int {
+        return 0
+    }
+}
+class Svc @Inject constructor(val db: Db) {
+    fun run() {
+        db.go()
+    }
+}
+fun interface Action {
+    fun act()
+}";
+    assert_eq!(
+        functions_in("Kotlin", src),
+        at(&[
+            ("find", 2),
+            ("ok", 8),
+            ("hex", 14),
+            ("size", 19),
+            ("run", 24)
+        ])
+    );
+}
+
+#[test]
+fn kotlin_calls_with_a_trailing_lambda_and_extension_receivers() {
+    let src = "\
+class Checks(val logger: Logger) {
+    init {
+        logger.check(ready) {
+            \"not ready\"
+        }
+    }
+    fun <T> List<T>.second(): T {
+        return this[1]
+    }
+}";
+    assert_eq!(functions_in("Kotlin", src), at(&[("second", 7)]));
+}
+
+#[test]
+fn java_throws_clause_on_the_line_after_the_parameters() {
+    let src = "\
+class Reader {
+    private Object readField(
+        JsonReader in, FieldDescriptor field)
+        throws IOException {
+        if (in.peek() == null) { return null; }
+        return in.next();
+    }
+    private int depth(JsonReader in)
+        throws IOException {
+        return 0;
+    }
+}";
+    assert_eq!(
+        functions_in("Java", src),
+        at(&[("readField", 2), ("depth", 8)])
+    );
+}
+
+#[test]
+fn abstract_members_of_an_interface_have_no_body() {
+    let src = "\
+interface Store {
+    fun get(id: Int): Row?
+    fun all(): List<Row>
+}
+class Impl(val db: Db) : Store {
+    override fun get(id: Int): Row? {
+        return db.get(id)
+    }
+    override fun all(): List<Row> =
+        db.rows()
+}";
+    assert_eq!(functions_in("Kotlin", src), at(&[("get", 6), ("all", 9)]));
+}
+
+#[test]
+fn java_and_csharp_records_and_primary_constructors_are_not_functions() {
+    let java = "\
+public record Point(int x, int y) {
+    public int sum(int z) {
+        return x + y + z;
+    }
+}";
+    assert_eq!(functions_in("Java", java), at(&[("sum", 2)]));
+    let csharp = "\
+public class Svc(ILogger log) {
+    public int Run(int n) {
+        return n;
+    }
+}
+public readonly record struct Pair<A, B>(A First, B Second) {
+    public object Get(int id) {
+        return First;
+    }
+}";
+    assert_eq!(functions_in("C#", csharp), at(&[("Run", 2), ("Get", 7)]));
+}
+
+#[test]
+fn functions_returning_a_type_or_named_as_a_keyword_are_functions() {
+    let c = "\
+struct node *make(int v) {
+    return 0;
+}
+enum color pick(int x) {
+    return RED;
+}";
+    assert_eq!(functions_in("C", c), at(&[("make", 1), ("pick", 4)]));
+    let js = "\
+class Log {
+  record(event) {
+    return event;
+  }
+}";
+    assert_eq!(functions_in("JavaScript", js), at(&[("record", 2)]));
+}
+
+#[test]
+fn javascript_private_methods_are_functions() {
+    let src = "\
+class A {
+  #count(x) {
+    while (x > 0) {
+      x--;
+    }
+  }
+  static #reset() {
+    return 0;
+  }
+}";
+    assert_eq!(
+        functions_in("JavaScript", src),
+        at(&[("#count", 2), ("#reset", 7)])
+    );
+}
+
+#[test]
+fn cpp_operators_are_functions() {
+    let src = "\
+bool Box::operator==(const Box& o) const {
+    return v_ == o.v_;
+}
+Box& Box::operator=(const Box& o) {
+    return *this;
+}
+int Box::operator()(int x) {
+    return x;
+}
+Box& operator<<(Box& b, int x) {
+    return b;
+}";
+    assert_eq!(
+        functions_in("C++", src),
+        at(&[
+            ("Box::operator==", 1),
+            ("Box::operator=", 4),
+            ("Box::operator", 7),
+            ("operator<<", 10)
+        ])
+    );
+}
+
+#[test]
+fn the_for_of_a_trait_implementation_is_no_loop() {
+    assert_eq!(
+        without_impl_for("impl<T> Display for Box<T> {"),
+        "impl<T> Display     Box<T> {"
+    );
+    assert_eq!(without_impl_for("for x in items {"), "for x in items {");
+}
+
+#[test]
+fn csharp_operators_are_functions() {
+    let src = "\
+public static bool operator ==(Box a, Box b) {
+    return a.v == b.v;
+}";
+    assert_eq!(functions_in("C#", src), at(&[("==", 1)]));
+}
+
+#[test]
+fn outside_functions_is_what_no_body_holds() {
+    let src = "\
+import sys
+def f(x):
+    return x
+if x:
+    f(1)";
+    let lines: Vec<String> = src.lines().map(String::from).collect();
+    let code: Vec<(usize, &str)> = lines
+        .iter()
+        .enumerate()
+        .map(|(i, l)| (i, l.as_str()))
+        .collect();
+    let markers = crate::cycom::markers::markers_for("Python").unwrap();
+    let bodies = detect_function_bodies(&lines, &code, markers);
+    let outside: Vec<usize> = outside_functions(&code, &bodies)
+        .iter()
+        .map(|(i, _)| *i)
+        .collect();
+    assert_eq!(outside, vec![0, 3, 4]);
+}
