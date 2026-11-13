@@ -13,7 +13,6 @@ mod script;
 mod shape;
 mod signature;
 
-pub(crate) use body::literal_len;
 use body::*;
 pub(crate) use declarations::without_impl_for;
 use declarations::*;
@@ -22,7 +21,6 @@ pub(crate) use names::closing_paren;
 pub use names::extract_function_name;
 use names::*;
 use script::*;
-pub(crate) use script::{regex_end, value_may_start};
 use shape::*;
 use signature::*;
 

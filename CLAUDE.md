@@ -26,10 +26,10 @@ CLI tool for code metrics: lines of code (like `cloc`), duplicate detection, Hal
 
 - **`language.rs`** — `LanguageSpec` struct + `lang!` macro defining 40+ languages. Detection by filename, extension, or shebang. Each spec declares: line comment markers, block comment delimiters, nesting support, string delimiter rules, pragma syntax, and exception characters for comment detection.
 
-- **`counter.rs`** — FSM with states `Normal`, `InString(StringKind)`, `InBlockComment(block, depth)`, `InDocAttribute(Option<StringKind>)`, `InDocString(StringKind)`. Processes files line-by-line via `BufReader`, classifying each line as blank/comment/code. Bytes that are not UTF-8 are replaced, so a Latin-1 or Windows-1252 source is read whole. Mixed lines (code + comment) count as code. Key design decisions:
-  - Only `"` triggers string mode (not `'`) unless `single_quote_strings` is set — avoids Rust lifetime false positives
-  - `InString` resets at line end for single/double quotes but persists for triple-quotes (Python) and raw strings
-  - `raw_strings` (Rust): `r"…"`, `r#"…"#`, with a `b` or `c` prefix too, end at a quote followed by as many `#` as opened them (`raw.rs`)
+- **`counter.rs`** — FSM with states `Normal`, `InString(StringKind)`, `InBlockComment(block, depth)`, `InDocAttribute(Option<StringKind>)`, `InDocString(StringKind)`, `InHeredoc(Heredoc)`. Processes files line-by-line via `BufReader`, classifying each line as blank/comment/code. Bytes that are not UTF-8 are replaced, so a Latin-1 or Windows-1252 source is read whole. Mixed lines (code + comment) count as code. Key design decisions:
+  - Literals are read through `literals/` (shared with `code_text`): `syntax.rs` says what each language writes beyond its spec, `openers.rs` where a literal opens and what closes it (quotes, triple quotes, backticks, Rust raw strings `r#"…"#`, C# verbatim, C++ raw), `heredoc.rs` heredocs (`State::InHeredoc`, from the line after the marker to the terminator). `strings.rs` steps inside one (`StringKind::Delimited`, `StringKind::Template` with its `${…}` frames)
+  - Only `"` opens a string unless `single_quote_strings` is set; elsewhere `'` opens a character literal, or is the quote of a Rust lifetime or label (`literals::character_len`)
+  - A quoted string ends with its line unless the language lets it span lines (`quotes_span_lines`) or the line ends with `\`; triple-quoted, raw and template literals persist
   - Block comments track nesting depth when `nested_block_comments` is true. A language may have a second kind (`other_block_comment`, Pascal's `(* *)` besides `{ }`); each is closed only by its own delimiter
   - `column_one_comments` (Fortran's fixed form: `C`, `c`, `*`) make a comment of the whole line; `directives` (`$omp`, `$acc`, `$ `) right after a comment marker make it code
   - `backslash_escapes` is false in Fortran and Pascal, where `'\'` is a one-character string
@@ -238,7 +238,7 @@ Function detection for `cycom`, `cogcom`, `smells` and `init`. `code_lines` give
 
 ### Shared: `src/code_text/`
 
-`read` gives the code of each line as analyzers of code measure it: the file is read whole, by the rules of its language, and comments become spaces and literals spaces within their quotes, closed on the line they open. `syntax.rs` holds what a language writes beyond its `LanguageSpec` (backticks, text blocks, verbatim and raw strings, heredocs, regular expressions, character codes, where a `#` comments); `openers.rs` where a literal opens and what closes it; `heredoc.rs` heredocs; `cursor.rs` the walk along a line. Rust lifetimes and labels are no character literals; a template literal keeps the code of its `${…}`.
+`read` gives the code of each line as analyzers of code measure it: the file is read whole, by the rules of its language, and comments become spaces and literals spaces within their quotes, closed on the line they open. What a language writes is read from `loc/literals`, as `km loc` reads it; `cursor.rs` is the walk along a line. Rust lifetimes and labels are no character literals; a template literal keeps the code of its `${…}`.
 
 ### Shared: `src/string_mask.rs`
 

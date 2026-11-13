@@ -7,8 +7,9 @@ pub(crate) mod counter;
 mod fsm;
 mod lang_macro;
 pub(crate) mod language;
-mod raw;
+pub(crate) mod literals;
 pub(crate) mod report;
+mod strings;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::error::Error;

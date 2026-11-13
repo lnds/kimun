@@ -1,11 +1,11 @@
 //! Where a string literal opens, and what closes it.
 
-use super::heredoc::is_word_byte;
+use super::is_word_byte;
 use super::syntax::{Backticks, Syntax};
 
 /// A literal that may span lines.
 #[derive(Clone, Debug, PartialEq)]
-pub(super) enum Literal {
+pub(crate) enum Literal {
     Delimited(Delimited),
     /// A JavaScript template literal, whose `${…}` holds code.
     Template,
@@ -13,7 +13,7 @@ pub(super) enum Literal {
 
 /// A literal closed by a fixed delimiter.
 #[derive(Clone, Debug, PartialEq)]
-pub(super) struct Delimited {
+pub(crate) struct Delimited {
     pub close: Vec<u8>,
     /// A backslash escapes the next character.
     pub escapes: bool,
@@ -23,27 +23,34 @@ pub(super) struct Delimited {
     pub spans: bool,
 }
 
+/// What opens a literal, by the kind it opens.
+type Reader = fn(&[u8]) -> Option<(Literal, usize)>;
+
 /// The literal that opens at `at`, with the length of its opening.
-pub(super) fn opener_at(
+pub(crate) fn opener_at(
     bytes: &[u8],
     at: usize,
     syntax: &Syntax,
     escapes: bool,
 ) -> Option<(Literal, usize)> {
     let rest = &bytes[at..];
-    let starts_word = at == 0 || !is_word_byte(bytes[at - 1]);
-    let prefixed = (syntax.rust_raw && starts_word)
-        .then(|| rust_raw(rest))
-        .flatten()
-        .or_else(|| {
-            (syntax.cpp_raw && starts_word)
-                .then(|| cpp_raw(rest))
-                .flatten()
-        })
-        .or_else(|| syntax.verbatim.then(|| verbatim(rest)).flatten());
+    let starts_word = at == 0 || is_boundary(bytes[at - 1]);
+    let prefixed: [(bool, Reader); 3] = [
+        (syntax.rust_raw && starts_word, rust_raw),
+        (syntax.cpp_raw && starts_word, cpp_raw),
+        (syntax.verbatim, verbatim),
+    ];
     prefixed
+        .into_iter()
+        .filter(|(on, _)| *on)
+        .find_map(|(_, read)| read(rest))
         .or_else(|| triple(rest, syntax, escapes))
         .or_else(|| quoted(rest, syntax, escapes))
+}
+
+/// Whether a prefix may start after `before`: not inside a name.
+fn is_boundary(before: u8) -> bool {
+    before.is_ascii() && !is_word_byte(before)
 }
 
 fn delimited(close: &[u8], escapes: bool, spans: bool) -> Literal {
@@ -61,11 +68,12 @@ fn triple(rest: &[u8], syntax: &Syntax, escapes: bool) -> Option<(Literal, usize
 }
 
 fn quoted(rest: &[u8], syntax: &Syntax, escapes: bool) -> Option<(Literal, usize)> {
-    let literal = match rest.first()? {
-        b'"' => delimited(b"\"", escapes, syntax.quotes_span_lines),
-        b'\'' if syntax.single_quotes => delimited(b"'", escapes, syntax.quotes_span_lines),
-        b'`' if syntax.backticks == Backticks::Raw => delimited(b"`", false, true),
-        b'`' if syntax.backticks == Backticks::Template => Literal::Template,
+    let spans = syntax.quotes_span_lines;
+    let literal = match (rest.first()?, syntax.backticks) {
+        (b'"', _) => delimited(b"\"", escapes, spans),
+        (b'\'', _) if syntax.single_quotes => delimited(b"'", escapes, spans),
+        (b'`', Backticks::Raw) => delimited(b"`", false, true),
+        (b'`', Backticks::Template) => Literal::Template,
         _ => return None,
     };
     Some((literal, 1))

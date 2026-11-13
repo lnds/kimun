@@ -1005,3 +1005,71 @@ fn fortran_commented_out_sentinels_are_comments() {
     let free = count(spec_at("a.f90"), "!$$ not a directive\n!$OMP DO\n");
     assert_eq!((free.comment, free.code), (1, 1));
 }
+
+// --- Literals that span lines or hold comment markers ---
+
+#[test]
+fn a_comment_marker_in_a_template_literal_opens_no_comment() {
+    let src = "const files = glob(`${root}/*.js`);\nconst a = 1;\nconst b = 2;\n";
+    assert_eq!(counted("JavaScript", src), (0, 0, 3));
+}
+
+#[test]
+fn a_template_literal_spans_lines() {
+    let src = "const q = `\n  // not a comment\n  /* nor this ${x}\n`;\nlet y = 1;\n";
+    assert_eq!(counted("TypeScript", src), (0, 0, 5));
+}
+
+#[test]
+fn a_rust_string_spans_lines() {
+    let src = "let s = \"a\n/* b\n c */\";\nlet t = 1;\n";
+    assert_eq!(counted("Rust", src), (0, 0, 4));
+}
+
+#[test]
+fn a_c_string_goes_on_after_a_backslash() {
+    let src = "char *s = \"a \\\n/* b\";\nint x;\n";
+    assert_eq!(counted("C", src), (0, 0, 3));
+}
+
+#[test]
+fn a_quote_in_a_character_literal_opens_no_string() {
+    let src = "if (c == '\"') return strcmp(s, \"/*\");\nint a;\nint b;\n";
+    assert_eq!(counted("C", src), (0, 0, 3));
+    let src = "let q = '\"'; let s = \"/*\";\nlet a = 1;\n";
+    assert_eq!(counted("Rust", src), (0, 0, 2));
+}
+
+#[test]
+fn text_blocks_verbatim_and_raw_strings_span_lines() {
+    let java = "String q = \"\"\"\n  /* not a comment\n  \"\"\";\nint a;\n";
+    assert_eq!(counted("Java", java), (0, 0, 4));
+    let csharp = "var q = @\"\n// not a comment \"\"x\"\"\n\";\nint a;\n";
+    assert_eq!(counted("C#", csharp), (0, 0, 4));
+    let cpp = "auto q = R\"(\n/* not a comment\n)\";\nint a;\n";
+    assert_eq!(counted("C++", cpp), (0, 0, 4));
+    let go = "q := `\n// not a comment\n`\nvar a int\n";
+    assert_eq!(counted("Go", go), (0, 0, 4));
+}
+
+#[test]
+fn a_heredoc_holds_no_comment() {
+    let shell = "cat <<EOF > conf\n# not a comment\nEOF\n# a comment\n";
+    assert_eq!(counted("Bourne Shell", shell), (0, 1, 3));
+    let php = "$s = <<<SQL\n  /* not a comment\n  SQL;\n$a = 1;\n";
+    assert_eq!(counted("PHP", php), (0, 0, 4));
+    let ruby = "q = <<~SQL\n  # not a comment\nSQL\n# a comment\n";
+    assert_eq!(counted("Ruby", ruby), (0, 1, 3));
+}
+
+#[test]
+fn php_comments_with_a_hash_too() {
+    let src = "<?php\n# a comment\n#[Attribute]\n$a = 1; # trailing\n";
+    assert_eq!(counted("PHP", src), (0, 1, 3));
+}
+
+#[test]
+fn a_shell_count_is_no_comment() {
+    let src = "echo $# \"/*\"\necho ${#x}\n";
+    assert_eq!(counted("Bourne Shell", src), (0, 0, 2));
+}

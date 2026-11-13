@@ -2,6 +2,7 @@
 //! over lines whose literals and comments are blanked.
 
 use super::*;
+use crate::loc::literals::literal_len;
 
 /// Whether the `=` at `pos` stands alone, rather than being part of an
 /// operator such as `==`, `=>`, `<=` or `+=`.
@@ -186,17 +187,4 @@ pub(super) fn without_lifetimes(line: &str) -> String {
         }
     }
     String::from_utf8(bytes).unwrap_or_else(|_| line.to_string())
-}
-
-/// Length of the character literal whose opening quote precedes `rest`,
-/// closing quote included; 0 when it does not close nearby.
-pub(crate) fn literal_len(rest: &[u8]) -> usize {
-    // An escape may hold a quote (`'\''`) and runs as long as `'\u{10FFFF}'`.
-    let (skip, reach) = if rest.first() == Some(&b'\\') {
-        (2, 12)
-    } else {
-        (1, 5)
-    };
-    let close = rest.iter().take(reach).skip(skip).position(|b| *b == b'\'');
-    close.map_or(0, |at| skip + at + 1)
 }
