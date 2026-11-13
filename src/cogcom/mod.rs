@@ -4,8 +4,10 @@
 /// nested control flow and rewarding linear structures.
 /// Levels: Simple, Moderate, Complex, VeryComplex, Extreme.
 mod analyzer;
+mod booleans;
 mod detection;
 mod fortran;
+mod indented;
 mod markers;
 pub(crate) mod report;
 

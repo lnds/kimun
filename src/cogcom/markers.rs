@@ -8,6 +8,14 @@ use crate::loc::language::is_fortran;
 /// depth and rewards linear control flow. Keywords are classified into
 /// three categories that determine how they contribute to the score.
 pub struct CognitiveMarkers {
+    /// Whether `cond ? a : b` is a branch: +1 and the nesting, as `if`.
+    pub ternary: bool,
+    /// Whether a keyword that names a key or a symbol (`if:`, `:if`) is no
+    /// keyword: Ruby, Elixir, JavaScript object keys, Swift argument labels.
+    pub keys: bool,
+    /// What ends the head of a lambda or a closure whose body is a block
+    /// (`x => {`, `|x| {`): that block nests, with no increment.
+    pub lambda_arrows: &'static [&'static str],
     /// Structural keywords: +1 + current nesting depth. These represent
     /// control flow that requires mental effort to follow. Each one also
     /// increases nesting depth for its body.
@@ -34,6 +42,9 @@ pub struct CognitiveMarkers {
 }
 
 static RUST: CognitiveMarkers = CognitiveMarkers {
+    ternary: false,
+    keys: false,
+    lambda_arrows: &["|"],
     structural_keywords: &["if", "for", "while", "loop", "match"],
     hybrid_keywords: &["else if"],
     fundamental_keywords: &["else"],
@@ -45,6 +56,9 @@ static RUST: CognitiveMarkers = CognitiveMarkers {
 };
 
 static PYTHON: CognitiveMarkers = CognitiveMarkers {
+    ternary: false,
+    keys: false,
+    lambda_arrows: &[],
     structural_keywords: &["if", "for", "while", "except"],
     hybrid_keywords: &["elif"],
     fundamental_keywords: &["else"],
@@ -56,6 +70,9 @@ static PYTHON: CognitiveMarkers = CognitiveMarkers {
 };
 
 static JAVASCRIPT: CognitiveMarkers = CognitiveMarkers {
+    ternary: true,
+    keys: true,
+    lambda_arrows: &["=>"],
     structural_keywords: &["if", "for", "while", "do", "switch", "catch"],
     hybrid_keywords: &["else if"],
     fundamental_keywords: &["else"],
@@ -67,8 +84,11 @@ static JAVASCRIPT: CognitiveMarkers = CognitiveMarkers {
 };
 
 static C_FAMILY: CognitiveMarkers = CognitiveMarkers {
-    structural_keywords: &["if", "for", "while", "do", "switch", "catch"],
-    hybrid_keywords: &["else if"],
+    ternary: true,
+    keys: false,
+    lambda_arrows: &["=>", "->"],
+    structural_keywords: &["if", "foreach", "for", "while", "do", "switch", "catch"],
+    hybrid_keywords: &["else if", "elseif"],
     fundamental_keywords: &["else"],
     boolean_operators: &["&&", "||"],
     function_markers: &[],
@@ -78,6 +98,9 @@ static C_FAMILY: CognitiveMarkers = CognitiveMarkers {
 };
 
 static GO: CognitiveMarkers = CognitiveMarkers {
+    ternary: false,
+    keys: false,
+    lambda_arrows: &[],
     structural_keywords: &["if", "for", "switch", "select"],
     hybrid_keywords: &["else if"],
     fundamental_keywords: &["else"],
@@ -89,10 +112,13 @@ static GO: CognitiveMarkers = CognitiveMarkers {
 };
 
 static RUBY: CognitiveMarkers = CognitiveMarkers {
-    structural_keywords: &["if", "unless", "for", "while", "until", "rescue"],
+    ternary: true,
+    keys: true,
+    lambda_arrows: &[],
+    structural_keywords: &["if", "unless", "case", "for", "while", "until", "rescue"],
     hybrid_keywords: &["elsif"],
     fundamental_keywords: &["else"],
-    boolean_operators: &["&&", "||"],
+    boolean_operators: &["&&", "||", "and", "or"],
     function_markers: &["def "],
     brace_scoped: false,
     function_syntax: FunctionSyntax::Loose,
@@ -100,6 +126,9 @@ static RUBY: CognitiveMarkers = CognitiveMarkers {
 };
 
 static KOTLIN: CognitiveMarkers = CognitiveMarkers {
+    ternary: false,
+    keys: false,
+    lambda_arrows: &[],
     structural_keywords: &["if", "for", "while", "when", "catch"],
     hybrid_keywords: &["else if"],
     fundamental_keywords: &["else"],
@@ -112,6 +141,9 @@ static KOTLIN: CognitiveMarkers = CognitiveMarkers {
 };
 
 static SWIFT: CognitiveMarkers = CognitiveMarkers {
+    ternary: true,
+    keys: true,
+    lambda_arrows: &[],
     structural_keywords: &["if", "for", "while", "switch", "catch", "guard"],
     hybrid_keywords: &["else if"],
     fundamental_keywords: &["else"],
@@ -123,6 +155,9 @@ static SWIFT: CognitiveMarkers = CognitiveMarkers {
 };
 
 static SCALA: CognitiveMarkers = CognitiveMarkers {
+    ternary: false,
+    keys: false,
+    lambda_arrows: &[],
     structural_keywords: &["if", "for", "while", "match", "catch"],
     hybrid_keywords: &["else if"],
     fundamental_keywords: &["else"],
@@ -138,6 +173,9 @@ static SCALA: CognitiveMarkers = CognitiveMarkers {
 /// `brace_scoped: true`, the `"function "` explicit marker, and the
 /// single-line-function limitation.
 static SHELL: CognitiveMarkers = CognitiveMarkers {
+    ternary: false,
+    keys: false,
+    lambda_arrows: &[],
     structural_keywords: &["if", "for", "while", "until", "case"],
     hybrid_keywords: &["elif"],
     fundamental_keywords: &["else"],
@@ -149,6 +187,9 @@ static SHELL: CognitiveMarkers = CognitiveMarkers {
 };
 
 static HASKELL: CognitiveMarkers = CognitiveMarkers {
+    ternary: false,
+    keys: false,
+    lambda_arrows: &[],
     structural_keywords: &["if", "case"],
     hybrid_keywords: &[],
     fundamental_keywords: &["else"],
@@ -160,6 +201,9 @@ static HASKELL: CognitiveMarkers = CognitiveMarkers {
 };
 
 static ELIXIR: CognitiveMarkers = CognitiveMarkers {
+    ternary: false,
+    keys: true,
+    lambda_arrows: &[],
     structural_keywords: &[
         "if", "unless", "cond", "case", "with", "receive", "for", "rescue",
     ],
@@ -173,6 +217,9 @@ static ELIXIR: CognitiveMarkers = CognitiveMarkers {
 };
 
 static LUA: CognitiveMarkers = CognitiveMarkers {
+    ternary: false,
+    keys: false,
+    lambda_arrows: &[],
     structural_keywords: &["if", "for", "while"],
     hybrid_keywords: &["elseif"],
     fundamental_keywords: &["else"],
@@ -184,6 +231,9 @@ static LUA: CognitiveMarkers = CognitiveMarkers {
 };
 
 static PERL: CognitiveMarkers = CognitiveMarkers {
+    ternary: true,
+    keys: false,
+    lambda_arrows: &[],
     structural_keywords: &["if", "for", "foreach", "while", "unless"],
     hybrid_keywords: &["elsif"],
     fundamental_keywords: &["else"],
@@ -195,6 +245,9 @@ static PERL: CognitiveMarkers = CognitiveMarkers {
 };
 
 static ERLANG: CognitiveMarkers = CognitiveMarkers {
+    ternary: false,
+    keys: false,
+    lambda_arrows: &[],
     structural_keywords: &["if", "case", "receive"],
     hybrid_keywords: &[],
     fundamental_keywords: &[],
@@ -206,6 +259,9 @@ static ERLANG: CognitiveMarkers = CognitiveMarkers {
 };
 
 static OCAML: CognitiveMarkers = CognitiveMarkers {
+    ternary: false,
+    keys: false,
+    lambda_arrows: &[],
     structural_keywords: &["if", "match"],
     hybrid_keywords: &[],
     fundamental_keywords: &["else"],
@@ -217,6 +273,9 @@ static OCAML: CognitiveMarkers = CognitiveMarkers {
 };
 
 static R: CognitiveMarkers = CognitiveMarkers {
+    ternary: false,
+    keys: false,
+    lambda_arrows: &[],
     structural_keywords: &["if", "for", "while", "repeat"],
     hybrid_keywords: &["else if"],
     fundamental_keywords: &["else"],
@@ -228,6 +287,9 @@ static R: CognitiveMarkers = CognitiveMarkers {
 };
 
 static JULIA: CognitiveMarkers = CognitiveMarkers {
+    ternary: false,
+    keys: false,
+    lambda_arrows: &[],
     structural_keywords: &["if", "for", "while"],
     hybrid_keywords: &["elseif"],
     fundamental_keywords: &["else"],
@@ -239,6 +301,9 @@ static JULIA: CognitiveMarkers = CognitiveMarkers {
 };
 
 static NIM: CognitiveMarkers = CognitiveMarkers {
+    ternary: false,
+    keys: false,
+    lambda_arrows: &[],
     structural_keywords: &["if", "for", "while", "case", "except"],
     hybrid_keywords: &["elif"],
     fundamental_keywords: &["else"],
@@ -250,6 +315,9 @@ static NIM: CognitiveMarkers = CognitiveMarkers {
 };
 
 static ZIG: CognitiveMarkers = CognitiveMarkers {
+    ternary: false,
+    keys: false,
+    lambda_arrows: &[],
     structural_keywords: &["if", "for", "while", "switch"],
     hybrid_keywords: &[],
     fundamental_keywords: &["else"],
@@ -261,6 +329,9 @@ static ZIG: CognitiveMarkers = CognitiveMarkers {
 };
 
 static CLOJURE: CognitiveMarkers = CognitiveMarkers {
+    ternary: false,
+    keys: false,
+    lambda_arrows: &[],
     structural_keywords: &["if", "cond", "case", "when"],
     hybrid_keywords: &[],
     fundamental_keywords: &[],
@@ -277,6 +348,9 @@ static CLOJURE: CognitiveMarkers = CognitiveMarkers {
 /// JavaScript's does. `with` is omitted because it shares the
 /// `handle ... with` line and would double-count.
 static KAIKAI: CognitiveMarkers = CognitiveMarkers {
+    ternary: false,
+    keys: false,
+    lambda_arrows: &[],
     structural_keywords: &["if", "match", "case", "when", "handle"],
     hybrid_keywords: &[],
     fundamental_keywords: &["else"],
@@ -291,6 +365,9 @@ static KAIKAI: CognitiveMarkers = CognitiveMarkers {
 /// constructs they open and the `end` that closes each, not from
 /// indentation, which fixed form lacks.
 static FORTRAN: CognitiveMarkers = CognitiveMarkers {
+    ternary: false,
+    keys: false,
+    lambda_arrows: &[],
     structural_keywords: &["if", "do", "select"],
     hybrid_keywords: &["else if", "elseif"],
     fundamental_keywords: &["else"],
@@ -303,6 +380,9 @@ static FORTRAN: CognitiveMarkers = CognitiveMarkers {
 
 /// Pascal: nesting is read from indentation, two columns a level.
 static PASCAL: CognitiveMarkers = CognitiveMarkers {
+    ternary: false,
+    keys: false,
+    lambda_arrows: &[],
     structural_keywords: &["if", "for", "while", "repeat", "case", "except"],
     hybrid_keywords: &["else if"],
     fundamental_keywords: &["else"],

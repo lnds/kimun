@@ -15,6 +15,8 @@ mod age;
 mod ai;
 /// Author summary: per-author ownership, lines, languages, last active date.
 mod authors;
+/// What reads as a branch in a line, for cyclomatic and cognitive complexity.
+mod branches;
 /// Code of languages that ignore case, read in lower case.
 mod case_fold;
 /// Code churn analysis: pure change frequency per file from git history.

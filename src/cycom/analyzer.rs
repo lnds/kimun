@@ -11,6 +11,7 @@
 
 use serde::Serialize;
 
+use crate::branches::{count_ternaries, names_something};
 use crate::loc::counter::LineKind;
 use crate::util::mask_strings;
 
@@ -185,20 +186,6 @@ fn count_line_complexity(line: &str, markers: &ComplexityMarkers) -> usize {
         }
 }
 
-/// Ternary operators of a line: a `?` with a space on each side, other
-/// than a wildcard of Java generics (`<?`, `, ? extends T`).
-fn count_ternaries(stripped: &str) -> usize {
-    stripped
-        .match_indices(" ? ")
-        .filter(|(at, _)| {
-            let after = stripped[at + 3..].trim_start();
-            !(after.starts_with(['>', ','])
-                || after.starts_with("extends")
-                || after.starts_with("super"))
-        })
-        .count()
-}
-
 /// The clauses of a construct whose clauses branch on a line
 /// (`ComplexityMarkers::clause_arrow`), one per arrow: not a catch-all
 /// (`_`), as `default` is no branch, nor the arrow of an anonymous function
@@ -234,7 +221,7 @@ fn count_keyword_as(line: &str, keyword: &str, keys: bool) -> usize {
     let bytes = line.as_bytes();
     let len = keyword.len();
     line.match_indices(keyword)
-        .filter(|(at, _)| is_word_at(bytes, *at, len) && !named(bytes, *at, len, keys))
+        .filter(|(at, _)| is_word_at(bytes, *at, len) && !names_something(bytes, *at, len, keys))
         .count()
 }
 
@@ -242,16 +229,6 @@ fn count_keyword_as(line: &str, keyword: &str, keys: bool) -> usize {
 fn is_word_at(line: &[u8], at: usize, len: usize) -> bool {
     let before = at.checked_sub(1).map(|b| line[b]);
     !before.is_some_and(is_word_char) && !line.get(at + len).is_some_and(|b| is_word_char(*b))
-}
-
-/// Whether the word at `at` names something rather than being a keyword:
-/// a method after a single `.`, or with `keys` a symbol (`:if`) or a key
-/// (`if:`, but not `if::`).
-fn named(line: &[u8], at: usize, len: usize, keys: bool) -> bool {
-    let (before, after) = (&line[..at], &line[at + len..]);
-    let ends_alone = |c: u8| before.ends_with(&[c]) && !before.ends_with(&[c, c]);
-    let key = after.starts_with(b":") && !after.starts_with(b"::");
-    ends_alone(b'.') || (keys && (ends_alone(b':') || key))
 }
 
 /// Check whether a byte is a word character (alphanumeric or underscore).

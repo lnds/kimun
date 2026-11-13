@@ -522,3 +522,98 @@ def black_style(
     assert_eq!(result.functions.len(), 1);
     assert_eq!(result.functions[0].complexity, 4);
 }
+
+fn scores(language: &str, code: &str) -> Vec<usize> {
+    let markers = super::super::markers::cognitive_markers_for(language).unwrap();
+    let (lines, kinds) = make_lines(code);
+    analyze(&lines, &kinds, markers)
+        .unwrap()
+        .functions
+        .iter()
+        .map(|f| f.complexity)
+        .collect()
+}
+
+#[test]
+fn nesting_by_indentation_reads_blocks_whatever_their_width() {
+    let ruby =
+        "def f(a, b, c)\n  if a\n    if b\n      if c\n        1\n      end\n    end\n  end\nend\n";
+    assert_eq!(scores("Ruby", ruby), [6]);
+}
+
+#[test]
+fn a_boolean_sequence_goes_on_through_calls_and_lines() {
+    let java = "boolean f(X x, boolean y) {\n    return x != null && x.isValid() && y;\n}\n";
+    assert_eq!(scores("Java", java), [1]);
+    let lines = "boolean f(X x, boolean y) {\n    return x != null\n        && x.isValid()\n        && y;\n}\n";
+    assert_eq!(scores("Java", lines), [1]);
+    let ruby = "def f(a, b, c)\n  if a and b or c\n    1\n  end\nend\n";
+    assert_eq!(scores("Ruby", ruby), [3]);
+}
+
+#[test]
+fn a_ternary_counts_with_its_nesting() {
+    let js = "function f(a, b) {\n  if (b) {\n    return a > 0 ? 1 : 2;\n  }\n}\n";
+    assert_eq!(scores("JavaScript", js), [3]);
+}
+
+#[test]
+fn a_do_while_loop_counts_once() {
+    let c = "int f(int x) {\n    do {\n        x--;\n    } while (x > 0);\n    return x;\n}\n";
+    assert_eq!(scores("C", c), [1]);
+}
+
+#[test]
+fn foreach_nests_its_body() {
+    let cs = "void F(int[] xs) {\n    foreach (var x in xs) {\n        if (x > 0) { }\n    }\n}\n";
+    assert_eq!(scores("C#", cs), [3]);
+}
+
+#[test]
+fn a_brace_inside_a_pattern_is_no_block() {
+    let rust =
+        "fn f(x: Option<Foo>) {\n    if let Some(Foo { a, b }) = x {\n        if a { }\n    }\n}\n";
+    assert_eq!(scores("Rust", rust), [3]);
+}
+
+#[test]
+fn a_lambda_nests_its_body() {
+    let java = "void f(boolean x) {\n    Runnable r = () -> {\n        if (x) { }\n    };\n}\n";
+    assert_eq!(scores("Java", java), [2]);
+}
+
+#[test]
+fn a_jump_to_a_label_counts() {
+    // The example of the SonarSource paper.
+    let java = "\
+int sumOfPrimes(int max) {
+    int total = 0;
+    OUT: for (int i = 1; i <= max; ++i) {
+        for (int j = 2; j < i; ++j) {
+            if (i % j == 0) {
+                continue OUT;
+            }
+        }
+        total += i;
+    }
+    return total;
+}
+";
+    assert_eq!(scores("Java", java), [7]);
+}
+
+#[test]
+fn a_keyword_naming_a_method_a_key_or_a_symbol_counts_nothing() {
+    let js = "function f(p) {\n  return p.then(g).catch(h);\n}\n";
+    assert_eq!(scores("JavaScript", js), [0]);
+    let elixir = "def f(x) do\n  validate(:x, if: :active)\nend\n";
+    assert_eq!(scores("Elixir", elixir), [0]);
+}
+
+#[test]
+fn python_continuations_and_try_blocks_do_not_nest() {
+    let continued = "def f(a, b, c):\n    x = g(a,\n          b if a else c)\n    return x\n";
+    assert_eq!(scores("Python", continued), [1]);
+    let tried = "def f(a):\n    try:\n        if a:\n            return 1\n    except ValueError:\n        return 2\n";
+    assert_eq!(scores("Python", tried), [2]);
+}
