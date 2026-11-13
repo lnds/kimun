@@ -7,7 +7,6 @@
 //! resolved working directory root, providing a safe API for walking
 //! commits, diffing trees, and resolving paths between the filesystem
 //! walk and git's path namespace.
-use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fs;
@@ -19,6 +18,8 @@ use git2::{Delta, DiffOptions, ObjectType, Repository, Sort, Tree};
 mod before;
 mod blame;
 mod changeset;
+mod coupling;
+mod frequencies;
 mod history;
 
 pub use changeset::{ChangeKind, CoChangeHistory, FileDiffStat, patch_stats};
@@ -27,6 +28,10 @@ mod touched;
 mod tree;
 
 pub use history::CommitsByFile;
+
+/// What a shallow clone cannot tell.
+const SHALLOW_WARNING: &str = "warning: shallow clone: the history stops at the commits fetched, \
+so commit counts, authors and ages read from it are short (git fetch --unshallow)";
 
 /// Wrapper around a `git2::Repository` with its resolved root path.
 pub struct GitRepo {
@@ -87,18 +92,6 @@ pub fn identity(name: &str, email: &str) -> String {
     }
 }
 
-/// The commit a revert undoes, as `git revert` writes it: a message opening
-/// with `Revert "` that says `This reverts commit <sha>`.
-fn reverted_commit(commit: &git2::Commit) -> Option<git2::Oid> {
-    let message = commit.message().ok()?;
-    if !message.starts_with("Revert \"") {
-        return None;
-    }
-    let after = message.split("This reverts commit ").nth(1)?;
-    let sha: String = after.chars().take_while(char::is_ascii_hexdigit).collect();
-    git2::Oid::from_str(&sha).ok()
-}
-
 /// Per-author blame contribution for a single file.
 pub struct BlameInfo {
     /// Author display name from git signature.
@@ -134,6 +127,21 @@ impl GitRepo {
         Ok(Self { repo, root })
     }
 
+    /// Whether this is a shallow clone, whose history stops at the commits
+    /// fetched.
+    pub fn is_shallow(&self) -> bool {
+        self.repo.is_shallow()
+    }
+
+    /// Say once, on stderr, that a shallow clone has only part of the
+    /// history, so what is read from it is short.
+    pub(super) fn warn_if_shallow(&self) {
+        static WARNED: std::sync::Once = std::sync::Once::new();
+        if self.is_shallow() {
+            WARNED.call_once(|| eprintln!("{SHALLOW_WARNING}"));
+        }
+    }
+
     /// Iterate non-merge commits in reverse chronological order, optionally
     /// filtered by a `since` timestamp. Calls `f` for each qualifying commit.
     /// The callback returns `ControlFlow::Continue(())` to keep walking or
@@ -155,6 +163,7 @@ impl GitRepo {
         since: Option<i64>,
         mut f: impl FnMut(&git2::Commit) -> Result<ControlFlow<()>, Box<dyn Error>>,
     ) -> Result<(), Box<dyn Error>> {
+        self.warn_if_shallow();
         revwalk.set_sorting(Sort::TIME)?;
 
         for oid in revwalk {
@@ -173,103 +182,6 @@ impl GitRepo {
             }
         }
         Ok(())
-    }
-
-    /// Count how many commits touched each file, with first/last timestamps.
-    pub fn file_frequencies(
-        &self,
-        since: Option<i64>,
-    ) -> Result<Vec<FileFrequency>, Box<dyn Error>> {
-        let mut map: HashMap<PathBuf, FileFrequency> = HashMap::new();
-
-        self.walk_commits(since, |commit| {
-            let time = commit.time().seconds();
-            let paths = self.changed_files(commit)?;
-            for path in paths {
-                map.entry(path.clone())
-                    .and_modify(|f| {
-                        f.commits += 1;
-                        if time < f.first_commit {
-                            f.first_commit = time;
-                        }
-                        if time > f.last_commit {
-                            f.last_commit = time;
-                        }
-                    })
-                    .or_insert(FileFrequency {
-                        path,
-                        commits: 1,
-                        first_commit: time,
-                        last_commit: time,
-                    });
-            }
-            Ok(ControlFlow::Continue(()))
-        })?;
-
-        let mut result: Vec<FileFrequency> = map.into_values().collect();
-        result.sort_by_key(|r| Reverse(r.commits));
-        Ok(result)
-    }
-
-    /// Return the most recent commit timestamp for each file in `targets`.
-    ///
-    /// Walks commits newest-first; the first time a target file appears is its
-    /// last-modification time. Stops early once all targets have been resolved.
-    /// Files not touched by any commit (e.g. untracked) are omitted from the result.
-    pub fn last_modified_per_file(
-        &self,
-        targets: &[PathBuf],
-    ) -> Result<HashMap<PathBuf, i64>, Box<dyn Error>> {
-        let mut remaining: HashSet<&PathBuf> = targets.iter().collect();
-        let mut result: HashMap<PathBuf, i64> = HashMap::new();
-
-        self.walk_commits(None, |commit| {
-            if remaining.is_empty() {
-                return Ok(ControlFlow::Break(()));
-            }
-            let time = commit.time().seconds();
-            for path in self.changed_files(commit)? {
-                if remaining.remove(&path) {
-                    result.insert(path, time);
-                }
-            }
-            Ok(ControlFlow::Continue(()))
-        })?;
-
-        Ok(result)
-    }
-
-    /// Collect groups of files that changed together in each commit.
-    /// Only includes commits that touch 2+ files.
-    ///
-    /// Commits touching more than `max_changeset` files are left out: a
-    /// sweeping change relates files by accident. So are a revert and the
-    /// commit it reverts, which together changed nothing.
-    pub fn co_changing_commits(
-        &self,
-        since: Option<i64>,
-        max_changeset: usize,
-    ) -> Result<Vec<Vec<PathBuf>>, Box<dyn Error>> {
-        let mut result = Vec::new();
-        let mut reverted: HashSet<git2::Oid> = HashSet::new();
-
-        self.walk_commits(since, |commit| {
-            // Newest first: a revert is met before the commit it undoes.
-            if let Some(undone) = reverted_commit(commit) {
-                reverted.insert(undone);
-                return Ok(ControlFlow::Continue(()));
-            }
-            if reverted.remove(&commit.id()) {
-                return Ok(ControlFlow::Continue(()));
-            }
-            let paths = self.changed_files(commit)?;
-            if (2..=max_changeset).contains(&paths.len()) {
-                result.push(paths);
-            }
-            Ok(ControlFlow::Continue(()))
-        })?;
-
-        Ok(result)
     }
 
     /// The time of the last commit of each author, by [`identity`], read

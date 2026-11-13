@@ -109,11 +109,8 @@ fn integration_basic() {
 
     // Verify coupling is found by using compute_coupling directly
     let git_repo = GitRepo::open(dir.path()).unwrap();
-    let freqs = git_repo.file_frequencies(None).unwrap();
-    let freq_map: HashMap<PathBuf, usize> =
-        freqs.into_iter().map(|f| (f.path, f.commits)).collect();
-    let co = git_repo.co_changing_commits(None, 30).unwrap();
-    let results = compute_coupling(&co, &freq_map, 3, 1);
+    let history = git_repo.coupling_history(None, 30).unwrap();
+    let results = compute_coupling(&history.co_changes, &history.commits, 3, 1);
 
     assert_eq!(results.len(), 1, "should find exactly one coupled pair");
     assert_eq!(results[0].shared_commits, 3);
@@ -220,6 +217,80 @@ fn integration_test_file_excluded() {
         !freq_map.contains_key(&PathBuf::from("a_test.rs")),
         "test file should be excluded from freq_map"
     );
+}
+
+/// Three commits that change `files` together.
+fn changed_together(repo: &Repository, files: &[&str]) {
+    for i in 0..3 {
+        let contents: Vec<(&str, String)> = files
+            .iter()
+            .map(|f| (*f, format!("fn f() {{ {i} }}")))
+            .collect();
+        let refs: Vec<(&str, &str)> = contents.iter().map(|(f, c)| (*f, c.as_str())).collect();
+        make_commit(repo, &refs, &format!("commit {i}"));
+    }
+}
+
+fn pair_names(pairs: &[FileCoupling]) -> Vec<(String, String)> {
+    pairs
+        .iter()
+        .map(|p| {
+            (
+                p.file_a.display().to_string(),
+                p.file_b.display().to_string(),
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn only_files_under_the_path_are_paired() {
+    let (dir, repo) = create_test_repo();
+    changed_together(&repo, &["src/a.rs", "src/b.rs", "lib/c.rs"]);
+    let options = opts(OutputMode::Json, false, 20, "strength", None, 1, None);
+    let pairs = pairs(&dir.path().join("src"), &options).unwrap().unwrap();
+    assert_eq!(
+        pair_names(&pairs),
+        [("src/a.rs".to_string(), "src/b.rs".to_string())]
+    );
+}
+
+#[test]
+fn ties_come_out_by_path() {
+    let (dir, repo) = create_test_repo();
+    changed_together(&repo, &["d.rs", "c.rs", "b.rs", "a.rs"]);
+    let options = opts(OutputMode::Json, false, 20, "strength", None, 1, None);
+    for _ in 0..3 {
+        let mut pairs = pairs(dir.path(), &options).unwrap().unwrap();
+        sort_pairs(&mut pairs, "shared");
+        let names = pair_names(&pairs);
+        let firsts: Vec<(&str, &str)> = names
+            .iter()
+            .take(3)
+            .map(|(a, b)| (a.as_str(), b.as_str()))
+            .collect();
+        assert_eq!(
+            firsts,
+            [("a.rs", "b.rs"), ("a.rs", "c.rs"), ("a.rs", "d.rs")]
+        );
+    }
+}
+
+#[test]
+fn a_revert_leaves_both_sides_of_the_strength() {
+    let (dir, repo) = create_test_repo();
+    changed_together(&repo, &["a.rs", "b.rs"]);
+    let head = repo.head().unwrap().peel_to_commit().unwrap().id();
+    make_commit(
+        &repo,
+        &[("a.rs", "fn f() { 1 }"), ("b.rs", "fn f() { 1 }")],
+        &format!("Revert \"commit 2\"\n\nThis reverts commit {head}.\n"),
+    );
+    let options = opts(OutputMode::Json, false, 20, "strength", None, 1, None);
+    let pairs = pairs(dir.path(), &options).unwrap().unwrap();
+    assert_eq!(pairs[0].shared_commits, 2);
+    assert_eq!((pairs[0].commits_a, pairs[0].commits_b), (2, 2));
+    assert!((pairs[0].strength - 1.0).abs() < f64::EPSILON);
 }
 
 #[test]

@@ -108,13 +108,29 @@ pub fn compute_coupling(
         })
         .collect();
 
-    results.sort_by(|a, b| {
-        b.strength
-            .partial_cmp(&a.strength)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-
+    sort_pairs(&mut results, "strength");
     results
+}
+
+/// Order pairs by the key asked for (`shared` or strength), then by the
+/// other one, then by their paths, so ties come out the same on every run.
+pub fn sort_pairs(results: &mut [FileCoupling], sort_by: &str) {
+    let paths =
+        |a: &FileCoupling, b: &FileCoupling| (&a.file_a, &a.file_b).cmp(&(&b.file_a, &b.file_b));
+    let strength = |a: &FileCoupling, b: &FileCoupling| b.strength.total_cmp(&a.strength);
+    let shared = |a: &FileCoupling, b: &FileCoupling| b.shared_commits.cmp(&a.shared_commits);
+    match sort_by {
+        "shared" => results.sort_by(|a, b| {
+            shared(a, b)
+                .then_with(|| strength(a, b))
+                .then_with(|| paths(a, b))
+        }),
+        _ => results.sort_by(|a, b| {
+            strength(a, b)
+                .then_with(|| shared(a, b))
+                .then_with(|| paths(a, b))
+        }),
+    }
 }
 
 #[cfg(test)]

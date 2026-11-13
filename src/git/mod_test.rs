@@ -114,7 +114,7 @@ fn test_co_changing_commits() {
     make_commit(&repo, &[("b.rs", "v1"), ("c.rs", "v1")], "two files");
 
     let git_repo = GitRepo::open(dir.path()).unwrap();
-    let co = git_repo.co_changing_commits(None, 30).unwrap();
+    let co = git_repo.coupling_history(None, 30).unwrap().co_changes;
 
     assert_eq!(co.len(), 1);
     assert_eq!(co[0].len(), 2);
@@ -220,8 +220,8 @@ fn test_empty_repo() {
     let freqs = git_repo.file_frequencies(None);
     assert!(freqs.is_err() || freqs.unwrap().is_empty());
 
-    let co = git_repo.co_changing_commits(None, 30);
-    assert!(co.is_err() || co.unwrap().is_empty());
+    let co = git_repo.coupling_history(None, 30);
+    assert!(co.is_err() || co.unwrap().co_changes.is_empty());
 }
 
 fn change_for<'a>(changes: &'a [FileChange], path: &str) -> Option<&'a FileChange> {
@@ -838,8 +838,9 @@ fn co_changes_skip_sweeping_commits() {
         &[("a.rs", "2"), ("b.rs", "2"), ("c.rs", "2"), ("d.rs", "2")],
     );
     let git_repo = GitRepo::open(dir.path()).unwrap();
-    assert_eq!(git_repo.co_changing_commits(None, 3).unwrap().len(), 1);
-    assert_eq!(git_repo.co_changing_commits(None, 4).unwrap().len(), 2);
+    let co_changes = |max| git_repo.coupling_history(None, max).unwrap().co_changes;
+    assert_eq!(co_changes(3).len(), 1);
+    assert_eq!(co_changes(4).len(), 2);
 }
 
 #[test]
@@ -853,7 +854,131 @@ fn co_changes_skip_a_revert_and_the_commit_it_undoes() {
         &[("a.rs", "1"), ("b.rs", "1")],
     );
     let git_repo = GitRepo::open(dir.path()).unwrap();
-    assert_eq!(git_repo.co_changing_commits(None, 30).unwrap().len(), 1);
+    let history = git_repo.coupling_history(None, 30).unwrap();
+    assert_eq!(history.co_changes.len(), 1);
+    assert_eq!(history.commits[Path::new("a.rs")], 1, "the same commits");
+}
+
+#[test]
+fn file_commits_skip_what_co_changes_skip() {
+    let (dir, repo) = create_test_repo();
+    commit_with(&repo, "pair", &[("a.rs", "1"), ("b.rs", "1")]);
+    commit_with(&repo, "alone", &[("a.rs", "2")]);
+    commit_with(
+        &repo,
+        "sweep",
+        &[("a.rs", "3"), ("b.rs", "3"), ("c.rs", "3")],
+    );
+    let git_repo = GitRepo::open(dir.path()).unwrap();
+    let history = git_repo.coupling_history(None, 2).unwrap();
+    assert_eq!(history.commits[Path::new("a.rs")], 2);
+    assert_eq!(history.commits[Path::new("b.rs")], 1);
+    assert!(!history.commits.contains_key(Path::new("c.rs")));
+}
+
+#[test]
+fn a_reverted_revert_leaves_the_first_change_in_effect() {
+    let (dir, repo) = create_test_repo();
+    commit_with(&repo, "kept", &[("a.rs", "1"), ("b.rs", "1")]);
+    let fix = commit_with(&repo, "fix", &[("a.rs", "2"), ("b.rs", "2")]);
+    let revert = commit_with(
+        &repo,
+        &format!("Revert \"fix\"\n\nThis reverts commit {fix}.\n"),
+        &[("a.rs", "1"), ("b.rs", "1")],
+    );
+    commit_with(
+        &repo,
+        &format!("Reapply \"fix\"\n\nThis reverts commit {revert}.\n"),
+        &[("a.rs", "2"), ("b.rs", "2")],
+    );
+    let git_repo = GitRepo::open(dir.path()).unwrap();
+    let history = git_repo.coupling_history(None, 30).unwrap();
+    assert_eq!(history.co_changes.len(), 2, "kept and fix");
+    assert_eq!(history.commits[Path::new("a.rs")], 2);
+}
+
+/// Move `from` to `to` in one commit at `epoch`, leaving the content as it is.
+fn move_at(repo: &Repository, from: &str, to: &str, epoch: i64) {
+    let root = repo.workdir().unwrap();
+    fs::rename(root.join(from), root.join(to)).unwrap();
+    let mut index = repo.index().unwrap();
+    index.remove_path(Path::new(from)).unwrap();
+    index.write().unwrap();
+    make_commit_at(
+        repo,
+        &[(to, &fs::read_to_string(root.join(to)).unwrap())],
+        "move",
+        epoch,
+    );
+}
+
+#[test]
+fn a_moved_file_keeps_its_history() {
+    let (dir, repo) = create_test_repo();
+    let body = "fn a() {}\nfn b() {}\nfn c() {}\n";
+    make_commit_at(&repo, &[("old.rs", body)], "add", 1_000_000);
+    make_commit_at(
+        &repo,
+        &[("old.rs", &format!("{body}fn d() {{}}\n"))],
+        "edit",
+        2_000_000,
+    );
+    move_at(&repo, "old.rs", "new.rs", 3_000_000);
+
+    let git_repo = GitRepo::open(dir.path()).unwrap();
+    let freqs = git_repo.file_frequencies(None).unwrap();
+    assert_eq!(freqs.len(), 1, "one file, under its name at HEAD");
+    assert_eq!(freqs[0].path, Path::new("new.rs"));
+    assert_eq!(freqs[0].commits, 2, "a pure move is no change");
+    assert_eq!(
+        (freqs[0].first_commit, freqs[0].last_commit),
+        (1_000_000, 2_000_000)
+    );
+
+    let modified = git_repo
+        .last_modified_per_file(&[PathBuf::from("new.rs")])
+        .unwrap();
+    assert_eq!(modified[Path::new("new.rs")], 2_000_000);
+}
+
+#[test]
+fn a_path_reused_after_a_move_keeps_its_own_history() {
+    let (dir, repo) = create_test_repo();
+    let body = "fn a() {}\nfn b() {}\nfn c() {}\n";
+    make_commit_at(&repo, &[("a.rs", body)], "add", 1_000_000);
+    move_at(&repo, "a.rs", "b.rs", 2_000_000);
+    make_commit_at(&repo, &[("a.rs", "fn other() {}\n")], "new a", 3_000_000);
+
+    let git_repo = GitRepo::open(dir.path()).unwrap();
+    let freqs = git_repo.file_frequencies(None).unwrap();
+    let commits = |name: &str| {
+        freqs
+            .iter()
+            .find(|f| f.path == Path::new(name))
+            .unwrap()
+            .commits
+    };
+    assert_eq!(commits("a.rs"), 1);
+    assert_eq!(commits("b.rs"), 1);
+}
+
+#[test]
+fn a_shallow_clone_is_told() {
+    let (dir, repo) = create_test_repo();
+    make_commit(&repo, &[("a.rs", "1")], "first");
+    make_commit(&repo, &[("a.rs", "2")], "second");
+    let git = GitRepo::open(dir.path()).unwrap();
+    assert!(!git.is_shallow());
+
+    let clone = tempfile::tempdir().unwrap();
+    let status = std::process::Command::new("git")
+        .args(["clone", "-q", "--depth", "1"])
+        .arg(format!("file://{}", dir.path().display()))
+        .arg(clone.path().join("c"))
+        .status();
+    if status.is_ok_and(|s| s.success()) {
+        assert!(GitRepo::open(&clone.path().join("c")).unwrap().is_shallow());
+    }
 }
 
 #[test]

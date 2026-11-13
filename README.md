@@ -494,7 +494,9 @@ Files with high scores concentrate risk — they are both change-prone and compl
 
 By default, complexity is measured by **total indentation** (sum of logical indentation levels across all code lines), following Tornhill's original method from "Your Code as a Crime Scene". Use `--complexity cycom` for cyclomatic complexity instead, or `--complexity cogcom` for cognitive complexity. Documents (`--kind docs`) are measured by their lines of text whatever the metric, since indentation and branches say nothing about prose: `km hotspots --kind docs` finds the long documents rewritten most often, such as an agent instruction file that grows every week. Infrastructure keeps the metric asked for, as the indentation of YAML and HCL is its structure.
 
-Requires a git repository. Merge commits are excluded from the count.
+Requires a git repository. Merge commits are excluded from the count. Renames are followed: the commits of a file before a `git mv` count for it under the name it has now, and a move that leaves the content as it was is no change. `km churn` and `km age` count the same way.
+
+A shallow clone (`git clone --depth 1`, the checkout many CI systems make) has only the commits fetched, so commit counts, owners and ages read from it come out short: every command that reads history says so on stderr. Fetch the whole history first (`git fetch --unshallow`, or `fetch-depth: 0` in GitHub Actions).
 
 Options:
 
@@ -572,7 +574,9 @@ Bot accounts (`dependabot[bot]`, `github-actions[bot]`) hold no knowledge: their
 
 #### Who wrote each line
 
-Ownership comes from blame of the file as committed at `HEAD`. When the `git` program is installed, kimun runs `git blame -w -M -C`: a change of whitespace keeps the author of the line, and so does code moved within a file or from another file the same commit changed. Revisions listed in `.git-blame-ignore-revs` (or in the file `blame.ignoreRevsFile` names) are skipped, so a mass reformat does not take the lines. Without `git`, libgit2 blames the file: it skips whitespace changes but neither follows moved code nor ignores revisions. `km authors` and `km loc --by-author` read blame the same way.
+Ownership comes from blame of the file as committed at `HEAD`. When the `git` program is installed, kimun runs `git blame -w -M -C`: a change of whitespace keeps the author of the line, and so does code moved within a file or from another file the same commit changed. Revisions listed in `.git-blame-ignore-revs` (or in the file `blame.ignoreRevsFile` names) are skipped, so a mass reformat does not take the lines. Without `git`, libgit2 blames the file: it skips whitespace changes but neither follows moved code nor ignores revisions. When `git blame` rejects `.git-blame-ignore-revs` (a line that names no revision), kimun says so and blames without it, still with `-w -M -C`. `km authors` and `km loc --by-author` read blame the same way.
+
+The primary owner of a file is the author of most of its lines. A tie goes to the author whose newest line there is the most recent, then to the identity (the email) first in alphabetical order, so the same repository names the same owner on every run.
 
 Options:
 
@@ -672,7 +676,7 @@ Options:
 | `--across` | Only pairs of files of different kinds: code with documentation, code with infrastructure. Reads every kind but data unless `--kind` says which |
 | `--include-ext`, `--exclude-ext`, `--exclude-dir`, `--exclude` | Path filters, applied to the paths of history |
 
-Only files that still exist in the working tree are paired, and only code: lock files, manifests, CI YAML and documentation are left out. A sweeping commit (more than `--max-changeset` files) relates files by accident and is skipped, as is a revert together with the commit it reverts (a message opening with `Revert "` that names the commit): together they changed nothing. Renames are not followed: a file is paired under the path it has now.
+Only files that still exist in the working tree are paired, and only code: lock files, manifests, CI YAML and documentation are left out. With a path, only the files under it are paired. A sweeping commit (more than `--max-changeset` files) relates files by accident and is skipped, as is a revert together with the commit it reverts (a message opening with `Revert "`, or `Reapply "` for the revert of a revert, that names the commit): together they changed nothing. Those commits are left out of the commits of each file too, so both sides of the strength count the same commits. Pairs as strong come by shared commits, then by path (with `--sort-by shared`, the other way round), so `--top` shows the same pairs on every run. Renames are not followed: a file is paired under the path it has now.
 
 Example output:
 
@@ -1310,8 +1314,10 @@ Options:
 
 | Flag | Description |
 |------|-------------|
-| `--since DURATION` | Only consider activity since this time (e.g. `6m`, `1y`, `30d`) |
+| `--since DURATION` | Count only the lines committed since this time, by commit date as the other commands read it (e.g. `6m`, `1y`, `30d`) |
 | `--format {table,json,short,terse}` | Output format (default: table) |
+
+Each file's primary owner is chosen as in `km knowledge`. Authors with as many lines are listed by identity.
 
 Example output:
 
