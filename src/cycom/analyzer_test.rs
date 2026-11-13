@@ -290,3 +290,78 @@ fn kaikai_default_of_an_option_is_a_branch() {
     let result = analyze(&lines, &kinds, markers).unwrap();
     assert_eq!(result.functions[0].complexity, 2);
 }
+
+#[test]
+fn python_signature_closed_at_the_indentation_of_def_keeps_its_body() {
+    let src = "\
+def black_style(
+    a: int,
+    b: int,
+) -> int:
+    if a:
+        return 1
+    elif b:
+        return 2
+    while a and b:
+        a -= 1
+    return 0
+def after():
+    return 1
+";
+    let (lines, kinds) = make_lines(src);
+    let result = analyze(&lines, &kinds, python_markers()).unwrap();
+    let found: Vec<(&str, usize)> = result
+        .functions
+        .iter()
+        .map(|f| (f.name.as_str(), f.complexity))
+        .collect();
+    assert_eq!(found, [("black_style", 5), ("after", 1)]);
+}
+
+#[test]
+fn ruby_rescue_at_the_indentation_of_def_stays_in_the_method() {
+    let src = "\
+def with_rescue(x)
+  risky(x) if x
+rescue ArgumentError => e
+  if e.message && x
+    log(e)
+  end
+rescue StandardError
+  nil
+end
+";
+    let markers = super::super::markers::markers_for("Ruby").unwrap();
+    let (lines, kinds) = make_lines(src);
+    let result = analyze(&lines, &kinds, markers).unwrap();
+    assert_eq!(result.functions.len(), 1);
+    assert_eq!(result.functions[0].complexity, 6);
+}
+
+#[test]
+fn elixir_rescue_at_the_indentation_of_def_stays_in_the_function() {
+    let src = "\
+defmodule R do
+  def with_rescue(x) do
+    if x > 0 and x < 5 do
+      risky(x)
+    end
+  rescue
+    e in ArgumentError ->
+      if x, do: log(e)
+    _ -> nil
+  end
+
+  def next_one(x), do: x
+end
+";
+    let markers = super::super::markers::markers_for("Elixir").unwrap();
+    let (lines, kinds) = make_lines(src);
+    let result = analyze(&lines, &kinds, markers).unwrap();
+    let found: Vec<(&str, usize)> = result
+        .functions
+        .iter()
+        .map(|f| (f.name.as_str(), f.complexity))
+        .collect();
+    assert_eq!(found, [("with_rescue", 7), ("next_one", 1)]);
+}

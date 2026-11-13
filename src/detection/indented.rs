@@ -20,7 +20,8 @@ pub(super) fn detect_indent_scoped<'a>(
             i += 1;
             continue;
         }
-        let (body, next) = indented_body(all_lines, code_lines, i);
+        let header = signature_end(code_lines, i, markers);
+        let (body, next) = indented_body(all_lines, code_lines, i, header);
         functions.push(FunctionBody {
             name: extract_function_name(trimmed, markers),
             start_line: line_idx + 1,
@@ -31,24 +32,67 @@ pub(super) fn detect_indent_scoped<'a>(
     functions
 }
 
-/// The declaration at `code_lines[start]` and the lines indented deeper
-/// than it, with the index of the line to go on from: the first after
-/// them, or the first inside a `quote` block among them. The code of a
-/// `quote` is generated, not run by the function: it is left out of the
-/// body, and the functions it declares are measured on their own.
+/// The index of the line that ends the signature declared at
+/// `code_lines[start]`: the first where its brackets are balanced. A
+/// signature split across lines may close at the indentation of the
+/// declaration (`) -> int:`), which would otherwise end the body.
+fn signature_end(
+    code_lines: &[(usize, &str)],
+    start: usize,
+    markers: &dyn FunctionDetectionMarkers,
+) -> usize {
+    let mut depth = 0;
+    code_lines[start..]
+        .iter()
+        .position(|(_, line)| {
+            depth += bracket_balance(&masked(line, markers));
+            depth <= 0
+        })
+        .map_or(code_lines.len() - 1, |k| start + k)
+}
+
+/// Brackets a line opens minus those it closes.
+fn bracket_balance(line: &str) -> isize {
+    let count = |set: &str| line.chars().filter(|c| set.contains(*c)).count() as isize;
+    count("([{") - count(")]}")
+}
+
+/// Clauses of a function written at the indentation of its declaration:
+/// Ruby's `rescue`, `else` and `ensure`, Elixir's `rescue`, `catch`,
+/// `else` and `after`.
+fn is_function_clause(trimmed: &str) -> bool {
+    let word = trimmed
+        .split(|c: char| !c.is_alphanumeric() && c != '_')
+        .next()
+        .unwrap_or("");
+    matches!(word, "rescue" | "ensure" | "else" | "catch" | "after")
+}
+
+/// Whether a line at `indent` goes on with a body declared at `base`.
+fn in_body(indent: usize, base: usize, line: &str) -> bool {
+    let trimmed = line.trim();
+    indent > base || trimmed.is_empty() || (indent == base && is_function_clause(trimmed))
+}
+
+/// The declaration at `code_lines[start]`, its signature through
+/// `code_lines[header]`, and the lines after it indented deeper than the
+/// declaration or opening one of its clauses, with the index of the line
+/// to go on from: the first after them, or the first inside a `quote`
+/// block among them. The code of a `quote` is generated, not run by the
+/// function: it is left out of the body, and the functions it declares are
+/// measured on their own.
 pub(super) fn indented_body<'a>(
     all_lines: &[String],
     code_lines: &[(usize, &'a str)],
     start: usize,
+    header: usize,
 ) -> (Vec<(usize, &'a str)>, usize) {
     let base_indent = indent_level(code_lines[start].1);
-    let len = code_lines[start + 1..]
+    let len = code_lines[header + 1..]
         .iter()
-        .take_while(|(idx, line)| {
-            indent_level(&all_lines[*idx]) > base_indent || line.trim().is_empty()
-        })
+        .take_while(|(idx, line)| in_body(indent_level(&all_lines[*idx]), base_indent, line))
         .count();
-    let end = start + 1 + len;
+    let end = header + 1 + len;
     let quoted = quoted_lines(all_lines, &code_lines[start..end]);
     let body = code_lines[start..end]
         .iter()
