@@ -318,7 +318,16 @@ Rust, Python, JavaScript, JSX, TypeScript, Go, C, C++, C#, Java, Objective-C, PH
 
 ### `km cycom` -- Cyclomatic complexity
 
-Computes cyclomatic complexity per file and per function by counting decision points (`if`, `for`, `while`, `match`, `&&`, `||`, etc.).
+Computes cyclomatic complexity per file and per function by counting decision points (`if`, `for`, `while`, `&&`, `||`, etc.).
+
+What counts, the same in every language that has it:
+
+- each condition and loop: `if`, `else if` (`elif`, `elsif`, `elseif`), `for`, `foreach`, `while`, `unless`, `until`, `guard`, and a `do … while` once, by its `while`;
+- each `case` of a `switch` or `select`, and each arm of a Rust `match` or clause of an Elixir `case`, `cond` or `receive`; the `switch` itself is none, nor is a catch-all (`default`, `_`);
+- each `catch`, `except` and `rescue`;
+- each `&&`, `||`, `and`, `or`, `??` and ternary operator (`a ? b : c`).
+
+A keyword that names something is no branch: a method (`p.catch(f)`) and, in Ruby, Elixir, JavaScript and Swift, a symbol or a key (`:if`, `if: true`). A Kotlin `when` and a C# `switch` expression count once whatever their arms, since `->` and `=>` there are also lambdas.
 
 ```bash
 km cycom [path]
