@@ -494,7 +494,9 @@ Los archivos con puntaje alto concentran el riesgo: cambian mucho y son complejo
 
 Por defecto, la complejidad se mide con la **indentación total** (la suma de los niveles lógicos de indentación de todas las líneas de código), siguiendo el método original de Tornhill en "Your Code as a Crime Scene". Usa `--complexity cycom` para medirla con la complejidad ciclomática, o `--complexity cogcom` para la cognitiva. Los documentos (`--kind docs`) se miden por sus líneas de texto sea cual sea la métrica, porque la indentación y las ramas no dicen nada de la prosa: `km hotspots --kind docs` encuentra los documentos largos que más se reescriben, como un archivo de instrucciones para agentes que crece cada semana. La infraestructura conserva la métrica pedida, porque la indentación de YAML y HCL es su estructura.
 
-Requiere un repositorio git. Los commits de merge se excluyen de la cuenta.
+Requiere un repositorio git. Los commits de merge se excluyen de la cuenta. Los renombres se siguen: los commits de un archivo antes de un `git mv` cuentan para él con el nombre que tiene hoy, y un movimiento que deja el contenido igual no es un cambio. `km churn` y `km age` cuentan de la misma forma.
+
+Un clon superficial (`git clone --depth 1`, el checkout que hacen muchos sistemas de integración continua) tiene solo los commits descargados, así que las cuentas de commits, los dueños y las edades que se leen de él salen cortos: cada comando que lee el historial lo avisa por stderr. Descarga el historial completo antes (`git fetch --unshallow`, o `fetch-depth: 0` en GitHub Actions).
 
 Opciones:
 
@@ -572,7 +574,9 @@ Las cuentas de bots (`dependabot[bot]`, `github-actions[bot]`) no tienen conocim
 
 #### Quién escribió cada línea
 
-La propiedad sale del blame del archivo tal como está commiteado en `HEAD`. Cuando el programa `git` está instalado, kimun ejecuta `git blame -w -M -C`: un cambio de espacios conserva al autor de la línea, y también lo conserva el código movido dentro de un archivo o desde otro archivo que cambió el mismo commit. Las revisiones listadas en `.git-blame-ignore-revs` (o en el archivo que indica `blame.ignoreRevsFile`) se omiten, así que un reformateo masivo no se queda con las líneas. Sin `git`, el blame lo hace libgit2: omite los cambios de espacios, pero no sigue el código movido ni ignora revisiones. `km authors` y `km loc --by-author` leen el blame de la misma forma.
+La propiedad sale del blame del archivo tal como está commiteado en `HEAD`. Cuando el programa `git` está instalado, kimun ejecuta `git blame -w -M -C`: un cambio de espacios conserva al autor de la línea, y también lo conserva el código movido dentro de un archivo o desde otro archivo que cambió el mismo commit. Las revisiones listadas en `.git-blame-ignore-revs` (o en el archivo que indica `blame.ignoreRevsFile`) se omiten, así que un reformateo masivo no se queda con las líneas. Sin `git`, el blame lo hace libgit2: omite los cambios de espacios, pero no sigue el código movido ni ignora revisiones. Cuando `git blame` rechaza `.git-blame-ignore-revs` (una línea que no nombra ninguna revisión), kimun lo avisa y hace el blame sin él, todavía con `-w -M -C`. `km authors` y `km loc --by-author` leen el blame de la misma forma.
+
+El dueño principal de un archivo es el autor de la mayoría de sus líneas. Un empate se lo lleva el autor cuya línea más nueva en el archivo es la más reciente, y después la identidad (el email) que va primero en orden alfabético, así que el mismo repositorio nombra al mismo dueño en cada ejecución.
 
 Opciones:
 
@@ -672,7 +676,7 @@ Opciones:
 | `--across` | Solo pares de archivos de tipos distintos: código con documentación, código con infraestructura. Lee todos los tipos salvo datos, a menos que `--kind` diga cuáles |
 | `--include-ext`, `--exclude-ext`, `--exclude-dir`, `--exclude` | Filtros de ruta, aplicados a las rutas del historial |
 
-Solo se emparejan archivos que todavía existen en el árbol de trabajo, y solo código: los archivos lock, los manifiestos, el YAML de CI y la documentación quedan fuera. Un commit masivo (más de `--max-changeset` archivos) relaciona archivos por accidente y se omite, igual que un revert junto con el commit que revierte (un mensaje que empieza con `Revert "` y nombra el commit): juntos no cambiaron nada. Los renombres no se siguen: un archivo se empareja con la ruta que tiene hoy.
+Solo se emparejan archivos que todavía existen en el árbol de trabajo, y solo código: los archivos lock, los manifiestos, el YAML de CI y la documentación quedan fuera. Con una ruta, solo se emparejan los archivos que están bajo ella. Un commit masivo (más de `--max-changeset` archivos) relaciona archivos por accidente y se omite, igual que un revert junto con el commit que revierte (un mensaje que empieza con `Revert "`, o `Reapply "` para el revert de un revert, y nombra el commit): juntos no cambiaron nada. Esos commits también quedan fuera de los commits de cada archivo, así que los dos lados de la fuerza cuentan los mismos commits. Los pares igual de fuertes van por commits compartidos y después por ruta (con `--sort-by shared`, al revés), así que `--top` muestra los mismos pares en cada ejecución. Los renombres no se siguen: un archivo se empareja con la ruta que tiene hoy.
 
 Ejemplo de salida:
 
@@ -1310,8 +1314,10 @@ Opciones:
 
 | Flag | Descripción |
 |------|-------------|
-| `--since DURATION` | Considera solo la actividad desde este momento (p. ej. `6m`, `1y`, `30d`) |
+| `--since DURATION` | Cuenta solo las líneas commiteadas desde este momento, por fecha de commit como la leen los demás comandos (p. ej. `6m`, `1y`, `30d`) |
 | `--format {table,json,short,terse}` | Formato de salida (por defecto: table) |
+
+El dueño principal de cada archivo se elige como en `km knowledge`. Los autores con tantas líneas como otro se listan por identidad.
 
 Ejemplo de salida:
 
