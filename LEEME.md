@@ -1959,10 +1959,22 @@ Todas las secciones y todos los campos son opcionales: omite los que no necesite
   tipos de clase, y las `forward` o `external`, no tienen cuerpo. Los encabezados
   repetidos bajo compilación condicional son una sola rutina. La anidación
   cognitiva se lee de la sangría, dos columnas por nivel.
-- **Las líneas interiores de los strings de varias líneas** (los literales con
-  triple comilla de Kaikai, los heredocs de Elixir) cuentan como código
-  para `km loc`, pero se excluyen de los análisis ciclomático, cognitivo, de
-  Halstead y de smells: la prosa y los datos incrustados no son flujo de control.
+- **Comentarios y literales en los análisis de código.** Los análisis
+  ciclomático, cognitivo, de Halstead y de smells leen cada lenguaje según sus
+  reglas: un comentario después del código en una línea (`x = 1; /* if */`) y
+  el texto de todo literal no cuentan para nada, así que la prosa y los datos
+  incrustados nunca se leen como flujo de control. Son literales los template
+  literals, conservando el código de sus `${…}` (JavaScript, TypeScript), los
+  strings crudos de Go, los bloques de texto y los strings con `"""` (Java,
+  Kotlin, Swift, Scala, Groovy, Dart, Python, Kaikai, Elixir), los strings
+  verbatim de C# (`@"…"`), los strings crudos de C++ (`R"(…)"`), los heredocs
+  (Ruby, PHP, shells, Perl), los strings que abarcan varias líneas donde el
+  lenguaje lo permite y las expresiones regulares de JavaScript. Un lifetime o
+  una etiqueta de bucle de Rust (`'outer:`) no es un literal de carácter, en
+  un shell un `#` es comentario solo donde empieza una palabra (`$#` y
+  `${#x}` son código), y PHP comenta con `#` además de `//`. Las líneas dentro
+  de un literal de varias líneas cuentan como código para `km loc`, pero
+  quedan fuera de estos análisis.
 - **Los strings crudos de Rust** (`r"..."`, `r#"..."#` y las formas con más `#`,
   también con prefijo `b` o `c`) terminan solo en una comilla seguida de tantos `#`
   como los que los abrieron, y abarcan varias líneas. Lo que contienen cuenta como

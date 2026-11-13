@@ -1,6 +1,5 @@
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
-use std::ops::Range;
 use std::path::Path;
 
 use super::fsm::{
@@ -39,15 +38,6 @@ pub fn count_lines(path: &Path, spec: &LanguageSpec) -> io::Result<Option<FileSt
     Ok(Some(count_reader(reader, spec)))
 }
 
-/// The part of a line that a raw string takes, delimiters included.
-#[derive(Debug, Clone, PartialEq)]
-pub struct RawSpan {
-    pub start: usize,
-    pub end: usize,
-    /// Whether the string opens here, rather than come from the line before.
-    pub opens: bool,
-}
-
 /// The lines of a reader without their line ends. Bytes that are not
 /// UTF-8 are replaced, so a source in Latin-1 or Windows-1252 is read whole.
 fn lossy_lines<R: BufRead>(reader: R) -> impl Iterator<Item = String> {
@@ -62,15 +52,8 @@ fn lossy_lines<R: BufRead>(reader: R) -> impl Iterator<Item = String> {
 /// Classify each line of source code as Blank, Comment, or Code.
 pub fn classify_reader<R: BufRead>(reader: R, spec: &LanguageSpec) -> Vec<LineKind> {
     let mut kinds = Vec::new();
-    process_lines(lossy_lines(reader), spec, |kind, _| kinds.push(kind));
+    process_lines(lossy_lines(reader), spec, |kind| kinds.push(kind));
     kinds
-}
-
-/// Where the raw strings of `lines` are, line by line.
-pub fn raw_string_spans(lines: &[String], spec: &LanguageSpec) -> Vec<Vec<RawSpan>> {
-    let mut spans = Vec::new();
-    process_lines(lines.iter(), spec, |_, of_line| spans.push(of_line));
-    spans
 }
 
 /// Count lines from a buffered reader, aggregating per-line classifications
@@ -87,25 +70,6 @@ pub fn count_reader<R: BufRead>(reader: R, spec: &LanguageSpec) -> FileStats {
     stats
 }
 
-fn in_raw_string(state: &State) -> bool {
-    matches!(state, State::InString(StringKind::Raw(_)))
-}
-
-/// Add the bytes at `at` to the raw strings of a line when they belong to
-/// one: to the one being read when it `goes_on`, as a new one when it
-/// opens.
-fn note_raw(spans: &mut Vec<RawSpan>, at: Range<usize>, goes_on: bool, opened: bool) {
-    match spans.last_mut() {
-        Some(last) if goes_on && last.end == at.start => last.end = at.end,
-        _ if goes_on || opened => spans.push(RawSpan {
-            start: at.start,
-            end: at.end,
-            opens: !goes_on,
-        }),
-        _ => {}
-    }
-}
-
 /// A string that cannot span lines ends with the line, closed or not.
 fn end_line(state: &mut State) {
     use StringKind::{Double, Single};
@@ -120,12 +84,7 @@ fn end_line(state: &mut State) {
 
 /// Classify a single non-blank, non-shebang line given the current FSM state.
 /// Updates `state` in place and returns the line classification.
-fn classify_line(
-    line: &str,
-    state: &mut State,
-    spec: &LanguageSpec,
-    raw: &mut Vec<RawSpan>,
-) -> LineKind {
+fn classify_line(line: &str, state: &mut State, spec: &LanguageSpec) -> LineKind {
     let mut has_code = matches!(state, State::InString(_));
     let mut has_comment = matches!(
         state,
@@ -136,7 +95,6 @@ fn classify_line(
     let mut i = 0;
 
     while i < len {
-        let was_raw = in_raw_string(state);
         let result = match &state {
             State::Normal => step_normal(&bytes[i..], spec, bytes, i),
             State::InString(kind) => step_in_string(&bytes[i..], kind, spec, false),
@@ -153,7 +111,6 @@ fn classify_line(
         if let Some(new_state) = result.new_state {
             *state = new_state;
         }
-        note_raw(raw, i..i + result.advance, was_raw, in_raw_string(state));
         i += result.advance;
         if result.break_line {
             break;
@@ -172,18 +129,17 @@ fn classify_line(
 }
 
 /// Process all lines through the FSM, handing `each` the classification of
-/// every line and the raw strings on it. Handles shebang detection on the
+/// every line. Handles shebang detection on the
 /// first line and blank line short-circuiting outside of block comments.
 fn process_lines(
     lines: impl Iterator<Item = impl AsRef<str>>,
     spec: &LanguageSpec,
-    mut each: impl FnMut(LineKind, Vec<RawSpan>),
+    mut each: impl FnMut(LineKind),
 ) {
     let mut state = State::Normal;
 
     for (number, line) in lines.enumerate() {
         let line = line.as_ref();
-        let mut raw = Vec::new();
         let kind = if number == 0 && line.starts_with("#!") {
             LineKind::Code
         } else if line.trim().is_empty()
@@ -193,9 +149,9 @@ fn process_lines(
         } else if state == State::Normal && is_column_one_comment(line, spec) {
             LineKind::Comment
         } else {
-            classify_line(line, &mut state, spec, &mut raw)
+            classify_line(line, &mut state, spec)
         };
-        each(kind, raw);
+        each(kind);
     }
 }
 

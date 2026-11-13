@@ -274,3 +274,148 @@ fn fortran_ends_of_constructs_are_no_branches() {
     // if, .and., do, select case, case
     assert_eq!(metrics.functions[0].complexity, 6);
 }
+
+/// Name and complexity of each function of `src`, written in a file named
+/// `name`.
+fn complexities(name: &str, src: &str) -> Vec<(String, usize)> {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join(name);
+    fs::write(&path, src).unwrap();
+    let spec = crate::loc::language::detect(&path).unwrap();
+    let file = analyze_file(&path, spec, true).unwrap().unwrap();
+    file.functions
+        .iter()
+        .map(|f| (f.name.clone(), f.complexity))
+        .collect()
+}
+
+fn named(pairs: &[(&str, usize)]) -> Vec<(String, usize)> {
+    pairs.iter().map(|(n, c)| (n.to_string(), *c)).collect()
+}
+
+#[test]
+fn loop_labels_and_strings_on_several_lines_hide_no_code() {
+    let src = "pub fn labeled(xs: &[Vec<i32>]) -> i32 {
+    let mut s = 0;
+    'outer: for row in xs {
+        'inner: while s < 10 {
+            if row.is_empty() {
+                break 'outer;
+            }
+            s += 1;
+        }
+    }
+    s
+}
+
+pub fn unlabeled(xs: &[Vec<i32>]) -> i32 {
+    let mut s = 0;
+    for row in xs {
+        while s < 10 {
+            if row.is_empty() {
+                break;
+            }
+            s += 1;
+        }
+    }
+    s
+}
+
+pub fn msg(x: i32) -> String {
+    let m = \"this is shown if the value is out of range, \\
+             or while waiting for the match to loop\";
+    format!(\"{m} {x}\")
+}
+";
+    assert_eq!(
+        complexities("lbl.rs", src),
+        named(&[("labeled", 4), ("unlabeled", 4), ("msg", 1)])
+    );
+}
+
+#[test]
+fn a_brace_in_a_template_literal_opens_no_block() {
+    let src = "function open(x) {
+  const s = `{`;
+  if (x) return s;
+  return '';
+}
+
+function second(x) {
+  if (x && x.y) return 1;
+  return 0;
+}
+
+function third(x) {
+  while (x) x--;
+}
+";
+    assert_eq!(
+        complexities("brace.js", src),
+        named(&[("open", 2), ("second", 3), ("third", 2)])
+    );
+}
+
+#[test]
+fn a_url_in_a_template_literal_opens_no_comment() {
+    let src = "function load(id, cb) {
+  fetch(`https://api.example.com/items/${id}`).then((r) => {
+    if (r.ok) {
+      cb(r);
+    }
+  });
+  if (id > 10) {
+    return 1;
+  }
+  for (const x of id) {
+    if (x) return 2;
+  }
+  return 0;
+}
+
+function next(x) {
+  if (x) return 1;
+  return 0;
+}
+";
+    assert_eq!(
+        complexities("url.js", src),
+        named(&[("load", 5), ("next", 2)])
+    );
+}
+
+#[test]
+fn a_brace_in_a_go_raw_string_opens_no_block() {
+    let src = "package a
+
+func Open(x bool) string {
+	s := `{\"a\": [`
+	if x {
+		return s
+	}
+	return \"\"
+}
+
+func Second(x, y bool) int {
+	if x && y {
+		return 1
+	}
+	return 0
+}
+";
+    assert_eq!(
+        complexities("brace.go", src),
+        named(&[("Open", 2), ("Second", 3)])
+    );
+}
+
+#[test]
+fn a_block_comment_after_code_counts_nothing() {
+    let src = "int inline_comment(int x)
+{
+    int y = x; /* if (y) case */
+    return y;  /* && || */
+}
+";
+    assert_eq!(complexities("a.c", src), named(&[("inline_comment", 1)]));
+}

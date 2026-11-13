@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use crate::case_fold::folded;
-use crate::loc::counter::{LineKind, RawSpan, raw_string_spans};
+use crate::loc::counter::LineKind;
 use crate::loc::language::LanguageSpec;
 
 /// For languages with triple-quoted strings (Python, Kaikai), mark interior lines
@@ -68,38 +68,51 @@ pub fn demote_multi_line_strings(
         .collect()
 }
 
-/// The lines and kinds an analysis of code reads: without the text of
-/// literals that span lines or hold quotes, which is no code whatever it
-/// looks like. The interior lines of multi-line strings become blanks, and
-/// each raw string is left as `""`. A language that ignores case is read
-/// in lower case (`case_fold`), and one without backslash escapes without
-/// its backslashes.
+/// The lines and kinds an analysis of code reads: code lines without
+/// their comments and the text of their literals, read by the rules of the
+/// language (`code_text`), which is no code whatever it looks like; comment
+/// lines as written. The lines inside a literal that spans lines become
+/// blanks. A language that ignores case is read in lower case
+/// (`case_fold`), and one without backslash escapes without its
+/// backslashes.
 pub fn code_view<'a>(
     lines: &'a [String],
     kinds: &[LineKind],
     spec: &LanguageSpec,
 ) -> (Cow<'a, [String]>, Vec<LineKind>) {
-    let mut kinds = demote_multi_line_strings(lines, kinds, spec);
     if spec.case_insensitive || !spec.backslash_escapes {
+        let kinds = demote_multi_line_strings(lines, kinds, spec);
         let view = folded(lines, spec).into_iter();
         let view = view.map(|line| as_escapes_read(line, spec)).collect();
         return (Cow::Owned(view), kinds);
     }
-    let may_hold_one = |line: &String| line.contains("r\"") || line.contains("r#");
-    if !spec.raw_strings || !lines.iter().any(may_hold_one) {
-        return (Cow::Borrowed(lines), kinds);
-    }
-    let mut view = lines.to_vec();
-    for (at, spans) in raw_string_spans(lines, spec).iter().enumerate() {
-        if spans.is_empty() {
-            continue;
-        }
-        view[at] = without_raw_text(&lines[at], spans);
-        if view[at].is_empty() {
-            kinds[at] = LineKind::Blank;
-        }
-    }
+    let read = crate::code_text::read(lines, spec);
+    let kinds: Vec<LineKind> = kinds
+        .iter()
+        .zip(&read)
+        .map(|(kind, line)| as_code(*kind, line))
+        .collect();
+    let view = read
+        .into_iter()
+        .zip(lines)
+        .zip(&kinds)
+        .map(|((line, text), kind)| match kind {
+            LineKind::Comment => text.clone(),
+            _ => line.text,
+        })
+        .collect();
     (Cow::Owned(view), kinds)
+}
+
+/// The kind of a line for an analysis of code: a line inside a literal is
+/// no code nor comment, and one whose code is all within literals or
+/// comments is no code.
+fn as_code(kind: LineKind, line: &crate::code_text::CodeLine) -> LineKind {
+    match kind {
+        _ if line.inside => LineKind::Blank,
+        LineKind::Code if !line.code && !line.literal => LineKind::Blank,
+        _ => kind,
+    }
 }
 
 /// A line of a language where a backslash escapes nothing, without its
@@ -112,19 +125,6 @@ fn as_escapes_read(line: String, spec: &LanguageSpec) -> String {
     } else {
         line.replace('\\', " ")
     }
-}
-
-/// `line` with each raw string blanked, and `""` where one opens.
-fn without_raw_text(line: &str, spans: &[RawSpan]) -> String {
-    let mut bytes = line.as_bytes().to_vec();
-    for span in spans {
-        bytes[span.start..span.end].fill(b' ');
-        if span.opens {
-            bytes[span.start..span.start + 2].fill(b'"');
-        }
-    }
-    let text = String::from_utf8(bytes).unwrap_or_default();
-    text.trim_end().to_string()
 }
 
 /// Advance past a character while inside a triple-quoted string.

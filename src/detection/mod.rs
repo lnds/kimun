@@ -10,9 +10,11 @@ mod indented;
 mod script;
 mod shape;
 
+pub(crate) use body::literal_len;
 use body::*;
 use indented::*;
 use script::*;
+pub(crate) use script::{regex_end, value_may_start};
 use shape::*;
 
 use crate::loc::counter::LineKind;

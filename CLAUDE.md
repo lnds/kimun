@@ -29,7 +29,7 @@ CLI tool for code metrics: lines of code (like `cloc`), duplicate detection, Hal
 - **`counter.rs`** — FSM with states `Normal`, `InString(StringKind)`, `InBlockComment(block, depth)`, `InDocAttribute(Option<StringKind>)`, `InDocString(StringKind)`. Processes files line-by-line via `BufReader`, classifying each line as blank/comment/code. Bytes that are not UTF-8 are replaced, so a Latin-1 or Windows-1252 source is read whole. Mixed lines (code + comment) count as code. Key design decisions:
   - Only `"` triggers string mode (not `'`) unless `single_quote_strings` is set — avoids Rust lifetime false positives
   - `InString` resets at line end for single/double quotes but persists for triple-quotes (Python) and raw strings
-  - `raw_strings` (Rust): `r"…"`, `r#"…"#`, with a `b` or `c` prefix too, end at a quote followed by as many `#` as opened them (`raw.rs`). `raw_string_spans` tells where they are on each line
+  - `raw_strings` (Rust): `r"…"`, `r#"…"#`, with a `b` or `c` prefix too, end at a quote followed by as many `#` as opened them (`raw.rs`)
   - Block comments track nesting depth when `nested_block_comments` is true. A language may have a second kind (`other_block_comment`, Pascal's `(* *)` besides `{ }`); each is closed only by its own delimiter
   - `column_one_comments` (Fortran's fixed form: `C`, `c`, `*`) make a comment of the whole line; `directives` (`$omp`, `$acc`, `$ `) right after a comment marker make it code
   - `backslash_escapes` is false in Fortran and Pascal, where `'\'` is a one-character string
@@ -236,6 +236,10 @@ Output conventions every command follows. `shown_count` gives how many entries a
 
 Function detection for `cycom`, `cogcom`, `smells` and `init`. `code_lines` gives the code lines they read, without preprocessor directives and their `\` continuations in the C family. `mod.rs` walks brace-scoped code: a line is a declaration by marker, or by shape over the signature it spans (`shape::signature`, `shape::is_c_family_function`), unless it starts inside open parentheses (`shape::continuation_lines`) or is an annotation or attribute. `body.rs` reads the body by braces (`BodyScan`; braces of a type in the parameter list are not the body). `script.rs` holds what `FunctionSyntax::Script` (JavaScript, TypeScript) adds: functions bound to a name and regex literals. `indented.rs` reads indent-scoped bodies and leaves `quote` blocks out of them.
 
+### Shared: `src/code_text/`
+
+`read` gives the code of each line as analyzers of code measure it: the file is read whole, by the rules of its language, and comments become spaces and literals spaces within their quotes, closed on the line they open. `syntax.rs` holds what a language writes beyond its `LanguageSpec` (backticks, text blocks, verbatim and raw strings, heredocs, regular expressions, character codes, where a `#` comments); `openers.rs` where a literal opens and what closes it; `heredoc.rs` heredocs; `cursor.rs` the walk along a line. Rust lifetimes and labels are no character literals; a template literal keeps the code of its `${…}`.
+
 ### Shared: `src/string_mask.rs`
 
 `multi_line_string_mask` marks the interior lines of triple-quoted strings (`starts_in_string_mask` also marks the line that closes one, for readers of statements such as `deps/python.rs`);
@@ -243,9 +247,9 @@ Function detection for `cycom`, `cogcom`, `smells` and `init`. `code_lines` give
 analyzers that select `LineKind::Code` skip them. Used by `hal`, `cycom`,
 `cogcom`, and `smells` — prose or data inside a multi-line literal must not
 count as control flow. `loc` is deliberately left alone: those lines are still
-code for line counting. `code_view` is what those analyzers read: the same
-demotion, and each raw string left as `""`, with the lines wholly inside one
-turned into blanks. Code of a language that ignores case comes in
+code for line counting. `code_view` is what those analyzers read: code lines
+through `code_text`, comment lines as written, and the lines inside a literal
+that spans lines turned into blanks. Code of a language that ignores case comes in
 lower case (`case_fold`), and one without backslash escapes without its
 backslashes.
 

@@ -111,7 +111,7 @@ pub(super) fn without_regex_literals(line: &str) -> String {
 
 /// Whether a value, rather than an operand of a division, may start after
 /// `before`.
-pub(super) fn value_may_start(before: &[u8]) -> bool {
+pub(crate) fn value_may_start(before: &[u8]) -> bool {
     let text = String::from_utf8_lossy(before);
     let text = text.trim_end();
     match text.bytes().last() {
@@ -126,7 +126,7 @@ pub(super) fn value_may_start(before: &[u8]) -> bool {
 }
 
 /// Where the regular expression whose body starts at `i` closes.
-pub(super) fn regex_end(bytes: &[u8], mut i: usize) -> Option<usize> {
+pub(crate) fn regex_end(bytes: &[u8], mut i: usize) -> Option<usize> {
     let mut class = false;
     while i < bytes.len() {
         match bytes[i] {
