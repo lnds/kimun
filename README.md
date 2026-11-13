@@ -382,7 +382,20 @@ In brace languages a function ends where its braces balance. A body introduced b
 
 In Python, Ruby and Elixir a function holds the lines indented deeper than its declaration, counted from the line where its signature closes: a signature split across lines may close at the indentation of `def` (`) -> int:`, as black formats it). A `rescue`, `ensure`, `else`, `catch` or `after` written at the indentation of `def` belongs to the function.
 
-Keywords and braces are read in order along each line, so code written on one line scores as it does on several: `if (a) { return 1 } else { return 2 }` is 2, and `for (v of xs) { if (y) { return v } }` is 3. The block of a control keyword opens at the next `{`, on its line or, Allman style, on the next one; `else if` nests its block like `if` and `else`.
+Keywords and braces are read in order along each line, so code written on one line scores as it does on several: `if (a) { return 1 } else { return 2 }` is 2, and `for (v of xs) { if (y) { return v } }` is 3. The block of a control keyword opens at the next `{`, on its line or, Allman style, on the next one, but not a brace inside parentheses (`if let Some(Foo { a }) = x {`); `else if` nests its block like `if` and `else`.
+
+What else follows the paper:
+
+- a sequence of like boolean operators is +1, each change of operator +1 more; a sequence goes on through parentheses and calls (`x != null && x.isValid() && y` is 1) and onto the next line when one of the two lines has an operator at the edge they share; a comma, a `;` or a brace ends it;
+- a ternary operator (`a ? b : c`) is +1 and its nesting, as `if`;
+- a `do … while` loop counts once, by its `do`; `foreach` (C#, PHP) is a loop and `elseif` (PHP) an `else if`; Ruby's `case` is structural and `and`/`or` boolean operators;
+- the body of a lambda or closure nests, with no increment of its own (`x => {`, `() -> {`, `|x| {`);
+- a jump to a label is +1: `goto`, and `break` or `continue` naming one (`continue OUT;`, `break@outer`), except in Rust, where a `break` may carry a value;
+- a keyword that names something counts nothing: a method (`p.catch(f)`) and, in Ruby, Elixir, JavaScript and Swift, a symbol or a key (`:if`, `if: :active`).
+
+In Python, Ruby, Elixir and the other languages scoped by indentation, the nesting of a line is the number of blocks around it that nest, whatever the width of the indentation: a control structure, an `else`, a nested function and a block passed to a call (`do |x|`, `fn x ->`) nest, while `try:`, `with` and `begin` do not, and a line that goes on inside open brackets keeps the nesting of the line it continues.
+
+Two rules of the paper are not applied: recursion adds nothing, and the body of a control structure written without braces (`if (x)` and the statement on the next line) does not nest.
 
 In Elixir, `with`, `unless` and `receive` are structural increments like `case`, and `and`, `or`, `&&` and `||` count as boolean sequences. For `km cycom`, each clause (`->`) of a `case`, `cond`, `receive` or multi-clause `fn` is a branch, as each `case` label of C, and `with`, `unless`, `and`, `or`, `&&` and `||` add one each.
 

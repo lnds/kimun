@@ -92,7 +92,9 @@ Cognitive complexity (SonarSource method). Invoked via `km cogcom`.
 
 - **`analyzer.rs`** — Core computation: penalizes nesting increments and non-linear control structures. Brace-scoped code is read token by token along each line (`line_tokens`: keywords and braces in order), through `BraceScan`: a control keyword leaves its block pending until the next `{`, on its line or the next (Allman), and only that first brace nests, so closure/struct braces on the same line are not double-counted.
 - **`detection.rs`** — Language-aware function boundary detection.
-- **`markers.rs`** — Per-language complexity markers (keywords that trigger nesting increments).
+- **`markers.rs`** — Per-language complexity markers (keywords that trigger nesting increments, whether a ternary counts, whether keywords may name keys or symbols, the arrows that open a lambda's block).
+- **`booleans.rs`** — Sequences of boolean operators, carried through parentheses and onto the next line when an operator sits at the edge two lines share.
+- **`indented.rs`** — Indent-scoped code: the nesting of a line is the blocks around it that nest (not `try:`, `with`, `begin`, nor a line inside open brackets), whatever the width of the indentation.
 - **`report.rs`** — Table and JSON output formatters.
 - **`mod.rs`** — Orchestration: walks files, computes per-function and per-file scores, sorts/filters results.
 

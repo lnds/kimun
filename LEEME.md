@@ -382,7 +382,20 @@ En los lenguajes de llaves una función termina donde sus llaves se balancean. U
 
 En Python, Ruby y Elixir una función abarca las líneas con más indentación que su declaración, contadas desde la línea donde se cierra su firma: una firma repartida en varias líneas puede cerrarse a la indentación del `def` (`) -> int:`, como la formatea black). Un `rescue`, `ensure`, `else`, `catch` o `after` escrito a la indentación del `def` pertenece a la función.
 
-Las palabras clave y las llaves se leen en orden a lo largo de cada línea, así que el código escrito en una línea obtiene el mismo puntaje que en varias: `if (a) { return 1 } else { return 2 }` es 2, y `for (v of xs) { if (y) { return v } }` es 3. El bloque de una palabra clave de control se abre en la siguiente `{`, en su misma línea o, en estilo Allman, en la siguiente; `else if` anida su bloque igual que `if` y `else`.
+Las palabras clave y las llaves se leen en orden a lo largo de cada línea, así que el código escrito en una línea obtiene el mismo puntaje que en varias: `if (a) { return 1 } else { return 2 }` es 2, y `for (v of xs) { if (y) { return v } }` es 3. El bloque de una palabra clave de control se abre en la siguiente `{`, en su misma línea o, en estilo Allman, en la siguiente, salvo una llave dentro de paréntesis (`if let Some(Foo { a }) = x {`); `else if` anida su bloque igual que `if` y `else`.
+
+Además, según el artículo:
+
+- una secuencia de operadores booleanos iguales suma 1, y cada cambio de operador 1 más; la secuencia sigue a través de paréntesis y llamadas (`x != null && x.isValid() && y` es 1) y en la línea siguiente cuando una de las dos líneas tiene un operador en el borde que comparten; una coma, un `;` o una llave la terminan;
+- un operador ternario (`a ? b : c`) suma 1 más su anidamiento, como `if`;
+- un bucle `do … while` cuenta una vez, por su `do`; `foreach` (C#, PHP) es un bucle y `elseif` (PHP) un `else if`; el `case` de Ruby es estructural y `and`/`or` son operadores booleanos;
+- el cuerpo de una lambda o un closure anida, sin incremento propio (`x => {`, `() -> {`, `|x| {`);
+- un salto a una etiqueta suma 1: `goto`, y `break` o `continue` que nombran una (`continue OUT;`, `break@outer`), salvo en Rust, donde un `break` puede llevar un valor;
+- una palabra clave que nombra algo no cuenta: un método (`p.catch(f)`) y, en Ruby, Elixir, JavaScript y Swift, un símbolo o una clave (`:if`, `if: :active`).
+
+En Python, Ruby, Elixir y los demás lenguajes que delimitan por indentación, el anidamiento de una línea es la cantidad de bloques que la rodean y anidan, sea cual sea el ancho de la sangría: una estructura de control, un `else`, una función anidada y un bloque pasado a una llamada (`do |x|`, `fn x ->`) anidan, mientras que `try:`, `with` y `begin` no, y una línea que sigue dentro de paréntesis abiertos conserva el anidamiento de la línea que continúa.
+
+Dos reglas del artículo no se aplican: la recursión no suma, y el cuerpo de una estructura de control escrito sin llaves (`if (x)` y la instrucción en la línea siguiente) no anida.
 
 En Elixir, `with`, `unless` y `receive` son incrementos estructurales como `case`, y `and`, `or`, `&&` y `||` cuentan como secuencias booleanas. Para `km cycom`, cada cláusula (`->`) de un `case`, `cond`, `receive` o `fn` de varias cláusulas es una rama, igual que cada etiqueta `case` de C, y `with`, `unless`, `and`, `or`, `&&` y `||` suman uno cada uno.
 

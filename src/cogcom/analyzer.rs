@@ -11,17 +11,23 @@
 //! - Fundamental keywords (else): +1, increments nesting for body
 //! - Boolean operator sequences: +1 per change in operator type
 //!   (a && b && c = +1, a && b || c = +2)
+//! - Ternary operators: +1 + nesting depth
+//! - A jump to a label (`goto`, `break label`, `continue label`): +1
+//! - A lambda or closure nests its body, with no increment of its own
 //!
 //! Levels: Simple (0-4), Moderate (5-9), Complex (10-14),
 //! VeryComplex (15-24), Extreme (>=25).
 
 use serde::Serialize;
 
+use crate::branches::{count_ternaries, names_something};
 use crate::detection::FunctionSyntax;
 use crate::loc::counter::LineKind;
 use crate::util::indent_level as indent_spaces;
 use crate::util::mask_strings;
 
+use super::booleans::Booleans;
+pub(super) use super::booleans::count_boolean_sequences;
 use super::detection::detect_functions;
 use super::markers::CognitiveMarkers;
 
@@ -127,8 +133,9 @@ pub fn analyze(
 /// What kind of brace context we're tracking.
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum BraceContext {
-    /// Brace opened by a control-flow keyword (if, for, while, etc.)
-    FlowControl,
+    /// Brace that nests: the block of a control-flow keyword (if, for,
+    /// while, etc.), or the body of a lambda or closure.
+    Nesting,
     /// Any other brace (function body, struct, etc.)
     Other,
 }
@@ -149,7 +156,7 @@ pub fn count_cognitive_for_lines(
         FunctionSyntax::Fortran => super::fortran::count(func_lines, markers),
         FunctionSyntax::Pascal => count_indent_scoped(func_lines, markers, 2),
         _ if markers.brace_scoped => count_brace_scoped(func_lines, markers),
-        _ => count_indent_scoped(func_lines, markers, 4),
+        _ => super::indented::count_function(func_lines, markers),
     }
 }
 
@@ -161,7 +168,7 @@ pub fn count_cognitive_outside(lines: &[(usize, &str)], markers: &CognitiveMarke
         FunctionSyntax::Fortran => super::fortran::count(lines, markers),
         FunctionSyntax::Pascal => count_indented(lines, markers, 2, 0),
         _ if markers.brace_scoped => count_braces(lines, markers, BraceScan::outside()),
-        _ => count_indented(lines, markers, 4, 0),
+        _ => super::indented::count_outside(lines, markers),
     }
 }
 
@@ -205,26 +212,49 @@ impl BraceScan {
         self.pending_flow = true;
     }
 
-    fn open_brace(&mut self) {
-        let context = if !self.in_body {
-            self.in_body = true;
-            BraceContext::Other
-        } else if self.pending_flow {
-            self.nesting_depth += 1;
-            BraceContext::FlowControl
-        } else {
-            BraceContext::Other
-        };
+    /// A `{`: the block of a pending keyword when it stands outside
+    /// parentheses, as a pattern's or a literal's inside them is no block
+    /// (`if let Some(Foo { a }) = x {`); the body of a lambda nests too.
+    fn open_brace(&mut self, brace: Brace) {
+        let nests = self.in_body && (brace.lambda || (self.pending_flow && !brace.in_parens));
+        self.in_body = true;
         // Only the first brace after a keyword is its block; later ones on
         // the line are closures or literals.
-        self.pending_flow = false;
-        self.brace_stack.push(context);
+        self.pending_flow &= brace.in_parens;
+        self.nesting_depth += usize::from(nests);
+        self.brace_stack.push(if nests {
+            BraceContext::Nesting
+        } else {
+            BraceContext::Other
+        });
     }
 
     fn close_brace(&mut self) {
-        if self.brace_stack.pop() == Some(BraceContext::FlowControl) {
+        if self.brace_stack.pop() == Some(BraceContext::Nesting) {
             self.nesting_depth = self.nesting_depth.saturating_sub(1);
         }
+    }
+
+    /// A line: its keywords and braces in order, then what it adds as a
+    /// whole at the nesting it started at.
+    fn read_line(&mut self, stripped: &str, markers: &CognitiveMarkers, booleans: &mut Booleans) {
+        let nesting = self.nesting_depth;
+        for token in line_tokens(stripped, markers) {
+            match token {
+                Token::Keyword(kind) => self.keyword(kind),
+                Token::Open(brace) => self.open_brace(brace),
+                Token::Close => self.close_brace(),
+            }
+        }
+        let ternaries = if markers.ternary {
+            count_ternaries(stripped)
+        } else {
+            0
+        };
+        self.complexity += booleans.line(stripped, markers)
+            + jumps_to_labels(stripped, markers)
+            + ternaries * (1 + nesting);
+        self.end_line(stripped);
     }
 
     /// The end of a line: a keyword whose body ended on it, as
@@ -248,50 +278,123 @@ fn count_braces(
     markers: &CognitiveMarkers,
     mut scan: BraceScan,
 ) -> usize {
+    let mut booleans = Booleans::default();
     for &(_, line) in func_lines {
         let stripped = mask_strings(line.trim(), markers.line_comments);
         let stripped = crate::detection::without_impl_for(&stripped);
-        for token in line_tokens(&stripped, markers) {
-            match token {
-                Token::Keyword(kind) => scan.keyword(kind),
-                Token::Open => scan.open_brace(),
-                Token::Close => scan.close_brace(),
-            }
-        }
-        scan.complexity += count_boolean_sequences(&stripped, markers);
-        scan.end_line(&stripped);
+        scan.read_line(&stripped, markers, &mut booleans);
     }
     scan.complexity
+}
+
+/// Jumps to a label: `goto`, and `break` or `continue` naming a label
+/// (`break outer;`, `continue@outer`). A Rust `break` may carry a value
+/// instead, so there only `goto` counts.
+fn jumps_to_labels(stripped: &str, markers: &CognitiveMarkers) -> usize {
+    let labels = markers.function_syntax != FunctionSyntax::KeywordWithLifetimes;
+    // Words and the empty gaps between separators: a label is the word one
+    // separator after its jump.
+    let words: Vec<&str> = stripped
+        .split(|c: char| !(c.is_alphanumeric() || c == '_' || c == '@'))
+        .collect();
+    let names_label = |at: usize| {
+        let next = words.get(at + 1);
+        labels && next.is_some_and(|w| w.starts_with(char::is_alphabetic))
+    };
+    words
+        .iter()
+        .enumerate()
+        .filter(|(at, word)| match **word {
+            "goto" => true,
+            "break" | "continue" => names_label(*at),
+            w => w.starts_with("break@") || w.starts_with("continue@"),
+        })
+        .count()
+}
+
+/// A `{`: whether it stands inside parentheses, and whether it opens the
+/// body of a lambda or a closure (after `=>`, `->` or `|args|`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Brace {
+    in_parens: bool,
+    lambda: bool,
 }
 
 /// A token of a line that the brace-scoped count reads.
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Token {
     Keyword(LineClassification),
-    Open,
+    Open(Brace),
     Close,
 }
 
 /// The keywords and braces of a line, in order. A hybrid keyword (`else
-/// if`) is one token, not an `else` and an `if`.
+/// if`) is one token, not an `else` and an `if`; the `while` that closes a
+/// `do` block (`} while (x);`) is none.
 fn line_tokens(stripped: &str, markers: &CognitiveMarkers) -> Vec<Token> {
-    let mut tokens = Vec::new();
+    let mut reader = Tokens {
+        stripped,
+        markers,
+        parens: 0,
+        tokens: Vec::new(),
+    };
     let mut i = 0;
     while i < stripped.len() {
-        match stripped.as_bytes()[i] {
-            b'{' => tokens.push(Token::Open),
-            b'}' => tokens.push(Token::Close),
-            _ => {
-                if let Some((kind, len)) = keyword_at(stripped, i, markers) {
-                    tokens.push(Token::Keyword(kind));
-                    i += len;
-                    continue;
-                }
-            }
-        }
-        i += 1;
+        i += reader.read(i);
     }
-    tokens
+    reader.tokens
+}
+
+/// The tokens of a line being read, with the parentheses open.
+struct Tokens<'l> {
+    stripped: &'l str,
+    markers: &'l CognitiveMarkers,
+    parens: usize,
+    tokens: Vec<Token>,
+}
+
+impl Tokens<'_> {
+    /// Read what starts at `i`; gives how many bytes it takes.
+    fn read(&mut self, i: usize) -> usize {
+        match self.stripped.as_bytes()[i] {
+            b'(' => self.parens += 1,
+            b')' => self.parens = self.parens.saturating_sub(1),
+            b'{' => self.tokens.push(Token::Open(Brace {
+                in_parens: self.parens > 0,
+                lambda: opens_lambda(&self.stripped[..i], self.markers),
+            })),
+            b'}' => self.tokens.push(Token::Close),
+            _ => return self.keyword(i),
+        }
+        1
+    }
+
+    fn keyword(&mut self, i: usize) -> usize {
+        let Some((kind, len)) = keyword_at(self.stripped, i, self.markers) else {
+            return 1;
+        };
+        if !is_do_tail(&self.stripped[..i], &self.stripped[i..i + len]) {
+            self.tokens.push(Token::Keyword(kind));
+        }
+        len
+    }
+}
+
+/// Whether a `{` after `before` opens the body of a lambda or a closure:
+/// `before` ends with an arrow of the language, which is no `||`, on a line
+/// that is no `case` (Java's `case 1 -> {`).
+fn opens_lambda(before: &str, markers: &CognitiveMarkers) -> bool {
+    let before = before.trim_end();
+    let arrow = markers
+        .lambda_arrows
+        .iter()
+        .any(|a| before.ends_with(a) && !before.ends_with("||"));
+    arrow && !contains_keyword(before, "case", false)
+}
+
+/// Whether `keyword` after `before` is the `while` that closes a `do` block.
+fn is_do_tail(before: &str, keyword: &str) -> bool {
+    keyword == "while" && before.trim_end().ends_with('}')
 }
 
 /// The keyword that starts at byte `i`, as a whole word, with its length.
@@ -300,14 +403,7 @@ fn keyword_at(
     i: usize,
     markers: &CognitiveMarkers,
 ) -> Option<(LineClassification, usize)> {
-    let kinds = [
-        (markers.hybrid_keywords, LineClassification::Hybrid),
-        (markers.structural_keywords, LineClassification::Structural),
-        (
-            markers.fundamental_keywords,
-            LineClassification::Fundamental,
-        ),
-    ];
+    let kinds = keyword_kinds(markers);
     let bytes = stripped.as_bytes();
     let starts_word = i == 0 || !is_word_char(bytes[i - 1]);
     if !starts_word {
@@ -319,6 +415,7 @@ fn keyword_at(
             .find(|kw| {
                 bytes[i..].starts_with(kw.as_bytes())
                     && !bytes.get(i + kw.len()).is_some_and(|b| is_word_char(*b))
+                    && !names_something(bytes, i, kw.len(), markers.keys)
             })
             .map(|kw| (*kind, kw.len()))
     })
@@ -369,6 +466,19 @@ fn count_indented(
     complexity
 }
 
+/// The keywords of each classification, hybrid first, as `else if` holds an
+/// `if`.
+fn keyword_kinds(markers: &CognitiveMarkers) -> [(&'static [&'static str], LineClassification); 3] {
+    [
+        (markers.hybrid_keywords, LineClassification::Hybrid),
+        (markers.structural_keywords, LineClassification::Structural),
+        (
+            markers.fundamental_keywords,
+            LineClassification::Fundamental,
+        ),
+    ]
+}
+
 /// Classification result for a single line.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(super) enum LineClassification {
@@ -383,98 +493,32 @@ pub(super) enum LineClassification {
 /// partial matches with structural/fundamental keywords.
 pub(super) fn classify_line(stripped: &str, markers: &CognitiveMarkers) -> LineClassification {
     // Check hybrid keywords first (multi-word, e.g. "else if", "elif")
-    for kw in markers.hybrid_keywords {
-        if contains_keyword(stripped, kw) {
-            return LineClassification::Hybrid;
-        }
-    }
-
-    // Check structural keywords
-    for kw in markers.structural_keywords {
-        if contains_keyword(stripped, kw) {
-            return LineClassification::Structural;
-        }
-    }
-
-    // Check fundamental keywords
-    for kw in markers.fundamental_keywords {
-        if contains_keyword(stripped, kw) {
-            return LineClassification::Fundamental;
-        }
-    }
-
-    LineClassification::None
+    let kinds = keyword_kinds(markers);
+    kinds
+        .into_iter()
+        .find(|(keywords, _)| {
+            keywords
+                .iter()
+                .any(|kw| contains_keyword(stripped, kw, markers.keys))
+        })
+        .map_or(LineClassification::None, |(_, kind)| kind)
 }
 
-/// Check whether a keyword appears as a whole word in the line.
-fn contains_keyword(line: &str, keyword: &str) -> bool {
-    let kw_bytes = keyword.as_bytes();
-    let kw_len = kw_bytes.len();
-    let line_bytes = line.as_bytes();
-    let line_len = line_bytes.len();
-    let mut i = 0;
-
-    while i + kw_len <= line_len {
-        if &line_bytes[i..i + kw_len] == kw_bytes {
-            let before_ok = i == 0 || !is_word_char(line_bytes[i - 1]);
-            let after_ok = i + kw_len >= line_len || !is_word_char(line_bytes[i + kw_len]);
-            if before_ok && after_ok {
-                return true;
-            }
-        }
-        i += 1;
-    }
-
-    false
+/// Check whether a keyword appears as a whole word in the line, other than
+/// as a method, a key or a symbol (`names_something`).
+fn contains_keyword(line: &str, keyword: &str, keys: bool) -> bool {
+    let bytes = line.as_bytes();
+    let len = keyword.len();
+    line.match_indices(keyword).any(|(at, _)| {
+        let before_ok = at == 0 || !is_word_char(bytes[at - 1]);
+        let after_ok = !bytes.get(at + len).is_some_and(|b| is_word_char(*b));
+        before_ok && after_ok && !names_something(bytes, at, len, keys)
+    })
 }
 
 /// Check whether a byte is a word character (alphanumeric or underscore).
 fn is_word_char(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
-}
-
-/// Count boolean operator sequence changes.
-///
-/// Per the SonarSource spec: +1 for the first operator in a sequence,
-/// +1 each time the operator type changes.
-/// `a && b && c` = 1 (one sequence of &&)
-/// `a && b || c` = 2 (first && = +1, change to || = +1)
-/// `a || b || c && d` = 2 (first || = +1, change to && = +1)
-pub(super) fn count_boolean_sequences(stripped: &str, markers: &CognitiveMarkers) -> usize {
-    let mut count = 0;
-    let mut last_op: Option<&str> = None;
-    let bytes = stripped.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        let Some(op) = operator_at(bytes, i, markers) else {
-            // A bracket, `;` or `,` ends the boolean expression.
-            if b"(){};,".contains(&bytes[i]) {
-                last_op = None;
-            }
-            i += 1;
-            continue;
-        };
-        // The first operator of a sequence, or a change of operator.
-        if last_op != Some(op) {
-            count += 1;
-            last_op = Some(op);
-        }
-        i += op.len();
-    }
-    count
-}
-
-/// The boolean operator that starts at byte `i`, if any; a word operator
-/// (`and`, `or`) only as a whole word.
-fn operator_at(bytes: &[u8], i: usize, markers: &CognitiveMarkers) -> Option<&'static str> {
-    let op = *markers
-        .boolean_operators
-        .iter()
-        .find(|op| bytes[i..].starts_with(op.as_bytes()))?;
-    let is_word = op.starts_with(|c: char| c.is_alphabetic());
-    let bounded = (i == 0 || !is_word_char(bytes[i - 1]))
-        && !bytes.get(i + op.len()).is_some_and(|b| is_word_char(*b));
-    (!is_word || bounded).then_some(op)
 }
 
 #[cfg(test)]
