@@ -106,7 +106,8 @@ static KOTLIN: CognitiveMarkers = CognitiveMarkers {
     boolean_operators: &["&&", "||"],
     function_markers: &["fun "],
     brace_scoped: true,
-    function_syntax: FunctionSyntax::Loose,
+    // A call with a trailing lambda, `check(x) {`, has the C-family shape.
+    function_syntax: FunctionSyntax::Keyword,
     line_comments: &["//"],
 };
 

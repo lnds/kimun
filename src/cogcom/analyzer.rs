@@ -80,24 +80,6 @@ pub struct FileCognitive {
     pub level: CognitiveLevel,
 }
 
-/// Build a `FileCognitive` for files where no functions were detected,
-/// treating the entire file as a single implicit `<file>` function.
-fn make_fallback_file_cognitive(complexity: usize) -> FileCognitive {
-    let level = CognitiveLevel::from_complexity(complexity);
-    FileCognitive {
-        functions: vec![FunctionCognitive {
-            name: "<file>".to_string(),
-            start_line: 1,
-            complexity,
-            level,
-        }],
-        total_complexity: complexity,
-        max_complexity: complexity,
-        avg_complexity: complexity as f64,
-        level,
-    }
-}
-
 /// Aggregate per-function cognitive complexity results into a `FileCognitive`.
 fn aggregate_functions(functions: Vec<FunctionCognitive>) -> FileCognitive {
     let total: usize = functions.iter().map(|f| f.complexity).sum();
@@ -116,8 +98,8 @@ fn aggregate_functions(functions: Vec<FunctionCognitive>) -> FileCognitive {
 /// Analyze cognitive complexity for a file's lines.
 ///
 /// Detects functions, then computes per-function cognitive complexity.
-/// If no functions are detected, treats the entire file as a single
-/// implicit `<file>` function.
+/// The code outside functions is one more, `<file>`: always when no
+/// function is detected, else when it adds complexity.
 ///
 /// Returns `None` if the input is empty or contains no code lines.
 pub fn analyze(
@@ -135,14 +117,11 @@ pub fn analyze(
         return None;
     }
 
-    let functions = detect_functions(lines, &code_lines, markers);
-
-    if functions.is_empty() {
-        let complexity = count_cognitive_for_lines(&code_lines, markers);
-        return Some(make_fallback_file_cognitive(complexity));
-    }
-
-    Some(aggregate_functions(functions))
+    Some(aggregate_functions(detect_functions(
+        lines,
+        &code_lines,
+        markers,
+    )))
 }
 
 /// What kind of brace context we're tracking.
@@ -174,6 +153,18 @@ pub fn count_cognitive_for_lines(
     }
 }
 
+/// Count the cognitive complexity of the code outside functions. It has
+/// no declaration: its first brace may open a block of control flow, and
+/// a statement at the left margin is not nested.
+pub fn count_cognitive_outside(lines: &[(usize, &str)], markers: &CognitiveMarkers) -> usize {
+    match markers.function_syntax {
+        FunctionSyntax::Fortran => super::fortran::count(lines, markers),
+        FunctionSyntax::Pascal => count_indented(lines, markers, 2, 0),
+        _ if markers.brace_scoped => count_braces(lines, markers, BraceScan::outside()),
+        _ => count_indented(lines, markers, 4, 0),
+    }
+}
+
 /// The increment a line's classification adds at `nesting_depth`.
 pub(super) fn increment(line_result: LineClassification, nesting_depth: usize) -> usize {
     match line_result {
@@ -197,6 +188,14 @@ struct BraceScan {
 }
 
 impl BraceScan {
+    /// A scan of code outside any function body.
+    fn outside() -> Self {
+        Self {
+            in_body: true,
+            ..Self::default()
+        }
+    }
+
     /// A keyword of control flow: its increment, and the block it opens.
     fn keyword(&mut self, kind: LineClassification) {
         self.complexity += match kind {
@@ -241,9 +240,17 @@ impl BraceScan {
 /// braces are read in order along each line, so that code written on one
 /// line counts as it does on several.
 fn count_brace_scoped(func_lines: &[(usize, &str)], markers: &CognitiveMarkers) -> usize {
-    let mut scan = BraceScan::default();
+    count_braces(func_lines, markers, BraceScan::default())
+}
+
+fn count_braces(
+    func_lines: &[(usize, &str)],
+    markers: &CognitiveMarkers,
+    mut scan: BraceScan,
+) -> usize {
     for &(_, line) in func_lines {
         let stripped = mask_strings(line.trim(), markers.line_comments);
+        let stripped = crate::detection::without_impl_for(&stripped);
         for token in line_tokens(&stripped, markers) {
             match token {
                 Token::Keyword(kind) => scan.keyword(kind),
@@ -325,25 +332,31 @@ fn count_indent_scoped(
     markers: &CognitiveMarkers,
     indent_unit: usize,
 ) -> usize {
-    let mut complexity: usize = 0;
-
-    // Base indent is the function declaration line's indent
-    let base_indent = if let Some(&(_, first_line)) = func_lines.first() {
-        indent_spaces(first_line)
-    } else {
+    // The body sits one level deeper than the declaration, which is skipped.
+    let Some((&(_, declaration), body)) = func_lines.split_first() else {
         return 0;
     };
+    let body_indent = indent_spaces(declaration) + indent_unit;
+    count_indented(body, markers, indent_unit, body_indent)
+}
 
-    for &(_, line) in func_lines.iter().skip(1) {
-        // skip function declaration line
+/// Count cognitive complexity over lines whose nesting is their
+/// indentation past `body_indent`, in steps of `indent_unit` columns.
+fn count_indented(
+    lines: &[(usize, &str)],
+    markers: &CognitiveMarkers,
+    indent_unit: usize,
+    body_indent: usize,
+) -> usize {
+    let mut complexity: usize = 0;
+    for &(_, line) in lines {
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;
         }
 
         let stripped = mask_strings(trimmed, markers.line_comments);
-        let line_indent = indent_spaces(line);
-        let relative_indent = line_indent.saturating_sub(base_indent + indent_unit);
+        let relative_indent = indent_spaces(line).saturating_sub(body_indent);
         let nesting_depth = relative_indent / indent_unit;
 
         let line_result = classify_line(&stripped, markers);

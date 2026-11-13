@@ -194,6 +194,53 @@ fn file_with_no_functions_uses_implicit() {
     assert_eq!(result.functions[0].name, "<file>");
 }
 
+fn named_complexities(result: &FileCognitive) -> Vec<(&str, usize)> {
+    result
+        .functions
+        .iter()
+        .map(|f| (f.name.as_str(), f.complexity))
+        .collect()
+}
+
+#[test]
+fn code_outside_functions_that_branches_is_file() {
+    // if: +1, and: +1, for nested in it: +2.
+    let (lines, kinds) = make_lines(
+        "import sys\n\ndef f(x):\n    return x\n\nif len(sys.argv) > 1 and sys.argv[1]:\n    for a in sys.argv:\n        print(f(a))\n",
+    );
+    let result = analyze(&lines, &kinds, python_markers()).unwrap();
+    assert_eq!(named_complexities(&result), vec![("<file>", 4), ("f", 0)]);
+    assert_eq!(result.total_complexity, 4);
+}
+
+#[test]
+fn a_file_without_functions_nests_from_its_first_line() {
+    let (lines, kinds) = make_lines("if a:\n    for x in a:\n        print(x)\n");
+    let result = analyze(&lines, &kinds, python_markers()).unwrap();
+    assert_eq!(named_complexities(&result), vec![("<file>", 3)]);
+    let (lines, kinds) = make_lines("if (a) {\n    while (b) {\n        c();\n    }\n}\n");
+    let markers = super::super::markers::cognitive_markers_for("Bourne Shell").unwrap();
+    let result = analyze(&lines, &kinds, markers).unwrap();
+    assert_eq!(named_complexities(&result), vec![("<file>", 3)]);
+}
+
+#[test]
+fn code_outside_functions_without_branches_is_not_measured() {
+    let (lines, kinds) = make_lines("use std::io;\nfn f() {\n    if x {}\n}\n");
+    let result = analyze(&lines, &kinds, rust_markers()).unwrap();
+    assert_eq!(named_complexities(&result), vec![("f", 1)]);
+}
+
+#[test]
+fn methods_of_a_record_are_measured_apart() {
+    let (lines, kinds) = make_lines(
+        "public record Point(int x, int y) {\n    public int sum(int z) {\n        if (z > 0) { return x + y + z; }\n        return x + y;\n    }\n}\n",
+    );
+    let markers = super::super::markers::cognitive_markers_for("Java").unwrap();
+    let result = analyze(&lines, &kinds, markers).unwrap();
+    assert_eq!(named_complexities(&result), vec![("sum", 1)]);
+}
+
 #[test]
 fn aggregation_stats() {
     let (lines, kinds) =

@@ -127,7 +127,8 @@ static KOTLIN: ComplexityMarkers = ComplexityMarkers {
     clause_arrow: None,
     function_markers: &["fun "],
     brace_scoped: true,
-    function_syntax: FunctionSyntax::Loose,
+    // A call with a trailing lambda, `check(x) {`, has the C-family shape.
+    function_syntax: FunctionSyntax::Keyword,
     line_comments: &["//"],
 };
 

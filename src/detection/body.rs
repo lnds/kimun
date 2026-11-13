@@ -116,11 +116,16 @@ impl BodyScan {
 /// A body introduced by `=` instead of a brace (`fn f(x) = expr`) has no
 /// closing delimiter of its own: it runs while its braces are open and
 /// while the lines that follow are indented deeper than the declaration.
+///
+/// With `optional_body`, a declaration on one line with nothing after it
+/// to open a body (`fun get(id: Int): Row?` in an interface) declares no
+/// function.
 pub(super) fn find_function_body<'a>(
     code_lines: &[(usize, &'a str)],
     masked: &[String],
     start: usize,
     expression_bodies: bool,
+    optional_body: bool,
 ) -> (Vec<(usize, &'a str)>, usize) {
     let mut scan = BodyScan::default();
     let base_indent = indent_level(code_lines[start].1);
@@ -131,6 +136,9 @@ pub(super) fn find_function_body<'a>(
         func_code_lines.push(code_lines[j]);
         let may_introduce = j == start || may_introduce_body(&masked[j]);
         scan.read(&masked[j], expression_bodies && may_introduce);
+        scan.declaration_only |= optional_body
+            && j == start
+            && without_body(&scan, &masked[j], code_lines.get(j + 1), base_indent);
         if scan.ends(code_lines.get(j + 1), base_indent) {
             break;
         }
