@@ -23,6 +23,8 @@ mod churn;
 mod cli;
 /// Long help text constants extracted from CLI definitions.
 mod cli_help;
+/// The code of each line, without comments and the text of literals.
+mod code_text;
 /// Cognitive complexity analysis (SonarSource, 2017).
 mod cogcom;
 /// Project-level configuration loaded from `.kimun.toml`.

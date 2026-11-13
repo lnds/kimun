@@ -182,7 +182,7 @@ pub(super) fn without_lifetimes(line: &str) -> String {
 
 /// Length of the character literal whose opening quote precedes `rest`,
 /// closing quote included; 0 when it does not close nearby.
-pub(super) fn literal_len(rest: &[u8]) -> usize {
+pub(crate) fn literal_len(rest: &[u8]) -> usize {
     // An escape may hold a quote (`'\''`) and runs as long as `'\u{10FFFF}'`.
     let (skip, reach) = if rest.first() == Some(&b'\\') {
         (2, 12)

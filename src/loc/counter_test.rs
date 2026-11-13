@@ -844,24 +844,6 @@ fn raw_strings_belong_to_the_languages_that_have_them() {
     assert_eq!(lines_of(&spec_c_like(), &lines), (1, 1));
 }
 
-#[test]
-fn raw_string_spans_tell_where_each_one_is() {
-    let lines: Vec<String> = ["let a = r#\"x\"# + r\"y\";", "let b = br#\"", "  }", "\"#;"]
-        .iter()
-        .map(|line| line.to_string())
-        .collect();
-    let span = |start, end, opens| RawSpan { start, end, opens };
-    assert_eq!(
-        raw_string_spans(&lines, &spec_rust()),
-        [
-            vec![span(8, 14, true), span(17, 21, true)],
-            vec![span(9, 12, true)],
-            vec![span(0, 3, false)],
-            vec![span(0, 2, false)],
-        ]
-    );
-}
-
 // --- Triple-quoted strings as comment (Python, as cloc counts them) ---
 
 /// Blank, comment and code lines of `text`, written in `language`.

@@ -208,8 +208,8 @@ fn code_view_leaves_a_raw_string_empty() {
     assert_eq!(
         lines,
         [
-            "let a = \"\"                      ;",
-            "let b = b\"\"   + 1;"
+            "let a = \"                     \" ;",
+            "let b = \"   \" + 1;"
         ]
     );
     assert_eq!(kinds, [LineKind::Code, LineKind::Code]);
@@ -231,15 +231,9 @@ fn code_view_blanks_the_lines_inside_a_raw_string() {
 }
 
 #[test]
-fn code_view_borrows_what_holds_no_raw_string() {
-    let spec = detect(std::path::Path::new("a.rs")).unwrap();
-    let lines = vec!["let a = \"x\";".to_string()];
-    let (same, _) = code_view(&lines, &[LineKind::Code], spec);
-    assert!(matches!(same, Cow::Borrowed(_)));
-
-    // Another language keeps its text, whatever it looks like.
+fn code_view_keeps_the_text_of_a_language_without_raw_strings() {
     let (lines, _) = view("a.c", "x = r#\"a\"#;\n");
-    assert_eq!(lines, ["x = r#\"a\"#;"]);
+    assert_eq!(lines, ["x = r#\" \"#;"]);
 }
 
 #[test]

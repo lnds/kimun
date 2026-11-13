@@ -91,7 +91,7 @@ pub fn mask_strings(line: &str, line_comments: &[&str]) -> String {
             let found_comment = line_comments.iter().any(|marker| {
                 let mb = marker.as_bytes();
                 i + mb.len() <= len && &bytes[i..i + mb.len()] == mb
-            });
+            }) && !is_count_sigil(bytes, i);
             if found_comment {
                 // Mask everything from the comment marker to end of line.
                 for byte in &mut result[i..len] {
@@ -111,6 +111,12 @@ pub fn mask_strings(line: &str, line_comments: &[&str]) -> String {
 
     // SAFETY: we only replaced ASCII bytes with ASCII spaces
     String::from_utf8(result).unwrap_or_else(|_| line.to_string())
+}
+
+/// Whether the `#` at `at` is a shell's or Perl's count (`$#`, `${#x}`),
+/// not a comment.
+fn is_count_sigil(bytes: &[u8], at: usize) -> bool {
+    bytes[at] == b'#' && (bytes[..at].ends_with(b"$") || bytes[..at].ends_with(b"${"))
 }
 
 /// The text of a file, with the bytes that are not UTF-8 replaced, so that

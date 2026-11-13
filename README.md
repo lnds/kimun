@@ -1954,10 +1954,20 @@ All sections and fields are optional — omit any you don't need. A fully docume
   `interface` section and of class types, and `forward` or `external` ones,
   have none. Headers repeated under conditional compilation are one routine.
   Cognitive nesting is read from indentation, two columns a level.
-- **Interior lines of multi-line strings** (Kaikai triple-quoted literals,
-  Elixir heredocs) count as code for `km loc`, but are excluded from
-  cyclomatic, cognitive, Halstead, and smell analyses: prose and embedded data
-  are not control flow.
+- **Comments and literals in the analyses of code.** The cyclomatic,
+  cognitive, Halstead and smell analyses read each language by its own rules:
+  a comment after code on a line (`x = 1; /* if */`) and the text of every
+  literal count for nothing, so prose and embedded data never read as control
+  flow. Literals include template literals with the code of their `${…}` kept
+  (JavaScript, TypeScript), Go raw strings, text blocks and `"""` strings
+  (Java, Kotlin, Swift, Scala, Groovy, Dart, Python, Kaikai, Elixir), C#
+  verbatim strings (`@"…"`), C++ raw strings (`R"(…)"`), heredocs (Ruby, PHP,
+  shells, Perl), strings that span lines where the language allows it, and
+  JavaScript regular expressions. A Rust lifetime or loop label (`'outer:`) is
+  no character literal, a `#` is a comment in a shell only where a word starts
+  (`$#` and `${#x}` are code), and PHP comments with `#` as well as `//`. The
+  lines inside a literal that spans lines count as code for `km loc`, but are
+  left out of these analyses.
 - **Rust raw strings** (`r"..."`, `r#"..."#` and the forms with more `#`, with a
   `b` or `c` prefix too) end only at a quote followed by as many `#` as opened
   them, and span lines. What they hold counts as code for `km loc`, whatever it

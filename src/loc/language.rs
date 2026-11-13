@@ -207,8 +207,15 @@ pub fn languages() -> &'static [LanguageSpec] {
               line: "//", block: "/*", "*/", nested: true),
         lang_spec!("Swift", ext: ["swift"],
               line: "//", block: "/*", "*/", nested: true),
-        lang_spec!("PHP", ext: ["php"],
-              line: "//", block: "/*", "*/", sq: true),
+        LanguageSpec {
+            name: "PHP",
+            extensions: &["php"],
+            line_comments: &["//", "#"],
+            line_comment_not_before: "[",
+            block_comment: Some(("/*", "*/")),
+            single_quote_strings: true,
+            ..LanguageSpec::PLAIN
+        },
         lang_spec!("Dart", ext: ["dart"],
               line: "//", block: "/*", "*/", sq: true),
         // Haskell is defined manually (not via lang! macro) because it needs
