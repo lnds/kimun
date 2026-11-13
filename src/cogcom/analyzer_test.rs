@@ -454,3 +454,24 @@ fn kaikai_default_of_an_option_counts_as_a_boolean_operator() {
     let result = analyze(&lines, &kinds, markers).unwrap();
     assert_eq!(result.functions[0].complexity, 1);
 }
+
+#[test]
+fn python_signature_closed_at_the_indentation_of_def_keeps_its_body() {
+    let src = "\
+def black_style(
+    a: int,
+    b: int,
+) -> int:
+    if a:
+        return 1
+    elif b:
+        return 2
+    while a and b:
+        a -= 1
+    return 0
+";
+    let (lines, kinds) = make_lines(src);
+    let result = analyze(&lines, &kinds, python_markers()).unwrap();
+    assert_eq!(result.functions.len(), 1);
+    assert_eq!(result.functions[0].complexity, 4);
+}
