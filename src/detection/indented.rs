@@ -41,20 +41,20 @@ fn signature_end(
     start: usize,
     markers: &dyn FunctionDetectionMarkers,
 ) -> usize {
-    let mut depth = 0i32;
-    for (k, (_, line)) in code_lines.iter().enumerate().skip(start) {
-        for b in masked(line, markers).bytes() {
-            match b {
-                b'(' | b'[' | b'{' => depth += 1,
-                b')' | b']' | b'}' => depth -= 1,
-                _ => {}
-            }
-        }
-        if depth <= 0 {
-            return k;
-        }
-    }
-    code_lines.len() - 1
+    let mut depth = 0;
+    code_lines[start..]
+        .iter()
+        .position(|(_, line)| {
+            depth += bracket_balance(&masked(line, markers));
+            depth <= 0
+        })
+        .map_or(code_lines.len() - 1, |k| start + k)
+}
+
+/// Brackets a line opens minus those it closes.
+fn bracket_balance(line: &str) -> isize {
+    let count = |set: &str| line.chars().filter(|c| set.contains(*c)).count() as isize;
+    count("([{") - count(")]}")
 }
 
 /// Clauses of a function written at the indentation of its declaration:
@@ -66,6 +66,12 @@ fn is_function_clause(trimmed: &str) -> bool {
         .next()
         .unwrap_or("");
     matches!(word, "rescue" | "ensure" | "else" | "catch" | "after")
+}
+
+/// Whether a line at `indent` goes on with a body declared at `base`.
+fn in_body(indent: usize, base: usize, line: &str) -> bool {
+    let trimmed = line.trim();
+    indent > base || trimmed.is_empty() || (indent == base && is_function_clause(trimmed))
 }
 
 /// The declaration at `code_lines[start]`, its signature through
@@ -84,13 +90,7 @@ pub(super) fn indented_body<'a>(
     let base_indent = indent_level(code_lines[start].1);
     let len = code_lines[header + 1..]
         .iter()
-        .take_while(|(idx, line)| {
-            let indent = indent_level(&all_lines[*idx]);
-            let trimmed = line.trim();
-            indent > base_indent
-                || trimmed.is_empty()
-                || (indent == base_indent && is_function_clause(trimmed))
-        })
+        .take_while(|(idx, line)| in_body(indent_level(&all_lines[*idx]), base_indent, line))
         .count();
     let end = header + 1 + len;
     let quoted = quoted_lines(all_lines, &code_lines[start..end]);
