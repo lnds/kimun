@@ -1,6 +1,6 @@
 /// Per-author summary computed from git blame across all source files.
 use std::cmp::Reverse;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::git::BlameInfo;
 
@@ -25,60 +25,63 @@ struct AuthorAccum {
     name: String,
     email: String,
     lines: usize,
-    languages: HashSet<String>,
+    languages: BTreeSet<String>,
     last_active: i64,
     owned_files: usize,
 }
 
-/// Aggregate per-author blame data across all files into `AuthorSummary` records.
-///
-/// For each file, the author with the most lines is counted as its primary owner.
-pub fn compute_authors(file_blames: &[(&str, &[BlameInfo])]) -> Vec<AuthorSummary> {
-    let mut accum: HashMap<String, AuthorAccum> = HashMap::new();
-
-    for (language, blames) in file_blames {
-        let primary = blames.first().map(BlameInfo::identity);
-
-        for blame in *blames {
-            let identity = blame.identity();
-            let owns_file = primary.as_ref() == Some(&identity);
-            let entry = accum.entry(identity).or_insert_with(|| AuthorAccum {
-                name: blame.author.clone(),
-                email: blame.email.clone(),
-                lines: 0,
-                languages: HashSet::new(),
-                last_active: 0,
-                owned_files: 0,
-            });
-
-            entry.lines += blame.lines;
-            entry.languages.insert(language.to_string());
-            if blame.last_commit_time > entry.last_active {
-                entry.last_active = blame.last_commit_time;
-            }
-            if owns_file {
-                entry.owned_files += 1;
-            }
+impl AuthorAccum {
+    fn new(blame: &BlameInfo) -> Self {
+        Self {
+            name: blame.author.clone(),
+            email: blame.email.clone(),
+            lines: 0,
+            languages: BTreeSet::new(),
+            last_active: 0,
+            owned_files: 0,
         }
     }
 
-    let mut result: Vec<AuthorSummary> = accum
-        .into_values()
-        .map(|a| {
-            let mut langs: Vec<String> = a.languages.into_iter().collect();
-            langs.sort();
-            AuthorSummary {
-                name: a.name,
-                email: a.email,
-                owned_files: a.owned_files,
-                lines: a.lines,
-                languages: langs,
-                last_active: a.last_active,
-            }
-        })
-        .collect();
+    /// Add the lines of one file, which this author may own.
+    fn add(&mut self, blame: &BlameInfo, language: &str, owns_file: bool) {
+        self.lines += blame.lines;
+        self.languages.insert(language.to_string());
+        self.last_active = self.last_active.max(blame.last_commit_time);
+        self.owned_files += usize::from(owns_file);
+    }
 
-    result.sort_by_key(|r| Reverse(r.lines));
+    fn summary(self) -> AuthorSummary {
+        AuthorSummary {
+            name: self.name,
+            email: self.email,
+            owned_files: self.owned_files,
+            lines: self.lines,
+            languages: self.languages.into_iter().collect(),
+            last_active: self.last_active,
+        }
+    }
+}
+
+/// Aggregate per-author blame data across all files into `AuthorSummary` records.
+///
+/// For each file, the first author of its blame (most lines, ties as
+/// [`crate::git::GitRepo::blame_file`] breaks them) is its primary owner.
+/// Authors come by lines, most first, and with as many by identity.
+pub fn compute_authors(file_blames: &[(&str, &[BlameInfo])]) -> Vec<AuthorSummary> {
+    let mut accum: BTreeMap<String, AuthorAccum> = BTreeMap::new();
+    for (language, blames) in file_blames {
+        let primary = blames.first().map(BlameInfo::identity);
+        for blame in *blames {
+            let identity = blame.identity();
+            let owns_file = primary.as_ref() == Some(&identity);
+            accum
+                .entry(identity)
+                .or_insert_with(|| AuthorAccum::new(blame))
+                .add(blame, language, owns_file);
+        }
+    }
+    let mut result: Vec<AuthorSummary> = accum.into_values().map(AuthorAccum::summary).collect();
+    result.sort_by_key(|a| Reverse(a.lines));
     result
 }
 

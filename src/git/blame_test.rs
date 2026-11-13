@@ -154,3 +154,86 @@ fn blame_reads_the_committed_file() {
     let git = GitRepo::open(dir.path()).unwrap();
     assert_eq!(owners(&git, "a.rs"), [("Ana".to_string(), 2)]);
 }
+
+/// Commit `files` as `name` at `time` on top of HEAD.
+fn commit_at(repo: &Repository, name: &str, time: i64, files: &[(&str, &str)]) {
+    let sig =
+        git2::Signature::new(name, &format!("{name}@x.org"), &git2::Time::new(time, 0)).unwrap();
+    let mut index = repo.index().unwrap();
+    for (path, content) in files {
+        fs::write(repo.workdir().unwrap().join(path), content).unwrap();
+        index.add_path(Path::new(path)).unwrap();
+    }
+    index.write().unwrap();
+    let tree = repo.find_tree(index.write_tree().unwrap()).unwrap();
+    let parent = repo.head().ok().and_then(|h| h.peel_to_commit().ok());
+    let parents: Vec<&git2::Commit> = parent.iter().collect();
+    repo.commit(Some("HEAD"), &sig, &sig, "commit", &tree, &parents)
+        .unwrap();
+}
+
+fn first_author(git: &GitRepo, path: &str) -> String {
+    git.blame_file(Path::new(path)).unwrap()[0].author.clone()
+}
+
+#[test]
+fn a_tie_in_lines_goes_to_the_most_recent_author() {
+    let (dir, repo) = repo();
+    commit_at(&repo, "Bob", 1_000, &[("a.rs", "1\n2\n")]);
+    commit_at(&repo, "Ana", 2_000, &[("a.rs", "1\n2\n3\n4\n")]);
+    commit_at(&repo, "Ana", 1_000, &[("b.rs", "1\n2\n")]);
+    commit_at(&repo, "Bob", 2_000, &[("b.rs", "1\n2\n3\n4\n")]);
+    let git = GitRepo::open(dir.path()).unwrap();
+    for _ in 0..5 {
+        assert_eq!(first_author(&git, "a.rs"), "Ana");
+        assert_eq!(first_author(&git, "b.rs"), "Bob");
+    }
+}
+
+#[test]
+fn a_tie_in_lines_and_time_goes_to_the_first_identity() {
+    let (dir, repo) = repo();
+    commit_at(&repo, "Bob", 1_000, &[("a.rs", "1\n2\n")]);
+    commit_at(&repo, "Ana", 1_000, &[("a.rs", "1\n2\n3\n4\n")]);
+    let git = GitRepo::open(dir.path()).unwrap();
+    for _ in 0..5 {
+        assert_eq!(first_author(&git, "a.rs"), "Ana");
+    }
+}
+
+#[test]
+fn blame_since_counts_the_lines_committed_since() {
+    let (dir, repo) = repo();
+    commit_at(&repo, "Ana", 1_000, &[("a.rs", "1\n2\n3\n")]);
+    commit_at(&repo, "Ana", 3_000, &[("a.rs", "1\n2\n3\n4\n")]);
+    commit_at(&repo, "Bob", 1_000, &[("b.rs", "1\n")]);
+    let git = GitRepo::open(dir.path()).unwrap();
+    let recent = git
+        .blame_file_since(Path::new("a.rs"), Some(2_000))
+        .unwrap();
+    assert_eq!(recent.len(), 1);
+    assert_eq!((recent[0].author.as_str(), recent[0].lines), ("Ana", 1));
+    let none = git
+        .blame_file_since(Path::new("b.rs"), Some(2_000))
+        .unwrap();
+    assert!(none.is_empty());
+}
+
+#[test]
+fn a_malformed_ignore_revs_file_still_blames_through_git() {
+    let (dir, repo) = repo();
+    commit(&repo, "Ana", &[("a.rs", "1\n2\n")]);
+    commit(
+        &repo,
+        "Ana",
+        &[(".git-blame-ignore-revs", "not a revision\n")],
+    );
+    let git = GitRepo::open(dir.path()).unwrap();
+    let lines: usize = git
+        .blame_with("git", Path::new("a.rs"))
+        .expect("blamed without the revisions to ignore")
+        .iter()
+        .map(|h| h.lines)
+        .sum();
+    assert_eq!(lines, 2);
+}

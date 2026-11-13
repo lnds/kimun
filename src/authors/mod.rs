@@ -35,23 +35,17 @@ pub fn run(
         .filter(|(path, _)| !crate::util::is_generated_file(path));
     for (file_path, spec) in files {
         let rel = GitRepo::to_git_path(&walk_root, &prefix, &file_path);
-        let mut blames = match git.blame_file(&rel) {
+        // With a cutoff, only the lines committed since it count.
+        let blames = match git.blame_file_since(&rel, since_ts) {
             Ok(b) => b,
             Err(e) => {
                 eprintln!("warning: blame {}: {e}", rel.display());
                 continue;
             }
         };
-
-        // Filter to lines last touched since the cutoff.
-        if let Some(ts) = since_ts {
-            blames.retain(|b| b.last_commit_time >= ts);
-            if blames.is_empty() {
-                continue;
-            }
+        if !blames.is_empty() {
+            file_blames.push((spec.name.to_string(), blames));
         }
-
-        file_blames.push((spec.name.to_string(), blames));
     }
 
     if file_blames.is_empty() {

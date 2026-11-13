@@ -187,7 +187,8 @@ or architectural issues \u{2014} consider extracting shared abstractions.
 
 Only files that still exist and are code are paired. Commits touching
 more than --max-changeset files, and a revert with the commit it reverts,
-are no evidence. Path filters apply to the paths of history.
+are no evidence, on either side of the strength. Path filters apply to
+the paths of history; a path pairs only the files under it.
 
 Requires a git repository. File renames are not tracked across history.
 

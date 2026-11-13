@@ -758,7 +758,7 @@ pub enum Commands {
         #[command(flatten)]
         common: CommonArgs,
 
-        /// Only consider activity since this time (e.g. 6m, 1y, 30d)
+        /// Count only the lines committed since this time (e.g. 6m, 1y, 30d)
         #[arg(long)]
         since: Option<String>,
     },

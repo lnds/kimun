@@ -37,6 +37,22 @@ fn primary_owner_is_author_with_most_lines() {
 }
 
 #[test]
+fn authors_with_as_many_lines_come_by_identity() {
+    let first = vec![blame("Zoe", "zoe@example.com", 10, 1000)];
+    let second = vec![blame("Ana", "ana@example.com", 10, 1000)];
+    for files in [
+        [("Rust", first.as_slice()), ("Rust", second.as_slice())],
+        [("Rust", second.as_slice()), ("Rust", first.as_slice())],
+    ] {
+        let names: Vec<String> = compute_authors(&files)
+            .into_iter()
+            .map(|a| a.name)
+            .collect();
+        assert_eq!(names, ["Ana", "Zoe"]);
+    }
+}
+
+#[test]
 fn lines_accumulated_across_files() {
     let blames_a = vec![blame("Alice", "alice@example.com", 50, 1000)];
     let blames_b = vec![blame("Alice", "alice@example.com", 30, 2000)];

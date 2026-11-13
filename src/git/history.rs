@@ -24,6 +24,7 @@ impl GitRepo {
     /// touched several files can be counted once. Read through `git log`,
     /// far faster on a long history, or, failing that, libgit2.
     pub fn commits_by_file(&self) -> Result<CommitsByFile, Box<dyn Error>> {
+        self.warn_if_shallow();
         let output = std::process::Command::new("git")
             .arg("-C")
             .arg(&self.root)
