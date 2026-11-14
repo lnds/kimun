@@ -674,6 +674,8 @@ pub enum Commands {
         trend: Option<String>,
 
         /// Exit with code 1 if the score is worse than the ref (requires --trend).
+        /// Passes, with a note, when there is nothing to grade now or at the ref
+        /// (with --gate-scope changed, duplicated lines are still compared).
         /// Example: --trend origin/main --fail-if-worse
         #[arg(long, requires = "trend")]
         fail_if_worse: bool,
@@ -692,6 +694,7 @@ pub enum Commands {
         gate_scope: GateScope,
 
         /// Exit with code 1 if the score is below GRADE (requires --trend).
+        /// Passes, with a note, when there is nothing to grade.
         /// Example: --trend origin/main --fail-below B-
         /// Valid grades: A++, A+, A, A-, B+, B, B-, C+, C, C-, D+, D, D-, F, F-, F--
         /// Overridable via .kimun.toml [score] fail_below.

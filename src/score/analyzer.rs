@@ -165,13 +165,41 @@ pub fn score_to_grade(score: f64) -> Grade {
     }
 }
 
+/// A score and the grade it earns, which always go together.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct Graded {
+    pub score: f64,
+    pub grade: Grade,
+}
+
+impl Graded {
+    /// The score with the grade it earns.
+    pub fn of(score: f64) -> Self {
+        Self {
+            score,
+            grade: score_to_grade(score),
+        }
+    }
+}
+
+/// The score of `graded` with `decimals` decimals, or `-` when there is
+/// nothing to grade, as indent shows an ungraded file.
+pub fn score_text(graded: Option<Graded>, decimals: usize) -> String {
+    graded.map_or_else(|| "-".to_string(), |g| format!("{:.decimals$}", g.score))
+}
+
+/// The grade of `graded`, or `-` when there is nothing to grade.
+pub fn grade_text(graded: Option<Graded>) -> &'static str {
+    graded.map_or("-", |g| g.grade.as_str())
+}
+
 /// A single scored dimension (e.g. MI, Complexity) with its weight.
+/// `graded` is `None` when there is nothing to grade: no code files.
 #[derive(Debug, Clone, Serialize)]
 pub struct DimensionScore {
     pub name: &'static str,
     pub weight: f64,
-    pub score: f64,
-    pub grade: Grade,
+    pub graded: Option<Graded>,
 }
 
 /// Per-file weighted score with identified issues.
@@ -185,19 +213,21 @@ pub struct FileScore {
 }
 
 /// Aggregated project-level score with per-dimension breakdown
-/// and the worst-scoring files that need attention.
+/// and the worst-scoring files that need attention. `graded` is `None`
+/// when there is nothing to grade: no code files.
 #[derive(Debug, Clone, Serialize)]
 pub struct ProjectScore {
-    pub score: f64,
-    pub grade: Grade,
+    pub graded: Option<Graded>,
     pub files_analyzed: usize,
     pub total_loc: usize,
     pub dimensions: Vec<DimensionScore>,
     pub needs_attention: Vec<FileScore>,
 }
 
-/// Weighted sum of dimension scores. Weights must sum to 1.0 when non-empty.
-pub fn compute_project_score(dimensions: &[DimensionScore]) -> f64 {
+/// Weighted sum of dimension scores, `None` when a dimension has nothing
+/// to grade (an empty slice sums to `Some(0.0)`, but every model has
+/// dimensions). Weights must sum to 1.0 when non-empty.
+pub fn compute_project_score(dimensions: &[DimensionScore]) -> Option<f64> {
     if !dimensions.is_empty() {
         let weight_sum: f64 = dimensions.iter().map(|d| d.weight).sum();
         debug_assert!(
@@ -205,7 +235,10 @@ pub fn compute_project_score(dimensions: &[DimensionScore]) -> f64 {
             "dimension weights must sum to 1.0, got {weight_sum}"
         );
     }
-    dimensions.iter().map(|d| d.score * d.weight).sum()
+    dimensions
+        .iter()
+        .map(|d| Some(d.graded?.score * d.weight))
+        .sum()
 }
 
 #[cfg(test)]

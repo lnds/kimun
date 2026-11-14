@@ -11,8 +11,11 @@ use super::analyzer::{Grade, ProjectScore};
 const LABEL: &str = "km score";
 
 /// The colour of a grade, by its letter, as shields.io names it and as
-/// its flat badges paint it.
-fn colour(grade: Grade) -> (&'static str, &'static str) {
+/// its flat badges paint it. Grey when there is nothing to grade.
+fn colour(grade: Option<Grade>) -> (&'static str, &'static str) {
+    let Some(grade) = grade else {
+        return ("lightgrey", "#9f9f9f");
+    };
     match grade.as_str().chars().next() {
         Some('A') => ("brightgreen", "#4c1"),
         Some('B') => ("green", "#97ca00"),
@@ -22,9 +25,13 @@ fn colour(grade: Grade) -> (&'static str, &'static str) {
     }
 }
 
-/// What the badge says: the grade and the score.
+/// What the badge says: the grade and the score, or that there is
+/// nothing to grade.
 fn message(score: &ProjectScore) -> String {
-    format!("{} {:.1}", score.grade, score.score)
+    score.graded.map_or_else(
+        || "not graded".to_string(),
+        |g| format!("{} {:.1}", g.grade, g.score),
+    )
 }
 
 /// Write the badge of `score` to `path`: the endpoint JSON when the file
@@ -67,7 +74,7 @@ pub fn endpoint(score: &ProjectScore) -> Result<String, Box<dyn Error>> {
         schema_version: 1,
         label: LABEL,
         message: message(score),
-        color: colour(score.grade).0,
+        color: colour(score.graded.map(|g| g.grade)).0,
     };
     Ok(serde_json::to_string_pretty(&badge)? + "\n")
 }
@@ -90,7 +97,7 @@ fn text_width(text: &str) -> usize {
 /// A flat badge as an SVG that needs nothing else to render.
 pub fn svg(score: &ProjectScore) -> String {
     let message = message(score);
-    let colour = colour(score.grade).1;
+    let colour = colour(score.graded.map(|g| g.grade)).1;
     let left = text_width(LABEL) + 10;
     let right = text_width(&message) + 10;
     let width = left + right;

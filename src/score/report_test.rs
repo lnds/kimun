@@ -1,26 +1,32 @@
 use std::path::PathBuf;
 
 use super::*;
-use crate::score::analyzer::{DimensionScore, FileScore};
+use crate::score::analyzer::{DimensionScore, FileScore, Graded};
 
 fn sample_score() -> ProjectScore {
     ProjectScore {
-        score: 84.3,
-        grade: Grade::BPlus,
+        graded: Some(Graded {
+            score: 84.3,
+            grade: Grade::BPlus,
+        }),
         files_analyzed: 42,
         total_loc: 8432,
         dimensions: vec![
             DimensionScore {
                 name: "Cognitive Complexity",
                 weight: 0.30,
-                score: 88.2,
-                grade: Grade::AMinus,
+                graded: Some(Graded {
+                    score: 88.2,
+                    grade: Grade::AMinus,
+                }),
             },
             DimensionScore {
                 name: "Duplication",
                 weight: 0.20,
-                score: 82.4,
-                grade: Grade::BPlus,
+                graded: Some(Graded {
+                    score: 82.4,
+                    grade: Grade::BPlus,
+                }),
             },
         ],
         needs_attention: vec![FileScore {
@@ -35,13 +41,77 @@ fn sample_score() -> ProjectScore {
 
 fn empty_score() -> ProjectScore {
     ProjectScore {
-        score: 0.0,
-        grade: Grade::FMinusMinus,
+        graded: None,
         files_analyzed: 0,
         total_loc: 0,
         dimensions: vec![],
         needs_attention: vec![],
     }
+}
+
+/// A target with nothing to grade, as `snapshot_of` builds it: the
+/// dimensions keep their names and weights, and have no score.
+fn nothing_to_grade() -> ProjectScore {
+    let mut score = sample_score();
+    score.graded = None;
+    score.files_analyzed = 0;
+    score.total_loc = 0;
+    score.needs_attention = vec![];
+    for d in &mut score.dimensions {
+        d.graded = None;
+    }
+    score
+}
+
+#[test]
+fn nothing_to_grade_is_shown_as_a_dash() {
+    let score = nothing_to_grade();
+    assert_eq!(
+        project_line(&score),
+        " Project Score:  - (nothing to grade)"
+    );
+    assert_eq!(
+        dimension_row(&score.dimensions[0]),
+        " Cognitive Complexity         30%       -   -    "
+    );
+    assert_eq!(
+        short(&score),
+        "score s:- g:- files:0 loc:0 cognitive:- duplication:-"
+    );
+}
+
+#[test]
+fn a_graded_score_keeps_its_lines() {
+    let score = sample_score();
+    assert_eq!(project_line(&score), " Project Score:  B+ (84.3)");
+    assert_eq!(
+        dimension_row(&score.dimensions[0]),
+        " Cognitive Complexity         30%    88.2   A-   "
+    );
+    assert_eq!(
+        short(&score),
+        "score s:84.3 g:B+ files:42 loc:8432 cognitive:88.2 duplication:82.4"
+    );
+}
+
+#[test]
+fn nothing_to_grade_is_null_in_json_with_every_key() {
+    let json = serde_json::to_value(to_json(&nothing_to_grade(), Some("README.md"), None)).unwrap();
+    assert_eq!(
+        json,
+        serde_json::json!({
+            "target": "README.md",
+            "score": null,
+            "grade": null,
+            "files_analyzed": 0,
+            "total_loc": 0,
+            "dimensions": [
+                {"name": "Cognitive Complexity", "weight": 0.3, "score": null, "grade": null},
+                {"name": "Duplication", "weight": 0.2, "score": null, "grade": null}
+            ],
+            "needs_attention": []
+        })
+    );
 }
 
 #[test]

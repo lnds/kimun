@@ -23,7 +23,8 @@ struct ProjectStats {
     avg_param_count: f64,
     function_count: usize,
     dup_ratio: f64,
-    health_grade: Grade,
+    /// `None` when the project has no code to grade.
+    health_grade: Option<Grade>,
 }
 
 pub fn run(path: &Path, yes: bool) -> Result<(), Box<dyn Error>> {
@@ -56,14 +57,14 @@ pub fn run(path: &Path, yes: bool) -> Result<(), Box<dyn Error>> {
     let suggested_max_lines = suggest_max_lines(stats.avg_function_len);
     let suggested_max_params = suggest_max_params(stats.avg_param_count);
     let suggested_max_dup_ratio = suggest_max_dup_ratio(stats.dup_ratio);
-    let suggested_fail_below = grade_one_lower(stats.health_grade);
+    let suggested_fail_below = stats.health_grade.map(grade_one_lower);
 
     let show_params = stats.function_count > 0 && stats.avg_param_count >= 1.0;
 
     let fn_val = format!("{:.0} lines", stats.avg_function_len);
     let param_val = format!("{:.1}", stats.avg_param_count);
     let dup_val = format!("{:.1}%", stats.dup_ratio);
-    let grade_val = stats.health_grade.as_str();
+    let grade_val = stats.health_grade.map_or("-", Grade::as_str);
 
     let mut widths = vec![dup_val.len(), grade_val.len()];
     if stats.function_count > 0 {
@@ -89,8 +90,8 @@ pub fn run(path: &Path, yes: bool) -> Result<(), Box<dyn Error>> {
         "  dup ratio:           {dup_val:<val_width$}  →  suggested max_dup_ratio = {suggested_max_dup_ratio:.1}"
     );
     println!(
-        "  health score:        {grade_val:<val_width$}  →  suggested fail_below = {}",
-        suggested_fail_below.as_str()
+        "  health score:        {grade_val:<val_width$}  →  {}",
+        fail_below_suggestion(suggested_fail_below)
     );
     println!();
 
@@ -164,7 +165,7 @@ fn collect_stats(cfg: &WalkConfig<'_>) -> Result<ProjectStats, Box<dyn Error>> {
     let dup_ratio = dup_metrics.percentage();
 
     let score = score::compute_score(cfg, 0, 6, &ScoringModel::Cognitive)?;
-    let health_grade = score.grade;
+    let health_grade = score.graded.map(|g| g.grade);
 
     Ok(ProjectStats {
         avg_function_len,
@@ -246,19 +247,37 @@ fn grade_one_lower(grade: Grade) -> Grade {
     }
 }
 
+/// What `init` suggests for `fail_below`: one grade below the current one,
+/// or nothing when there is no code to grade yet.
+fn fail_below_suggestion(fail_below: Option<Grade>) -> String {
+    fail_below.map_or_else(
+        || "nothing to grade, fail_below left unset".to_string(),
+        |g| format!("suggested fail_below = {g}"),
+    )
+}
+
+/// The `fail_below` line of the config: commented out when there is no
+/// code to grade yet, since any grade would be a guess.
+fn fail_below_line(fail_below: Option<Grade>) -> String {
+    fail_below.map_or_else(
+        || "# fail_below = \"B\"  # nothing to grade yet".to_string(),
+        |g| format!("fail_below = \"{g}\""),
+    )
+}
+
 const TEMPLATE: &str = include_str!("template.toml");
 
 fn build_toml(
     max_lines: usize,
     max_params: usize,
     max_dup_ratio: f64,
-    fail_below: Grade,
+    fail_below: Option<Grade>,
 ) -> String {
     TEMPLATE
         .replace("{{max_lines}}", &max_lines.to_string())
         .replace("{{max_params}}", &max_params.to_string())
         .replace("{{max_dup_ratio}}", &format!("{max_dup_ratio:.1}"))
-        .replace("{{fail_below}}", fail_below.as_str())
+        .replace("{{fail_below}}", &fail_below_line(fail_below))
 }
 
 #[cfg(test)]
@@ -301,5 +320,23 @@ mod tests {
         assert_eq!(count_params("fn foo(a: i32, b: i32)"), Some(2));
         assert_eq!(count_params("fn bar()"), Some(0));
         assert_eq!(count_params("fn baz(x: Vec<(i32, i32)>, y: i32)"), Some(2));
+    }
+
+    #[test]
+    fn a_project_with_nothing_to_grade_leaves_fail_below_unset() {
+        assert_eq!(
+            fail_below_suggestion(None),
+            "nothing to grade, fail_below left unset"
+        );
+        assert_eq!(
+            fail_below_suggestion(Some(Grade::B)),
+            "suggested fail_below = B"
+        );
+        let unset: crate::config::KimunConfig =
+            toml::from_str(&build_toml(50, 4, 2.0, None)).expect("valid toml");
+        assert_eq!(unset.score.fail_below, None);
+        let set: crate::config::KimunConfig =
+            toml::from_str(&build_toml(50, 4, 2.0, Some(Grade::BMinus))).expect("valid toml");
+        assert_eq!(set.score.fail_below.as_deref(), Some("B-"));
     }
 }

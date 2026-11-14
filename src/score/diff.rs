@@ -5,36 +5,28 @@
 
 use serde::Serialize;
 
-use super::analyzer::{Grade, ProjectScore};
+use super::analyzer::{Graded, ProjectScore};
 use super::changed::ChangedScope;
 
-/// Numeric delta: before, after, and signed difference.
-#[derive(Debug, Clone, Serialize)]
-pub struct ScoreDelta {
-    pub before: f64,
-    pub after: f64,
-    pub delta: f64,
-}
-
-/// Per-dimension delta with name, weight, and before/after grades.
+/// Per-dimension delta with name, weight, and the before/after scores.
+/// A side with nothing to grade is `None`, and so is the delta.
 #[derive(Debug, Clone, Serialize)]
 pub struct DimensionDelta {
     pub name: String,
     pub weight: f64,
-    pub before_score: f64,
-    pub before_grade: Grade,
-    pub after_score: f64,
-    pub after_grade: Grade,
-    pub delta: f64,
+    pub before: Option<Graded>,
+    pub after: Option<Graded>,
+    pub delta: Option<f64>,
 }
 
-/// Full diff result comparing two project score snapshots.
+/// Full diff result comparing two project score snapshots. A side with
+/// nothing to grade (no code files) is `None`, and so is the delta.
 #[derive(Debug, Clone, Serialize)]
 pub struct ScoreDiff {
     pub git_ref: String,
-    pub overall: ScoreDelta,
-    pub before_grade: Grade,
-    pub after_grade: Grade,
+    pub before: Option<Graded>,
+    pub after: Option<Graded>,
+    pub delta: Option<f64>,
     pub files_before: usize,
     pub files_after: usize,
     pub loc_before: usize,
@@ -42,6 +34,11 @@ pub struct ScoreDiff {
     pub dimensions: Vec<DimensionDelta>,
     /// Per-file breakdown, present only under `--gate-scope changed`.
     pub changed: Option<ChangedScope>,
+}
+
+/// After minus before, when both sides have a score.
+fn change(before: Option<Graded>, after: Option<Graded>) -> Option<f64> {
+    Some(after?.score - before?.score)
 }
 
 /// Compare two `ProjectScore` snapshots and produce a `ScoreDiff`.
@@ -73,23 +70,17 @@ pub fn compute_diff(git_ref: &str, before: &ProjectScore, after: &ProjectScore) 
         .map(|(b, a)| DimensionDelta {
             name: b.name.to_string(),
             weight: b.weight,
-            before_score: b.score,
-            before_grade: b.grade,
-            after_score: a.score,
-            after_grade: a.grade,
-            delta: a.score - b.score,
+            before: b.graded,
+            after: a.graded,
+            delta: change(b.graded, a.graded),
         })
         .collect();
 
     ScoreDiff {
         git_ref: git_ref.to_string(),
-        overall: ScoreDelta {
-            before: before.score,
-            after: after.score,
-            delta: after.score - before.score,
-        },
-        before_grade: before.grade,
-        after_grade: after.grade,
+        before: before.graded,
+        after: after.graded,
+        delta: change(before.graded, after.graded),
         files_before: before.files_analyzed,
         files_after: after.files_analyzed,
         loc_before: before.total_loc,
@@ -104,64 +95,72 @@ mod tests {
     use super::*;
     use crate::score::analyzer::{DimensionScore, Grade, ProjectScore};
 
-    fn make_score(score: f64, files: usize, loc: usize, dim_score: f64) -> ProjectScore {
-        let grade = crate::score::analyzer::score_to_grade(score);
-        let dim_grade = crate::score::analyzer::score_to_grade(dim_score);
+    /// A two-dimension score, `None` for nothing to grade.
+    fn make_score(score: Option<f64>, files: usize, loc: usize) -> ProjectScore {
+        let graded = score.map(Graded::of);
+        let dimension = |name| DimensionScore {
+            name,
+            weight: 0.5,
+            graded,
+        };
         ProjectScore {
-            score,
-            grade,
+            graded,
             files_analyzed: files,
             total_loc: loc,
-            dimensions: vec![
-                DimensionScore {
-                    name: "Cognitive Complexity",
-                    weight: 0.30,
-                    score: dim_score,
-                    grade: dim_grade,
-                },
-                DimensionScore {
-                    name: "Duplication",
-                    weight: 0.20,
-                    score: dim_score,
-                    grade: dim_grade,
-                },
-            ],
+            dimensions: vec![dimension("Cognitive Complexity"), dimension("Duplication")],
             needs_attention: vec![],
         }
     }
 
     #[test]
     fn compute_diff_positive_delta() {
-        let before = make_score(70.0, 10, 1000, 70.0);
-        let after = make_score(80.0, 12, 1200, 80.0);
+        let before = make_score(Some(70.0), 10, 1000);
+        let after = make_score(Some(80.0), 12, 1200);
         let diff = compute_diff("HEAD", &before, &after);
 
         assert_eq!(diff.git_ref, "HEAD");
-        assert!((diff.overall.delta - 10.0).abs() < 0.01);
-        assert_eq!(diff.before_grade, Grade::C);
-        assert_eq!(diff.after_grade, Grade::B);
+        assert_eq!(diff.delta, Some(10.0));
+        assert_eq!(diff.before.map(|g| g.grade), Some(Grade::C));
+        assert_eq!(diff.after.map(|g| g.grade), Some(Grade::B));
         assert_eq!(diff.files_before, 10);
         assert_eq!(diff.files_after, 12);
         assert_eq!(diff.dimensions.len(), 2);
-        assert!((diff.dimensions[0].delta - 10.0).abs() < 0.01);
+        assert_eq!(diff.dimensions[0].delta, Some(10.0));
     }
 
     #[test]
     fn compute_diff_negative_delta() {
-        let before = make_score(80.0, 10, 1000, 80.0);
-        let after = make_score(70.0, 10, 1000, 70.0);
+        let before = make_score(Some(80.0), 10, 1000);
+        let after = make_score(Some(70.0), 10, 1000);
         let diff = compute_diff("main", &before, &after);
 
-        assert!((diff.overall.delta - (-10.0)).abs() < 0.01);
+        assert_eq!(diff.delta, Some(-10.0));
     }
 
     #[test]
     fn compute_diff_no_change() {
-        let before = make_score(85.0, 10, 1000, 85.0);
-        let after = make_score(85.0, 10, 1000, 85.0);
+        let before = make_score(Some(85.0), 10, 1000);
+        let after = make_score(Some(85.0), 10, 1000);
         let diff = compute_diff("HEAD", &before, &after);
 
-        assert!((diff.overall.delta).abs() < 0.01);
-        assert_eq!(diff.before_grade, diff.after_grade);
+        assert_eq!(diff.delta, Some(0.0));
+        assert_eq!(diff.before, diff.after);
+    }
+
+    #[test]
+    fn a_side_with_nothing_to_grade_has_no_delta() {
+        let graded = make_score(Some(85.0), 3, 120);
+        let ungraded = make_score(None, 0, 0);
+
+        for (before, after) in [(&graded, &ungraded), (&ungraded, &graded)] {
+            let diff = compute_diff("HEAD", before, after);
+            assert_eq!(diff.delta, None);
+            assert!(diff.dimensions.iter().all(|d| d.delta.is_none()));
+        }
+        let diff = compute_diff("HEAD", &graded, &ungraded);
+        assert_eq!(diff.before, Some(Graded::of(85.0)));
+        assert_eq!(diff.after, None);
+        assert_eq!(diff.dimensions[0].before, Some(Graded::of(85.0)));
+        assert_eq!(diff.dimensions[0].after, None);
     }
 }

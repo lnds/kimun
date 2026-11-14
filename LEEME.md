@@ -1407,6 +1407,10 @@ Hay tres modelos de puntaje: `cogcom`, el modelo por defecto, basado en la compl
 
 Los archivos que no son código (Markdown, TOML, JSON, etc.) se excluyen automáticamente. Los bloques de test en línea (`#[cfg(test)]`) se excluyen de todas las dimensiones, ver [Tests en línea](#tests-en-línea).
 
+Un objetivo sin nada que calificar, sin archivos de código (un README, un archivo de configuración, un archivo fuente vacío), no recibe nota en vez de F--: el informe dice que no hay nada que calificar y muestra `-` en el puntaje, la nota y cada dimensión, `--format json` da `null` en `score` y `grade` y mantiene todas las claves, `--format terse` imprime `-`, y el badge es gris y dice `not graded`. Si hay archivos de código pero ninguno se puede leer, es un error, no un objetivo sin nada que calificar.
+
+Con `--trend`, un gate sin nada que comparar pasa, y lo dice en stderr (`note: nothing to grade in README.md (no code files measured); --fail-below skipped`): `--fail-below` cuando no hay nada que calificar ahora, `--fail-if-worse` cuando no hay nada que calificar ahora o en la ref. Con `--gate-scope changed`, las líneas duplicadas se comparan igual cuando la ref no tenía código, porque se cuentan, no se califican. Así un gate que revisa cada ruta modificada no falla por la documentación, y eliminar todo el código bajo una ruta no hace fallar `--fail-if-worse`.
+
 ```bash
 km score [path]
 km score --model cogcom-0.35 [path]  # los pesos hasta la v0.35
@@ -1472,10 +1476,10 @@ Opciones:
 | `--model MODEL` | Modelo de puntaje: `cogcom` (por defecto), `cogcom-0.35` (los pesos hasta la v0.35) o `legacy` (MI + ciclomática) |
 | `--experimental` | Calcula con el Maintainability Index en lugar del esfuerzo de Halstead, comparado con el modelo por defecto |
 | `--trend [REF]` | Compara el puntaje actual con una ref de git (por defecto: `HEAD`). Muestra el cambio: `B- → B (+2.3)`. Útil para revisar un PR: `--trend origin/main` |
-| `--fail-if-worse` | Con `--trend`: termina con código 1 si el puntaje bajó más que `--gate-tolerance` |
+| `--fail-if-worse` | Con `--trend`: termina con código 1 si el puntaje bajó más que `--gate-tolerance`. Pasa, con una nota, cuando no hay nada que calificar ahora o en la ref (con `--gate-scope changed`, las líneas duplicadas se comparan igual cuando solo la ref no tiene nada que calificar) |
 | `--gate-tolerance POINTS` | Caída de puntaje que `--fail-if-worse` permite antes de fallar (por defecto: `0.01` con `--gate-scope project`, `0.5` con `--gate-scope changed`). Compara los puntajes sin redondear |
 | `--gate-scope {project,changed}` | Qué compara `--fail-if-worse` (por defecto: `project`, el puntaje agregado). `changed` mira solo los archivos que toca el diff: falla si un archivo modificado o renombrado termina por debajo del puntaje que el proyecto tenía en la ref después de bajar más que `--gate-tolerance`, o si crecen las líneas duplicadas del proyecto. Los archivos por encima del puntaje del proyecto, los archivos nuevos y los eliminados nunca la hacen fallar, así que quitar código sano no puede empeorar el veredicto. El informe lista cada archivo modificado con su puntaje de antes y de después |
-| `--fail-below GRADE` | Con `--trend`: termina con código 1 si la nota está por debajo de `GRADE` (p. ej. `B-`). Se puede sobrescribir en `.kimun.toml` |
+| `--fail-below GRADE` | Con `--trend`: termina con código 1 si la nota está por debajo de `GRADE` (p. ej. `B-`). Pasa, con una nota, cuando no hay nada que calificar. Se puede sobrescribir en `.kimun.toml` |
 | `--badge ARCHIVO` | Escribe un badge del puntaje: un SVG, o el JSON de un badge endpoint de shields.io cuando `ARCHIVO` termina en `.json` (mira [Badge](#badge)) |
 | `--format {table,json,short,terse}` | Formato de salida (por defecto: table) |
 | `--include-tests` | Incluye los tests, ejemplos y benchmarks en el análisis (excluidos por defecto) |
@@ -1519,7 +1523,7 @@ Code Health Score
 
 #### Badge
 
-`--badge ARCHIVO` escribe un badge del puntaje para un README, además del informe: un SVG autocontenido con el estilo plano de shields.io, coloreado según la letra de la nota (A verde, B verde claro, C amarillo, D naranja, F rojo), o, cuando `ARCHIVO` termina en `.json`, el JSON de un [badge endpoint de shields.io](https://shields.io/badges/endpoint-badge).
+`--badge ARCHIVO` escribe un badge del puntaje para un README, además del informe: un SVG autocontenido con el estilo plano de shields.io, coloreado según la letra de la nota (A verde, B verde claro, C amarillo, D naranja, F rojo; gris, `not graded`, cuando no hay nada que calificar), o, cuando `ARCHIVO` termina en `.json`, el JSON de un [badge endpoint de shields.io](https://shields.io/badges/endpoint-badge).
 
 ```bash
 km score --badge .github/km-score.svg

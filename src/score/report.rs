@@ -7,7 +7,7 @@
 
 use serde::Serialize;
 
-use super::analyzer::{Grade, ProjectScore};
+use super::analyzer::{DimensionScore, Grade, Graded, ProjectScore, grade_text, score_text};
 use crate::report_helpers;
 
 /// Print the project health score as a formatted table.
@@ -26,7 +26,7 @@ pub fn print_report(score: &ProjectScore, bottom: usize, target: Option<&str>) {
     };
     println!("{header}");
     println!("{separator}");
-    println!(" Project Score:  {} ({:.1})", score.grade, score.score);
+    println!("{}", project_line(score));
     println!(" Files Analyzed: {}", score.files_analyzed);
     println!(" Total LOC:      {}", format_thousands(score.total_loc));
     println!("{separator}");
@@ -37,13 +37,7 @@ pub fn print_report(score: &ProjectScore, bottom: usize, target: Option<&str>) {
     println!("{separator}");
 
     for d in &score.dimensions {
-        println!(
-            " {:<25} {:>5.0}%   {:>5.1}   {:<5}",
-            d.name,
-            d.weight * 100.0,
-            d.score,
-            d.grade.as_str(),
-        );
+        println!("{}", dimension_row(d));
     }
 
     println!("{separator}");
@@ -93,6 +87,26 @@ pub fn print_report(score: &ProjectScore, bottom: usize, target: Option<&str>) {
     println!("{separator}");
 }
 
+/// The project score line of the table: grade and score, or that there
+/// is nothing to grade.
+fn project_line(score: &ProjectScore) -> String {
+    match score.graded {
+        Some(g) => format!(" Project Score:  {} ({:.1})", g.grade, g.score),
+        None => " Project Score:  - (nothing to grade)".to_string(),
+    }
+}
+
+/// A dimension row of the table.
+fn dimension_row(d: &DimensionScore) -> String {
+    format!(
+        " {:<25} {:>5.0}%   {:>5}   {:<5}",
+        d.name,
+        d.weight * 100.0,
+        score_text(d.graded, 1),
+        grade_text(d.graded),
+    )
+}
+
 /// Format an integer with thousand separators (e.g. 1234567 → "1,234,567").
 fn format_thousands(n: usize) -> String {
     let s = n.to_string();
@@ -108,6 +122,11 @@ fn format_thousands(n: usize) -> String {
 
 /// Print score as a single compact line.
 pub fn print_short(score: &ProjectScore) {
+    println!("{}", short(score));
+}
+
+/// The compact line: `-` for what there is nothing to grade.
+fn short(score: &ProjectScore) -> String {
     let dim_scores: Vec<String> = score
         .dimensions
         .iter()
@@ -118,22 +137,39 @@ pub fn print_short(score: &ProjectScore) {
                 .next()
                 .unwrap_or(d.name)
                 .to_lowercase();
-            format!("{key}:{:.1}", d.score)
+            format!("{key}:{}", score_text(d.graded, 1))
         })
         .collect();
-    println!(
-        "score s:{:.1} g:{} files:{} loc:{} {}",
-        score.score,
-        score.grade,
+    format!(
+        "score s:{} g:{} files:{} loc:{} {}",
+        score_text(score.graded, 1),
+        grade_text(score.graded),
         score.files_analyzed,
         score.total_loc,
         dim_scores.join(" "),
-    );
+    )
 }
 
-/// Print only the overall score value.
+/// Print only the overall score value, `-` when there is nothing to grade.
 pub fn print_terse(score: &ProjectScore) {
-    println!("{:.1}", score.score);
+    println!("{}", score_text(score.graded, 1));
+}
+
+/// A score and its grade in JSON: both null when there is nothing to grade,
+/// so every key is always there.
+#[derive(Serialize)]
+pub(super) struct JsonGraded {
+    score: Option<f64>,
+    grade: Option<Grade>,
+}
+
+impl From<Option<Graded>> for JsonGraded {
+    fn from(graded: Option<Graded>) -> Self {
+        Self {
+            score: graded.map(|g| g.score),
+            grade: graded.map(|g| g.grade),
+        }
+    }
 }
 
 /// JSON-serializable representation of a single score dimension.
@@ -143,10 +179,9 @@ struct JsonDimension {
     name: String,
     /// Relative weight in the final score (0.0–1.0, all sum to 1.0).
     weight: f64,
-    /// Normalized score for this dimension (0–100 scale).
-    score: f64,
-    /// Letter grade derived from the normalized score.
-    grade: Grade,
+    /// Normalized score (0–100 scale) and its letter grade.
+    #[serde(flatten)]
+    graded: JsonGraded,
 }
 
 /// JSON-serializable representation of a per-file score with issues.
@@ -168,10 +203,9 @@ struct JsonProjectScore {
     /// Target path or file name (omitted when analyzing "." default).
     #[serde(skip_serializing_if = "Option::is_none")]
     target: Option<String>,
-    /// Overall weighted project score (0–100 scale).
-    score: f64,
-    /// Overall letter grade (A++ to F--).
-    grade: Grade,
+    /// Overall weighted project score (0–100 scale) and grade (A++ to F--).
+    #[serde(flatten)]
+    graded: JsonGraded,
     /// Number of source files included in the analysis.
     files_analyzed: usize,
     /// Total lines of code across all analyzed files.
@@ -188,8 +222,8 @@ struct JsonProjectScore {
 /// The score of the default model, next to an experimental one.
 #[derive(Serialize)]
 struct JsonBaseline {
-    score: f64,
-    grade: Grade,
+    #[serde(flatten)]
+    graded: JsonGraded,
 }
 
 /// Serialize the project score to pretty-printed JSON and print to stdout.
@@ -206,10 +240,19 @@ pub fn print_json_against(
     target: Option<&str>,
     baseline: Option<&ProjectScore>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let json = JsonProjectScore {
+    report_helpers::print_json_stdout(&to_json(score, target, baseline))
+}
+
+/// The JSON of the score. Every key is present; what there is nothing to
+/// grade is null.
+fn to_json(
+    score: &ProjectScore,
+    target: Option<&str>,
+    baseline: Option<&ProjectScore>,
+) -> JsonProjectScore {
+    JsonProjectScore {
         target: target.map(String::from),
-        score: score.score,
-        grade: score.grade,
+        graded: score.graded.into(),
         files_analyzed: score.files_analyzed,
         total_loc: score.total_loc,
         dimensions: score
@@ -218,8 +261,7 @@ pub fn print_json_against(
             .map(|d| JsonDimension {
                 name: d.name.to_string(),
                 weight: d.weight,
-                score: d.score,
-                grade: d.grade,
+                graded: d.graded.into(),
             })
             .collect(),
         needs_attention: score
@@ -233,11 +275,9 @@ pub fn print_json_against(
             })
             .collect(),
         baseline: baseline.map(|b| JsonBaseline {
-            score: b.score,
-            grade: b.grade,
+            graded: b.graded.into(),
         }),
-    };
-    report_helpers::print_json_stdout(&json)
+    }
 }
 
 #[cfg(test)]

@@ -254,6 +254,8 @@ Legacy model (--model legacy, v0.13) — 6 dimensions:
   File Size                5%  (full score up to 500 LOC, 0 at 4000)
 
 Non-code files (Markdown, TOML, JSON, etc.) are automatically excluded.
+With no code files there is nothing to grade: the score shows - (null
+in JSON) and --fail-below / --fail-if-worse pass with a note.
 Inline test blocks (#[cfg(test)]) are excluded from duplication analysis.
 
 Grade scale:

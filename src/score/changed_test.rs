@@ -97,7 +97,7 @@ fn gate_failure_names_each_file_over_tolerance() {
         10,
         10,
     );
-    let msg = gate_failure(&s, 0.01, 90.0).expect("worse.rs dropped 4.9 points");
+    let msg = gate_failure(&s, 0.01, Some(90.0)).expect("worse.rs dropped 4.9 points");
     assert!(
         msg.contains("worse.rs dropped 80.00 → 75.10 (-4.9000)"),
         "{msg}"
@@ -109,19 +109,19 @@ fn gate_failure_names_each_file_over_tolerance() {
 #[test]
 fn gate_failure_ignores_new_files() {
     let s = scope(vec![file("new.rs", None, 5.0)], 0, 0);
-    assert!(gate_failure(&s, 0.0, 90.0).is_none());
+    assert!(gate_failure(&s, 0.0, Some(90.0)).is_none());
 }
 
 #[test]
 fn gate_failure_passes_when_nothing_regressed() {
     let s = scope(vec![file("a.rs", Some(80.0), 80.0)], 12, 12);
-    assert!(gate_failure(&s, 0.01, 90.0).is_none());
+    assert!(gate_failure(&s, 0.01, Some(90.0)).is_none());
 }
 
 #[test]
 fn gate_failure_catches_duplicated_lines_growth() {
     let s = scope(vec![], 120, 150);
-    let msg = gate_failure(&s, 0.01, 90.0).expect("duplicated lines grew");
+    let msg = gate_failure(&s, 0.01, Some(90.0)).expect("duplicated lines grew");
     assert!(
         msg.contains("duplicated lines grew 120 → 150 (+30)"),
         "{msg}"
@@ -131,13 +131,13 @@ fn gate_failure_catches_duplicated_lines_growth() {
 #[test]
 fn gate_failure_allows_duplicated_lines_to_shrink() {
     let s = scope(vec![], 150, 120);
-    assert!(gate_failure(&s, 0.01, 90.0).is_none());
+    assert!(gate_failure(&s, 0.01, Some(90.0)).is_none());
 }
 
 #[test]
 fn gate_failure_lists_every_reason() {
     let s = scope(vec![file("a.rs", Some(80.0), 70.0)], 0, 8);
-    let msg = gate_failure(&s, 0.01, 90.0).unwrap();
+    let msg = gate_failure(&s, 0.01, Some(90.0)).unwrap();
     assert!(
         msg.contains("a.rs dropped") && msg.contains("duplicated lines grew"),
         "{msg}"
@@ -147,13 +147,13 @@ fn gate_failure_lists_every_reason() {
 #[test]
 fn gate_failure_lets_files_above_the_baseline_drop() {
     let s = scope(vec![file("healthy.rs", Some(98.0), 92.0)], 0, 0);
-    assert!(gate_failure(&s, 0.5, 90.0).is_none());
+    assert!(gate_failure(&s, 0.5, Some(90.0)).is_none());
 }
 
 #[test]
 fn gate_failure_catches_a_file_that_falls_below_the_baseline() {
     let s = scope(vec![file("slipping.rs", Some(91.0), 89.0)], 0, 0);
-    let msg = gate_failure(&s, 0.5, 90.0).expect("ends below 90 after a 2-point drop");
+    let msg = gate_failure(&s, 0.5, Some(90.0)).expect("ends below 90 after a 2-point drop");
     assert!(msg.contains("below the project score 90.00"), "{msg}");
 }
 
@@ -161,6 +161,17 @@ fn gate_failure_catches_a_file_that_falls_below_the_baseline() {
 fn gate_failure_tolerates_a_small_drop_below_the_baseline() {
     // The #54 case: 75.2 → 75.1 in a project scoring 77.78.
     let s = scope(vec![file("currency_edit.ex", Some(75.2), 75.1)], 0, 0);
-    assert!(gate_failure(&s, 0.5, 77.78).is_none());
-    assert!(gate_failure(&s, 0.01, 77.78).is_some());
+    assert!(gate_failure(&s, 0.5, Some(77.78)).is_none());
+    assert!(gate_failure(&s, 0.01, Some(77.78)).is_some());
+}
+
+#[test]
+fn with_nothing_graded_at_the_ref_only_duplication_can_fail() {
+    let s = scope(vec![file("new.rs", None, 5.0)], 0, 0);
+    assert_eq!(gate_failure(&s, 0.01, None), None);
+    let s = scope(vec![file("new.rs", None, 5.0)], 0, 44);
+    assert_eq!(
+        gate_failure(&s, 0.01, None).as_deref(),
+        Some("quality gate failed:\n  duplicated lines grew 0 → 44 (+44)")
+    );
 }

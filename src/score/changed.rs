@@ -66,13 +66,15 @@ pub fn changed_files(
 
 /// A file fails only if it ends below `baseline`, the project score at the
 /// ref, after dropping more than `tolerance`: files above it may grow and
-/// lose points freely. New files never fail, having no earlier score.
-pub fn gate_failure(scope: &ChangedScope, tolerance: f64, baseline: f64) -> Option<String> {
+/// lose points freely. New files never fail, having no earlier score, and
+/// with nothing graded at the ref (`baseline` is `None`) no file had one.
+/// Duplicated lines are counted, not graded, so their growth always fails.
+pub fn gate_failure(scope: &ChangedScope, tolerance: f64, baseline: Option<f64>) -> Option<String> {
     let mut reasons: Vec<String> = scope
         .files
         .iter()
         .filter_map(|f| {
-            let before = f.before?;
+            let (before, baseline) = (f.before?, baseline?);
             (f.after < baseline && gate_score_worsened(before, f.after, tolerance)).then(|| {
                 format!(
                     "{} dropped {before:.2} → {:.2} ({:+.4}), below the project score \
