@@ -25,11 +25,8 @@ fn run_on_rust_file() {
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     let model = ScoringModel::Cognitive;
     let score = compute_score(&cfg, 10, 6, &model).unwrap();
-    assert!(
-        score.score > 50.0,
-        "simple code should score well, got {}",
-        score.score
-    );
+    let value = score.graded.unwrap().score;
+    assert!(value > 50.0, "simple code should score well, got {value}");
     assert_eq!(score.files_analyzed, 1);
     assert!(score.total_loc > 0);
     assert_eq!(score.dimensions.len(), 5);
@@ -47,10 +44,10 @@ fn run_on_rust_file_legacy_model() {
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     let model = ScoringModel::Legacy;
     let score = compute_score(&cfg, 10, 6, &model).unwrap();
+    let value = score.graded.unwrap().score;
     assert!(
-        score.score > 50.0,
-        "simple code should score well with legacy model, got {}",
-        score.score
+        value > 50.0,
+        "simple code should score well with legacy model, got {value}"
     );
     assert_eq!(score.files_analyzed, 1);
     assert!(score.total_loc > 0);
@@ -129,6 +126,7 @@ fn excludes_markdown_files() {
     let model = ScoringModel::Cognitive;
     let score = compute_score(&cfg, 10, 6, &model).unwrap();
     assert_eq!(score.files_analyzed, 0, "Markdown should be excluded");
+    assert_eq!(score.graded, None, "nothing to grade, no grade");
 }
 
 #[test]
@@ -144,6 +142,7 @@ fn excludes_toml_files() {
     let model = ScoringModel::Cognitive;
     let score = compute_score(&cfg, 10, 6, &model).unwrap();
     assert_eq!(score.files_analyzed, 0, "TOML should be excluded");
+    assert_eq!(score.graded, None, "nothing to grade, no grade");
 }
 
 #[test]
@@ -155,6 +154,7 @@ fn excludes_json_files() {
     let model = ScoringModel::Cognitive;
     let score = compute_score(&cfg, 10, 6, &model).unwrap();
     assert_eq!(score.files_analyzed, 0, "JSON should be excluded");
+    assert_eq!(score.graded, None, "nothing to grade, no grade");
 }
 
 #[test]
@@ -413,14 +413,11 @@ fn the_weights_up_to_v0_35_give_the_former_score() {
     }];
     let score_with = |model| {
         let dims = build_dimensions(&files, 100, 0.0, &model);
-        dims.iter().map(|d| d.weight * d.score).sum::<f64>()
+        compute_project_score(&dims).unwrap()
     };
     let dims = build_dimensions(&files, 100, 0.0, &ScoringModel::Cognitive035);
-    let former = 0.30 * dims[0].score
-        + 0.20 * dims[1].score
-        + 0.15 * dims[2].score
-        + 0.20 * dims[3].score
-        + 0.15 * dims[4].score;
+    let d = |i: usize| dims[i].graded.unwrap().score;
+    let former = 0.30 * d(0) + 0.20 * d(1) + 0.15 * d(2) + 0.20 * d(3) + 0.15 * d(4);
     assert!((score_with(ScoringModel::Cognitive035) - former).abs() < 1e-9);
     assert!(score_with(ScoringModel::Cognitive) < former);
 }
@@ -562,41 +559,97 @@ fn score_gate_fail_below_passes_when_above_threshold() {
     );
 }
 
+/// A diff between two scores, `None` for nothing to grade, through
+/// `compute_diff` as `run_diff` builds it.
+fn diff_of(before: Option<f64>, after: Option<f64>) -> diff::ScoreDiff {
+    let project = |score: Option<f64>| analyzer::ProjectScore {
+        graded: score.map(analyzer::Graded::of),
+        files_analyzed: usize::from(score.is_some()),
+        total_loc: if score.is_some() { 10 } else { 0 },
+        dimensions: vec![],
+        needs_attention: vec![],
+    };
+    diff::compute_diff("HEAD~1", &project(before), &project(after))
+}
+
+fn gate(max_drop: Option<f64>, fail_below: Option<analyzer::Grade>) -> ScoreGate {
+    ScoreGate {
+        max_drop,
+        fail_below,
+        ..ScoreGate::default()
+    }
+}
+
 #[test]
 fn score_gate_fail_below_unit() {
-    // Unit test: verify gate logic directly using ScoreDiff without a full git run.
-    let before = analyzer::score_to_grade(80.0); // B
-    let after = analyzer::score_to_grade(70.0); // C
-    let diff = diff::ScoreDiff {
-        git_ref: "HEAD".to_string(),
-        overall: diff::ScoreDelta {
-            before: 80.0,
-            after: 70.0,
-            delta: -10.0,
-        },
-        before_grade: before,
-        after_grade: after,
-        files_before: 1,
-        files_after: 1,
-        loc_before: 10,
-        loc_after: 10,
-        dimensions: vec![],
-        changed: None,
-    };
-    // Gate: fail if below B — current score is C, so should fail
-    let threshold = analyzer::Grade::B;
-    assert!(
-        diff.after_grade.numeric_rank() < threshold.numeric_rank(),
-        "C should be below B"
+    let b_to_c = diff_of(Some(80.0), Some(70.0));
+    assert_eq!(
+        gate_failure(&b_to_c, gate(None, Some(analyzer::Grade::B))).as_deref(),
+        Some("quality gate failed: score C is below minimum threshold B")
     );
-    // Gate: fail if below F-- — current score is C, should pass
-    let low_threshold = analyzer::Grade::FMinusMinus;
-    assert!(
-        diff.after_grade.numeric_rank() >= low_threshold.numeric_rank(),
-        "C should not be below F--"
+    assert_eq!(
+        gate_failure(&b_to_c, gate(None, Some(analyzer::Grade::FMinusMinus))),
+        None
     );
-    // Gate: fail-if-worse compares numeric score, not grade
-    assert!(diff.overall.delta < 0.0, "80→70 is a negative delta");
+    // fail-if-worse compares the scores, not the grades.
+    assert_eq!(
+        gate_failure(&b_to_c, gate(Some(0.01), None)).as_deref(),
+        Some(
+            "quality gate failed: score dropped 80.00 → 70.00 (-10.0000), more than the 0.01 tolerance"
+        )
+    );
+}
+
+#[test]
+fn no_gate_fails_when_there_is_nothing_to_grade() {
+    let strict = gate(Some(0.01), Some(analyzer::Grade::APlusPlus));
+    assert_eq!(gate_failure(&diff_of(None, None), strict), None);
+    // All the code deleted: nothing left to compare or to hold to a grade.
+    assert_eq!(gate_failure(&diff_of(Some(90.0), None), strict), None);
+}
+
+#[test]
+fn the_first_code_is_held_to_fail_below_only() {
+    let first_code = diff_of(None, Some(70.0));
+    assert_eq!(gate_failure(&first_code, gate(Some(0.01), None)), None);
+    assert_eq!(
+        gate_failure(&first_code, gate(Some(0.01), Some(analyzer::Grade::B))).as_deref(),
+        Some("quality gate failed: score C is below minimum threshold B")
+    );
+}
+
+#[test]
+fn skipped_gates_names_the_target_and_the_flags() {
+    let strict = gate(Some(0.01), Some(analyzer::Grade::B));
+    assert_eq!(
+        skipped_gates(&diff_of(Some(90.0), None), strict, "README.md").as_deref(),
+        Some(
+            "note: nothing to grade in README.md (no code files measured); --fail-if-worse and --fail-below skipped"
+        )
+    );
+    assert_eq!(
+        skipped_gates(&diff_of(None, Some(90.0)), strict, "src").as_deref(),
+        Some(
+            "note: nothing to grade in src at HEAD~1 (no code files measured); --fail-if-worse skipped"
+        )
+    );
+    assert_eq!(
+        skipped_gates(
+            &diff_of(None, None),
+            gate(None, Some(analyzer::Grade::B)),
+            "docs"
+        )
+        .as_deref(),
+        Some("note: nothing to grade in docs (no code files measured); --fail-below skipped")
+    );
+    assert_eq!(
+        skipped_gates(&diff_of(Some(80.0), Some(70.0)), strict, "src"),
+        None
+    );
+    assert_eq!(
+        skipped_gates(&diff_of(None, None), gate(None, None), "docs"),
+        None
+    );
 }
 
 #[test]
@@ -832,7 +885,8 @@ fn a_file_is_scored_without_its_inline_tests_when_they_are_excluded() {
     let spec = crate::loc::language::detect(&path).unwrap();
     for model in [ScoringModel::Cognitive, ScoringModel::Legacy] {
         let of = |exclude_tests| {
-            analyze_single_file(&path, spec, exclude_tests, &model)
+            collector::analyze_single_file(&path, spec, exclude_tests, &model)
+                .unwrap()
                 .unwrap()
                 .metrics
         };
@@ -840,4 +894,174 @@ fn a_file_is_scored_without_its_inline_tests_when_they_are_excluded() {
         assert_eq!(of(false).code_lines, 14);
         assert!(of(true).halstead_effort < of(false).halstead_effort);
     }
+}
+
+// ── nothing to grade ────────────────────────────────────────────────────
+
+#[test]
+fn a_target_with_nothing_to_grade_has_no_grade() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("README.md"), "# Hello\n\nWorld\n").unwrap();
+    fs::write(dir.path().join("ci.yml"), "on: [push]\njobs: {}\n").unwrap();
+    fs::write(dir.path().join("Cargo.toml"), "[package]\nname = \"x\"\n").unwrap();
+    fs::write(dir.path().join("data.json"), "{\"key\": 1}\n").unwrap();
+    fs::write(dir.path().join("empty.rs"), "").unwrap();
+    fs::write(dir.path().join("comment.rs"), "// only a comment\n").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    for (model, dimensions) in [(ScoringModel::Cognitive, 5), (ScoringModel::Legacy, 6)] {
+        let score = compute_score(&cfg, 10, 6, &model).unwrap();
+        assert_eq!(score.graded, None);
+        assert_eq!(score.files_analyzed, 0);
+        assert_eq!(score.total_loc, 0);
+        assert_eq!(score.dimensions.len(), dimensions);
+        assert!(score.dimensions.iter().all(|d| d.graded.is_none()));
+        let weights: f64 = score.dimensions.iter().map(|d| d.weight).sum();
+        assert!((weights - 1.0).abs() < 1e-9, "weights stay: {weights}");
+    }
+}
+
+#[test]
+fn an_empty_source_file_is_not_graded() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("empty.rs");
+    fs::write(&file, "").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(&file, false, &filter);
+    let score = compute_score(&cfg, 10, 6, &ScoringModel::Cognitive).unwrap();
+    assert_eq!(score.graded, None);
+}
+
+#[test]
+fn fail_below_passes_when_the_target_has_nothing_to_grade() {
+    let dir = make_git_repo_with_files(&[("README.md", "# Hi\n"), ("ci.yml", "on: [push]\n")]);
+    fs::write(dir.path().join("README.md"), "# Hi\n\nMore docs.\n").unwrap();
+    let strict = ScoreGate {
+        max_drop: Some(0.01),
+        fail_below: Some(analyzer::Grade::APlusPlus),
+        ..ScoreGate::default()
+    };
+    run_gate(dir.path(), strict).expect("a directory with no code has no grade to fail");
+    let filter = ExcludeFilter::default();
+    let readme = dir.path().join("README.md");
+    let cfg = WalkConfig::new(&readme, false, &filter);
+    run_diff(&cfg, "HEAD", OutputMode::Json, 10, 6, "cogcom", strict)
+        .expect("a README has no grade to fail");
+}
+
+#[test]
+fn deleting_all_the_code_does_not_fail_the_gates() {
+    let dir = make_git_repo_with_files(&[("lib.rs", SIMPLE_FNS), ("README.md", "# Hi\n")]);
+    fs::remove_file(dir.path().join("lib.rs")).unwrap();
+    let project = ScoreGate {
+        max_drop: Some(0.01),
+        fail_below: Some(analyzer::Grade::APlusPlus),
+        ..ScoreGate::default()
+    };
+    run_gate(dir.path(), project).expect("no code left to compare or to grade");
+    run_gate(dir.path(), changed_scope_gate()).expect("no code left to compare");
+}
+
+#[test]
+fn the_first_code_in_a_target_is_held_to_fail_below() {
+    let dir = make_git_repo_with_files(&[("README.md", "# Hi\n")]);
+    fs::write(dir.path().join("lib.rs"), NESTED_FN).unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let grade = compute_score(&cfg, 10, 6, &ScoringModel::Cognitive)
+        .unwrap()
+        .graded
+        .unwrap()
+        .grade;
+    assert!(grade.numeric_rank() < analyzer::Grade::APlusPlus.numeric_rank());
+
+    let drop_only = ScoreGate {
+        max_drop: Some(0.01),
+        ..ScoreGate::default()
+    };
+    run_gate(dir.path(), drop_only).expect("no score at the ref to drop from");
+    let strict = ScoreGate {
+        fail_below: Some(analyzer::Grade::APlusPlus),
+        ..drop_only
+    };
+    let err = run_gate(dir.path(), strict).expect_err("the new code is below A++");
+    assert_eq!(
+        err.to_string(),
+        format!("quality gate failed: score {grade} is below minimum threshold A++")
+    );
+}
+
+#[test]
+fn duplication_added_where_the_ref_had_no_code_fails_the_changed_gate() {
+    let dir = make_git_repo_with_files(&[("README.md", "# Hi\n")]);
+    fs::write(dir.path().join("a.rs"), NESTED_FN).unwrap();
+    fs::write(dir.path().join("b.rs"), NESTED_FN).unwrap();
+    let err = run_gate(dir.path(), changed_scope_gate())
+        .expect_err("the copies are duplicated lines the ref did not have");
+    assert!(
+        err.to_string()
+            .starts_with("quality gate failed:\n  duplicated lines grew 0 → "),
+        "{err}"
+    );
+}
+
+#[test]
+fn a_skipped_changed_gate_is_noted_only_when_there_is_no_code_now() {
+    let changed = |before, after| diff::ScoreDiff {
+        changed: Some(changed::ChangedScope {
+            files: vec![],
+            duplicated_lines_before: 0,
+            duplicated_lines_after: 0,
+        }),
+        ..diff_of(before, after)
+    };
+    let gate = changed_scope_gate();
+    assert_eq!(skipped_gates(&changed(None, Some(90.0)), gate, "src"), None);
+    assert_eq!(
+        skipped_gates(&changed(Some(90.0), None), gate, "src").as_deref(),
+        Some("note: nothing to grade in src (no code files measured); --fail-if-worse skipped")
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn code_that_cannot_be_read_is_an_error_not_nothing_to_grade() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("lib.rs");
+    fs::write(&file, SIMPLE_FNS).unwrap();
+    fs::set_permissions(&file, fs::Permissions::from_mode(0o000)).unwrap();
+    if fs::read(&file).is_ok() {
+        return; // running as root: the file stays readable
+    }
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let score = compute_score(&cfg, 10, 6, &ScoringModel::Cognitive);
+    fs::set_permissions(&file, fs::Permissions::from_mode(0o644)).unwrap();
+    let err = score.expect_err("a gate must not pass on a file it could not read");
+    assert_eq!(
+        err.to_string(),
+        "cannot grade: the code could not be read (unreadable files: 1)"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn an_unreadable_file_does_not_stop_the_rest_from_being_graded() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("lib.rs"), SIMPLE_FNS).unwrap();
+    let locked = dir.path().join("locked.rs");
+    fs::write(&locked, NESTED_FN).unwrap();
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o000)).unwrap();
+    if fs::read(&locked).is_ok() {
+        return; // running as root: the file stays readable
+    }
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let score = compute_score(&cfg, 10, 6, &ScoringModel::Cognitive);
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o644)).unwrap();
+    let score = score.expect("the file that can be read is graded");
+    assert_eq!(score.files_analyzed, 1);
+    assert!(score.graded.is_some());
 }

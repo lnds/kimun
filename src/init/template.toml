@@ -41,7 +41,7 @@ model = "cogcom"  # default: cogcom
 
 # CI gate: exit with code 1 if the health score falls below this grade.
 # Requires --trend. Valid grades: A++, A+, A, A-, B+, B, B-, C+, C, C-, D+, D, D-, F, F-, F--
-fail_below = "{{fail_below}}"
+{{fail_below}}
 
 # ── File age classification (km age) ─────────────────────────────────────────
 

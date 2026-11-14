@@ -42,8 +42,8 @@ use crate::git::GitRepo;
 use crate::walk::WalkConfig;
 
 use crate::cli::{GateScope, OutputMode};
-use analyzer::{FileScore, ProjectScore, compute_project_score, score_to_grade};
-use collector::{FileMetrics, analyze_single_file};
+use analyzer::{FileScore, Graded, ProjectScore, compute_project_score};
+use collector::FileMetrics;
 use report::{print_json, print_report, print_short, print_terse};
 use scoring::{build_dimensions, build_empty_dimensions, score_file};
 
@@ -208,31 +208,64 @@ pub fn run_diff(
     }
 
     // Quality gates: evaluated after output so the log is always complete.
+    if let Some(note) = skipped_gates(&score_diff, gate, &cfg.path.display().to_string()) {
+        eprintln!("{note}");
+    }
     match gate_failure(&score_diff, gate) {
         Some(msg) => Err(msg.into()),
         None => Ok(()),
     }
 }
 
+/// The gate that fails, if any. A side with nothing to grade leaves no
+/// score to compare: the project drop gate needs both, `fail_below` the
+/// current. `--gate-scope changed` needs only the current: with nothing
+/// graded at the ref it still fails when duplicated lines grow.
 fn gate_failure(score_diff: &diff::ScoreDiff, gate: ScoreGate) -> Option<String> {
-    let overall = &score_diff.overall;
+    let after = score_diff.after?;
     let drop_failure = gate
         .max_drop
         .and_then(|tolerance| match &score_diff.changed {
-            Some(scope) => changed::gate_failure(scope, tolerance, overall.before),
-            None => gate_score_worsened(overall.before, overall.after, tolerance).then(|| {
-                format_gate_error(overall.before, overall.after, overall.delta, tolerance)
-            }),
+            Some(scope) => {
+                changed::gate_failure(scope, tolerance, score_diff.before.map(|b| b.score))
+            }
+            None => {
+                let (before, delta) = (score_diff.before?.score, score_diff.delta?);
+                gate_score_worsened(before, after.score, tolerance)
+                    .then(|| format_gate_error(before, after.score, delta, tolerance))
+            }
         });
     drop_failure.or_else(|| {
-        let threshold = gate.fail_below?;
-        (score_diff.after_grade.numeric_rank() < threshold.numeric_rank()).then(|| {
-            format!(
-                "quality gate failed: score {} is below minimum threshold {}",
-                score_diff.after_grade, threshold
-            )
+        let (grade, threshold) = (after.grade, gate.fail_below?);
+        (grade.numeric_rank() < threshold.numeric_rank()).then(|| {
+            format!("quality gate failed: score {grade} is below minimum threshold {threshold}")
         })
     })
+}
+
+/// A note on the gates that [`gate_failure`] skipped for lack of anything
+/// to grade in `target`, now or at the ref, so a gate that passes for that
+/// reason says so.
+fn skipped_gates(score_diff: &diff::ScoreDiff, gate: ScoreGate, target: &str) -> Option<String> {
+    let compared = match score_diff.changed {
+        Some(_) => score_diff.after.is_some(),
+        None => score_diff.delta.is_some(),
+    };
+    let drop = gate.max_drop.is_some() && !compared;
+    let below = gate.fail_below.is_some() && score_diff.after.is_none();
+    let flags = match (drop, below) {
+        (true, true) => "--fail-if-worse and --fail-below",
+        (true, false) => "--fail-if-worse",
+        (false, true) => "--fail-below",
+        (false, false) => return None,
+    };
+    let place = match score_diff.after {
+        None => target.to_string(),
+        Some(_) => format!("{target} at {}", score_diff.git_ref),
+    };
+    Some(format!(
+        "note: nothing to grade in {place} (no code files measured); {flags} skipped"
+    ))
 }
 
 /// Walk all source files, compute per-file and project-level metrics,
@@ -276,21 +309,37 @@ pub(crate) struct Measured {
     file_metrics: Vec<FileMetrics>,
     dup_percent: f64,
     duplicated_lines: usize,
+    /// Code files that could not be read.
+    unreadable: usize,
+}
+
+impl Measured {
+    /// The measurement, unless there were code files and none could be
+    /// read: that is an error, not a target with nothing to grade, so a
+    /// gate cannot pass on it.
+    pub(crate) fn readable(self) -> Result<Self, String> {
+        if self.file_metrics.is_empty() && self.unreadable > 0 {
+            return Err(format!(
+                "cannot grade: the code could not be read (unreadable files: {})",
+                self.unreadable
+            ));
+        }
+        Ok(self)
+    }
 }
 
 /// Walk the code files and measure what `model` scores, duplication included.
+/// A caller that grades takes the result through [`Measured::readable`].
 pub(crate) fn measure(cfg: &WalkConfig<'_>, min_lines: usize, model: &ScoringModel) -> Measured {
-    let exclude_tests = cfg.exclude_tests();
     let mut file_metrics: Vec<FileMetrics> = Vec::new();
     let mut dup_files: Vec<dups::detector::NormalizedFile> = Vec::new();
     let mut total_code_lines: usize = 0;
 
-    for (file_path, spec) in cfg.code_files() {
-        if let Some(result) = analyze_single_file(&file_path, spec, exclude_tests, model) {
-            total_code_lines += result.normalized_count;
-            dup_files.push(result.dup_file);
-            file_metrics.push(result.metrics);
-        }
+    let (analyzed, unreadable) = collector::analyze_files(cfg, model);
+    for result in analyzed {
+        total_code_lines += result.normalized_count;
+        dup_files.push(result.dup_file);
+        file_metrics.push(result.metrics);
     }
 
     let dup_groups = if dup_files.is_empty() {
@@ -308,6 +357,7 @@ pub(crate) fn measure(cfg: &WalkConfig<'_>, min_lines: usize, model: &ScoringMod
         file_metrics,
         dup_percent,
         duplicated_lines,
+        unreadable,
     }
 }
 
@@ -320,11 +370,7 @@ pub(crate) fn snapshot_of(measured: &Measured, bottom: usize, model: &ScoringMod
     } else {
         build_dimensions(file_metrics, total_loc, measured.dup_percent, model)
     };
-    let project_score = if file_metrics.is_empty() {
-        0.0
-    } else {
-        compute_project_score(&dimensions)
-    };
+    let graded = compute_project_score(&dimensions).map(Graded::of);
     let mut file_scores: Vec<FileScore> =
         file_metrics.iter().map(|f| score_file(f, model)).collect();
     file_scores.sort_by(|a, b| a.score.total_cmp(&b.score));
@@ -332,8 +378,7 @@ pub(crate) fn snapshot_of(measured: &Measured, bottom: usize, model: &ScoringMod
 
     Snapshot {
         score: ProjectScore {
-            score: project_score,
-            grade: score_to_grade(project_score),
+            graded,
             files_analyzed: file_metrics.len(),
             total_loc,
             dimensions,
@@ -350,7 +395,8 @@ fn compute_snapshot(
     min_lines: usize,
     model: &ScoringModel,
 ) -> Result<Snapshot, Box<dyn Error>> {
-    Ok(snapshot_of(&measure(cfg, min_lines, model), bottom, model))
+    let measured = measure(cfg, min_lines, model).readable()?;
+    Ok(snapshot_of(&measured, bottom, model))
 }
 
 #[cfg(test)]

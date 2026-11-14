@@ -42,23 +42,58 @@ fn test_compute_project_score() {
         DimensionScore {
             name: "A",
             weight: 0.60,
-            score: 80.0,
-            grade: Grade::B,
+            graded: Some(Graded::of(80.0)),
         },
         DimensionScore {
             name: "B",
             weight: 0.40,
-            score: 60.0,
-            grade: Grade::D,
+            graded: Some(Graded::of(60.0)),
         },
     ];
-    let s = compute_project_score(&dims);
+    let s = compute_project_score(&dims).unwrap();
     assert!((s - 72.0).abs() < 0.01, "expected 72, got {s}");
 }
 
 #[test]
 fn test_compute_project_score_empty() {
-    assert!((compute_project_score(&[]) - 0.0).abs() < 0.01);
+    assert_eq!(compute_project_score(&[]), Some(0.0));
+}
+
+#[test]
+fn a_project_with_an_ungraded_dimension_has_no_score() {
+    let dims = vec![
+        DimensionScore {
+            name: "A",
+            weight: 0.60,
+            graded: Some(Graded::of(80.0)),
+        },
+        DimensionScore {
+            name: "B",
+            weight: 0.40,
+            graded: None,
+        },
+    ];
+    assert_eq!(compute_project_score(&dims), None);
+}
+
+#[test]
+fn graded_of_a_score_carries_its_grade() {
+    assert_eq!(
+        Graded::of(91.4),
+        Graded {
+            score: 91.4,
+            grade: Grade::A
+        }
+    );
+}
+
+#[test]
+fn nothing_to_grade_is_shown_as_a_dash() {
+    assert_eq!(score_text(None, 1), "-");
+    assert_eq!(grade_text(None), "-");
+    assert_eq!(score_text(Some(Graded::of(84.25)), 1), "84.2");
+    assert_eq!(score_text(Some(Graded::of(84.25)), 2), "84.25");
+    assert_eq!(grade_text(Some(Graded::of(84.25))), "B+");
 }
 
 #[test]

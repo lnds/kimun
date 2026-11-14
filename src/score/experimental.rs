@@ -7,7 +7,7 @@ use std::error::Error;
 use crate::cli::OutputMode;
 use crate::walk::WalkConfig;
 
-use super::analyzer::ProjectScore;
+use super::analyzer::{Graded, ProjectScore, grade_text, score_text};
 use super::report::{print_json_against, print_report, print_short, print_terse};
 use super::{ScoringModel, measure, snapshot_of};
 
@@ -20,14 +20,18 @@ pub fn run(
     min_lines: usize,
 ) -> Result<(), Box<dyn Error>> {
     let target = cfg.path.to_str().filter(|s| *s != ".");
-    let measured = measure(cfg, min_lines, &ScoringModel::ExperimentalMi);
+    let measured = measure(cfg, min_lines, &ScoringModel::ExperimentalMi).readable()?;
     let baseline = snapshot_of(&measured, bottom, &ScoringModel::Cognitive).score;
     let experimental = snapshot_of(&measured, bottom, &ScoringModel::ExperimentalMi).score;
     match output {
         OutputMode::Json => return print_json_against(&experimental, target, Some(&baseline)),
         OutputMode::Short => {
             print_short(&experimental);
-            println!("baseline s:{:.1} g:{}", baseline.score, baseline.grade);
+            println!(
+                "baseline s:{} g:{}",
+                score_text(baseline.graded, 1),
+                grade_text(baseline.graded)
+            );
         }
         OutputMode::Terse => print_terse(&experimental),
         OutputMode::Github | OutputMode::Codeclimate => {
@@ -41,16 +45,26 @@ pub fn run(
     Ok(())
 }
 
-/// What the experimental model changes, and how the score moves.
+/// What the experimental model changes, and how the score moves. `-`
+/// stands for nothing to grade, which leaves no move to show.
 pub fn comparison(baseline: &ProjectScore, experimental: &ProjectScore) -> String {
+    let moved = match (baseline.graded, experimental.graded) {
+        (Some(b), Some(e)) => format!(", {:+.1}", e.score - b.score),
+        _ => String::new(),
+    };
     format!(
         "\n Experimental: Maintainability Index (Visual Studio) in place of Halstead Effort.\n \
-         Default model: {} ({:.1})  \u{2192}  experimental: {} ({:.1}), {:+.1}\n",
-        baseline.grade,
-        baseline.score,
-        experimental.grade,
-        experimental.score,
-        experimental.score - baseline.score,
+         Default model: {}  \u{2192}  experimental: {}{moved}\n",
+        shown(baseline.graded),
+        shown(experimental.graded),
+    )
+}
+
+/// The grade and the score, as `B+ (83.2)`, or `-`.
+fn shown(graded: Option<Graded>) -> String {
+    graded.map_or_else(
+        || "-".to_string(),
+        |g| format!("{} ({:.1})", g.grade, g.score),
     )
 }
 

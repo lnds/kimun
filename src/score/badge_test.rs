@@ -1,9 +1,12 @@
 use super::*;
+use crate::score::analyzer::Graded;
 
 fn score(value: f64, grade: Grade) -> ProjectScore {
     ProjectScore {
-        score: value,
-        grade,
+        graded: Some(Graded {
+            score: value,
+            grade,
+        }),
         files_analyzed: 1,
         total_loc: 10,
         dimensions: Vec::new(),
@@ -13,11 +16,29 @@ fn score(value: f64, grade: Grade) -> ProjectScore {
 
 #[test]
 fn the_colour_follows_the_letter_of_the_grade() {
-    assert_eq!(colour(Grade::APlusPlus).0, "brightgreen");
-    assert_eq!(colour(Grade::BMinus).0, "green");
-    assert_eq!(colour(Grade::C).0, "yellow");
-    assert_eq!(colour(Grade::DPlus).0, "orange");
-    assert_eq!(colour(Grade::FMinusMinus).0, "red");
+    assert_eq!(colour(Some(Grade::APlusPlus)).0, "brightgreen");
+    assert_eq!(colour(Some(Grade::BMinus)).0, "green");
+    assert_eq!(colour(Some(Grade::C)).0, "yellow");
+    assert_eq!(colour(Some(Grade::DPlus)).0, "orange");
+    assert_eq!(colour(Some(Grade::FMinusMinus)).0, "red");
+    assert_eq!(colour(None).0, "lightgrey");
+}
+
+#[test]
+fn a_badge_with_nothing_to_grade_is_grey_and_says_so() {
+    let nothing = ProjectScore {
+        graded: None,
+        files_analyzed: 0,
+        total_loc: 0,
+        dimensions: Vec::new(),
+        needs_attention: Vec::new(),
+    };
+    let json: serde_json::Value = serde_json::from_str(&endpoint(&nothing).unwrap()).unwrap();
+    assert_eq!(json["message"], "not graded");
+    assert_eq!(json["color"], "lightgrey");
+    let badge = svg(&nothing);
+    assert!(badge.contains("aria-label=\"km score: not graded\""));
+    assert!(badge.contains("#9f9f9f"));
 }
 
 #[test]

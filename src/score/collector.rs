@@ -14,6 +14,7 @@ use crate::indent;
 use crate::loc::counter::LineKind;
 use crate::miv;
 use crate::util::read_and_classify;
+use crate::walk::WalkConfig;
 
 use super::ScoringModel;
 
@@ -41,21 +42,38 @@ pub struct SingleFileResult {
     pub normalized_count: usize,
 }
 
+/// Analyze every code file of `cfg`, with a warning for each one that
+/// cannot be read, as `walk::collect_analysis` does. Also returns how many
+/// those were, which tells a target whose code could not be read from one
+/// with no code.
+pub fn analyze_files(cfg: &WalkConfig<'_>, model: &ScoringModel) -> (Vec<SingleFileResult>, usize) {
+    let exclude_tests = cfg.exclude_tests();
+    let mut analyzed = Vec::new();
+    let mut unreadable = 0;
+    for (file_path, spec) in cfg.code_files() {
+        match analyze_single_file(&file_path, spec, exclude_tests, model) {
+            Ok(Some(result)) => analyzed.push(result),
+            Ok(None) => {}
+            Err(e) => {
+                eprintln!("warning: {}: {e}", file_path.display());
+                unreadable += 1;
+            }
+        }
+    }
+    (analyzed, unreadable)
+}
+
 /// Analyze a single source file: read, classify, compute metrics, normalize for dups.
-/// Returns `None` for binary files, non-code files, or on I/O errors.
+/// Returns `None` for binary files and non-code files, and the error of a
+/// file that cannot be read.
 pub fn analyze_single_file(
     file_path: &Path,
     spec: &crate::loc::language::LanguageSpec,
     exclude_tests: bool,
     model: &ScoringModel,
-) -> Option<SingleFileResult> {
-    let (lines, kinds) = match read_and_classify(file_path, spec, exclude_tests) {
-        Ok(Some(v)) => v,
-        Ok(None) => return None,
-        Err(e) => {
-            eprintln!("warning: {}: {e}", file_path.display());
-            return None;
-        }
+) -> std::io::Result<Option<SingleFileResult>> {
+    let Some((lines, kinds)) = read_and_classify(file_path, spec, exclude_tests)? else {
+        return Ok(None);
     };
 
     let code_lines = kinds.iter().filter(|k| **k == LineKind::Code).count();
@@ -109,13 +127,13 @@ pub fn analyze_single_file(
         _ => max_cognitive.is_some(),
     };
     if !has_model_metric {
-        return None;
+        return Ok(None);
     }
 
     let normalized = dups::normalize_content(&lines, &kinds);
     let normalized_count = normalized.len();
 
-    Some(SingleFileResult {
+    Ok(Some(SingleFileResult {
         metrics: FileMetrics {
             path: file_path.to_path_buf(),
             code_lines,
@@ -131,7 +149,7 @@ pub fn analyze_single_file(
             lines: normalized,
         },
         normalized_count,
-    })
+    }))
 }
 
 /// The Maintainability Index of a file, Visual Studio variant (0–100), from

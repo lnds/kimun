@@ -11,7 +11,7 @@
 //! - **Legacy** (v0.13): 6 dimensions with MI + cyclomatic complexity.
 
 use super::ScoringModel;
-use super::analyzer::{DimensionScore, FileScore, score_to_grade};
+use super::analyzer::{DimensionScore, FileScore, Graded, score_to_grade};
 use super::collector::FileMetrics;
 use super::normalize::{
     normalize_cognitive, normalize_complexity, normalize_duplication, normalize_file_size,
@@ -97,9 +97,13 @@ pub fn build_dimensions(
     }
 }
 
-/// Build dimension scores for an empty project.
+/// The dimensions of a project with nothing to grade: their names and
+/// weights, and no score.
 pub fn build_empty_dimensions(model: &ScoringModel) -> Vec<DimensionScore> {
     build_dimensions(&[], 0, 0.0, model)
+        .into_iter()
+        .map(|d| DimensionScore { graded: None, ..d })
+        .collect()
 }
 
 /// Score a single file using the active scoring model.
@@ -193,8 +197,7 @@ fn build_cognitive_dimensions(
     let dim = |name, weight, score| DimensionScore {
         name,
         weight,
-        score,
-        grade: score_to_grade(score),
+        graded: Some(Graded::of(score)),
     };
 
     vec![
@@ -285,8 +288,7 @@ fn build_legacy_dimensions(
     let dim = |name, weight, score| DimensionScore {
         name,
         weight,
-        score,
-        grade: score_to_grade(score),
+        graded: Some(Graded::of(score)),
     };
 
     vec![

@@ -45,7 +45,7 @@ fn the_baseline_from_one_measurement_is_the_default_score() {
     let measured = measure(&cfg, 6, &ScoringModel::ExperimentalMi);
     let baseline = snapshot_of(&measured, 5, &ScoringModel::Cognitive).score;
     let default = super::super::compute_score(&cfg, 5, 6, &ScoringModel::Cognitive).unwrap();
-    assert!((baseline.score - default.score).abs() < 1e-9);
+    assert_eq!(baseline.graded, default.graded);
 }
 
 #[test]
@@ -58,9 +58,10 @@ fn comparison_names_both_scores_and_the_change() {
     let experimental = snapshot_of(&measured, 5, &ScoringModel::ExperimentalMi).score;
     let text = comparison(&baseline, &experimental);
     assert!(text.contains("in place of Halstead Effort"), "{text}");
-    assert!(text.contains(&format!("{:.1}", baseline.score)), "{text}");
+    let (b, e) = (baseline.graded.unwrap(), experimental.graded.unwrap());
+    assert!(text.contains(&format!("{:.1}", b.score)), "{text}");
     assert!(
-        text.contains(&format!("{:+.1}", experimental.score - baseline.score)),
+        text.contains(&format!("{:+.1}", e.score - b.score)),
         "{text}"
     );
 }
@@ -91,5 +92,22 @@ fn the_mi_dimension_counts_each_file_once() {
         .unwrap();
     // Weighted by lines the large file would dominate; per file the four
     // small files hold four fifths of the mean.
-    assert!(mi.score > 70.0, "{}", mi.score);
+    let mi = mi.graded.unwrap().score;
+    assert!(mi > 70.0, "{mi}");
+}
+
+#[test]
+fn the_comparison_of_nothing_to_grade_shows_dashes() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("README.md"), "# Notes\n\nSome text.\n").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let measured = measure(&cfg, 6, &ScoringModel::ExperimentalMi);
+    let baseline = snapshot_of(&measured, 5, &ScoringModel::Cognitive).score;
+    let experimental = snapshot_of(&measured, 5, &ScoringModel::ExperimentalMi).score;
+    assert_eq!(
+        comparison(&baseline, &experimental),
+        "\n Experimental: Maintainability Index (Visual Studio) in place of Halstead Effort.\n \
+         Default model: -  \u{2192}  experimental: -\n"
+    );
 }

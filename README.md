@@ -1407,6 +1407,10 @@ There are three scoring models: `cogcom`, the default, built on Cognitive Comple
 
 Non-code files (Markdown, TOML, JSON, etc.) are automatically excluded. Inline test blocks (`#[cfg(test)]`) are excluded from every dimension, see [Inline tests](#inline-tests).
 
+A target with nothing to grade, no code files (a README, a config file, an empty source file), gets no grade rather than F--: the report says there is nothing to grade and shows `-` for the score, the grade and every dimension, `--format json` gives `null` for `score` and `grade` and keeps every key, `--format terse` prints `-`, and the badge is grey and says `not graded`. If there are code files but none can be read, that is an error, not nothing to grade.
+
+With `--trend`, a gate with nothing to compare passes, and says so on stderr (`note: nothing to grade in README.md (no code files measured); --fail-below skipped`): `--fail-below` when there is nothing to grade now, `--fail-if-worse` when there is nothing to grade now or at the ref. With `--gate-scope changed`, duplicated lines are still compared when the ref had no code, since they are counted, not graded. So a gate that checks each changed path does not fail on documentation, and deleting all the code under a path does not fail `--fail-if-worse`.
+
 ```bash
 km score [path]
 km score --model cogcom-0.35 [path]  # the weights up to v0.35
@@ -1472,10 +1476,10 @@ Options:
 | `--model MODEL` | Scoring model: `cogcom` (default), `cogcom-0.35` (the weights up to v0.35) or `legacy` (MI + cyclomatic) |
 | `--experimental` | Score with the Maintainability Index in place of Halstead Effort, against the default model |
 | `--trend [REF]` | Compare current score against a git ref (default: `HEAD`). Shows change: `B- → B (+2.3)`. Useful for PR review: `--trend origin/main` |
-| `--fail-if-worse` | With `--trend`: exit with code 1 if the score dropped by more than `--gate-tolerance` |
+| `--fail-if-worse` | With `--trend`: exit with code 1 if the score dropped by more than `--gate-tolerance`. Passes, with a note, when there is nothing to grade now or at the ref (with `--gate-scope changed`, duplicated lines are still compared when only the ref has nothing to grade) |
 | `--gate-tolerance POINTS` | Score drop `--fail-if-worse` allows before failing (default: `0.01` with `--gate-scope project`, `0.5` with `--gate-scope changed`). Compares unrounded scores |
 | `--gate-scope {project,changed}` | What `--fail-if-worse` compares (default: `project`, the aggregate score). `changed` looks only at the files the diff touches: it fails if a modified or renamed file ends below the project score at the ref after dropping more than `--gate-tolerance`, or if the project's duplicated lines grow. Files above the project score, new files and deleted files never fail it, so removing healthy code cannot lower the verdict. The report lists every changed file with its before/after score |
-| `--fail-below GRADE` | With `--trend`: exit with code 1 if the score is below `GRADE` (e.g. `B-`). Overridable via `.kimun.toml` |
+| `--fail-below GRADE` | With `--trend`: exit with code 1 if the score is below `GRADE` (e.g. `B-`). Passes, with a note, when there is nothing to grade. Overridable via `.kimun.toml` |
 | `--badge FILE` | Write a badge of the score: an SVG, or the JSON of a shields.io endpoint badge when `FILE` ends in `.json` (see [Badge](#badge)) |
 | `--format {table,json,short,terse}` | Output format (default: table) |
 | `--include-tests` | Include tests, examples and benchmarks in analysis (excluded by default) |
@@ -1519,7 +1523,7 @@ Code Health Score
 
 #### Badge
 
-`--badge FILE` writes a badge of the score for a README, besides the report: a self-contained SVG in the flat style of shields.io, coloured by the letter of the grade (A green, B light green, C yellow, D orange, F red), or, when `FILE` ends in `.json`, the JSON of a [shields.io endpoint badge](https://shields.io/badges/endpoint-badge).
+`--badge FILE` writes a badge of the score for a README, besides the report: a self-contained SVG in the flat style of shields.io, coloured by the letter of the grade (A green, B light green, C yellow, D orange, F red; grey, `not graded`, when there is nothing to grade), or, when `FILE` ends in `.json`, the JSON of a [shields.io endpoint badge](https://shields.io/badges/endpoint-badge).
 
 ```bash
 km score --badge .github/km-score.svg
