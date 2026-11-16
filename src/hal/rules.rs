@@ -667,6 +667,185 @@ pub static PASCAL: TokenRules = TokenRules {
     ],
 };
 
+/// Lua tokenization rules.
+///
+/// `do`, `then` and `end` delimit blocks, as `do`/`end` do in Ruby, so they
+/// are operators; `function` and `local` declare and are ignored. `~=` is
+/// inequality, `..` concatenation, `#` length and `//` floor division.
+pub static LUA: TokenRules = TokenRules {
+    operator_keywords: &[
+        "if", "then", "elseif", "else", "for", "while", "repeat", "until", "do", "end", "return",
+        "break", "goto", "and", "or", "not", "in",
+    ],
+    operator_symbols: &[
+        "...", "..", "==", "~=", "<=", ">=", "//", "<<", ">>", "::", "+", "-", "*", "/", "%", "^",
+        "#", "&", "~", "|", "<", ">", "=", ";", ",", ".", ":", "(", ")", "[", "]", "{", "}",
+    ],
+    ignored_keywords: &["function", "local"],
+};
+
+/// Perl tokenization rules.
+///
+/// The sigils `$` and `@` are operators, as `$` is in shell: they access a
+/// variable. `%` is both the hash sigil and modulo. The word operators
+/// (`eq`, `lt`, `cmp`, `and`, ...) compute, and `die` and `eval` leave or
+/// guard the normal flow. `x` is left out: it is as often a variable name.
+/// Declarations (`sub`, `my`, `package`, `use`, ...) are ignored.
+pub static PERL: TokenRules = TokenRules {
+    operator_keywords: &[
+        "if", "elsif", "else", "unless", "while", "until", "for", "foreach", "do", "last", "next",
+        "redo", "goto", "return", "die", "eval", "and", "or", "not", "xor", "eq", "ne", "lt", "gt",
+        "le", "ge", "cmp",
+    ],
+    operator_symbols: &[
+        "<=>", "**=", "||=", "&&=", "//=", "<<=", ">>=", "...", "->", "=>", "=~", "!~", "==", "!=",
+        "<=", ">=", "&&", "||", "//", "**", "++", "--", "+=", "-=", "*=", "/=", ".=", "%=", "|=",
+        "&=", "^=", "<<", ">>", "::", "..", "+", "-", "*", "/", "%", "&", "|", "^", "~", "!", "<",
+        ">", "=", ";", ",", ".", ":", "(", ")", "[", "]", "{", "}", "?", "$", "@", "\\",
+    ],
+    ignored_keywords: &[
+        "sub", "my", "our", "local", "use", "no", "package", "require", "BEGIN", "END",
+    ],
+};
+
+/// Scala tokenization rules (Scala 2 and 3).
+///
+/// `match` and `case` are pattern-matching control flow, `yield` gives the
+/// value of a `for`, and `new` builds an object, so all are operators.
+/// `with` mixes in a trait, a declaration, and is ignored with the other
+/// declarations and modifiers. `<-` binds in a `for`, `<:` and `>:` bound a
+/// type.
+pub static SCALA: TokenRules = TokenRules {
+    operator_keywords: &[
+        "if", "then", "else", "match", "case", "for", "while", "do", "yield", "return", "throw",
+        "try", "catch", "finally", "new",
+    ],
+    operator_symbols: &[
+        ">>>", "<<=", ">>=", "=>", "<-", "->", "<:", ">:", "::", "++", "+=", "-=", "*=", "/=",
+        "%=", "&=", "|=", "^=", "==", "!=", "<=", ">=", "&&", "||", "<<", ">>", "+", "-", "*", "/",
+        "%", "&", "|", "^", "~", "!", "<", ">", "=", ";", ",", ".", ":", "(", ")", "[", "]", "{",
+        "}", "@", "#",
+    ],
+    ignored_keywords: &[
+        "def",
+        "val",
+        "var",
+        "lazy",
+        "class",
+        "object",
+        "trait",
+        "enum",
+        "extends",
+        "with",
+        "type",
+        "import",
+        "package",
+        "private",
+        "protected",
+        "override",
+        "abstract",
+        "final",
+        "sealed",
+        "implicit",
+        "given",
+        "using",
+        "extension",
+        "export",
+        "Any",
+        "AnyRef",
+        "Boolean",
+        "Byte",
+        "Char",
+        "Double",
+        "Float",
+        "Int",
+        "Long",
+        "Nothing",
+        "Short",
+        "String",
+        "Unit",
+    ],
+};
+
+/// Zig tokenization rules.
+///
+/// `defer` and `errdefer` schedule code, `try`, `catch` and `orelse`
+/// handle errors and nulls, and `unreachable` ends a path: all control
+/// flow. The wrapping (`+%`) and saturating (`+|`) arithmetic, `++`
+/// concatenation, `**` repetition, `.*` dereference and `.?` unwrapping
+/// are operators. `@` calls a builtin. Declarations, `comptime`, `async`
+/// and type names are ignored.
+pub static ZIG: TokenRules = TokenRules {
+    operator_keywords: &[
+        "if",
+        "else",
+        "switch",
+        "while",
+        "for",
+        "return",
+        "break",
+        "continue",
+        "defer",
+        "errdefer",
+        "try",
+        "catch",
+        "orelse",
+        "and",
+        "or",
+        "unreachable",
+        "suspend",
+        "resume",
+    ],
+    operator_symbols: &[
+        "<<=", ">>=", "+%=", "-%=", "*%=", "+|=", "-|=", "*|=", "...", "**", "++", "+%", "-%",
+        "*%", "+|", "-|", "*|", "=>", "==", "!=", "<=", ">=", "<<", ">>", "+=", "-=", "*=", "/=",
+        "%=", "&=", "|=", "^=", "..", ".*", ".?", "||", "+", "-", "*", "/", "%", "&", "|", "^",
+        "~", "!", "<", ">", "=", ";", ",", ".", ":", "(", ")", "[", "]", "{", "}", "?", "@",
+    ],
+    ignored_keywords: &[
+        "fn",
+        "const",
+        "var",
+        "pub",
+        "extern",
+        "export",
+        "inline",
+        "comptime",
+        "struct",
+        "enum",
+        "union",
+        "error",
+        "packed",
+        "threadlocal",
+        "usingnamespace",
+        "test",
+        "async",
+        "await",
+        "anytype",
+        "type",
+        "void",
+        "bool",
+        "noreturn",
+        "anyerror",
+        "i8",
+        "i16",
+        "i32",
+        "i64",
+        "i128",
+        "isize",
+        "u8",
+        "u16",
+        "u32",
+        "u64",
+        "u128",
+        "usize",
+        "f16",
+        "f32",
+        "f64",
+        "f128",
+    ],
+};
+
 /// Look up the tokenization rules for a language by name.
 /// Returns `None` for unsupported languages (no Halstead analysis available).
 pub fn rules_for(language: &str) -> Option<&'static TokenRules> {
@@ -684,6 +863,10 @@ pub fn rules_for(language: &str) -> Option<&'static TokenRules> {
         "Elixir" | "Elixir Script" => Some(&ELIXIR),
         name if is_fortran(name) => Some(&FORTRAN),
         "Pascal" => Some(&PASCAL),
+        "Lua" => Some(&LUA),
+        "Perl" => Some(&PERL),
+        "Scala" => Some(&SCALA),
+        "Zig" => Some(&ZIG),
         _ => None,
     }
 }
