@@ -1,3 +1,26 @@
+## v0.47.0 (2026-11-16)
+
+### Notes
+
+- Scores move. Cyclomatic and cognitive complexity now follow the same rules in every language, and comments and strings are read as each language writes them, so `km cycom`, `km cogcom`, `km loc` and `km score` give different numbers than 0.46 on the same code. Compare a project against itself measured with the same version.
+- A target with nothing to grade has no grade: `-` in the table, short and terse formats, `null` for `score` and `grade` in JSON, where it was `F--` and `0.0`.
+- The Linux binaries are linked against glibc 2.17, so they run on older distributions.
+
+### Fix
+
+- **score**: a target with nothing to grade gets no grade, not F--
+- **cogcom**: follow the SonarSource rules the audit found missing
+- **cycom**: the same construct counts the same in every language
+- **loc**: strings read as each language writes them, across lines too
+- **detection**: a type is never a function, and code outside functions is measured
+- **git**: owners tie the same way on every run, and tc counts both sides alike
+- **analyzers**: comments and literals read by the rules of each language
+- **detection**: an indented function keeps its body after a signature on several lines
+
+### Refactor
+
+- **detection**: bracket balance and body test in functions of their own
+
 ## v0.46.1 (2026-11-04)
 
 ### Fix
