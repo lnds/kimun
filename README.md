@@ -288,6 +288,8 @@ km hal [path]
 
 Higher effort, volume, and bugs indicate more complex and error-prone code.
 
+Languages with Halstead rules: Rust, Python, JavaScript, JSX, TypeScript, Go, C, C++, C#, Java, Objective-C, PHP, Dart, Ruby, Kotlin, Swift, shell (sh, Bash, Zsh), Kaikai, Elixir, Fortran, Pascal, Lua, Perl, Scala and Zig. Files in other languages have no Halstead metrics.
+
 In TypeScript, declarations that run nothing (`interface`, `type` aliases, `import type`, `export type { … }`, `declare`) are left out: a file of types alone has no Halstead metrics, so it does not reach `km miv` or the Halstead dimension of `km score`.
 
 Options:

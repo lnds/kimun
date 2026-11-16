@@ -130,6 +130,14 @@ fn operator_symbols_sorted_longest_first() {
         "Kotlin",
         "Swift",
         "Bourne Shell",
+        "Kaikai",
+        "Elixir",
+        "Fortran 90",
+        "Pascal",
+        "Lua",
+        "Perl",
+        "Scala",
+        "Zig",
     ];
     for lang in &languages {
         let rules = rules_for(lang).unwrap();
@@ -249,4 +257,86 @@ fn kaikai_coalesce_each_pipe_and_reference_are_operators() {
     }
     assert!(!counts.distinct_operators.contains("|"));
     assert!(!counts.distinct_operators.contains("?"));
+}
+
+/// Each line of `code` read with the rules of `lang`: the operators and
+/// operands it must find, and the declarations it must skip.
+fn assert_tokens(lang: &str, code: &[&str], comments: &[&str], ops: &[&str], skipped: &[&str]) {
+    let rules = rules_for(lang).unwrap();
+    let counts = count_tokens(code, rules, comments);
+    for op in ops {
+        assert!(counts.distinct_operators.contains(*op), "{lang}: {op}");
+    }
+    for word in skipped {
+        assert!(!counts.distinct_operators.contains(*word), "{lang}: {word}");
+        assert!(!counts.distinct_operands.contains(*word), "{lang}: {word}");
+    }
+    assert!(counts.total_operands > 0, "{lang} has operands");
+}
+
+#[test]
+fn lua_blocks_concatenation_and_inequality() {
+    let code = [
+        "local function add(a, b)",
+        "  if a ~= b then return a .. b // 2 end",
+        "  return #a",
+        "end",
+    ];
+    let ops = ["if", "then", "end", "return", "~=", "..", "//", "#"];
+    assert_tokens("Lua", &code, &["--"], &ops, &["local", "function"]);
+}
+
+#[test]
+fn perl_sigils_and_word_operators() {
+    let code = [
+        "sub total {",
+        "  my ($x, @rest) = @_;",
+        "  return $x <=> $y if $s eq 'a' and $x =~ m;",
+        "}",
+    ];
+    let ops = ["$", "@", "<=>", "eq", "and", "=~", "if", "return"];
+    assert_tokens("Perl", &code, &["#"], &ops, &["sub", "my"]);
+    let counts = count_tokens(&["my $x = 1;"], rules_for("Perl").unwrap(), &["#"]);
+    assert!(counts.distinct_operands.contains("x"), "x is a variable");
+}
+
+#[test]
+fn scala_match_for_and_mixins() {
+    let code = [
+        "class A extends B with C {",
+        "  def f(xs: List[Int]): Int = xs match {",
+        "    case h :: t => for (x <- t) yield x + h",
+        "  }",
+        "}",
+    ];
+    let ops = ["match", "case", "::", "=>", "<-", "for", "yield"];
+    assert_tokens(
+        "Scala",
+        &code,
+        &["//"],
+        &ops,
+        &["def", "class", "with", "Int"],
+    );
+}
+
+#[test]
+fn zig_error_handling_and_wrapping_arithmetic() {
+    let code = [
+        "pub fn next(self: *Iter) !u32 {",
+        "    defer self.i +%= 1;",
+        "    const v = try self.read() orelse unreachable;",
+        "    return v.* ++ @as(u32, 1);",
+        "}",
+    ];
+    let ops = [
+        "defer",
+        "+%=",
+        "try",
+        "orelse",
+        "unreachable",
+        ".*",
+        "++",
+        "@",
+    ];
+    assert_tokens("Zig", &code, &["//"], &ops, &["pub", "fn", "const", "u32"]);
 }
