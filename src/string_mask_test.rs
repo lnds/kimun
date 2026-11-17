@@ -1,5 +1,5 @@
 use super::*;
-use crate::loc::language::detect;
+use crate::lang::language::detect;
 
 #[test]
 fn mask_python() {
@@ -194,7 +194,7 @@ fn starts_in_string_without_triple_quotes() {
 fn view(file: &str, src: &str) -> (Vec<String>, Vec<LineKind>) {
     let spec = detect(std::path::Path::new(file)).unwrap();
     let lines: Vec<String> = src.lines().map(String::from).collect();
-    let kinds = crate::loc::counter::classify_reader(src.as_bytes(), spec);
+    let kinds = crate::lang::counter::classify_reader(src.as_bytes(), spec);
     let (lines, kinds) = code_view(&lines, &kinds, spec);
     (lines.into_owned(), kinds)
 }

@@ -14,8 +14,8 @@ use std::path::Path;
 
 use crate::case_fold;
 use crate::cli::OutputMode;
-use crate::loc::counter::LineKind;
-use crate::loc::language::LanguageSpec;
+use crate::lang::counter::LineKind;
+use crate::lang::language::LanguageSpec;
 use crate::string_mask::code_view;
 use crate::util::read_and_classify;
 use crate::walk::WalkConfig;

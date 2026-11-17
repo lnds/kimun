@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::{self, BufRead, BufReader};
+use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
 
 use super::fsm::{
@@ -9,7 +9,15 @@ use super::fsm::{
 use super::language::LanguageSpec;
 use super::literals::heredoc::{Heredoc, terminator_end};
 use super::literals::syntax::Syntax;
-use crate::util::is_binary_reader;
+
+/// Check whether a reader points to a binary file by looking for null bytes
+/// in the first 512 bytes. Resets the reader position to the start afterward.
+pub fn is_binary_reader<R: Read + Seek>(reader: &mut R) -> io::Result<bool> {
+    let mut header = [0u8; 512];
+    let n = reader.read(&mut header)?;
+    reader.seek(SeekFrom::Start(0))?;
+    Ok(header[..n].contains(&0))
+}
 
 #[derive(Debug, Default, Clone)]
 pub struct FileStats {

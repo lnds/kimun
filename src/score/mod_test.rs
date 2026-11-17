@@ -882,7 +882,7 @@ fn changed_scope_maps_paths_when_analyzing_a_subdirectory() {
 #[test]
 fn a_file_is_scored_without_its_inline_tests_when_they_are_excluded() {
     let (_dir, path) = crate::test_blocks::tests::source_with_test_module();
-    let spec = crate::loc::language::detect(&path).unwrap();
+    let spec = crate::lang::language::detect(&path).unwrap();
     for model in [ScoringModel::Cognitive, ScoringModel::Legacy] {
         let of = |exclude_tests| {
             collector::analyze_single_file(&path, spec, exclude_tests, &model)

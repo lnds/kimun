@@ -7,7 +7,7 @@
 //! of their crate; `crates` resolves the paths against that tree. Nothing
 //! is expanded: what a macro generates or names is not seen.
 
-use super::rust_literals::code_and_strings;
+use crate::rust_literals::code_and_strings;
 
 /// A `mod` declaration.
 #[derive(Debug, Clone, PartialEq)]

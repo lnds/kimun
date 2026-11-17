@@ -10,12 +10,12 @@
 
 mod cursor;
 
-use crate::loc::language::LanguageSpec;
-use crate::loc::literals::character_len;
-use crate::loc::literals::heredoc::{self, Heredoc, terminator_end};
-use crate::loc::literals::openers::{Delimited, Literal, opener_at};
-use crate::loc::literals::regex::{regex_end, value_may_start};
-use crate::loc::literals::syntax::Syntax;
+use crate::lang::language::LanguageSpec;
+use crate::lang::literals::character_len;
+use crate::lang::literals::heredoc::{self, Heredoc, terminator_end};
+use crate::lang::literals::openers::{Delimited, Literal, opener_at};
+use crate::lang::literals::regex::{regex_end, value_may_start};
+use crate::lang::literals::syntax::Syntax;
 use cursor::Cursor;
 
 /// A line as code: its text, whether code is left on it, whether a

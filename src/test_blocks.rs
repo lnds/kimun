@@ -6,9 +6,9 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use crate::deps::rust_literals::code_and_strings;
-use crate::loc::counter::LineKind;
-use crate::loc::language::LanguageSpec;
+use crate::lang::counter::LineKind;
+use crate::lang::language::LanguageSpec;
+use crate::rust_literals::code_and_strings;
 
 const ATTRIBUTE: &str = "#[cfg(test)]";
 

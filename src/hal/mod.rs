@@ -13,8 +13,8 @@ mod type_decls;
 use std::error::Error;
 use std::path::Path;
 
-use crate::loc::counter::LineKind;
-use crate::loc::language::LanguageSpec;
+use crate::lang::counter::LineKind;
+use crate::lang::language::LanguageSpec;
 use crate::report_helpers;
 use crate::string_mask::{code_view, multi_line_string_mask};
 use crate::util::read_and_classify;

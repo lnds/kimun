@@ -17,7 +17,7 @@ use super::structural::Structural;
 /// Whether a file outside a change may hold a copy of its values: one of a
 /// known language, not a document nor a generated file.
 fn may_hold_copies(path: &Path) -> bool {
-    crate::loc::language::detect(path)
+    crate::lang::language::detect(path)
         .is_some_and(|spec| crate::kind::Kind::by_name(path, spec) != crate::kind::Kind::Docs)
         && !is_generated(path)
 }

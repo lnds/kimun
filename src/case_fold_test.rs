@@ -1,5 +1,5 @@
 use super::*;
-use crate::loc::language::detect;
+use crate::lang::language::detect;
 use std::path::Path;
 
 fn fold(file: &str, lines: &[&str]) -> Vec<String> {

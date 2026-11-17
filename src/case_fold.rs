@@ -4,7 +4,7 @@
 //! Lines keep their length, byte for byte, so a name found in a folded line
 //! is at the same place in the line as written.
 
-use crate::loc::language::{LanguageSpec, is_fortran};
+use crate::lang::language::{LanguageSpec, is_fortran};
 
 /// Constructs Fortran closes with `end` and their keyword, which may be
 /// written apart (`end if`) or together (`endif`).

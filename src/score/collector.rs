@@ -11,7 +11,7 @@ use crate::cycom;
 use crate::dups;
 use crate::hal;
 use crate::indent;
-use crate::loc::counter::LineKind;
+use crate::lang::counter::LineKind;
 use crate::miv;
 use crate::util::read_and_classify;
 use crate::walk::WalkConfig;
@@ -68,7 +68,7 @@ pub fn analyze_files(cfg: &WalkConfig<'_>, model: &ScoringModel) -> (Vec<SingleF
 /// file that cannot be read.
 pub fn analyze_single_file(
     file_path: &Path,
-    spec: &crate::loc::language::LanguageSpec,
+    spec: &crate::lang::language::LanguageSpec,
     exclude_tests: bool,
     model: &ScoringModel,
 ) -> std::io::Result<Option<SingleFileResult>> {
@@ -157,7 +157,7 @@ pub fn analyze_single_file(
 fn vs_maintainability(
     lines: &[String],
     kinds: &[LineKind],
-    spec: &crate::loc::language::LanguageSpec,
+    spec: &crate::lang::language::LanguageSpec,
     volume: Option<f64>,
     code_lines: usize,
 ) -> Option<f64> {

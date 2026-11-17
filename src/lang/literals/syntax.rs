@@ -1,7 +1,7 @@
 //! How each language writes its literals and comments, beyond what
 //! `LanguageSpec` declares for counting lines.
 
-use crate::loc::language::LanguageSpec;
+use crate::lang::language::LanguageSpec;
 
 /// What a backtick opens.
 #[derive(Clone, Copy, PartialEq, Debug)]

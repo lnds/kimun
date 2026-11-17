@@ -51,7 +51,7 @@ fn text_lines(file_path: &Path) -> Result<Option<usize>, Box<dyn Error>> {
 /// Returns None if the file cannot be analyzed.
 fn compute_complexity(
     file_path: &Path,
-    spec: &crate::loc::language::LanguageSpec,
+    spec: &crate::lang::language::LanguageSpec,
     metric: &str,
     exclude_tests: bool,
 ) -> Result<Option<usize>, Box<dyn Error>> {

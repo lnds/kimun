@@ -1,7 +1,7 @@
 //! The magic_number smell: a bare numeric literal in logic, rather than the
 //! value of something named.
 
-use crate::loc::counter::LineKind;
+use crate::lang::counter::LineKind;
 use crate::util::mask_strings;
 
 use super::analyzer::{SmellInstance, SmellKind};

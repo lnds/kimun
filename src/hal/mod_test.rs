@@ -173,7 +173,7 @@ fn run_sort_by_bugs_two_files() {
 
 #[test]
 fn analyze_file_returns_none_for_unsupported_language() {
-    use crate::loc::language::detect;
+    use crate::lang::language::detect;
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("data.json");
     fs::write(&path, "{\"key\": \"value\"}\n").unwrap();
@@ -187,7 +187,7 @@ fn analyze_file_returns_none_for_unsupported_language() {
 
 #[test]
 fn analyze_file_returns_none_for_comment_only_file() {
-    use crate::loc::language::detect;
+    use crate::lang::language::detect;
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("comments_only.rs");
     fs::write(&path, "// just a comment\n// another comment\n").unwrap();
@@ -220,7 +220,7 @@ fn run_terse_format() {
 #[test]
 fn analyze_file_leaves_inline_tests_out_when_they_are_excluded() {
     let (_dir, path) = crate::test_blocks::tests::source_with_test_module();
-    let spec = crate::loc::language::detect(&path).unwrap();
+    let spec = crate::lang::language::detect(&path).unwrap();
     let production = analyze_file(&path, spec, true).unwrap().unwrap();
     let everything = analyze_file(&path, spec, false).unwrap().unwrap();
     assert!(production.metrics.volume < everything.metrics.volume);
@@ -228,7 +228,7 @@ fn analyze_file_leaves_inline_tests_out_when_they_are_excluded() {
 
 #[test]
 fn elixir_docs_and_heredocs_not_tokenized() {
-    use crate::loc::language::detect;
+    use crate::lang::language::detect;
     let dir = tempfile::tempdir().unwrap();
     let code =
         "defmodule A do\n  def run(x) do\n    if x > 0, do: x |> inc(), else: 0\n  end\nend\n";
@@ -250,7 +250,7 @@ fn elixir_docs_and_heredocs_not_tokenized() {
 
 #[test]
 fn case_insensitive_languages_are_tokenized_in_any_case() {
-    use crate::loc::language::detect;
+    use crate::lang::language::detect;
     let dir = tempfile::tempdir().unwrap();
     let analyze = |name: &str, text: &str| {
         let path = dir.path().join(name);
@@ -271,7 +271,7 @@ fn case_insensitive_languages_are_tokenized_in_any_case() {
 
 #[test]
 fn pascal_has_halstead_rules() {
-    use crate::loc::language::detect;
+    use crate::lang::language::detect;
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("a.pas");
     fs::write(&path, "begin\n  X := Y div 2;\nend.\n").unwrap();

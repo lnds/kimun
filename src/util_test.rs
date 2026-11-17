@@ -70,7 +70,7 @@ fn mask_strings_comment_marker_inside_string() {
 #[test]
 fn read_and_classify_blanks_inline_tests_when_they_are_excluded() {
     let (_dir, path) = crate::test_blocks::tests::source_with_test_module();
-    let spec = crate::loc::language::detect(&path).unwrap();
+    let spec = crate::lang::language::detect(&path).unwrap();
     let code = |exclude_tests| {
         let (lines, kinds) = read_and_classify(&path, spec, exclude_tests)
             .unwrap()

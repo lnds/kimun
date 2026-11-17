@@ -18,7 +18,7 @@
 /// (type cast — a computation) but ignored in Python (aliasing — a
 /// declaration). Each language's doc comment explains such distinctions.
 use super::tokenizer::TokenRules;
-use crate::loc::language::is_fortran;
+use crate::lang::language::is_fortran;
 
 // ── Language rules ──────────────────────────────────────────────────────
 

@@ -198,7 +198,7 @@ fn run_github_format() {
 #[test]
 fn analyze_file_leaves_inline_tests_out_when_they_are_excluded() {
     let (_dir, path) = crate::test_blocks::tests::source_with_test_module();
-    let spec = crate::loc::language::detect(&path).unwrap();
+    let spec = crate::lang::language::detect(&path).unwrap();
     let production = analyze_file(&path, spec, true).unwrap().unwrap();
     let everything = analyze_file(&path, spec, false).unwrap().unwrap();
     assert_eq!(production.function_count, 1);
@@ -228,7 +228,7 @@ fn real(n: u32) -> u32 {
 }
 ";
     fs::write(&path, src).unwrap();
-    let spec = crate::loc::language::detect(&path).unwrap();
+    let spec = crate::lang::language::detect(&path).unwrap();
     let file = analyze_file(&path, spec, true).unwrap().unwrap();
     let found: Vec<(&str, usize)> = file
         .functions
@@ -240,7 +240,7 @@ fn real(n: u32) -> u32 {
 
 #[test]
 fn case_insensitive_languages_count_keywords_in_any_case_and_keep_names() {
-    use crate::loc::language::detect;
+    use crate::lang::language::detect;
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("u.pas");
     fs::write(
@@ -259,7 +259,7 @@ fn case_insensitive_languages_count_keywords_in_any_case_and_keep_names() {
 
 #[test]
 fn fortran_ends_of_constructs_are_no_branches() {
-    use crate::loc::language::detect;
+    use crate::lang::language::detect;
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("s.f90");
     fs::write(
@@ -281,7 +281,7 @@ fn complexities(name: &str, src: &str) -> Vec<(String, usize)> {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join(name);
     fs::write(&path, src).unwrap();
-    let spec = crate::loc::language::detect(&path).unwrap();
+    let spec = crate::lang::language::detect(&path).unwrap();
     let file = analyze_file(&path, spec, true).unwrap().unwrap();
     file.functions
         .iter()

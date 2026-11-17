@@ -51,7 +51,6 @@ mod ruby_files;
 mod ruby_literals;
 mod rust;
 mod rust_crates;
-pub(crate) mod rust_literals;
 mod terraform;
 mod types;
 

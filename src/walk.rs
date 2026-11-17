@@ -13,7 +13,7 @@ use globset::{Glob, GlobSet, GlobSetBuilder};
 use ignore::WalkBuilder;
 
 use crate::kind::{Kind, Selection};
-use crate::loc::language::{LanguageSpec, detect_by_shebang, detect_file};
+use crate::lang::language::{LanguageSpec, detect_by_shebang, detect_file};
 use crate::test_blocks::rust_test_modules;
 use crate::util::is_generated_file;
 

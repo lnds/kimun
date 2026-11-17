@@ -1,7 +1,7 @@
 use serde::Serialize;
 
 use super::structure::structural_depths;
-use crate::loc::counter::LineKind;
+use crate::lang::counter::LineKind;
 
 /// Qualitative complexity classification based on indentation stddev
 /// measured in logical indentation levels (4 spaces = 1 level).

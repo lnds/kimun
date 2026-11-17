@@ -310,7 +310,7 @@ fn run_terse_format() {
 #[test]
 fn inline_tests_stay_in_the_line_counts_and_out_of_the_metrics() {
     let (_dir, path) = crate::test_blocks::tests::source_with_test_module();
-    let spec = crate::loc::language::detect(&path).unwrap();
+    let spec = crate::lang::language::detect(&path).unwrap();
     let production = analyzer::analyze_file_for_report(&path, spec, true).unwrap();
     let everything = analyzer::analyze_file_for_report(&path, spec, false).unwrap();
     assert_eq!(production.code_lines, 14);
