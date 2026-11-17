@@ -222,7 +222,7 @@ Dependency graph (file-level coupling from imports, cycles via Tarjan SCC). Invo
 - **`markdown.rs`** — Markdown documents, read only when `--kind docs` is chosen: each links to what `docs::links::Notes` resolves its links and wikilinks to; a broken link is unresolved.
 - **`kaikai.rs`** — Kaikai extraction and resolution: `import a.b.c` names a file under a package root, found by trying each ancestor directory of the importer; a package directory (`kai.toml`) names the file of its name, or every file in it when it has none. Each file is a module and the files of a package import each other, so they have no edges besides their imports (unlike Go).
 - **`edges.rs`** — The file-level edges, kept in `DepResult.edges` (sorted, with their `EdgeKind`); the JSON lists those that leave the files shown.
-- **`matrix_tree.rs`** — The order of the matrix over `crate::file_tree::Tree`: `order` sorts the children of each directory so that a sibling comes before those it uses, by the uses that load or compile: SCCs stay together, inside one by uses given minus taken, ties by name.
+- **`matrix_tree.rs`** — The order of the matrix over `crate::file_tree::Tree`: `order(tree, uses)` sorts the children of each directory so that a sibling comes before those it uses, by the uses that load or compile: SCCs stay together, inside one by uses given minus taken, ties by name.
 - **`matrix.rs`** — The dependency structure matrix: `Expand` (`--depth`, `--focus`) picks the directories shown expanded, `Matrix::build` the rows and the cells (files of the column using files of the row), each with its `Mark` (cycle, against the layering, type-only or deferred).
 - **`matrix_json.rs`** — The matrix as JSON (`--matrix --format json`): rows, expanded groups, every cell with its mark and uses, and the cells above the diagonal.
 - **`matrix_text.rs`** — The matrix as text: rows numbered and named, columns by number, `!` on cells of a cycle, colours on a terminal, and the cells above the diagonal with the uses behind each.
@@ -235,9 +235,17 @@ Dependency graph (file-level coupling from imports, cycles via Tarjan SCC). Invo
 
 Self-contained HTML pages: `render` puts a `Page` (title, styles, body, script) in the shared shell with `html/base.css` (theme tokens, light and dark) and its data as the JSON of `#data`; `script_json` writes that JSON so no `<` can close the element. No external assets.
 
+### Shared: `src/options.rs`, `src/run.rs`, `src/cli.rs`
+
+`options.rs` holds what every command takes from the command line: `OutputMode`, `CommonArgs`, `ExcludeArgs`, `GateScope` and `ERR_CI_FORMAT_ONLY`. A command with arguments of its own declares them in its module (`deps::DepsArgs`, `impact::ImpactArgs`, `docs::DocsCommands`, `infra::InfraCommands`). `cli.rs` is the clap tree on top of them all, and only `main.rs` uses it. `run.rs` runs a command (`run_command`, `maybe_list_excluded`) for `main.rs` and `on_kind.rs`.
+
+### Shared: `src/nearest.rs`
+
+`shared_depth` and `nearest`: the one file of several deepest in the directories it shares with another, for the readers of `deps` and the links of `docs`.
+
 ### Shared: `src/report_helpers.rs`
 
-Output conventions every command follows. `shown_count` gives how many entries an output lists: a table `--top` rows (`DEFAULT_TOP`), JSON every entry unless `--top` is given, summaries and CI annotations every entry; `total_label` says when a totals row covers more files than it shows; `output_results` hands a table every entry and how many to show. `set_path_base` (called by `main::run_command`) and `shown` print every path relative to the repository root, or to the analyzed directory outside one.
+Output conventions every command follows. `shown_count` gives how many entries an output lists: a table `--top` rows (`DEFAULT_TOP`), JSON every entry unless `--top` is given, summaries and CI annotations every entry; `total_label` says when a totals row covers more files than it shows; `output_results` hands a table every entry and how many to show. `set_path_base` (called by `run::run_command`) and `shown` print every path relative to the repository root, or to the analyzed directory outside one.
 
 ### Shared: `src/detection/`
 
@@ -269,10 +277,10 @@ Fortran the end of a construct written apart is joined (`end if` reads
 length, so `name_at` gives back a function name as written: `cycom`, `cogcom`
 and `smells` report names that way.
 
-### Shared: `src/unit_bodies.rs`
+### Shared: `src/detection/unit_bodies.rs`
 
 Functions closed by words, for `FunctionSyntax::Fortran` and
-`FunctionSyntax::Pascal` (`detection::detect_function_bodies` hands them
+`FunctionSyntax::Pascal` (`detect_function_bodies` hands them
 over). Fortran: program units to the `end` that closes them, contained units
 included, interface blocks skipped. Pascal: routines of the implementation to
 the `end` of their `begin` block, after their local routines; the `interface`
@@ -356,7 +364,7 @@ Measures of documentation, the files of kind `docs`. `km docs refs`, `km docs li
 - **`markdown.rs`** — `scan` reads a document by paragraphs (`Block`: code spans and link texts go on across lines, each character keeps its line), skipping front matter, fenced and indented code and HTML comments. It gives the `Reference`s (links, images, reference definitions, `href`/`src`, code spans) and the anchors: headings named as GitHub names them (`slug`, `-1` for a repeated one) and `id`/`name` of HTML elements.
 - **`refs.rs`** — `check` finds the dead references of a document against a `Repository`: the working tree (ignored files left out) with every trailing part of its paths, so `deps/graph.rs` names `src/deps/graph.rs`. A link is dead when its file or its heading is missing; an absolute link without extension is a route of a site and is not checked. A code span shaped like a path is dead when the history held it (`GitRepo::paths_in_history`, read only when a span names a path the tree lacks), or outside git when it starts at a name of the tree.
 - **`report.rs`** — Table, JSON, one line, GitHub and CodeClimate annotations.
-- **`links.rs`** — The links between documents: `links` gives the Markdown links and `[[wikilinks]]` (`Form::Note`) of a text; `Notes` resolves them by normalized path, or a wikilink by path from the root, else by note name without case or extension, the nearest of several (`deps::graph::nearest`). `Graph` holds the edges and broken links, fan-in and the groups (union-find); `is_entry_point` tells READMEs and indexes, which are no orphans. `deps/markdown.rs` uses `Notes` too, so `km deps --kind docs` reads the same graph (`Selection::chose`). **`links_report.rs`** prints `km docs links`.
+- **`links.rs`** — The links between documents: `links` gives the Markdown links and `[[wikilinks]]` (`Form::Note`) of a text; `Notes` resolves them by normalized path, or a wikilink by path from the root, else by note name without case or extension, the nearest of several (`nearest::nearest`). `Graph` holds the edges and broken links, fan-in and the groups (union-find); `is_entry_point` tells READMEs and indexes, which are no orphans. `deps/markdown.rs` uses `Notes` too, so `km deps --kind docs` reads the same graph (`Selection::chose`). **`links_report.rs`** prints `km docs links`.
 - **`context.rs`** — `km docs context`: the `Role` of the files that steer agents (by name and path), approximate `tokens` (characters / 4), `rules` (lines of prose that ask), `repeated` lines across files (normalized, 30 characters or more), and `loads`: per directory and family (`claude`, `agents`, `gemini`), the instructions from the root down. **`context_report.rs`** runs it: walks with `walk::walk` (no language needed), reads git through `commits_by_file`, leaves links to an already read file out of the repetition, and prints with `report_helpers::table`.
 - **`describes.rs`** — What a document describes, shared with `km impact`: `Rules` (`[docs] covers` and `ignore`, changelogs), the globs of `covers:` in a front matter (`declared_in`), and `names_of`/`names`: the path a reference names and whether it names a file, whole, by its end, or as a directory of two names or more above it.
 - **`stale.rs`** — `km docs stale`: `Files` indexes the files of the tree by every end of their paths and by their directories; a document is behind when a file it covers or names has commits after its last one (`GitRepo::commits_by_file`, through `git log`). **`stale_report.rs`** prints it.
@@ -364,9 +372,9 @@ Measures of documentation, the files of kind `docs`. `km docs refs`, `km docs li
 
 ### Module structure: `src/infra/`
 
-Measures of infrastructure code, the files of kind `infra`. `km infra smells` reads them whatever `--kind` says (`main::on_kind`, as `km docs` does).
+Measures of infrastructure code, the files of kind `infra`. `km infra smells` reads them whatever `--kind` says (`main::on_kind`, as `km docs` does). `commands.rs` holds its subcommands.
 
-- **`lines.rs`** — `Format` by language (`Hcl`, `Dockerfile`, `Yaml`, `Other`); `split` gives each line's code and comment (HCL `#`, `//`, `/* */`, heredocs as code; whole `#` lines in a Dockerfile; `#` outside quotes in YAML, where a quote opens only where a value starts). `assignments` reads `key: value`, `key = value`, `KEY=value` and `ENV`/`ARG`.
+- **`crate::infra_lines`** (shared with `projects/terraform.rs`) — `Format` by language (`Hcl`, `Dockerfile`, `Yaml`, `Other`); `split` gives each line's code and comment (HCL `#`, `//`, `/* */`, heredocs as code; whole `#` lines in a Dockerfile; `#` outside quotes in YAML, where a quote opens only where a value starts). `assignments` reads `key: value`, `key = value`, `KEY=value` and `ENV`/`ARG`.
 - **`secrets.rs`** — `names_secret` by the last word of a key (camel case and separators split), `is_literal` (variables, interpolations, references, tags, paths, numbers are not; an unquoted HCL value is an expression), `shaped`: known key prefixes and private keys.
 - **`smells.rs`** — `Smell` (also the values of `--fail-on`) and `scan`: per line, the smells of assignments (secret, empty password, admin, image, action), shapes, `0.0.0.0/0`, `http://` to hosts that need TLS, MD5/SHA-1, suspicious comments, CI permissions; a Dockerfile adds unpinned `FROM` and a last `USER root`. One smell of each kind per line; secret values never enter `detail`.
 - **`report.rs`** — Table (most severe first, through `report_helpers::table`), JSON in the shape of `km smells`, one line, GitHub and CodeClimate annotations by severity.

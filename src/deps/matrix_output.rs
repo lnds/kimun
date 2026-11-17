@@ -6,7 +6,7 @@ use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
 use super::{analyze, matrix, matrix_html, matrix_json, matrix_text, report, show_paths};
-use crate::cli::OutputMode;
+use crate::options::OutputMode;
 use crate::walk::WalkConfig;
 
 /// Where the matrix goes.
@@ -18,7 +18,7 @@ enum Sink<'a> {
 
 fn sink<'a>(
     output: OutputMode,
-    args: &'a crate::cli::DepsArgs,
+    args: &'a crate::deps::DepsArgs,
 ) -> Result<Sink<'a>, Box<dyn Error>> {
     match (output, &args.html) {
         (OutputMode::Table, Some(file)) => Ok(Sink::Html(file)),
@@ -33,7 +33,7 @@ fn sink<'a>(
 pub fn run(
     cfg: &WalkConfig<'_>,
     output: OutputMode,
-    args: &crate::cli::DepsArgs,
+    args: &crate::deps::DepsArgs,
     expand: &matrix::Expand,
 ) -> Result<(), Box<dyn Error>> {
     let sink = sink(output, args)?;

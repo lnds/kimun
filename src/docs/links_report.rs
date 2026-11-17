@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use serde::Serialize;
 
 use super::links::{Graph, is_entry_point};
-use crate::cli::OutputMode;
+use crate::options::OutputMode;
 use crate::report_helpers::{self, table};
 
 /// What `km docs links` found in the graph of notes.

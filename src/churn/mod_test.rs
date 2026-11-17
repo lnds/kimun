@@ -1,4 +1,4 @@
-use crate::cli::OutputMode;
+use crate::options::OutputMode;
 use crate::walk::{ExcludeFilter, WalkConfig};
 use git2::Repository;
 use std::fs;

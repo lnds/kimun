@@ -3,7 +3,7 @@
 //! that directory. Registry, git and other remote sources are external.
 
 use super::{DepTarget, Manifest, RawDep, Scope};
-use crate::infra::lines::{self, Format};
+use crate::infra_lines::{self as lines, Format};
 
 /// What a `.tf` file declares: the local modules it calls. The name of the
 /// project is that of its directory.

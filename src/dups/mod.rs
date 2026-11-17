@@ -191,7 +191,7 @@ pub fn run(
     min_lines: usize,
     show_report: bool,
     show_all: bool,
-    output: crate::cli::OutputMode,
+    output: crate::options::OutputMode,
     gate: DupsGate,
 ) -> Result<(), Box<dyn Error>> {
     let exclude_tests = cfg.exclude_tests();
@@ -213,7 +213,7 @@ pub fn run(
 
     if files.is_empty() {
         match output {
-            crate::cli::OutputMode::Json => {
+            crate::options::OutputMode::Json => {
                 let metrics = DuplicationMetrics {
                     total_code_lines: 0,
                     duplicated_lines: 0,
@@ -230,7 +230,11 @@ pub fn run(
         return Ok(());
     }
 
-    let groups = detect_duplicates(&files, min_lines, output == crate::cli::OutputMode::Json);
+    let groups = detect_duplicates(
+        &files,
+        min_lines,
+        output == crate::options::OutputMode::Json,
+    );
 
     let duplicated_lines: usize = crate::dups::detector::duplicated_line_count(&groups);
     let largest_block = groups.iter().map(|g| g.line_count).max().unwrap_or(0);
@@ -250,16 +254,16 @@ pub fn run(
 
     // Always print first so CI logs show the full report before any gate error.
     match output {
-        crate::cli::OutputMode::Json => {
+        crate::options::OutputMode::Json => {
             let limit = display_limit(groups.len(), show_all);
             print_json(&metrics, &groups[..limit])?;
         }
-        crate::cli::OutputMode::Short => print_short(&metrics),
-        crate::cli::OutputMode::Terse => print_terse(&metrics),
-        crate::cli::OutputMode::Github | crate::cli::OutputMode::Codeclimate => {
-            return Err(crate::cli::ERR_CI_FORMAT_ONLY.into());
+        crate::options::OutputMode::Short => print_short(&metrics),
+        crate::options::OutputMode::Terse => print_terse(&metrics),
+        crate::options::OutputMode::Github | crate::options::OutputMode::Codeclimate => {
+            return Err(crate::options::ERR_CI_FORMAT_ONLY.into());
         }
-        crate::cli::OutputMode::Table => {
+        crate::options::OutputMode::Table => {
             if show_report {
                 let limit = display_limit(groups.len(), show_all);
                 print_detailed(&metrics, &groups[..limit], groups.len());

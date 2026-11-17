@@ -12,6 +12,7 @@ mod names;
 mod script;
 mod shape;
 mod signature;
+pub(crate) mod unit_bodies;
 
 use body::*;
 pub(crate) use declarations::without_impl_for;
@@ -152,8 +153,8 @@ pub fn detect_function_bodies<'a>(
     markers: &dyn FunctionDetectionMarkers,
 ) -> Vec<FunctionBody<'a>> {
     match markers.function_syntax() {
-        FunctionSyntax::Fortran => return crate::unit_bodies::fortran(code_lines),
-        FunctionSyntax::Pascal => return crate::unit_bodies::pascal(code_lines),
+        FunctionSyntax::Fortran => return unit_bodies::fortran(code_lines),
+        FunctionSyntax::Pascal => return unit_bodies::pascal(code_lines),
         _ => {}
     }
     if markers.brace_scoped() {

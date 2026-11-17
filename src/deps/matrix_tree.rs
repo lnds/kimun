@@ -8,23 +8,21 @@ use std::collections::{BTreeSet, BinaryHeap, HashMap};
 use super::analyzer::tarjan_scc;
 use crate::file_tree::{ROOT, Tree};
 
-impl Tree {
-    /// Order the children of every directory by the uses between files:
-    /// `(from, to)` by file index.
-    pub fn order(&mut self, uses: &[(usize, usize)]) {
-        let mut between: HashMap<usize, BTreeSet<(usize, usize)>> = HashMap::new();
-        for &(from, to) in uses {
-            let (a, b) = (&self.chains[from], &self.chains[to]);
-            let k = a.iter().zip(b).take_while(|(x, y)| x == y).count();
-            if k < a.len() && k < b.len() {
-                let parent = if k == 0 { ROOT } else { a[k - 1] };
-                between.entry(parent).or_default().insert((a[k], b[k]));
-            }
+/// Order the children of every directory of `tree` by the uses between
+/// files: `(from, to)` by file index.
+pub fn order(tree: &mut Tree, uses: &[(usize, usize)]) {
+    let mut between: HashMap<usize, BTreeSet<(usize, usize)>> = HashMap::new();
+    for &(from, to) in uses {
+        let (a, b) = (&tree.chains[from], &tree.chains[to]);
+        let k = a.iter().zip(b).take_while(|(x, y)| x == y).count();
+        if k < a.len() && k < b.len() {
+            let parent = if k == 0 { ROOT } else { a[k - 1] };
+            between.entry(parent).or_default().insert((a[k], b[k]));
         }
-        for (parent, uses) in between {
-            let children = &self.nodes[parent].children;
-            self.nodes[parent].children = layered(children, &uses);
-        }
+    }
+    for (parent, uses) in between {
+        let children = &tree.nodes[parent].children;
+        tree.nodes[parent].children = layered(children, &uses);
     }
 }
 

@@ -43,7 +43,7 @@ fn analyze_file(
 
 pub fn run(
     cfg: &WalkConfig<'_>,
-    output: crate::cli::OutputMode,
+    output: crate::options::OutputMode,
     top: Option<usize>,
     sort_by: &str,
 ) -> Result<(), Box<dyn Error>> {

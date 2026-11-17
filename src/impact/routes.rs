@@ -4,8 +4,9 @@
 //! its project tells which module serves it, and that makes the test one
 //! that refers to the module, though it never names it.
 
-use crate::deps::graph::{FileGraph, Related, Source, shared_depth};
+use crate::deps::graph::{FileGraph, Related, Source};
 use crate::deps::routes::{requests, routes, serves};
+use crate::nearest::shared_depth;
 
 /// A router: its file, and the paths it serves with the file behind each.
 struct Router {

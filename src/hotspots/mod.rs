@@ -11,9 +11,9 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
-use crate::cli::OutputMode;
 use crate::git::GitRepo;
 use crate::kind::Kind;
+use crate::options::OutputMode;
 use crate::util::parse_since;
 use crate::walk::{self, WalkConfig};
 use report::{print_json, print_report, print_short, print_terse};
@@ -155,7 +155,7 @@ pub fn run(
         OutputMode::Short => print_short(&results),
         OutputMode::Terse => print_terse(&results),
         OutputMode::Github | OutputMode::Codeclimate => {
-            return Err(crate::cli::ERR_CI_FORMAT_ONLY.into());
+            return Err(crate::options::ERR_CI_FORMAT_ONLY.into());
         }
         OutputMode::Table => print_report(listed),
     }

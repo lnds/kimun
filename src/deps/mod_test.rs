@@ -1,5 +1,5 @@
 use super::*;
-use crate::cli::OutputMode;
+use crate::options::OutputMode;
 use crate::walk::{ExcludeFilter, WalkConfig};
 use std::fs;
 
@@ -605,8 +605,8 @@ fn matrix_focus_on_a_missing_directory_fails() {
     assert!(matrix_output::run(&cfg, OutputMode::Table, &matrix_args(), &focus).is_err());
 }
 
-fn matrix_args() -> crate::cli::DepsArgs {
-    crate::cli::DepsArgs {
+fn matrix_args() -> crate::deps::DepsArgs {
+    crate::deps::DepsArgs {
         cycles_only: false,
         sort_by: "fan-out".to_string(),
         top: None,
@@ -626,7 +626,7 @@ fn matrix_html_is_written_to_the_file_given() {
     let page = out.path().join("deps.html");
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
-    let args = crate::cli::DepsArgs {
+    let args = crate::deps::DepsArgs {
         html: Some(page.clone()),
         ..matrix_args()
     };

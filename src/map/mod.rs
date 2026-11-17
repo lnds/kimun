@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 
 pub use metric::ColorBy;
 
-use crate::cli::OutputMode;
+use crate::options::OutputMode;
 use crate::score::ScoringModel;
 use crate::walk::WalkConfig;
 

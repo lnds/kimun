@@ -17,7 +17,7 @@ fn names(tree: &Tree, node: usize) -> Vec<&str> {
 fn users_come_before_what_they_use() {
     let mut tree = Tree::of(&paths(&["a.rs", "b.rs", "c.rs"]));
     // c uses b, b uses a.
-    tree.order(&[(2, 1), (1, 0)]);
+    order(&mut tree, &[(2, 1), (1, 0)]);
     assert_eq!(names(&tree, ROOT), vec!["c.rs", "b.rs", "a.rs"]);
 }
 
@@ -25,7 +25,7 @@ fn users_come_before_what_they_use() {
 fn uses_between_directories_order_the_directories() {
     let mut tree = Tree::of(&paths(&["core/x.rs", "web/y.rs", "web/z.rs"]));
     // web/z uses core/x, web/z uses web/y.
-    tree.order(&[(2, 0), (2, 1)]);
+    order(&mut tree, &[(2, 0), (2, 1)]);
     assert_eq!(names(&tree, ROOT), vec!["web/", "core/"]);
     let web = tree.nodes[ROOT].children[0];
     assert_eq!(names(&tree, web), vec!["z.rs", "y.rs"]);
@@ -36,13 +36,13 @@ fn a_cycle_stays_together_and_the_more_using_member_goes_first() {
     let mut tree = Tree::of(&paths(&["a.rs", "b.rs", "c.rs", "d.rs"]));
     // a, b and c form a cycle in which c uses two and is used by one; d
     // uses c.
-    tree.order(&[(0, 1), (1, 2), (2, 0), (2, 1), (3, 2)]);
+    order(&mut tree, &[(0, 1), (1, 2), (2, 0), (2, 1), (3, 2)]);
     assert_eq!(names(&tree, ROOT), vec!["d.rs", "c.rs", "a.rs", "b.rs"]);
 }
 
 #[test]
 fn files_without_uses_keep_the_order_of_their_names() {
     let mut tree = Tree::of(&paths(&["b.rs", "a.rs", "c.rs"]));
-    tree.order(&[]);
+    order(&mut tree, &[]);
     assert_eq!(names(&tree, ROOT), vec!["a.rs", "b.rs", "c.rs"]);
 }

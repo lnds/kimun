@@ -26,7 +26,7 @@ use report::{
 pub fn run(
     cfg: &WalkConfig<'_>,
     verbose: bool,
-    output: crate::cli::OutputMode,
+    output: crate::options::OutputMode,
 ) -> Result<(), Box<dyn Error>> {
     let start = Instant::now();
     let mut stats_by_lang: HashMap<&'static str, (usize, FileStats)> = HashMap::new();
@@ -92,7 +92,7 @@ pub fn run(
 
     if reports.is_empty() {
         match output {
-            crate::cli::OutputMode::Json => {
+            crate::options::OutputMode::Json => {
                 println!(
                     "{}",
                     serde_json::json!({"languages": [], "kinds": [], "totals": {"files": 0, "blank": 0, "comment": 0, "code": 0}})
@@ -104,13 +104,13 @@ pub fn run(
         }
     } else {
         match output {
-            crate::cli::OutputMode::Json => print_json(reports, kinds),
-            crate::cli::OutputMode::Short => print_short(&reports),
-            crate::cli::OutputMode::Terse => print_terse(&reports),
-            crate::cli::OutputMode::Github | crate::cli::OutputMode::Codeclimate => {
-                return Err(crate::cli::ERR_CI_FORMAT_ONLY.into());
+            crate::options::OutputMode::Json => print_json(reports, kinds),
+            crate::options::OutputMode::Short => print_short(&reports),
+            crate::options::OutputMode::Terse => print_terse(&reports),
+            crate::options::OutputMode::Github | crate::options::OutputMode::Codeclimate => {
+                return Err(crate::options::ERR_CI_FORMAT_ONLY.into());
             }
-            crate::cli::OutputMode::Table => {
+            crate::options::OutputMode::Table => {
                 let verbose_stats = if verbose {
                     Some(VerboseStats {
                         total_files,
@@ -135,7 +135,7 @@ pub fn run(
 /// via `git blame`, classify lines with the FSM, and print a per-author table.
 pub fn run_by_author(
     cfg: &WalkConfig<'_>,
-    output: crate::cli::OutputMode,
+    output: crate::options::OutputMode,
 ) -> Result<(), Box<dyn Error>> {
     let git = GitRepo::open(cfg.path)?;
     let (canonical_walk, prefix) = git.walk_prefix(cfg.path)?;
@@ -184,7 +184,7 @@ pub fn run_by_author(
 
     if by_author.is_empty() {
         match output {
-            crate::cli::OutputMode::Json => {
+            crate::options::OutputMode::Json => {
                 println!(
                     "{}",
                     serde_json::json!({"authors": [], "totals": {"files": 0, "blank": 0, "comment": 0, "code": 0}})
@@ -210,13 +210,13 @@ pub fn run_by_author(
         .collect();
 
     match output {
-        crate::cli::OutputMode::Json => print_author_json(reports),
-        crate::cli::OutputMode::Short => print_author_short(&reports),
-        crate::cli::OutputMode::Terse => print_author_terse(&reports),
-        crate::cli::OutputMode::Github | crate::cli::OutputMode::Codeclimate => {
-            return Err(crate::cli::ERR_CI_FORMAT_ONLY.into());
+        crate::options::OutputMode::Json => print_author_json(reports),
+        crate::options::OutputMode::Short => print_author_short(&reports),
+        crate::options::OutputMode::Terse => print_author_terse(&reports),
+        crate::options::OutputMode::Github | crate::options::OutputMode::Codeclimate => {
+            return Err(crate::options::ERR_CI_FORMAT_ONLY.into());
         }
-        crate::cli::OutputMode::Table => print_author_report(reports),
+        crate::options::OutputMode::Table => print_author_report(reports),
     }
 
     Ok(())

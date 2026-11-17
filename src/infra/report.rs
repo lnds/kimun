@@ -6,7 +6,7 @@ use serde::Serialize;
 
 use super::FileSmells;
 use super::smells::{ALL, Found, Smell};
-use crate::cli::OutputMode;
+use crate::options::OutputMode;
 use crate::report_helpers::{self, table};
 
 pub fn total(files: &[FileSmells]) -> usize {

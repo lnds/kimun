@@ -259,8 +259,8 @@ pub const DEFAULT_TOP: usize = 20;
 /// How many of `total` entries an output lists: a table `--top` rows
 /// (`DEFAULT_TOP` when not given), JSON every entry unless `--top` is given,
 /// and the summaries (`short`, `terse`) and CI annotations every entry.
-pub fn shown_count(output: crate::cli::OutputMode, top: Option<usize>, total: usize) -> usize {
-    use crate::cli::OutputMode;
+pub fn shown_count(output: crate::options::OutputMode, top: Option<usize>, total: usize) -> usize {
+    use crate::options::OutputMode;
     let limit = match output {
         OutputMode::Table => top.unwrap_or(DEFAULT_TOP),
         OutputMode::Json => top.unwrap_or(usize::MAX),
@@ -285,7 +285,7 @@ pub fn total_label(total: usize, shown: usize) -> String {
 pub fn output_results<T>(
     results: &[T],
     top: Option<usize>,
-    output: crate::cli::OutputMode,
+    output: crate::options::OutputMode,
     print_json_fn: impl FnOnce(&[T]) -> Result<(), Box<dyn std::error::Error>>,
     print_report_fn: impl FnOnce(&[T], usize),
     print_short_fn: impl FnOnce(&[T]),
@@ -293,19 +293,19 @@ pub fn output_results<T>(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let shown = shown_count(output, top, results.len());
     match output {
-        crate::cli::OutputMode::Terse => {
+        crate::options::OutputMode::Terse => {
             print_terse_fn(results);
             Ok(())
         }
-        crate::cli::OutputMode::Short => {
+        crate::options::OutputMode::Short => {
             print_short_fn(results);
             Ok(())
         }
-        crate::cli::OutputMode::Json => print_json_fn(&results[..shown]),
-        crate::cli::OutputMode::Github | crate::cli::OutputMode::Codeclimate => {
-            Err(crate::cli::ERR_CI_FORMAT_ONLY.into())
+        crate::options::OutputMode::Json => print_json_fn(&results[..shown]),
+        crate::options::OutputMode::Github | crate::options::OutputMode::Codeclimate => {
+            Err(crate::options::ERR_CI_FORMAT_ONLY.into())
         }
-        crate::cli::OutputMode::Table => {
+        crate::options::OutputMode::Table => {
             print_report_fn(results, shown);
             Ok(())
         }

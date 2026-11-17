@@ -84,7 +84,7 @@ fn weighted_mi_weighs_by_lines_and_floors_at_zero() {
 
 #[test]
 fn tables_show_top_rows_json_every_entry_unless_asked() {
-    use crate::cli::OutputMode;
+    use crate::options::OutputMode;
     assert_eq!(shown_count(OutputMode::Table, None, 30), DEFAULT_TOP);
     assert_eq!(shown_count(OutputMode::Table, Some(5), 30), 5);
     assert_eq!(shown_count(OutputMode::Table, None, 3), 3);
@@ -116,7 +116,7 @@ fn output_results_totals_every_entry_and_shows_the_top() {
     output_results(
         &rows,
         None,
-        crate::cli::OutputMode::Table,
+        crate::options::OutputMode::Table,
         |_| Ok(()),
         |all, shown| seen = (all.len(), shown),
         |_| {},

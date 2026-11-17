@@ -49,20 +49,20 @@ pub(crate) fn analyze_file(
 
 /// Walk source files, compute indentation metrics, sort by stddev
 /// descending, and print as a table, JSON, or compact format.
-pub fn run(cfg: &WalkConfig<'_>, output: crate::cli::OutputMode) -> Result<(), Box<dyn Error>> {
+pub fn run(cfg: &WalkConfig<'_>, output: crate::options::OutputMode) -> Result<(), Box<dyn Error>> {
     let mut results = cfg.collect_analysis(analyze_file);
 
     // Sort by stddev descending
     results.sort_by(|a, b| b.stddev.total_cmp(&a.stddev));
 
     match output {
-        crate::cli::OutputMode::Json => print_json(&results)?,
-        crate::cli::OutputMode::Short => print_short(&results),
-        crate::cli::OutputMode::Terse => print_terse(&results),
-        crate::cli::OutputMode::Github | crate::cli::OutputMode::Codeclimate => {
-            return Err(crate::cli::ERR_CI_FORMAT_ONLY.into());
+        crate::options::OutputMode::Json => print_json(&results)?,
+        crate::options::OutputMode::Short => print_short(&results),
+        crate::options::OutputMode::Terse => print_terse(&results),
+        crate::options::OutputMode::Github | crate::options::OutputMode::Codeclimate => {
+            return Err(crate::options::ERR_CI_FORMAT_ONLY.into());
         }
-        crate::cli::OutputMode::Table => print_report(&results),
+        crate::options::OutputMode::Table => print_report(&results),
     }
 
     Ok(())

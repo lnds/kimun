@@ -10,7 +10,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use super::graph::shared_depth;
+use crate::nearest::shared_depth;
 
 /// The files that declare each type, by qualified name. A C# partial
 /// class is declared by several.

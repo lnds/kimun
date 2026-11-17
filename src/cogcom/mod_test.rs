@@ -1,6 +1,6 @@
 use super::*;
-use crate::cli::OutputMode;
 use crate::lang::language::detect;
+use crate::options::OutputMode;
 use crate::walk::{ExcludeFilter, WalkConfig};
 use std::fs;
 
