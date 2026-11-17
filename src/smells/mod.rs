@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 use crate::case_fold;
 use crate::cli::OutputMode;
 use crate::cycom::markers::markers_for;
-use crate::loc::language::{LanguageSpec, detect_file};
+use crate::lang::language::{LanguageSpec, detect_file};
 use crate::string_mask::code_view;
 use crate::util::read_and_classify;
 use crate::walk::WalkConfig;

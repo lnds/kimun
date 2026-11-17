@@ -2,7 +2,7 @@
 //! over lines whose literals and comments are blanked.
 
 use super::*;
-use crate::loc::literals::literal_len;
+use crate::lang::literals::literal_len;
 
 /// Whether the `=` at `pos` stands alone, rather than being part of an
 /// operator such as `==`, `=>`, `<=` or `+=`.

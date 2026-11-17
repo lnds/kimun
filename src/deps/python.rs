@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use super::graph::EdgeKind;
 use super::python_blocks::Blocks;
-use crate::loc::language::{LanguageSpec, languages};
+use crate::lang::language::{LanguageSpec, languages};
 use crate::string_mask::starts_in_string_mask;
 
 /// A name an import statement binds in a file.

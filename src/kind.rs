@@ -13,7 +13,7 @@ use std::path::Path;
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use serde::Serialize;
 
-use crate::loc::language::{LanguageSpec, detect};
+use crate::lang::language::{LanguageSpec, detect};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize)]
 #[serde(rename_all = "lowercase")]

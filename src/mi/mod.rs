@@ -19,8 +19,8 @@ use std::cmp::Reverse;
 use std::error::Error;
 use std::path::Path;
 
-use crate::loc::counter::LineKind;
-use crate::loc::language::LanguageSpec;
+use crate::lang::counter::LineKind;
+use crate::lang::language::LanguageSpec;
 use crate::report_helpers;
 use crate::util::read_and_classify;
 use crate::walk::WalkConfig;

@@ -1,6 +1,6 @@
 use super::*;
 use crate::cli::OutputMode;
-use crate::loc::language::detect;
+use crate::lang::language::detect;
 use crate::walk::{ExcludeFilter, WalkConfig};
 use std::fs;
 
@@ -96,8 +96,8 @@ fn analyze_content_returns_some_for_rust() {
         .lines()
         .map(String::from)
         .collect();
-    let kinds = vec![crate::loc::counter::LineKind::Code; lines.len()];
-    let spec = crate::loc::language::detect(std::path::Path::new("test.rs")).unwrap();
+    let kinds = vec![crate::lang::counter::LineKind::Code; lines.len()];
+    let spec = crate::lang::language::detect(std::path::Path::new("test.rs")).unwrap();
     let result = analyze_content(&lines, &kinds, spec);
     assert!(result.is_some());
     assert_eq!(result.unwrap().max_complexity, 1);
@@ -106,9 +106,9 @@ fn analyze_content_returns_some_for_rust() {
 #[test]
 fn analyze_content_returns_none_for_unknown() {
     let lines = vec!["hello".to_string()];
-    let kinds = vec![crate::loc::counter::LineKind::Code];
+    let kinds = vec![crate::lang::counter::LineKind::Code];
     // JSON has no cognitive markers
-    let spec = crate::loc::language::detect(std::path::Path::new("test.json")).unwrap();
+    let spec = crate::lang::language::detect(std::path::Path::new("test.json")).unwrap();
     let result = analyze_content(&lines, &kinds, spec);
     assert!(result.is_none());
 }
@@ -208,7 +208,7 @@ fn run_terse_format() {
 #[test]
 fn analyze_file_leaves_inline_tests_out_when_they_are_excluded() {
     let (_dir, path) = crate::test_blocks::tests::source_with_test_module();
-    let spec = crate::loc::language::detect(&path).unwrap();
+    let spec = crate::lang::language::detect(&path).unwrap();
     let production = analyze_file(&path, spec, true).unwrap().unwrap();
     let everything = analyze_file(&path, spec, false).unwrap().unwrap();
     assert_eq!(production.function_count, 1);

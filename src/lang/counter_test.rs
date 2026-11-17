@@ -848,7 +848,7 @@ fn raw_strings_belong_to_the_languages_that_have_them() {
 
 /// Blank, comment and code lines of `text`, written in `language`.
 fn counted(language: &str, text: &str) -> (usize, usize, usize) {
-    let spec = crate::loc::language::languages()
+    let spec = crate::lang::language::languages()
         .iter()
         .find(|s| s.name == language)
         .unwrap();

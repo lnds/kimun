@@ -1,7 +1,7 @@
 //! Pure detection functions for each code smell.
 
 use crate::detection::{FunctionDetectionMarkers, detect_function_bodies};
-use crate::loc::counter::LineKind;
+use crate::lang::counter::LineKind;
 
 use super::analyzer::{SmellInstance, SmellKind};
 

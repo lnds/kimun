@@ -22,7 +22,7 @@ use serde::Serialize;
 
 use crate::branches::{count_ternaries, names_something};
 use crate::detection::FunctionSyntax;
-use crate::loc::counter::LineKind;
+use crate::lang::counter::LineKind;
 use crate::util::indent_level as indent_spaces;
 use crate::util::mask_strings;
 

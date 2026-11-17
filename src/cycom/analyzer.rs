@@ -12,7 +12,7 @@
 use serde::Serialize;
 
 use crate::branches::{count_ternaries, names_something};
-use crate::loc::counter::LineKind;
+use crate::lang::counter::LineKind;
 use crate::util::mask_strings;
 
 use super::detection::detect_functions;

@@ -34,7 +34,7 @@ pub fn run(
 
     let (walk_root, prefix) = git.walk_prefix(cfg.path)?;
 
-    let source_files: Vec<(PathBuf, &'static crate::loc::language::LanguageSpec)> =
+    let source_files: Vec<(PathBuf, &'static crate::lang::language::LanguageSpec)> =
         walk::source_files(&walk_root, cfg.exclude_tests(), cfg.filter);
 
     // Build git-relative paths for the blame query.

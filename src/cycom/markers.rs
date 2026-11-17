@@ -1,5 +1,5 @@
 use crate::detection::{FunctionSyntax, detection_markers};
-use crate::loc::language::is_fortran;
+use crate::lang::language::is_fortran;
 
 /// Language-specific tokens used to compute cyclomatic complexity.
 ///

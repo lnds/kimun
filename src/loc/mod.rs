@@ -3,13 +3,7 @@
 /// Walks the directory tree, deduplicates files by content hash,
 /// counts blank/comment/code lines per language via a character-level
 /// FSM, and aggregates results for table or JSON output.
-pub(crate) mod counter;
-mod fsm;
-mod lang_macro;
-pub(crate) mod language;
-pub(crate) mod literals;
 pub(crate) mod report;
-mod strings;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::error::Error;
@@ -18,9 +12,9 @@ use std::io::BufReader;
 use std::time::Instant;
 
 use crate::git::GitRepo;
+use crate::lang::counter::{FileStats, LineKind, classify_reader, count_lines};
 use crate::util::hash_file;
 use crate::walk::{self, WalkConfig};
-use counter::{FileStats, LineKind, classify_reader, count_lines};
 use report::{
     AuthorReport, KindLines, KindReport, LanguageReport, VerboseStats, print_author_json,
     print_author_report, print_author_short, print_author_terse, print_json, print_kinds,

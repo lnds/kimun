@@ -1,6 +1,6 @@
 //! The commented_out_code smell: comment lines that read as code.
 
-use crate::loc::counter::LineKind;
+use crate::lang::counter::LineKind;
 
 use super::analyzer::{SmellInstance, SmellKind};
 

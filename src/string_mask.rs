@@ -1,8 +1,8 @@
 use std::borrow::Cow;
 
 use crate::case_fold::folded;
-use crate::loc::counter::LineKind;
-use crate::loc::language::LanguageSpec;
+use crate::lang::counter::LineKind;
+use crate::lang::language::LanguageSpec;
 
 /// For languages with triple-quoted strings (Python, Kaikai), mark interior lines
 /// of multi-line strings so the tokenizer can skip them.

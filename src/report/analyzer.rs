@@ -9,7 +9,7 @@ use std::path::Path;
 use crate::cycom;
 use crate::hal;
 use crate::indent;
-use crate::loc::counter::LineKind;
+use crate::lang::counter::LineKind;
 use crate::mi;
 use crate::miv;
 use crate::test_blocks::production_kinds;
@@ -46,7 +46,7 @@ pub struct FileReportData {
 /// Returns `None` for binary files or on I/O errors.
 pub fn analyze_file_for_report(
     file_path: &Path,
-    spec: &crate::loc::language::LanguageSpec,
+    spec: &crate::lang::language::LanguageSpec,
     exclude_tests: bool,
 ) -> Option<FileReportData> {
     let (lines, kinds) = match read_and_classify(file_path, spec, false) {

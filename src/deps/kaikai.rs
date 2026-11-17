@@ -5,8 +5,8 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use crate::loc::counter::{LineKind, classify_reader};
-use crate::loc::language::languages;
+use crate::lang::counter::{LineKind, classify_reader};
+use crate::lang::language::languages;
 use crate::string_mask::multi_line_string_mask;
 
 /// Extract the dotted module path of each `import` line

@@ -22,11 +22,13 @@ The binary is named `km` (configured in `[[bin]]` in Cargo.toml). After `cargo i
 
 CLI tool for code metrics: lines of code (like `cloc`), duplicate detection, Halstead complexity, cyclomatic complexity, cognitive complexity, indentation analysis, Maintainability Index, code smells, hotspots, temporal coupling, knowledge maps, code churn, file age, and an overall health score. Built around a character-level finite state machine for line classification.
 
-### Module structure: `src/loc/`
+### Shared: `src/lang/`
+
+What every command reads a source file with: the languages and the classifier of lines. `util`, `walk`, `test_blocks` and every analyzer use it; it uses nothing of the crate.
 
 - **`language.rs`** — `LanguageSpec` struct + `lang!` macro defining 40+ languages. Detection by filename, extension, or shebang. Each spec declares: line comment markers, block comment delimiters, nesting support, string delimiter rules, pragma syntax, and exception characters for comment detection.
 
-- **`counter.rs`** — FSM with states `Normal`, `InString(StringKind)`, `InBlockComment(block, depth)`, `InDocAttribute(Option<StringKind>)`, `InDocString(StringKind)`, `InHeredoc(Heredoc)`. Processes files line-by-line via `BufReader`, classifying each line as blank/comment/code. Bytes that are not UTF-8 are replaced, so a Latin-1 or Windows-1252 source is read whole. Mixed lines (code + comment) count as code. Key design decisions:
+- **`counter.rs`** — FSM with states `Normal`, `InString(StringKind)`, `InBlockComment(block, depth)`, `InDocAttribute(Option<StringKind>)`, `InDocString(StringKind)`, `InHeredoc(Heredoc)`. Processes files line-by-line via `BufReader` (`is_binary_reader` skips binary files), classifying each line as blank/comment/code. Bytes that are not UTF-8 are replaced, so a Latin-1 or Windows-1252 source is read whole. Mixed lines (code + comment) count as code. Key design decisions:
   - Literals are read through `literals/` (shared with `code_text`): `syntax.rs` says what each language writes beyond its spec, `openers.rs` where a literal opens and what closes it (quotes, triple quotes, backticks, Rust raw strings `r#"…"#`, C# verbatim, C++ raw), `heredoc.rs` heredocs (`State::InHeredoc`, from the line after the marker to the terminator). `strings.rs` steps inside one (`StringKind::Delimited`, `StringKind::Template` with its `${…}` frames)
   - Only `"` opens a string unless `single_quote_strings` is set; elsewhere `'` opens a character literal, or is the quote of a Rust lifetime or label (`literals::character_len`)
   - A quoted string ends with its line unless the language lets it span lines (`quotes_span_lines`) or the line ends with `\`; triple-quoted, raw and template literals persist
@@ -40,6 +42,10 @@ CLI tool for code metrics: lines of code (like `cloc`), duplicate detection, Hal
   - `triple_quote_comments` (Python, `tqc: true`): a triple-quoted string is `InDocString`, comment unless code shares its line, as cloc counts docstrings
   - `detect_file` refines `detect` by content: a `.h` holding C++ (`namespace`, `template`, `class`, `std::`, ...) is C++
 
+### Module structure: `src/loc/`
+
+The `km loc` command, over `lang/`.
+
 - **`report.rs`** — Formats results as a table sorted by code lines descending, with totals.
 
 - **`mod.rs`** — Orchestrates: walks directory tree (via `ignore` crate, respects `.gitignore`), detects language, deduplicates files by content hash (streaming), counts lines, aggregates by language.
@@ -50,7 +56,7 @@ CLI tool for code metrics: lines of code (like `cloc`), duplicate detection, Hal
 
 ### Adding a new language
 
-Use the `lang!` macro in `language.rs`. For most languages:
+Use the `lang!` macro in `lang/language.rs`. For most languages:
 ```rust
 lang!("LangName", ext: ["ext1", "ext2"],
       line: "//", block: "/*", "*/", sq: true,
@@ -65,8 +71,8 @@ Optional flags: `nested: true`, `sq: true` (single-quote strings), `tq: true` (t
 - Always run `cargo fmt` before `cargo clippy`. Then validate with `cargo clippy` (zero warnings required) and `cargo test` before considering a change complete.
 - When adding or modifying a feature (new command, new flag, changed behavior), update `README.md` to reflect the change before considering the work done.
 - `LEEME.md` is the Spanish edition of `README.md`, section by section. A change to one goes into the other.
-- Tests in `counter.rs` use `count_reader(Cursor::new(...))` to test the FSM without touching the filesystem.
-- Tests in `mod.rs` use `tempfile::tempdir()` for integration tests with real files.
+- Tests in `lang/counter.rs` use `count_reader(Cursor::new(...))` to test the FSM without touching the filesystem.
+- Tests in `loc/mod.rs` use `tempfile::tempdir()` for integration tests with real files.
 - Tests exist in all modules: `counter.rs`, `language.rs`, `report.rs`, `mod.rs`.
 - Edition 2024 Rust (requires recent toolchain).
 
@@ -189,7 +195,6 @@ Dependency graph (file-level coupling from imports, cycles via Tarjan SCC). Invo
 - **`heex.rs`** — HEEx templates. `code` keeps only the Elixir of a template (braces, EEx tags, components called as tags; `<.button` as the local call `button(`), so prose never reads as a module; `owners` tells the module that renders a template kept in a file of its own. `embedded` picks the `~H` ones out of a source. `elixir::parse_with` reads both kinds with the aliases of the file. `km impact` hands the templates over; `km deps` reads only the `~H` ones.
 - **`phoenix.rs`** — What Phoenix relates by name alone: a controller uses the views named after it (`PageController` and `PageJSON`, `PageHTML`, `PageView`).
 - **`routes.rs`** — Phoenix routes, lexically. `declared` gives each route with its verb, action and line (`resources` as its seven routes); `routes` reads a router: each `scope` adds its path and alias to what is inside, by indentation. `requests` reads the paths a test asks for, only from calls that make a request. `serves` matches the two segment by segment.
-- **`rust_literals.rs`** — Blanks comments and character literals of Rust, keeping lines; a string keeps its quotes and its content is handed apart, for `#[path = "…"]`.
 - **`rust.rs`** — Rust, read lexically: the `mod` declarations of a file (with `#[path]` and the inline modules around them), every path of `use` trees and of code, the names `use` brings in, the types `impl` blocks are for, and whether the file holds `#[test]`s.
 - **`rust_crates.rs`** — The module tree of each crate, grown from its root files by `mod` declarations, and `uses`: each path made absolute from the module it is written in and led to the file of the deepest module it names. Library crates answer to their package name. A module may have several files (`mod imp;` under opposite `#[cfg]`s, each with its `#[path]`); a path goes on through a crate re-exported under a name (`pub extern crate x as y`, `pub use x as y`). `mod x;` is no edge; a type uses the files of its `impl` blocks.
 - **`graph.rs`** — `FileGraph::build` builds the file graph from `(path, language, text)` sources, so they can come from disk or from a commit's tree. `Layout` carries what is known besides the sources: paths to look up, the Go modules, the Cargo packages, the import roots of Python projects, the aliases and packages of JavaScript. Elixir references resolve through a module index (nearest file, then `Related`: what the projects declare); Python, Go, C/C++, Java, C# and Ruby are read apart (`Apart`: `python_uses`, `golang`, `c_family`, `java`, `csharp`, `ruby_files`); the rest go through `extract_imports` + `resolve_import`. `Use.calls` keeps the functions called. Each `Use` has an `EdgeKind`: `Compile` (Elixir, `elixir_compile`), `Load`, `Deferred` (a Python import in a function, `import()`) or `Type` (`import type`, `if TYPE_CHECKING:`); `analyzer::build_graph` leaves the last two out of cycles but counts them in fan-in/fan-out, and `km impact` follows them all, except that a test's `Type` import protects nothing. Readers return a `Found`: the uses, their kinds and the imports that look internal but resolve to no file (`FileGraph.unresolved`): a quoted include that is no system header, a relative specifier of a script or relative Python import, a Go import within a module of the repository.
@@ -240,7 +245,7 @@ Function detection for `cycom`, `cogcom`, `smells` and `init`. `code_lines` give
 
 ### Shared: `src/code_text/`
 
-`read` gives the code of each line as analyzers of code measure it: the file is read whole, by the rules of its language, and comments become spaces and literals spaces within their quotes, closed on the line they open. What a language writes is read from `loc/literals`, as `km loc` reads it; `cursor.rs` is the walk along a line. Rust lifetimes and labels are no character literals; a template literal keeps the code of its `${…}`.
+`read` gives the code of each line as analyzers of code measure it: the file is read whole, by the rules of its language, and comments become spaces and literals spaces within their quotes, closed on the line they open. What a language writes is read from `lang/literals`, as `km loc` reads it; `cursor.rs` is the walk along a line. Rust lifetimes and labels are no character literals; a template literal keeps the code of its `${…}`.
 
 ### Shared: `src/string_mask.rs`
 
@@ -277,12 +282,16 @@ and headers repeated under it with the routine's own name are one routine.
 `cogcom` reads Fortran nesting from constructs (`fortran_statement`), Pascal
 nesting from indentation, two columns a level.
 
+### Shared: `src/rust_literals.rs`
+
+Blanks comments and character literals of Rust, keeping lines; a string keeps its quotes and its content is handed apart, for `#[path = "…"]`. Read by `test_blocks` and `deps/rust.rs`.
+
 ### Shared: `src/test_blocks.rs`
 
 `test_block_mask` marks the lines of each item under `#[cfg(test)]` of a Rust
 file, attribute included: to where its braces balance, or to its `;` or `,`
 when it has none. Comments and literals are read apart
-(`deps::rust_literals`). `without_test_blocks` turns those lines into
+(`rust_literals`). `without_test_blocks` turns those lines into
 `LineKind::Blank`, and `production_kinds` does so for a Rust file when tests
 are excluded. `util::read_and_classify` applies it, so every analyzer that
 reads through it measures production code; the code after a test module is

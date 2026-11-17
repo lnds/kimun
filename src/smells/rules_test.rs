@@ -1,5 +1,5 @@
 use crate::detection::{FunctionDetectionMarkers, FunctionSyntax};
-use crate::loc::counter::LineKind;
+use crate::lang::counter::LineKind;
 
 use super::*;
 

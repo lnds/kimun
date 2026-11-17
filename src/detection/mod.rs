@@ -24,7 +24,7 @@ use script::*;
 use shape::*;
 use signature::*;
 
-use crate::loc::counter::LineKind;
+use crate::lang::counter::LineKind;
 use crate::util::{indent_level, mask_strings};
 
 /// Trait for language marker structs that support function detection.

@@ -11,7 +11,7 @@ mod structure;
 use std::error::Error;
 use std::path::Path;
 
-use crate::loc::language::LanguageSpec;
+use crate::lang::language::LanguageSpec;
 use crate::util::read_and_classify;
 use crate::walk::WalkConfig;
 use analyzer::analyze;

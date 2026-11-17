@@ -3,7 +3,7 @@
 use crate::detection::{
     FunctionBody, FunctionDetectionMarkers, closing_paren as closing, detect_function_bodies,
 };
-use crate::loc::counter::LineKind;
+use crate::lang::counter::LineKind;
 use crate::util::mask_strings;
 
 use super::analyzer::{SmellInstance, SmellKind};

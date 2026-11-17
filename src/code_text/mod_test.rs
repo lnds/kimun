@@ -1,5 +1,5 @@
 use super::*;
-use crate::loc::language::languages;
+use crate::lang::language::languages;
 
 fn spec(name: &str) -> &'static LanguageSpec {
     languages().iter().find(|s| s.name == name).unwrap()

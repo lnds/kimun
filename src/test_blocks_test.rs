@@ -184,9 +184,9 @@ pub(crate) fn source_with_test_module() -> (tempfile::TempDir, std::path::PathBu
 }
 
 fn code_lines_of(language_file: &str, exclude_tests: bool) -> usize {
-    let spec = crate::loc::language::detect(std::path::Path::new(language_file)).unwrap();
+    let spec = crate::lang::language::detect(std::path::Path::new(language_file)).unwrap();
     let lines: Vec<String> = WITH_TEST_MODULE.lines().map(String::from).collect();
-    let kinds = crate::loc::counter::classify_reader(WITH_TEST_MODULE.as_bytes(), spec);
+    let kinds = crate::lang::counter::classify_reader(WITH_TEST_MODULE.as_bytes(), spec);
     production_kinds(&lines, kinds, spec, exclude_tests)
         .iter()
         .filter(|kind| **kind == LineKind::Code)
@@ -208,7 +208,7 @@ fn production_kinds_touch_no_other_language() {
 }
 
 fn rust_files(dir: &Path, files: &[(&str, &str)]) -> Vec<(PathBuf, &'static LanguageSpec)> {
-    let rust = crate::loc::language::detect(Path::new("a.rs")).unwrap();
+    let rust = crate::lang::language::detect(Path::new("a.rs")).unwrap();
     files
         .iter()
         .map(|(name, text)| {

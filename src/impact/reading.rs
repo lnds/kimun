@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use crate::deps::graph::{FileGraph, Related, Source};
 use crate::deps::heex;
 use crate::deps::layout::{Layout, is_manifest};
-use crate::loc::language::detect;
+use crate::lang::language::detect;
 
 /// The language of a file, when it has a graph.
 pub fn graphed_language(path: &Path) -> Option<&'static str> {

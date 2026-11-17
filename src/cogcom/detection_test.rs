@@ -1,5 +1,5 @@
 use super::*;
-use crate::loc::counter::LineKind;
+use crate::lang::counter::LineKind;
 
 fn rust_markers() -> &'static CognitiveMarkers {
     super::super::markers::cognitive_markers_for("Rust").unwrap()

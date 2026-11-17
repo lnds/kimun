@@ -3,7 +3,7 @@
 use serde::Serialize;
 
 use crate::detection::FunctionDetectionMarkers;
-use crate::loc::counter::LineKind;
+use crate::lang::counter::LineKind;
 
 use super::{commented, magic, params, rules};
 

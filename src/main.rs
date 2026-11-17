@@ -63,6 +63,8 @@ mod init;
 mod kind;
 /// Knowledge maps: code ownership via git blame.
 mod knowledge;
+/// Languages and the classifier of source lines every command reads with.
+mod lang;
 /// Lines of code counting with FSM-based line classification.
 mod loc;
 /// Enclosure diagram: directories as circles holding their files, coloured by a metric.
@@ -79,6 +81,8 @@ mod projects;
 mod report;
 /// Shared report formatting utilities (separators, path widths, JSON output).
 mod report_helpers;
+/// Rust source with comments and character literals blanked, strings apart.
+mod rust_literals;
 /// Overall code health score (A++ to F--, 5 weighted dimensions).
 mod score;
 /// Code smell detection (long functions, magic numbers, etc.).

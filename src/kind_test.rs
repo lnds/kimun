@@ -5,7 +5,7 @@ use tempfile::tempdir;
 
 use super::*;
 use crate::config::KindsConfig;
-use crate::loc::language::detect;
+use crate::lang::language::detect;
 
 fn kind_by_name(path: &str) -> Kind {
     let path = Path::new(path);

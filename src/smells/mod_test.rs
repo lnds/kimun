@@ -20,7 +20,7 @@ fn finds_long_function_with_correct_count() {
     }
     writeln!(f, "}}").unwrap();
 
-    let spec = crate::loc::language::detect(&file).unwrap();
+    let spec = crate::lang::language::detect(&file).unwrap();
     let result = super::analyze_file(&file, spec, 50, 4, false)
         .unwrap()
         .unwrap();
@@ -52,7 +52,7 @@ fn finds_todo_debt_in_comments() {
     writeln!(f, "    let x = 1;").unwrap();
     writeln!(f, "}}").unwrap();
 
-    let spec = crate::loc::language::detect(&file).unwrap();
+    let spec = crate::lang::language::detect(&file).unwrap();
     let result = super::analyze_file(&file, spec, 50, 4, false)
         .unwrap()
         .unwrap();
@@ -78,7 +78,7 @@ fn finds_long_params_single_line() {
     writeln!(f, "    let x = a;").unwrap();
     writeln!(f, "}}").unwrap();
 
-    let spec = crate::loc::language::detect(&file).unwrap();
+    let spec = crate::lang::language::detect(&file).unwrap();
     let result = super::analyze_file(&file, spec, 50, 4, false)
         .unwrap()
         .unwrap();
@@ -109,7 +109,7 @@ fn finds_long_params_multiline() {
     writeln!(f, "    let x = a;").unwrap();
     writeln!(f, "}}").unwrap();
 
-    let spec = crate::loc::language::detect(&file).unwrap();
+    let spec = crate::lang::language::detect(&file).unwrap();
     let result = super::analyze_file(&file, spec, 50, 4, false)
         .unwrap()
         .unwrap();
@@ -134,7 +134,7 @@ fn no_smells_for_clean_file() {
     writeln!(f, "    a + b").unwrap();
     writeln!(f, "}}").unwrap();
 
-    let spec = crate::loc::language::detect(&file).unwrap();
+    let spec = crate::lang::language::detect(&file).unwrap();
     let result = super::analyze_file(&file, spec, 50, 4, false).unwrap();
     assert!(result.is_none(), "clean file should have no smells");
 }
@@ -163,7 +163,7 @@ fn doc_comments_with_use_not_false_positive() {
     writeln!(f, "/// use tokio::runtime::Runtime;").unwrap();
     writeln!(f, "fn main() {{}}").unwrap();
 
-    let spec = crate::loc::language::detect(&file).unwrap();
+    let spec = crate::lang::language::detect(&file).unwrap();
     let result = super::analyze_file(&file, spec, 50, 4, false).unwrap();
     // Should not detect commented-out code for doc comments with `use`
     if let Some(ref metrics) = result {
@@ -286,7 +286,7 @@ fn analyze_file_returns_none_for_unsupported_language() {
     let dir = tempdir().unwrap();
     let file = dir.path().join("data.json");
     std::fs::write(&file, "{\"key\": \"value\"}\n").unwrap();
-    let spec = crate::loc::language::detect(&file).unwrap();
+    let spec = crate::lang::language::detect(&file).unwrap();
     // JSON has no function detection markers → returns None
     let result = super::analyze_file(&file, spec, 50, 4, false).unwrap();
     assert!(result.is_none(), "JSON should have no markers, return None");
@@ -352,7 +352,7 @@ fn run_on_files_codeclimate_format_with_smells() {
 #[test]
 fn smells_of_inline_tests_are_left_out_when_tests_are_excluded() {
     let (_dir, file) = crate::test_blocks::tests::source_with_test_module();
-    let spec = crate::loc::language::detect(&file).unwrap();
+    let spec = crate::lang::language::detect(&file).unwrap();
     let total = |exclude_tests| {
         super::analyze_file(&file, spec, 50, 4, exclude_tests)
             .unwrap()

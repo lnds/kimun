@@ -11,7 +11,7 @@ use std::error::Error;
 use std::path::Path;
 
 use crate::dups;
-use crate::loc::counter::FileStats;
+use crate::lang::counter::FileStats;
 use crate::loc::report::LanguageReport;
 use crate::util::hash_file;
 use crate::walk::WalkConfig;

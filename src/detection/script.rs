@@ -2,7 +2,7 @@
 //! (`f = function`, `f = (x) => {`) and regular expression literals.
 
 use super::*;
-use crate::loc::literals::regex::{regex_end, value_may_start};
+use crate::lang::literals::regex::{regex_end, value_may_start};
 
 /// The name a JavaScript or TypeScript function is assigned to or keyed
 /// by, when the signature is one: `name = function`, `name = (x) => {`,

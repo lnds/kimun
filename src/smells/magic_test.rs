@@ -1,4 +1,4 @@
-use crate::loc::counter::LineKind;
+use crate::lang::counter::LineKind;
 
 use super::*;
 
