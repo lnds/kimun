@@ -1,3 +1,18 @@
+## v0.48.0 (2026-11-17)
+
+### Notes
+
+- Lua, Perl, Scala and Zig have Halstead metrics: `km hal`, `km miv` and `km score` measure them. A project in one of them, which `km score` capped at B- (79.0) for lack of Halstead data, now gets the score its code earns.
+
+### Feat
+
+- **hal**: Halstead rules for Lua, Perl, Scala and Zig
+
+### Refactor
+
+- nothing above the diagonal of the module matrix of src/
+- languages and line classifier out of loc/, Rust literals out of deps/
+
 ## v0.47.0 (2026-11-16)
 
 ### Notes
