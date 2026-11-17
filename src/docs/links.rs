@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use super::markdown::{self, Form};
 use super::refs::{decode, is_external, relative};
-use crate::deps::graph::{nearest, shared_depth};
+use crate::nearest::{nearest, shared_depth};
 
 /// Where a link leads.
 #[derive(Debug, PartialEq, Eq)]

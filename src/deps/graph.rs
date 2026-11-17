@@ -13,6 +13,7 @@ use super::javascript;
 use super::layout::Layout;
 use super::python_names;
 use super::rust_crates;
+use crate::nearest::{nearest, shared_depth};
 
 /// A source file to place in the graph.
 pub struct Source {
@@ -269,25 +270,6 @@ fn imports(
 fn is_elixir_code(source: &Source) -> bool {
     matches!(source.language.as_str(), "Elixir" | "Elixir Script")
         && !elixir::is_build_config(&source.path)
-}
-
-/// How many leading directories two paths share.
-pub fn shared_depth(a: &Path, b: &Path) -> usize {
-    a.components()
-        .zip(b.components())
-        .take_while(|(x, y)| x == y)
-        .count()
-}
-
-/// The one file of `pool` deepest by `depth`, or `Err` when none or
-/// several are.
-pub fn nearest(pool: &[usize], depth: impl Fn(usize) -> usize) -> Result<usize, ()> {
-    let deepest = pool.iter().map(|&f| depth(f)).max().ok_or(())?;
-    let mut at_deepest = pool.iter().filter(|&&f| depth(f) == deepest);
-    match (at_deepest.next(), at_deepest.next()) {
-        (Some(&only), None) => Ok(only),
-        _ => Err(()),
-    }
 }
 
 /// Tells whether the file at the first path may use the one at the second

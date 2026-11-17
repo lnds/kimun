@@ -41,7 +41,7 @@ use crate::dups;
 use crate::git::GitRepo;
 use crate::walk::WalkConfig;
 
-use crate::cli::{GateScope, OutputMode};
+use crate::options::{GateScope, OutputMode};
 use analyzer::{FileScore, Graded, ProjectScore, compute_project_score};
 use collector::FileMetrics;
 use report::{print_json, print_report, print_short, print_terse};
@@ -124,7 +124,7 @@ pub fn run(
         OutputMode::Short => print_short(&score),
         OutputMode::Terse => print_terse(&score),
         OutputMode::Github | OutputMode::Codeclimate => {
-            return Err(crate::cli::ERR_CI_FORMAT_ONLY.into());
+            return Err(crate::options::ERR_CI_FORMAT_ONLY.into());
         }
         OutputMode::Table => print_report(&score, bottom, target.as_deref()),
     }
@@ -202,7 +202,7 @@ pub fn run_diff(
         OutputMode::Short => diff_report::print_short(&score_diff),
         OutputMode::Terse => diff_report::print_terse(&score_diff),
         OutputMode::Github | OutputMode::Codeclimate => {
-            return Err(crate::cli::ERR_CI_FORMAT_ONLY.into());
+            return Err(crate::options::ERR_CI_FORMAT_ONLY.into());
         }
         OutputMode::Table => diff_report::print_report(&score_diff),
     }

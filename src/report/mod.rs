@@ -22,7 +22,7 @@ mod markdown;
 
 use std::error::Error;
 
-use crate::cli::OutputMode;
+use crate::options::OutputMode;
 use crate::walk::WalkConfig;
 
 pub use data::*;
@@ -43,7 +43,7 @@ pub fn run(
         OutputMode::Short => print_short(&report),
         OutputMode::Terse => print_terse(&report),
         OutputMode::Github | OutputMode::Codeclimate => {
-            return Err(crate::cli::ERR_CI_FORMAT_ONLY.into());
+            return Err(crate::options::ERR_CI_FORMAT_ONLY.into());
         }
         OutputMode::Table => markdown::print_markdown(&report),
     }

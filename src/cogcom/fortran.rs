@@ -2,7 +2,7 @@
 //! constructs a statement opens and the `end` that closes each, not from
 //! indentation, which fixed form lacks.
 
-use crate::unit_bodies::fortran_statement;
+use crate::detection::unit_bodies::fortran_statement;
 use crate::util::mask_strings;
 
 use super::analyzer::{classify_line, count_boolean_sequences, increment};

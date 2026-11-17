@@ -104,7 +104,7 @@ pub(crate) fn analyze_file(
 /// chosen metric (effort, volume, or bugs), and print results.
 pub fn run(
     cfg: &WalkConfig<'_>,
-    output: crate::cli::OutputMode,
+    output: crate::options::OutputMode,
     top: Option<usize>,
     sort_by: &str,
 ) -> Result<(), Box<dyn Error>> {

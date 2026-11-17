@@ -1,5 +1,5 @@
 use super::*;
-use crate::cli::OutputMode;
+use crate::options::OutputMode;
 use std::fs;
 use std::path::Path as StdPath;
 

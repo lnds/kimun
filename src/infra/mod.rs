@@ -4,12 +4,13 @@
 //! CI pipelines, Compose files, Kubernetes manifests and Ansible
 //! playbooks, whatever `--kind` says.
 
+mod commands;
 mod help;
-pub mod lines;
 mod report;
 pub mod secrets;
 pub mod smells;
 
+pub use commands::InfraCommands;
 pub use help::SMELLS as SMELLS_HELP;
 pub use smells::Smell;
 
@@ -17,10 +18,10 @@ use std::cmp::Reverse;
 use std::error::Error;
 use std::path::PathBuf;
 
-use crate::cli::{InfraCommands, OutputMode};
+use crate::infra_lines::Format;
 use crate::kind::Kind;
+use crate::options::OutputMode;
 use crate::walk::WalkConfig;
-use lines::Format;
 use smells::Found;
 
 /// The smells of one file.

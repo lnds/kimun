@@ -1,4 +1,4 @@
-use crate::cli::OutputMode;
+use crate::options::OutputMode;
 use std::io::Write;
 use std::path::PathBuf;
 

@@ -9,8 +9,8 @@ use chrono::DateTime;
 use serde::Serialize;
 
 use super::context::{Load, Repeated, Role};
-use crate::cli::OutputMode;
 use crate::git::GitRepo;
+use crate::options::OutputMode;
 use crate::report_helpers::{self, table};
 use crate::walk::WalkConfig;
 
@@ -117,7 +117,7 @@ pub fn run(
         OutputMode::Short => print_short(&report),
         OutputMode::Terse => println!("{}", report.loads.first().map_or(0, |l| l.tokens)),
         OutputMode::Github | OutputMode::Codeclimate => {
-            return Err(crate::cli::ERR_CI_FORMAT_ONLY.into());
+            return Err(crate::options::ERR_CI_FORMAT_ONLY.into());
         }
         OutputMode::Table => print_report(&report, top),
     }

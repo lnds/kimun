@@ -2,7 +2,7 @@
 //! indentation: the program units of Fortran and the routines of Pascal.
 //! Both read code folded to lower case (`case_fold`).
 
-use crate::detection::FunctionBody;
+use super::FunctionBody;
 use crate::util::{indent_level, mask_strings};
 
 /// The words of a line outside strings and comments, and outside

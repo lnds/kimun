@@ -7,6 +7,7 @@
 
 mod analyzer;
 mod apart;
+mod args;
 mod c_family;
 mod c_like;
 mod c_like_reader;
@@ -53,6 +54,8 @@ mod rust;
 mod rust_crates;
 mod terraform;
 mod types;
+
+pub use args::DepsArgs;
 
 use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
@@ -208,8 +211,8 @@ fn visible_entries(entries: &[DepEntry], cycles_only: bool, top: usize) -> Vec<&
 /// Run `km deps`: the matrix when asked for, else the table.
 pub fn run(
     cfg: &WalkConfig<'_>,
-    output: crate::cli::OutputMode,
-    args: &crate::cli::DepsArgs,
+    output: crate::options::OutputMode,
+    args: &crate::deps::DepsArgs,
 ) -> Result<(), Box<dyn Error>> {
     match args.matrix {
         true => {
@@ -223,7 +226,7 @@ pub fn run(
 /// Run dependency graph analysis: walk files, extract imports, build graph, output.
 fn run_table(
     cfg: &WalkConfig<'_>,
-    output: crate::cli::OutputMode,
+    output: crate::options::OutputMode,
     cycles_only: bool,
     sort_by: &str,
     top: Option<usize>,
@@ -236,7 +239,7 @@ fn run_table(
     let entries = visible_entries(&result.entries, cycles_only, limit);
 
     match output {
-        crate::cli::OutputMode::Json => {
+        crate::options::OutputMode::Json => {
             let filtered = DepResult {
                 entries: entries.iter().map(|e| (*e).clone()).collect(),
                 cycles: result.cycles.clone(),
@@ -246,18 +249,18 @@ fn run_table(
             };
             report::print_json(&filtered)
         }
-        crate::cli::OutputMode::Short => {
+        crate::options::OutputMode::Short => {
             report::print_short(&result);
             Ok(())
         }
-        crate::cli::OutputMode::Terse => {
+        crate::options::OutputMode::Terse => {
             report::print_terse(&result);
             Ok(())
         }
-        crate::cli::OutputMode::Github | crate::cli::OutputMode::Codeclimate => {
-            Err(crate::cli::ERR_CI_FORMAT_ONLY.into())
+        crate::options::OutputMode::Github | crate::options::OutputMode::Codeclimate => {
+            Err(crate::options::ERR_CI_FORMAT_ONLY.into())
         }
-        crate::cli::OutputMode::Table => {
+        crate::options::OutputMode::Table => {
             let entries_vec: Vec<DepEntry> = entries.into_iter().cloned().collect();
             report::print_report(&entries_vec, &result);
             Ok(())

@@ -7,8 +7,8 @@ mod report;
 
 use std::error::Error;
 
-use crate::cli::OutputMode;
 use crate::git::GitRepo;
+use crate::options::OutputMode;
 use crate::util::parse_since;
 use crate::walk::{self, WalkConfig};
 use analyzer::{compute_authors, set_last_commits};
@@ -70,7 +70,7 @@ pub fn run(
         OutputMode::Short => print_short(&authors),
         OutputMode::Terse => print_terse(&authors),
         OutputMode::Github | OutputMode::Codeclimate => {
-            return Err(crate::cli::ERR_CI_FORMAT_ONLY.into());
+            return Err(crate::options::ERR_CI_FORMAT_ONLY.into());
         }
         OutputMode::Table => print_report(&authors),
     }

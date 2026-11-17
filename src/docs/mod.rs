@@ -5,6 +5,7 @@
 //! code spans that the repository no longer has. `km docs stale` finds the
 //! documents whose code changed after them.
 
+mod commands;
 pub mod context;
 mod context_report;
 pub mod describes;
@@ -17,6 +18,7 @@ mod report;
 pub mod stale;
 mod stale_report;
 
+pub use commands::DocsCommands;
 pub use help::{
     CONTEXT as CONTEXT_HELP, LINKS as LINKS_HELP, REFS as REFS_HELP, STALE as STALE_HELP,
 };
@@ -25,10 +27,10 @@ use std::collections::HashSet;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
-use crate::cli::{DocsCommands, OutputMode};
 use crate::config::KimunConfig;
 use crate::git::GitRepo;
 use crate::kind::Kind;
+use crate::options::OutputMode;
 use crate::walk::WalkConfig;
 use refs::{Dead, Repository};
 
@@ -109,7 +111,7 @@ pub fn links(cfg: &WalkConfig<'_>, output: OutputMode, top: Option<usize>) -> Co
         OutputMode::Short => links_report::print_short(&report),
         OutputMode::Terse => println!("{}", report.graph.broken.len()),
         OutputMode::Github | OutputMode::Codeclimate => {
-            return Err(crate::cli::ERR_CI_FORMAT_ONLY.into());
+            return Err(crate::options::ERR_CI_FORMAT_ONLY.into());
         }
         OutputMode::Table => links_report::print_report(&report, top),
     }
@@ -135,7 +137,7 @@ pub fn stale(cfg: &WalkConfig<'_>, output: OutputMode, top: Option<usize>) -> Co
         OutputMode::Short => stale_report::print_short(&found, documents.len()),
         OutputMode::Terse => println!("{}", found.len()),
         OutputMode::Github | OutputMode::Codeclimate => {
-            return Err(crate::cli::ERR_CI_FORMAT_ONLY.into());
+            return Err(crate::options::ERR_CI_FORMAT_ONLY.into());
         }
         OutputMode::Table => stale_report::print_report(&found, documents.len(), top),
     }

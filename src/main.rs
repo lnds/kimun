@@ -57,6 +57,8 @@ mod impact;
 mod indent;
 /// Measures of infrastructure code: security smells.
 mod infra;
+/// Lines of infrastructure code split into code and comment, by format.
+mod infra_lines;
 /// Interactive wizard: analyze current project state and write `.kimun.toml`.
 mod init;
 /// What a file is for: code, documentation, infrastructure or data.
@@ -73,14 +75,20 @@ mod map;
 mod mi;
 /// Maintainability Index (verifysoft variant, with comment weight).
 mod miv;
+/// The nearest of several files, by the directories they share.
+mod nearest;
 /// Commands that read the files of one kind, whatever `--kind` says.
 mod on_kind;
+/// The options every command shares: format, exclusions, gates.
+mod options;
 /// Projects of a repository and their dependencies, read from manifests.
 mod projects;
 /// Combined report (`km report`) aggregating all metrics.
 mod report;
 /// Shared report formatting utilities (separators, path widths, JSON output).
 mod report_helpers;
+/// Running a command: its target, its exclusions and its errors.
+mod run;
 /// Rust source with comments and character literals blanked, strings apart.
 mod rust_literals;
 /// Overall code health score (A++ to F--, 5 weighted dimensions).
@@ -93,8 +101,6 @@ mod string_mask;
 mod tc;
 /// Inline test blocks of Rust (`#[cfg(test)]`), left out with the tests.
 mod test_blocks;
-/// Functions closed by words: Fortran program units and Pascal routines.
-mod unit_bodies;
 /// Shared utilities (string masking, file reading, since parsing).
 mod util;
 /// Filesystem walking with .gitignore support and test exclusion.
@@ -106,39 +112,8 @@ use clap::{CommandFactory, Parser};
 use clap_complete::{Shell, generate};
 
 use cli::{AiCommands, Cli, Commands, ScoreCommands};
-use walk::{ExcludeFilter, WalkConfig};
-
-/// Resolve an optional path to a default of "." and run an analysis
-/// command, printing errors to stderr and exiting with code 1 on failure.
-fn run_command(
-    path: Option<PathBuf>,
-    f: impl FnOnce(&std::path::Path) -> Result<(), Box<dyn std::error::Error>>,
-) {
-    let target = path.unwrap_or_else(|| PathBuf::from("."));
-    report_helpers::set_path_base(&target);
-    if let Err(err) = f(&target) {
-        eprintln!("error: {err}");
-        std::process::exit(1);
-    }
-}
-
-/// If `--list-excluded` was passed, print the excluded files and exit.
-fn maybe_list_excluded(
-    path: &Option<PathBuf>,
-    include_tests: bool,
-    filter: &ExcludeFilter,
-    list_excluded: bool,
-) {
-    if !list_excluded {
-        return;
-    }
-    let target = path.as_deref().unwrap_or(std::path::Path::new("."));
-    if let Err(err) = walk::print_excluded_files(target, !include_tests, filter) {
-        eprintln!("error: {err}");
-        std::process::exit(1);
-    }
-    std::process::exit(0);
-}
+use run::{maybe_list_excluded, run_command};
+use walk::WalkConfig;
 
 /// Build filter, handle `--list-excluded`, then run a walk-based command.
 ///

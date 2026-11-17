@@ -6,6 +6,7 @@
 //! consulted ends at that merge base: the change is never evidence for itself.
 
 mod analyzer;
+mod args;
 mod copies;
 mod copies_report;
 mod documentation;
@@ -39,17 +40,18 @@ use std::collections::HashSet;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
-use crate::cli::OutputMode;
 use crate::config::KimunConfig;
 use crate::deps::heex;
 use crate::deps::layout::is_manifest;
 use crate::git::{ChangeKind, FileDiffStat, GitRepo};
+use crate::options::OutputMode;
 use crate::projects::ProjectGraph;
 use crate::util::{is_generated, parse_since};
 
 use analyzer::{
     Diffusion, MissingCoChange, Target, Thresholds, compute_diffusion, missing_co_changes,
 };
+pub use args::ImpactArgs;
 use documentation::{Signal, Stale};
 use entry::EntryPoints;
 pub use help::HELP;
@@ -86,7 +88,7 @@ pub struct ImpactOptions {
 /// The options the command line asks for. A pull request comes first, then
 /// a patch, then the refs: the parser already refuses the mixes that make
 /// no sense.
-pub fn options(args: &crate::cli::ImpactArgs) -> ImpactOptions {
+pub fn options(args: &ImpactArgs) -> ImpactOptions {
     let source = match (args.pr, &args.diff, &args.since_ref) {
         (Some(number), _, _) => DiffSource::PullRequest(number),
         (None, Some(file), base) => DiffSource::Patch {

@@ -1,7 +1,7 @@
 //! Secrets written into infrastructure code: a literal assigned to a key
 //! named as a secret, or a value shaped like a known kind of key.
 
-use super::lines::{Format, Value};
+use crate::infra_lines::{Format, Value};
 
 /// The last word of a key that names a secret.
 const SECRET_WORDS: [&str; 9] = [

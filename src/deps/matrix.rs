@@ -111,7 +111,7 @@ impl Matrix {
             .unzip();
         let mut tree = Tree::of(files);
         let uses = edges.iter().zip(&ends).filter(|(e, _)| strong(e.kind));
-        tree.order(&uses.map(|(_, &pair)| pair).collect::<Vec<_>>());
+        super::matrix_tree::order(&mut tree, &uses.map(|(_, &pair)| pair).collect::<Vec<_>>());
 
         let lines = visible(&tree, expand)?;
         let rows: Vec<usize> = lines

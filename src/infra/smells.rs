@@ -7,8 +7,8 @@ use std::collections::HashSet;
 use clap::ValueEnum;
 use serde::Serialize;
 
-use super::lines::{self, Format, Line, Value};
 use super::secrets;
+use crate::infra_lines::{self as lines, Format, Line, Value};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, ValueEnum)]
 #[serde(rename_all = "snake_case")]

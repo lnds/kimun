@@ -10,8 +10,8 @@ use std::path::PathBuf;
 
 use chrono::Utc;
 
-use crate::cli::OutputMode;
 use crate::git::GitRepo;
+use crate::options::OutputMode;
 use crate::walk::{self, WalkConfig};
 use analyzer::{AgeStatus, AgeThresholds, classify};
 use report::{print_json, print_report, print_short, print_terse};
@@ -92,7 +92,7 @@ pub fn run(
         OutputMode::Short => print_short(&files),
         OutputMode::Terse => print_terse(&files),
         OutputMode::Github | OutputMode::Codeclimate => {
-            return Err(crate::cli::ERR_CI_FORMAT_ONLY.into());
+            return Err(crate::options::ERR_CI_FORMAT_ONLY.into());
         }
         OutputMode::Table => print_report(&files, &thresholds),
     }

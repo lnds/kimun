@@ -1,4 +1,5 @@
-//! Lines of infrastructure code as the smells read them: the code apart
+//! Lines of infrastructure code as `infra` and the Terraform reader of
+//! `projects` read them: the code apart
 //! from the comment, by format, and the assignments the code makes.
 
 /// How a file of infrastructure is written.
@@ -234,5 +235,5 @@ pub fn words(text: &str) -> impl Iterator<Item = String> + '_ {
 }
 
 #[cfg(test)]
-#[path = "lines_test.rs"]
+#[path = "infra_lines_test.rs"]
 mod tests;

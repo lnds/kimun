@@ -4,7 +4,7 @@
 
 use std::error::Error;
 
-use crate::cli::OutputMode;
+use crate::options::OutputMode;
 use crate::walk::WalkConfig;
 
 use super::analyzer::{Graded, ProjectScore, grade_text, score_text};
@@ -35,7 +35,7 @@ pub fn run(
         }
         OutputMode::Terse => print_terse(&experimental),
         OutputMode::Github | OutputMode::Codeclimate => {
-            return Err(crate::cli::ERR_CI_FORMAT_ONLY.into());
+            return Err(crate::options::ERR_CI_FORMAT_ONLY.into());
         }
         OutputMode::Table => {
             print_report(&experimental, bottom, target);

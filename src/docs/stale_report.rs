@@ -6,7 +6,7 @@ use chrono::DateTime;
 use serde::Serialize;
 
 use super::stale::StaleDocument;
-use crate::cli::OutputMode;
+use crate::options::OutputMode;
 use crate::report_helpers::{self, display_width, pad_to};
 
 const DAY: i64 = 86_400;

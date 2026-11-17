@@ -12,8 +12,8 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
-use crate::cli::OutputMode;
 use crate::git::GitRepo;
+use crate::options::OutputMode;
 use crate::util::parse_since;
 use crate::walk::{self, ExcludeFilter};
 use analyzer::{FileCoupling, compute_coupling, sort_pairs};
@@ -138,7 +138,7 @@ pub fn run(path: &Path, opts: &TcOptions<'_>) -> Result<(), Box<dyn Error>> {
         OutputMode::Short => print_short(&results, total),
         OutputMode::Terse => print_terse(total),
         OutputMode::Github | OutputMode::Codeclimate => {
-            return Err(crate::cli::ERR_CI_FORMAT_ONLY.into());
+            return Err(crate::options::ERR_CI_FORMAT_ONLY.into());
         }
         OutputMode::Table => print_report(&results, total),
     }

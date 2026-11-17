@@ -18,7 +18,7 @@ use crate::git::{BlameInfo, GitRepo};
 use crate::util::parse_since;
 use crate::walk::{self, WalkConfig};
 
-use crate::cli::OutputMode;
+use crate::options::OutputMode;
 use crate::report_helpers;
 use analyzer::{FileOwnership, aggregate_by_author, compute_bus_factor, compute_ownership};
 use report::{
@@ -157,7 +157,7 @@ pub fn run(cfg: &WalkConfig<'_>, opts: &KnowledgeOptions<'_>) -> Result<(), Box<
                 Ok(())
             }
             OutputMode::Github | OutputMode::Codeclimate => {
-                Err(crate::cli::ERR_CI_FORMAT_ONLY.into())
+                Err(crate::options::ERR_CI_FORMAT_ONLY.into())
             }
             OutputMode::Table => {
                 print_bus_factor_report(
@@ -191,7 +191,7 @@ pub fn run(cfg: &WalkConfig<'_>, opts: &KnowledgeOptions<'_>) -> Result<(), Box<
                 Ok(())
             }
             OutputMode::Github | OutputMode::Codeclimate => {
-                Err(crate::cli::ERR_CI_FORMAT_ONLY.into())
+                Err(crate::options::ERR_CI_FORMAT_ONLY.into())
             }
             OutputMode::Table => {
                 print_summary_report(authors);

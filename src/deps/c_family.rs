@@ -20,8 +20,9 @@
 use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
-use super::graph::{EdgeKind, Found, Source, Use, nearest, shared_depth};
+use super::graph::{EdgeKind, Found, Source, Use};
 use super::javascript::normalize;
+use crate::nearest::{nearest, shared_depth};
 
 /// An `#include` and how it names its file.
 #[derive(Debug, PartialEq)]
