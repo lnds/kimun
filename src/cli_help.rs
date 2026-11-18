@@ -256,6 +256,9 @@ Legacy model (--model legacy, v0.13) — 6 dimensions:
 Non-code files (Markdown, TOML, JSON, etc.) are automatically excluded.
 With no code files there is nothing to grade: the score shows - (null
 in JSON) and --fail-below / --fail-if-worse pass with a note.
+A dimension that no file measures (Halstead for a file of imports alone)
+shows - and its weight is spread over the measured dimensions; a file's
+own score leaves out the metrics it lacks in the same way.
 Inline test blocks (#[cfg(test)]) are excluded from duplication analysis.
 
 Grade scale:

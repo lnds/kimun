@@ -1,9 +1,8 @@
 //! Grading system and data structures for the code health score.
 //!
-//! Defines the 16-level letter grade scale (A++ through F--),
-//! dimension/file/project score types, and the weighted aggregation
-//! function. Grade thresholds follow a 3-point spacing pattern:
-//! A++ ≥97, A+ ≥93, A ≥90, ..., F-- <40.
+//! Defines the 16-level letter grade scale (A++ through F--) and the
+//! dimension/file/project score types. Grade thresholds follow a 3-point
+//! spacing pattern: A++ ≥97, A+ ≥93, A ≥90, ..., F-- <40.
 
 use std::fmt;
 use std::path::PathBuf;
@@ -194,7 +193,8 @@ pub fn grade_text(graded: Option<Graded>) -> &'static str {
 }
 
 /// A single scored dimension (e.g. MI, Complexity) with its weight.
-/// `graded` is `None` when there is nothing to grade: no code files.
+/// `graded` is `None` when no file of the target has its metric: every
+/// dimension when there is nothing to grade, no code files.
 #[derive(Debug, Clone, Serialize)]
 pub struct DimensionScore {
     pub name: &'static str,
@@ -222,23 +222,6 @@ pub struct ProjectScore {
     pub total_loc: usize,
     pub dimensions: Vec<DimensionScore>,
     pub needs_attention: Vec<FileScore>,
-}
-
-/// Weighted sum of dimension scores, `None` when a dimension has nothing
-/// to grade (an empty slice sums to `Some(0.0)`, but every model has
-/// dimensions). Weights must sum to 1.0 when non-empty.
-pub fn compute_project_score(dimensions: &[DimensionScore]) -> Option<f64> {
-    if !dimensions.is_empty() {
-        let weight_sum: f64 = dimensions.iter().map(|d| d.weight).sum();
-        debug_assert!(
-            (weight_sum - 1.0).abs() < 1e-9,
-            "dimension weights must sum to 1.0, got {weight_sum}"
-        );
-    }
-    dimensions
-        .iter()
-        .map(|d| Some(d.graded?.score * d.weight))
-        .sum()
 }
 
 #[cfg(test)]

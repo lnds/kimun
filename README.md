@@ -1411,6 +1411,8 @@ Non-code files (Markdown, TOML, JSON, etc.) are automatically excluded. Inline t
 
 A target with nothing to grade, no code files (a README, a config file, an empty source file), gets no grade rather than F--: the report says there is nothing to grade and shows `-` for the score, the grade and every dimension, `--format json` gives `null` for `score` and `grade` and keeps every key, `--format terse` prints `-`, and the badge is grey and says `not graded`. If there are code files but none can be read, that is an error, not nothing to grade.
 
+A dimension that no file of the target can measure has no score either: for instance Halstead Effort, for a file with nothing for Halstead to count (a Ruby file of `require` lines, a JavaScript file of side-effect imports, a Go file that holds only its package clause, a TypeScript file of types alone) or in a language without Halstead rules (those [`km hal`](#km-hal----halstead-complexity-metrics) does not list), and with it the Maintainability Index of the legacy and experimental models. The table shows `-` for it and says why under it (`Halstead Effort not measured; its weight is spread over the other dimensions.`), `--format json` gives `null`, and the project score is the weighted mean of the dimensions that were measured. A file's own score, in "Files Needing Attention", `km map` and `--gate-scope changed`, leaves out the metrics the file lacks in the same way. Up to v0.48 such a dimension counted 0.0 in the project score and 50 in a file's score: `km score` on a file of `require` lines alone gave B- (79.0), and the file itself 86.7 in "Files Needing Attention".
+
 With `--trend`, a gate with nothing to compare passes, and says so on stderr (`note: nothing to grade in README.md (no code files measured); --fail-below skipped`): `--fail-below` when there is nothing to grade now, `--fail-if-worse` when there is nothing to grade now or at the ref. With `--gate-scope changed`, duplicated lines are still compared when the ref had no code, since they are counted, not graded. So a gate that checks each changed path does not fail on documentation, and deleting all the code under a path does not fail `--fail-if-worse`.
 
 ```bash
@@ -1455,7 +1457,7 @@ On the projects it was tried on, the experimental score stays within about 1.5 p
 | Halstead Effort | 15% | Mental effort per LOC |
 | File Size | 5% | Full score up to 500 LOC, falling to 0 at 4,000 |
 
-Each dimension is aggregated as a LOC-weighted mean across all files (except Duplication which is a single project-level value). The project score is the weighted sum of all dimension scores.
+Each dimension is aggregated as a LOC-weighted mean across all files (except Duplication which is a single project-level value). The project score is the weighted mean of the dimension scores: their weighted sum when every dimension was measured.
 
 #### Grade scale
 

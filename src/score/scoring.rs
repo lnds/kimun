@@ -1,9 +1,10 @@
 //! Dimension scoring and per-file score computation.
 //!
 //! Handles the normalization and aggregation of per-file metrics into
-//! dimension scores (LOC-weighted means) and individual file scores
-//! (weighted sums across dimensions). Each dimension uses a piecewise
-//! linear curve from `normalize.rs` to map raw metrics to 0–100.
+//! dimension scores (LOC-weighted means), of dimension scores into the
+//! project score, and of a file's metrics into its own score. Those two are
+//! weighted means of the dimensions that were measured. Each dimension uses
+//! a piecewise linear curve from `normalize.rs` to map raw metrics to 0–100.
 //!
 //! Supports three scoring models:
 //! - **Cognitive** (default): 5 dimensions with cognitive complexity.
@@ -79,9 +80,6 @@ pub const FILE_WEIGHTS_LEGACY: [(f64, &str); 5] = [
 
 // ─── Shared ──────────────────────────────────────────────────────────
 
-/// Default score for missing dimensions (neutral).
-pub const MISSING_DIM_SCORE: f64 = 50.0;
-
 /// Build dimension scores for the active scoring model.
 pub fn build_dimensions(
     file_metrics: &[FileMetrics],
@@ -147,17 +145,13 @@ impl Effort {
     /// by their code lines for Halstead, as for every other dimension, and
     /// the plain mean of the files for the MI. The MI already falls with the
     /// size of a file, so weighting it by lines would count size twice, on
-    /// top of the File Size dimension.
-    fn aggregate(self, file_metrics: &[FileMetrics], total_loc: usize) -> f64 {
+    /// top of the File Size dimension. `None` when no file has the metric.
+    fn aggregate(self, file_metrics: &[FileMetrics], total_loc: usize) -> Option<f64> {
         match self {
             Self::Halstead => weighted_mean(file_metrics, total_loc, |f| self.score(f)),
             Self::MaintainabilityIndex => {
                 let scores: Vec<f64> = file_metrics.iter().filter_map(|f| self.score(f)).collect();
-                if scores.is_empty() {
-                    0.0
-                } else {
-                    scores.iter().sum::<f64>() / scores.len() as f64
-                }
+                (!scores.is_empty()).then(|| scores.iter().sum::<f64>() / scores.len() as f64)
             }
         }
     }
@@ -192,12 +186,12 @@ fn build_cognitive_dimensions(
     let size_dim = weighted_mean(file_metrics, total_loc, |f| {
         Some(normalize_file_size(f.code_lines))
     });
-    let dup_dim = normalize_duplication(dup_percent);
+    let dup_dim = Some(normalize_duplication(dup_percent));
 
-    let dim = |name, weight, score| DimensionScore {
+    let dim = |name, weight, score: Option<f64>| DimensionScore {
         name,
         weight,
-        graded: Some(Graded::of(score)),
+        graded: score.map(Graded::of),
     };
 
     vec![
@@ -210,9 +204,10 @@ fn build_cognitive_dimensions(
 }
 
 /// Score a single file using the cognitive model.
-/// Excludes duplication (project-level only). The weighted sum uses absolute
-/// dimension weights divided by the per-file weight sum, so the result is
-/// renormalized to 0–100 but not directly comparable to the project score.
+/// Excludes duplication (project-level only), and the metrics the file lacks.
+/// The weighted sum uses absolute dimension weights divided by the sum of
+/// the weights left, so the result is renormalized to 0–100 but not directly
+/// comparable to the project score.
 fn score_file_cognitive(f: &FileMetrics, model: &ScoringModel) -> FileScore {
     let w = model.cognitive_weights();
     let mut issues: Vec<String> = Vec::new();
@@ -244,21 +239,19 @@ fn score_file_cognitive(f: &FileMetrics, model: &ScoringModel) -> FileScore {
         ),
     };
 
-    let size_s = normalize_file_size(f.code_lines);
-    if f.code_lines > 1000 {
-        issues.push(format!("Size: {} LOC", f.code_lines));
-    }
+    let size_s = size_score(f, &mut issues);
 
-    let weighted_sum = cogcom_s * w.cogcom + indent_s * w.indent + hal_s * w.hal + size_s * w.size;
-    let file_score = weighted_sum / w.file_sum();
+    let file_score = file_mean(
+        &[
+            (cogcom_s, w.cogcom),
+            (indent_s, w.indent),
+            (hal_s, w.hal),
+            (Some(size_s), w.size),
+        ],
+        w.file_sum(),
+    );
 
-    FileScore {
-        path: f.path.clone(),
-        score: file_score,
-        grade: score_to_grade(file_score),
-        loc: f.code_lines,
-        issues,
-    }
+    scored(f, file_score, issues)
 }
 
 // ─── Legacy model (v0.13) ────────────────────────────────────────────
@@ -283,12 +276,12 @@ fn build_legacy_dimensions(
     let size_dim = weighted_mean(file_metrics, total_loc, |f| {
         Some(normalize_file_size(f.code_lines))
     });
-    let dup_dim = normalize_duplication(dup_percent);
+    let dup_dim = Some(normalize_duplication(dup_percent));
 
-    let dim = |name, weight, score| DimensionScore {
+    let dim = |name, weight, score: Option<f64>| DimensionScore {
         name,
         weight,
-        graded: Some(Graded::of(score)),
+        graded: score.map(Graded::of),
     };
 
     vec![
@@ -302,12 +295,12 @@ fn build_legacy_dimensions(
 }
 
 /// Score a single file using the legacy model.
-/// Excludes duplication (project-level only). The weighted sum uses absolute
-/// dimension weights divided by the per-file weight sum, so the result is
-/// renormalized to 0–100 but not directly comparable to the project score.
+/// Excludes duplication (project-level only), and the metrics the file lacks.
+/// The weighted sum uses absolute dimension weights divided by the sum of
+/// the weights left, so the result is renormalized to 0–100 but not directly
+/// comparable to the project score.
 fn score_file_legacy(f: &FileMetrics) -> FileScore {
     let mut issues: Vec<String> = Vec::new();
-    let file_weight_sum: f64 = FILE_WEIGHTS_LEGACY.iter().map(|(w, _)| w).sum();
 
     let mi_s = score_dim(
         f.mi_score,
@@ -334,60 +327,114 @@ fn score_file_legacy(f: &FileMetrics) -> FileScore {
         &mut issues,
     );
 
-    let size_s = normalize_file_size(f.code_lines);
-    if f.code_lines > 1000 {
-        issues.push(format!("Size: {} LOC", f.code_lines));
-    }
+    let size_s = size_score(f, &mut issues);
 
-    let weighted_sum = mi_s * W_MI
-        + cycom_s * W_CYCOM
-        + indent_s * W_INDENT_LEGACY
-        + hal_s * W_HAL_LEGACY
-        + size_s * W_SIZE_LEGACY;
-    let file_score = weighted_sum / file_weight_sum;
+    let file_score = file_mean(
+        &[
+            (mi_s, W_MI),
+            (cycom_s, W_CYCOM),
+            (indent_s, W_INDENT_LEGACY),
+            (hal_s, W_HAL_LEGACY),
+            (Some(size_s), W_SIZE_LEGACY),
+        ],
+        FILE_WEIGHTS_LEGACY.iter().map(|(w, _)| w).sum(),
+    );
 
-    FileScore {
-        path: f.path.clone(),
-        score: file_score,
-        grade: score_to_grade(file_score),
-        loc: f.code_lines,
-        issues,
-    }
+    scored(f, file_score, issues)
 }
 
 // ─── Shared helpers ──────────────────────────────────────────────────
 
 /// Normalize an optional metric and push an issue if the score is below 60.
+/// A file without the metric has no score on it.
 fn score_dim<T: Copy>(
     value: Option<T>,
     normalize: impl Fn(T) -> f64,
     label: impl Fn(T) -> String,
     issues: &mut Vec<String>,
-) -> f64 {
-    match value {
-        Some(v) => {
-            let s = normalize(v);
-            if s < 60.0 {
-                issues.push(label(v));
-            }
-            s
-        }
-        None => MISSING_DIM_SCORE,
+) -> Option<f64> {
+    let v = value?;
+    let s = normalize(v);
+    if s < 60.0 {
+        issues.push(label(v));
     }
+    Some(s)
+}
+
+/// The score of a file with the issues found in it.
+fn scored(f: &FileMetrics, score: f64, issues: Vec<String>) -> FileScore {
+    FileScore {
+        path: f.path.clone(),
+        score,
+        grade: score_to_grade(score),
+        loc: f.code_lines,
+        issues,
+    }
+}
+
+/// The File Size score of a file, with an issue when it is over 1000 lines.
+fn size_score(f: &FileMetrics, issues: &mut Vec<String>) -> f64 {
+    if f.code_lines > 1000 {
+        issues.push(format!("Size: {} LOC", f.code_lines));
+    }
+    normalize_file_size(f.code_lines)
+}
+
+/// Weighted mean of the dimensions that have a score, `None` when none has:
+/// a dimension that nothing in the target can measure leaves its weight to
+/// the others. With every dimension graded it is the plain weighted sum.
+/// Weights must sum to 1.0 when non-empty.
+pub fn compute_project_score(dimensions: &[DimensionScore]) -> Option<f64> {
+    if !dimensions.is_empty() {
+        let weight_sum: f64 = dimensions.iter().map(|d| d.weight).sum();
+        debug_assert!(
+            (weight_sum - 1.0).abs() < 1e-9,
+            "dimension weights must sum to 1.0, got {weight_sum}"
+        );
+    }
+    let terms: Vec<(Option<f64>, f64)> = dimensions
+        .iter()
+        .map(|d| (d.graded.map(|g| g.score), d.weight))
+        .collect();
+    measured_mean(&terms, 1.0)
+}
+
+/// The weighted mean of the scores that were measured: the weight of a
+/// term without a score goes to the others, and `None` when none has one.
+/// With every term scored it is the weighted sum over `whole`, the sum of
+/// all the weights, so a fully measured target gets the number it always
+/// did.
+fn measured_mean(terms: &[(Option<f64>, f64)], whole: f64) -> Option<f64> {
+    let measured: Vec<(f64, f64)> = terms.iter().filter_map(|&(s, w)| Some((s?, w))).collect();
+    if measured.is_empty() {
+        return None;
+    }
+    let weighted_sum: f64 = measured.iter().map(|(s, w)| s * w).sum();
+    let weight = if measured.len() == terms.len() {
+        whole
+    } else {
+        measured.iter().map(|(_, w)| w).sum()
+    };
+    Some(weighted_sum / weight)
+}
+
+/// The score of a file on the metrics it has. File Size is always one.
+fn file_mean(terms: &[(Option<f64>, f64)], whole: f64) -> f64 {
+    measured_mean(terms, whole).expect("File Size always has a score")
 }
 
 /// LOC-weighted mean of a normalized dimension across all files.
 ///
 /// Files with more code lines have proportionally more influence on
 /// the dimension score. Files where the metric is unavailable (None)
-/// are excluded from the mean.
+/// are excluded from the mean. `None` when no file has the metric.
 pub fn weighted_mean(
     files: &[FileMetrics],
     total_loc: usize,
     score_fn: impl Fn(&FileMetrics) -> Option<f64>,
-) -> f64 {
+) -> Option<f64> {
     if total_loc == 0 {
-        return 0.0;
+        return None;
     }
     let mut weighted_sum = 0.0;
     let mut weight_sum = 0usize;
@@ -398,11 +445,7 @@ pub fn weighted_mean(
             weight_sum += w;
         }
     }
-    if weight_sum == 0 {
-        0.0
-    } else {
-        weighted_sum / weight_sum as f64
-    }
+    (weight_sum > 0).then(|| weighted_sum / weight_sum as f64)
 }
 
 #[cfg(test)]

@@ -1411,6 +1411,8 @@ Los archivos que no son código (Markdown, TOML, JSON, etc.) se excluyen automá
 
 Un objetivo sin nada que calificar, sin archivos de código (un README, un archivo de configuración, un archivo fuente vacío), no recibe nota en vez de F--: el informe dice que no hay nada que calificar y muestra `-` en el puntaje, la nota y cada dimensión, `--format json` da `null` en `score` y `grade` y mantiene todas las claves, `--format terse` imprime `-`, y el badge es gris y dice `not graded`. Si hay archivos de código pero ninguno se puede leer, es un error, no un objetivo sin nada que calificar.
 
+Una dimensión que ningún archivo del objetivo puede medir tampoco tiene puntaje: por ejemplo Halstead Effort, en un archivo sin nada que contar para Halstead (un archivo Ruby de líneas `require`, un archivo JavaScript de imports de efecto secundario, un archivo Go que solo tiene su cláusula `package`, un archivo TypeScript solo de tipos) o en un lenguaje sin reglas de Halstead (los que [`km hal`](#km-hal----métricas-de-complejidad-de-halstead) no lista), y con ella el Maintainability Index de los modelos legacy y experimental. La tabla muestra `-` en ella y dice por qué debajo (`Halstead Effort not measured; its weight is spread over the other dimensions.`), `--format json` da `null`, y el puntaje del proyecto es la media ponderada de las dimensiones que se midieron. El puntaje propio de un archivo, en "Files Needing Attention", `km map` y `--gate-scope changed`, deja fuera de la misma forma las métricas que le faltan. Hasta v0.48 una dimensión así contaba 0.0 en el puntaje del proyecto y 50 en el de un archivo: `km score` sobre un archivo solo de líneas `require` daba B- (79.0), y el archivo mismo 86.7 en "Files Needing Attention".
+
 Con `--trend`, un gate sin nada que comparar pasa, y lo dice en stderr (`note: nothing to grade in README.md (no code files measured); --fail-below skipped`): `--fail-below` cuando no hay nada que calificar ahora, `--fail-if-worse` cuando no hay nada que calificar ahora o en la ref. Con `--gate-scope changed`, las líneas duplicadas se comparan igual cuando la ref no tenía código, porque se cuentan, no se califican. Así un gate que revisa cada ruta modificada no falla por la documentación, y eliminar todo el código bajo una ruta no hace fallar `--fail-if-worse`.
 
 ```bash
@@ -1455,7 +1457,7 @@ En los proyectos donde se probó, el puntaje experimental queda a unos 1,5 punto
 | Esfuerzo de Halstead | 15% | Esfuerzo mental por LOC |
 | Tamaño de archivo | 5% | Puntaje completo hasta 500 LOC; baja a 0 en 4.000 |
 
-Cada dimensión se agrega como un promedio ponderado por LOC sobre todos los archivos (salvo la duplicación, que es un único valor a nivel de proyecto). El puntaje del proyecto es la suma ponderada de los puntajes de todas las dimensiones.
+Cada dimensión se agrega como un promedio ponderado por LOC sobre todos los archivos (salvo la duplicación, que es un único valor a nivel de proyecto). El puntaje del proyecto es el promedio ponderado de los puntajes de las dimensiones: su suma ponderada cuando se midieron todas.
 
 #### Escala de notas
 
