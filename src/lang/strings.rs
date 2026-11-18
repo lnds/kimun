@@ -59,9 +59,9 @@ pub(super) fn scan(rest: &[u8], kind: &mut StringKind) -> (usize, bool) {
     }
 }
 
-fn delimited_scan(rest: &[u8], d: &Delimited) -> (usize, bool) {
+fn delimited_scan(rest: &[u8], d: &mut Delimited) -> (usize, bool) {
     let len = d.close.len();
-    let closes = rest.starts_with(&d.close);
+    let closes = d.step_closes(rest);
     if d.escapes && rest[0] == b'\\' {
         (rest.len().min(2), false)
     } else if closes && d.doubled && rest[len..].starts_with(&d.close) {

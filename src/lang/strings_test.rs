@@ -37,6 +37,7 @@ fn a_doubled_quote_does_not_close_a_verbatim_string() {
         escapes: false,
         doubled: true,
         spans: true,
+        nests: None,
     });
     assert_eq!(closes_after("a \"\"b\"\" c\" d", verbatim), Some(10));
 }

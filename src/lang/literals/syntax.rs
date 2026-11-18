@@ -1,6 +1,8 @@
 //! How each language writes its literals and comments, beyond what
 //! `LanguageSpec` declares for counting lines.
 
+use super::marked::Marks;
+use super::regex;
 use crate::lang::language::LanguageSpec;
 
 /// What a backtick opens.
@@ -46,8 +48,11 @@ pub(crate) struct Syntax {
     /// Rust's raw strings: `r"…"`, `r#"…"#`, with a `b` or `c` prefix.
     pub rust_raw: bool,
     pub heredocs: Heredocs,
-    /// Regular expression literals (JavaScript).
-    pub regex: bool,
+    /// Regular expression literals (JavaScript, Ruby): where a `/` opens one.
+    pub regex: Option<regex::ValueStart>,
+    /// What the language marks beyond its quotes: sigils, percent literals,
+    /// quotes that open nothing.
+    pub marks: Marks,
     /// `?"` and `?'` are the code of a character (Ruby, Elixir).
     pub char_codes: bool,
     /// A `#` is a comment only where a word starts (shells).
@@ -88,7 +93,8 @@ impl Syntax {
                 _ if shell => Heredocs::Shell,
                 _ => Heredocs::None,
             },
-            regex: script,
+            regex: regex::value_start(script, name),
+            marks: Marks::of(name, shell),
             char_codes: matches!(name, "Ruby" | "Elixir" | "Elixir Script"),
             hash_at_word_start: shell,
             dollar_hash: name == "Perl",

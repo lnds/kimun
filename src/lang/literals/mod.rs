@@ -3,6 +3,7 @@
 //! (`code_text`) read them alike.
 
 pub(crate) mod heredoc;
+pub(crate) mod marked;
 pub(crate) mod openers;
 pub(crate) mod regex;
 pub(crate) mod syntax;

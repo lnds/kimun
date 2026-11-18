@@ -2,7 +2,7 @@
 //! (`f = function`, `f = (x) => {`) and regular expression literals.
 
 use super::*;
-use crate::lang::literals::regex::{regex_end, value_may_start};
+use crate::lang::literals::regex::{SCRIPT, regex_end};
 
 /// The name a JavaScript or TypeScript function is assigned to or keyed
 /// by, when the signature is one: `name = function`, `name = (x) => {`,
@@ -98,7 +98,7 @@ pub(super) fn without_regex_literals(line: &str) -> String {
     while i < bytes.len() {
         let opens = bytes[i] == b'/'
             && !matches!(bytes.get(i + 1), Some(b'/' | b'*'))
-            && value_may_start(&bytes[..i]);
+            && SCRIPT.after_operator(&bytes[..i]);
         match opens.then(|| regex_end(&bytes, i + 1)).flatten() {
             Some(end) => {
                 bytes[i + 1..end].fill(b' ');
