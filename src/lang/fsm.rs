@@ -273,7 +273,9 @@ pub(super) fn step_in_string(rest: &[u8], kind: &mut StringKind, doc: bool) -> S
 /// Process one byte inside a documentation attribute. The body is
 /// documentation, so every byte counts as comment. String literals are
 /// tracked because the closing delimiter (`)]`) is only meaningful outside
-/// a string — a doc text may well contain `)]` itself.
+/// a string — a doc text may well contain `)]` itself. An attribute that
+/// opens a string (`@doc """`) holds the text of that string: nothing but
+/// its close ends it, whatever quotes the text has (`it won't`).
 pub(super) fn step_in_doc_attribute(
     rest: &[u8],
     spec: &LanguageSpec,
@@ -291,6 +293,9 @@ pub(super) fn step_in_doc_attribute(
 
     if bytes_start_with(rest, close) {
         return StepResult::comment(close.len(), Some(State::Normal));
+    }
+    if close.starts_with(['"', '\'']) {
+        return StepResult::comment(1, None);
     }
 
     match literal_open(rest, 0, spec, syntax) {
