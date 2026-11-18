@@ -16,7 +16,7 @@ use std::path::Path;
 use crate::lang::counter::LineKind;
 use crate::lang::language::LanguageSpec;
 use crate::report_helpers;
-use crate::string_mask::{code_view, multi_line_string_mask};
+use crate::string_mask::code_view;
 use crate::util::read_and_classify;
 use crate::walk::WalkConfig;
 use analyzer::compute;
@@ -39,20 +39,18 @@ pub(crate) fn analyze_content(
     compute(&counts)
 }
 
-/// The lines Halstead reads: code, outside multi-line strings, and in
-/// TypeScript outside type-level declarations, which run nothing.
+/// The lines Halstead reads: the code lines of `code_view`, which holds no
+/// line from inside a string that spans lines, and in TypeScript outside
+/// type-level declarations, which run nothing.
 fn measured_lines<'a>(
     lines: &'a [String],
     kinds: &[LineKind],
     spec: &LanguageSpec,
 ) -> Vec<&'a str> {
-    let string_mask = multi_line_string_mask(lines, spec);
     let code: Vec<&str> = lines
         .iter()
         .zip(kinds)
-        .zip(&string_mask)
-        .filter(|((_, k), in_string)| **k == LineKind::Code && !*in_string)
-        .map(|((line, _), _)| line.as_str())
+        .filter_map(|(line, kind)| (*kind == LineKind::Code).then_some(line.as_str()))
         .collect();
     if spec.name != "TypeScript" {
         return code;

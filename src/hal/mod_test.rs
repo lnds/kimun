@@ -284,3 +284,45 @@ fn pascal_has_halstead_rules() {
     // x, y, 2
     assert_eq!(metrics.distinct_operands, 3);
 }
+
+/// The Halstead metrics of a Python file that holds `text`.
+fn python_metrics(text: &str) -> analyzer::HalsteadMetrics {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("a.py");
+    fs::write(&path, text).unwrap();
+    let spec = crate::lang::language::detect(&path).unwrap();
+    let measured = analyze_file(&path, spec, false).unwrap();
+    measured.expect("the file has code to measure").metrics
+}
+
+#[test]
+fn python_code_after_a_string_that_spans_lines_is_tokenized() {
+    let code = "def total(items):\n    return sum(i.price * i.qty for i in items) + 1\n";
+    let one_line = python_metrics(&format!("QUERY = \"a\"\n{code}"));
+    // the text of the string is no code, and the function after it is
+    let spanning = python_metrics(&format!(
+        "QUERY = \"\"\"\nSELECT id\nFROM users\n\"\"\"\n{code}"
+    ));
+    assert_eq!(spanning.total_operators, one_line.total_operators);
+    assert_eq!(spanning.total_operands, one_line.total_operands);
+}
+
+#[test]
+fn python_code_between_two_strings_that_span_lines_is_tokenized() {
+    let code = "def total(items):\n    return sum(i.price * i.qty for i in items) + 1\n";
+    let one_line = python_metrics(&format!("A = \"a\"\n{code}B = \"b\"\n{code}"));
+    let spanning = python_metrics(&format!(
+        "A = \"\"\"\na\n\"\"\"\n{code}B = \"\"\"\nb\n\"\"\"\n{code}"
+    ));
+    assert_eq!(spanning.total_operators, one_line.total_operators);
+    assert_eq!(spanning.total_operands, one_line.total_operands);
+}
+
+#[test]
+fn a_python_file_that_opens_with_a_raw_docstring_has_halstead_metrics() {
+    let plain = python_metrics("\"\"\"\nDoc.\n\"\"\"\nx = 1 + 2\nprint(x)\n");
+    let raw = python_metrics("r\"\"\"\nDoc \\d.\n\"\"\"\nx = 1 + 2\nprint(x)\n");
+    assert_eq!(raw.total_operators, plain.total_operators);
+    // a docstring is a comment; with a prefix it is an expression, one operand
+    assert_eq!(raw.total_operands, plain.total_operands + 1);
+}
