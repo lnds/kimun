@@ -7,8 +7,8 @@ use serde::Serialize;
 
 use super::analyzer::{Grade, Graded, grade_text, score_text};
 use super::changed::ChangedScope;
-use super::diff::ScoreDiff;
-use super::report::JsonGraded;
+use super::diff::{DimensionDelta, ScoreDiff};
+use super::report::{JsonGraded, unmeasured_note};
 use crate::report_helpers;
 
 // ANSI color codes.
@@ -36,12 +36,12 @@ fn colored_delta(delta: f64, decimals: usize) -> String {
     format!("{color}{text}{RESET}")
 }
 
-/// The colored delta, or `-` when a side has nothing to grade.
+/// The colored delta, or `-` when a side has no score.
 fn shown_delta(delta: Option<f64>, decimals: usize) -> String {
     delta.map_or_else(|| "-".to_string(), |d| colored_delta(d, decimals))
 }
 
-/// The signed delta without color, or `-` when a side has nothing to grade.
+/// The signed delta without color, or `-` when a side has no score.
 fn plain_delta(delta: Option<f64>) -> String {
     delta.map_or_else(|| "-".to_string(), |d| format!("{d:+.2}"))
 }
@@ -99,9 +99,43 @@ pub fn print_report(diff: &ScoreDiff) {
     }
 
     println!("{separator}");
+    for note in dimension_notes(diff) {
+        println!(" {note}");
+    }
 
     if let Some(scope) = &diff.changed {
         print_changed_files(scope, diff.before, &separator);
+    }
+}
+
+/// The notes under the table: the dimensions not measured on a side that
+/// has a score, said once when both sides miss the same ones.
+fn dimension_notes(diff: &ScoreDiff) -> Vec<String> {
+    let before = unmeasured(diff, diff.before, |d| d.before);
+    let after = unmeasured(diff, diff.after, |d| d.after);
+    if before == after {
+        return unmeasured_note(before).into_iter().collect();
+    }
+    [("Before", before), ("After", after)]
+        .into_iter()
+        .filter_map(|(side, names)| Some(format!("{side}: {}", unmeasured_note(names)?)))
+        .collect()
+}
+
+/// The dimensions without a score on a side that has one.
+fn unmeasured(
+    diff: &ScoreDiff,
+    project: Option<Graded>,
+    side: fn(&DimensionDelta) -> Option<Graded>,
+) -> Vec<&str> {
+    match project {
+        Some(_) => diff
+            .dimensions
+            .iter()
+            .filter(|d| side(d).is_none())
+            .map(|d| d.name.as_str())
+            .collect(),
+        None => Vec::new(),
     }
 }
 
@@ -228,8 +262,8 @@ pub fn print_json(diff: &ScoreDiff) -> Result<(), Box<dyn std::error::Error>> {
     report_helpers::print_json_stdout(&to_json(diff))
 }
 
-/// The JSON of the diff. Every key is present; what a side with nothing
-/// to grade lacks is null.
+/// The JSON of the diff. Every key is present; a score a side lacks, for
+/// nothing to grade or nothing measured, is null.
 fn to_json(diff: &ScoreDiff) -> JsonScoreDiff<'_> {
     JsonScoreDiff {
         git_ref: diff.git_ref.clone(),
@@ -447,6 +481,55 @@ mod tests {
             baseline_line(None),
             " Nothing was graded at the ref: only duplicated lines are compared."
         );
+    }
+
+    /// A project with a score and four dimensions, those named without one.
+    fn without_a_score(unmeasured: &[&str]) -> ProjectScore {
+        let dimension = |name| DimensionScore {
+            name,
+            weight: 0.25,
+            graded: (!unmeasured.contains(&name)).then(|| Graded::of(90.0)),
+        };
+        ProjectScore {
+            dimensions: [
+                "Cognitive Complexity",
+                "Duplication",
+                "Indentation Complexity",
+                "Halstead Effort",
+            ]
+            .map(dimension)
+            .to_vec(),
+            ..graded_or_not(Some(90.0), 3, 300)
+        }
+    }
+
+    /// The notes under the table of the diff between two projects.
+    fn notes_of(before: &ProjectScore, after: &ProjectScore) -> Vec<String> {
+        dimension_notes(&compute_diff("HEAD", before, after))
+    }
+
+    #[test]
+    fn a_dimension_without_a_score_is_explained_under_the_diff_table() {
+        let all = without_a_score(&[]);
+        let no_halstead = without_a_score(&["Halstead Effort"]);
+        let note = "Halstead Effort not measured; its weight is spread over the other dimensions.";
+        assert_eq!(notes_of(&no_halstead, &no_halstead), [note]);
+        assert_eq!(notes_of(&all, &no_halstead), [format!("After: {note}")]);
+        assert_eq!(notes_of(&no_halstead, &all), [format!("Before: {note}")]);
+        assert_eq!(
+            notes_of(&no_halstead, &without_a_score(&["Duplication"])),
+            [
+                format!("Before: {note}"),
+                "After: Duplication not measured; its weight is spread over the other dimensions."
+                    .to_string()
+            ]
+        );
+        let nothing = ProjectScore {
+            graded: None,
+            ..without_a_score(&["Cognitive Complexity", "Duplication", "Halstead Effort"])
+        };
+        assert_eq!(notes_of(&nothing, &no_halstead), [format!("After: {note}")]);
+        assert!(notes_of(&all, &all).is_empty());
     }
 
     #[test]

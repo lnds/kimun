@@ -173,3 +173,46 @@ fn print_report_truncates_long_path() {
     // Should not panic even with long paths
     print_report(&score, 10, None);
 }
+
+/// A project with a score whose dimensions named have none.
+fn without_a_score(unmeasured: &[&str]) -> ProjectScore {
+    let dimension = |name| DimensionScore {
+        name,
+        weight: 0.25,
+        graded: (!unmeasured.contains(&name)).then(|| Graded::of(90.0)),
+    };
+    ProjectScore {
+        dimensions: [
+            "Cognitive Complexity",
+            "Maintainability Index",
+            "Duplication",
+            "Halstead Effort",
+        ]
+        .map(dimension)
+        .to_vec(),
+        ..sample_score()
+    }
+}
+
+#[test]
+fn a_dimension_without_a_score_is_explained_under_the_table() {
+    assert_eq!(
+        dimension_note(&without_a_score(&["Halstead Effort"])),
+        " Halstead Effort not measured; its weight is spread over the other dimensions.\n"
+    );
+    assert_eq!(
+        dimension_note(&without_a_score(&[
+            "Maintainability Index",
+            "Halstead Effort"
+        ])),
+        " Maintainability Index and Halstead Effort not measured; \
+         their weight is spread over the other dimensions.\n"
+    );
+    assert_eq!(dimension_note(&without_a_score(&[])), "");
+    assert_eq!(dimension_note(&nothing_to_grade()), "");
+    assert_eq!(
+        unmeasured_note(["A", "B", "C"]),
+        Some("A, B and C not measured; their weight is spread over the other dimensions.".into())
+    );
+    assert_eq!(unmeasured_note([]), None);
+}

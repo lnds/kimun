@@ -1065,3 +1065,162 @@ fn an_unreadable_file_does_not_stop_the_rest_from_being_graded() {
     assert_eq!(score.files_analyzed, 1);
     assert!(score.graded.is_some());
 }
+
+// ── what was not measured is left out ───────────────────────────────────
+
+const REQUIRES: &str = "require \"bundler/setup\"\nrequire \"bootsnap/setup\"\n";
+const TYPES_ONLY: &str = "export interface User {\n  id: number;\n  name: string;\n}\n\n\
+export type UserId = User[\"id\"];\n";
+const DEFINES_ONLY: &str = "#ifndef CFG_H\n#define CFG_H\n#define MAX(a, b) ((a) > (b) ? (a) : (b))\n\
+#define LIMIT (4 * 1024)\n#endif\n";
+const IMPORTS_ONLY: &str = "import os\nimport sys\n";
+const PY_ADD: &str = "def add(a, b):\n    return a + b\n";
+
+/// A file alone in a directory of its own: the directory and the path.
+fn lone_file(name: &str, content: &str) -> (tempfile::TempDir, std::path::PathBuf) {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join(name);
+    fs::write(&file, content).unwrap();
+    (dir, file)
+}
+
+/// The score of what lies at `path`, with `model`.
+fn score_of(path: &Path, model: &ScoringModel) -> ProjectScore {
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(path, false, &filter);
+    compute_score(&cfg, 10, 6, model).unwrap()
+}
+
+/// The names of the dimensions without a score.
+fn unscored(score: &ProjectScore) -> Vec<&str> {
+    score
+        .dimensions
+        .iter()
+        .filter(|d| d.graded.is_none())
+        .map(|d| d.name)
+        .collect()
+}
+
+/// Every score of the dimensions that have one.
+fn dimension_scores(score: &ProjectScore) -> Vec<f64> {
+    score
+        .dimensions
+        .iter()
+        .filter_map(|d| Some(d.graded?.score))
+        .collect()
+}
+
+/// The score of the project and of its only file, with the grade of the project.
+fn scores_of_a_lone_file(score: &ProjectScore) -> (f64, f64, analyzer::Grade) {
+    let graded = score.graded.expect("the file is graded");
+    (graded.score, score.needs_attention[0].score, graded.grade)
+}
+
+#[test]
+fn a_file_with_nothing_for_halstead_to_count_is_graded_on_the_rest() {
+    let (_dir, file) = lone_file("requires.rb", REQUIRES);
+
+    let score = score_of(&file, &ScoringModel::Cognitive);
+    assert_eq!(unscored(&score), ["Halstead Effort"]);
+    assert_eq!(dimension_scores(&score), [100.0; 4]);
+    let (project, file_score, grade) = scores_of_a_lone_file(&score);
+    assert!((project - 100.0).abs() < 1e-9, "{project}");
+    assert!((file_score - 100.0).abs() < 1e-9, "{file_score}");
+    assert_eq!(grade, analyzer::Grade::APlusPlus);
+
+    let score = score_of(&file, &ScoringModel::Legacy);
+    assert_eq!(
+        unscored(&score),
+        ["Maintainability Index", "Halstead Effort"]
+    );
+    let (project, file_score, grade) = scores_of_a_lone_file(&score);
+    assert!((project - 100.0).abs() < 1e-9, "{project}");
+    assert!((file_score - 100.0).abs() < 1e-9, "{file_score}");
+    assert_eq!(grade, analyzer::Grade::APlusPlus);
+}
+
+#[test]
+fn a_typescript_file_of_types_alone_is_graded_on_the_rest() {
+    let (_dir, file) = lone_file("types.ts", TYPES_ONLY);
+    let score = score_of(&file, &ScoringModel::Cognitive);
+    assert_eq!(unscored(&score), ["Halstead Effort"]);
+    let (project, _, grade) = scores_of_a_lone_file(&score);
+    assert!((project - 100.0).abs() < 1e-9, "{project}");
+    assert_eq!(grade, analyzer::Grade::APlusPlus);
+}
+
+#[test]
+fn a_header_of_defines_has_no_cyclomatic_score_in_the_legacy_model() {
+    let (_dir, file) = lone_file("cfg.h", DEFINES_ONLY);
+
+    let score = score_of(&file, &ScoringModel::Legacy);
+    assert_eq!(unscored(&score), ["Cyclomatic Complexity"]);
+    let graded: f64 = score
+        .dimensions
+        .iter()
+        .filter_map(|d| Some(d.graded?.score * d.weight))
+        .sum();
+    let weights: f64 = score
+        .dimensions
+        .iter()
+        .filter(|d| d.graded.is_some())
+        .map(|d| d.weight)
+        .sum();
+    let project = score.graded.expect("the rest is graded").score;
+    assert!((project - graded / weights).abs() < 1e-9, "{project}");
+
+    let score = score_of(&file, &ScoringModel::Cognitive);
+    assert_eq!(score.graded, None);
+}
+
+/// Python with nested conditions: a file of its own scores well below 99.5.
+const PY_TANGLE: &str = "def tangle(a, b, c, d):
+    if a:
+        if b:
+            if c:
+                if d:
+                    for i in range(a):
+                        if i > b and i < c or i == d:
+                            return i
+    return 0
+";
+
+#[test]
+fn moving_code_out_and_leaving_only_imports_passes_the_gates() {
+    let dir = make_git_repo_with_files(&[("app.py", PY_ADD)]);
+    fs::write(dir.path().join("app.py"), IMPORTS_ONLY).unwrap();
+    fs::write(dir.path().join("core.py"), PY_ADD).unwrap();
+
+    let project = ScoreGate {
+        max_drop: Some(0.01),
+        ..ScoreGate::default()
+    };
+    run_gate(&dir.path().join("app.py"), project).expect("app.py is graded on what it has");
+    run_gate(dir.path(), changed_scope_gate()).expect("no changed file got worse");
+}
+
+#[test]
+fn a_new_file_of_imports_passes_fail_below() {
+    let dir = make_git_repo_with_files(&[("lib.py", PY_ADD)]);
+    fs::write(dir.path().join("boot.py"), IMPORTS_ONLY).unwrap();
+    let strict = ScoreGate {
+        fail_below: Some(analyzer::Grade::B),
+        ..ScoreGate::default()
+    };
+    run_gate(&dir.path().join("boot.py"), strict).expect("imports alone grade above B");
+}
+
+#[test]
+fn code_added_to_a_file_of_imports_is_held_to_its_full_score() {
+    let dir = make_git_repo_with_files(&[("app.py", "import os\n")]);
+    fs::write(
+        dir.path().join("app.py"),
+        format!("import os\n\n{PY_TANGLE}"),
+    )
+    .unwrap();
+
+    let err = run_gate(dir.path(), changed_scope_gate())
+        .expect_err("app.py ends below the 100 it had")
+        .to_string();
+    assert!(err.contains("app.py dropped 100.00 →"), "{err}");
+}

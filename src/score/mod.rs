@@ -42,10 +42,10 @@ use crate::git::GitRepo;
 use crate::walk::WalkConfig;
 
 use crate::options::{GateScope, OutputMode};
-use analyzer::{FileScore, Graded, ProjectScore, compute_project_score};
+use analyzer::{FileScore, Graded, ProjectScore};
 use collector::FileMetrics;
 use report::{print_json, print_report, print_short, print_terse};
-use scoring::{build_dimensions, build_empty_dimensions, score_file};
+use scoring::{build_dimensions, build_empty_dimensions, compute_project_score, score_file};
 
 /// Quality gate options for `--trend` mode.
 /// Both conditions are independent and checked after the report is printed.

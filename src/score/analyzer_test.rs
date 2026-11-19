@@ -37,46 +37,6 @@ fn test_score_to_grade_all_boundaries() {
 }
 
 #[test]
-fn test_compute_project_score() {
-    let dims = vec![
-        DimensionScore {
-            name: "A",
-            weight: 0.60,
-            graded: Some(Graded::of(80.0)),
-        },
-        DimensionScore {
-            name: "B",
-            weight: 0.40,
-            graded: Some(Graded::of(60.0)),
-        },
-    ];
-    let s = compute_project_score(&dims).unwrap();
-    assert!((s - 72.0).abs() < 0.01, "expected 72, got {s}");
-}
-
-#[test]
-fn test_compute_project_score_empty() {
-    assert_eq!(compute_project_score(&[]), Some(0.0));
-}
-
-#[test]
-fn a_project_with_an_ungraded_dimension_has_no_score() {
-    let dims = vec![
-        DimensionScore {
-            name: "A",
-            weight: 0.60,
-            graded: Some(Graded::of(80.0)),
-        },
-        DimensionScore {
-            name: "B",
-            weight: 0.40,
-            graded: None,
-        },
-    ];
-    assert_eq!(compute_project_score(&dims), None);
-}
-
-#[test]
 fn graded_of_a_score_carries_its_grade() {
     assert_eq!(
         Graded::of(91.4),

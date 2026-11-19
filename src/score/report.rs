@@ -41,6 +41,7 @@ pub fn print_report(score: &ProjectScore, bottom: usize, target: Option<&str>) {
     }
 
     println!("{separator}");
+    print!("{}", dimension_note(score));
 
     if score.needs_attention.is_empty() {
         return;
@@ -96,6 +97,30 @@ fn project_line(score: &ProjectScore) -> String {
     }
 }
 
+/// The line under the table that says why a project with a score shows a
+/// dimension without one, or nothing when every dimension was measured.
+fn dimension_note(score: &ProjectScore) -> String {
+    let unmeasured = score.dimensions.iter().filter(|d| d.graded.is_none());
+    let note = score
+        .graded
+        .and(unmeasured_note(unmeasured.map(|d| d.name)));
+    note.map_or_else(String::new, |note| format!(" {note}\n"))
+}
+
+/// The note for the dimensions named, as `Halstead Effort not measured; its
+/// weight is spread over the other dimensions.`, or `None` for none.
+pub(super) fn unmeasured_note<'a>(names: impl IntoIterator<Item = &'a str>) -> Option<String> {
+    let names: Vec<&str> = names.into_iter().collect();
+    let (last, rest) = names.split_last()?;
+    let (listed, its) = match rest {
+        [] => (last.to_string(), "its"),
+        _ => (format!("{} and {last}", rest.join(", ")), "their"),
+    };
+    Some(format!(
+        "{listed} not measured; {its} weight is spread over the other dimensions."
+    ))
+}
+
 /// A dimension row of the table.
 fn dimension_row(d: &DimensionScore) -> String {
     format!(
@@ -125,7 +150,7 @@ pub fn print_short(score: &ProjectScore) {
     println!("{}", short(score));
 }
 
-/// The compact line: `-` for what there is nothing to grade.
+/// The compact line: `-` for what has no score.
 fn short(score: &ProjectScore) -> String {
     let dim_scores: Vec<String> = score
         .dimensions
@@ -155,8 +180,8 @@ pub fn print_terse(score: &ProjectScore) {
     println!("{}", score_text(score.graded, 1));
 }
 
-/// A score and its grade in JSON: both null when there is nothing to grade,
-/// so every key is always there.
+/// A score and its grade in JSON: both null when there is no score (nothing
+/// to grade, or a dimension nothing measured), so every key is always there.
 #[derive(Serialize)]
 pub(super) struct JsonGraded {
     score: Option<f64>,
@@ -177,9 +202,11 @@ impl From<Option<Graded>> for JsonGraded {
 struct JsonDimension {
     /// Human-readable dimension name (e.g. "Maintainability Index").
     name: String,
-    /// Relative weight in the final score (0.0–1.0, all sum to 1.0).
+    /// Relative weight in the final score (0.0–1.0, all sum to 1.0). The
+    /// weight of a dimension whose score is null goes to the others.
     weight: f64,
-    /// Normalized score (0–100 scale) and its letter grade.
+    /// Normalized score (0–100 scale) and its letter grade, both null when
+    /// no file of the target has the metric.
     #[serde(flatten)]
     graded: JsonGraded,
 }

@@ -9,7 +9,8 @@ use super::analyzer::{Graded, ProjectScore};
 use super::changed::ChangedScope;
 
 /// Per-dimension delta with name, weight, and the before/after scores.
-/// A side with nothing to grade is `None`, and so is the delta.
+/// A side with nothing to grade, or where nothing measured the dimension, is
+/// `None`, and so is the delta.
 #[derive(Debug, Clone, Serialize)]
 pub struct DimensionDelta {
     pub name: String,
