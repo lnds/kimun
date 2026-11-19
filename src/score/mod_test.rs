@@ -949,6 +949,31 @@ fn fail_below_passes_when_the_target_has_nothing_to_grade() {
         .expect("a README has no grade to fail");
 }
 
+#[cfg(unix)]
+#[test]
+fn a_link_to_a_code_file_changes_nothing_on_an_unchanged_tree() {
+    let dir = make_git_repo_with_files(&[("lib.rs", SIMPLE_FNS), ("bad.rs", NESTED_FN)]);
+    std::os::unix::fs::symlink("lib.rs", dir.path().join("alias.rs")).unwrap();
+    let repo = git2::Repository::open(dir.path()).unwrap();
+    repo.config()
+        .unwrap()
+        .set_bool("core.symlinks", true)
+        .unwrap();
+    let mut index = repo.index().unwrap();
+    index.add_path(Path::new("alias.rs")).unwrap();
+    index.write().unwrap();
+    let tree = repo.find_tree(index.write_tree().unwrap()).unwrap();
+    let sig = repo.signature().unwrap();
+    let head = repo.head().unwrap().peel_to_commit().unwrap();
+    repo.commit(Some("HEAD"), &sig, &sig, "link", &tree, &[&head])
+        .unwrap();
+    let project = ScoreGate {
+        max_drop: Some(0.01),
+        ..ScoreGate::default()
+    };
+    run_gate(dir.path(), project).expect("the tree is the commit");
+}
+
 #[test]
 fn deleting_all_the_code_does_not_fail_the_gates() {
     let dir = make_git_repo_with_files(&[("lib.rs", SIMPLE_FNS), ("README.md", "# Hi\n")]);

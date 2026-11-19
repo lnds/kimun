@@ -13,7 +13,7 @@ use std::fs;
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 
-use git2::{Delta, DiffOptions, ObjectType, Repository, Sort, Tree};
+use git2::{Delta, DiffOptions, FileMode, ObjectType, Repository, Sort, Tree};
 
 mod before;
 mod blame;
@@ -250,10 +250,22 @@ impl GitRepo {
 
     /// Extract the file tree at a given git ref (e.g. "HEAD", "main~3") into
     /// a destination directory. Writes blobs as files and recurses into subtrees.
-    /// Skips submodules and symlinks.
+    /// Skips submodules. A symbolic link is written as a checkout writes it:
+    /// not at all where it is a link, which the walk skips, else as the file
+    /// holding the path it points to.
     pub fn extract_tree_to_dir(&self, refspec: &str, dest: &Path) -> Result<(), Box<dyn Error>> {
         let tree = self.ref_tree(refspec)?;
-        self.write_tree_recursive(&tree, dest)
+        self.write_tree_recursive(&tree, dest, self.checks_out_links())
+    }
+
+    /// Whether a checkout makes symbolic links links rather than files
+    /// holding the path they point to: `core.symlinks`, which is on by
+    /// default, and off by default on Windows.
+    fn checks_out_links(&self) -> bool {
+        self.repo
+            .config()
+            .and_then(|config| config.get_bool("core.symlinks"))
+            .unwrap_or(!cfg!(windows))
     }
 
     fn ref_tree(&self, refspec: &str) -> Result<Tree<'_>, Box<dyn Error>> {
@@ -267,8 +279,14 @@ impl GitRepo {
         Ok(commit.tree()?)
     }
 
-    /// Recursively write a git tree to a filesystem directory.
-    fn write_tree_recursive(&self, tree: &Tree, dest: &Path) -> Result<(), Box<dyn Error>> {
+    /// Recursively write a git tree to a filesystem directory, leaving out
+    /// its symbolic links where a checkout makes them `links`.
+    fn write_tree_recursive(
+        &self,
+        tree: &Tree,
+        dest: &Path,
+        links: bool,
+    ) -> Result<(), Box<dyn Error>> {
         for entry in tree.iter() {
             let name = entry
                 .name()
@@ -276,6 +294,8 @@ impl GitRepo {
             let path = dest.join(name);
 
             match entry.kind() {
+                Some(ObjectType::Blob)
+                    if links && entry.filemode() == i32::from(FileMode::Link) => {}
                 Some(ObjectType::Blob) => {
                     let blob = self.repo.find_blob(entry.id())?;
                     fs::write(&path, blob.content())?;
@@ -283,9 +303,9 @@ impl GitRepo {
                 Some(ObjectType::Tree) => {
                     let subtree = self.repo.find_tree(entry.id())?;
                     fs::create_dir_all(&path)?;
-                    self.write_tree_recursive(&subtree, &path)?;
+                    self.write_tree_recursive(&subtree, &path, links)?;
                 }
-                _ => {} // skip submodules, symlinks, etc.
+                _ => {} // submodules
             }
         }
         Ok(())
