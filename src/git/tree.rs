@@ -6,11 +6,13 @@ use std::path::{Path, PathBuf};
 use git2::{ObjectType, TreeWalkMode, TreeWalkResult};
 
 use super::GitRepo;
+use crate::lang::counter::without_bom;
 
 impl GitRepo {
     /// The files of the tree at `refspec` that `wanted` picks, with their
-    /// content. Directories `skipped` rejects are not entered, and a file
-    /// that is not text is left out.
+    /// content, without the byte order mark it may start with. Directories
+    /// `skipped` rejects are not entered, and a file that is not text is
+    /// left out.
     pub fn files_at(
         &self,
         refspec: &str,
@@ -24,11 +26,9 @@ impl GitRepo {
             match entry.kind() {
                 Some(ObjectType::Tree) if skipped(&path) => return TreeWalkResult::Skip,
                 Some(ObjectType::Blob) if wanted(&path) => {
-                    let text = self
-                        .repo
-                        .find_blob(entry.id())
-                        .ok()
-                        .and_then(|blob| String::from_utf8(blob.content().to_vec()).ok());
+                    let text = self.repo.find_blob(entry.id()).ok().and_then(|blob| {
+                        String::from_utf8(without_bom(blob.content()).to_vec()).ok()
+                    });
                     files.extend(text.map(|text| (path, text)));
                 }
                 _ => {}

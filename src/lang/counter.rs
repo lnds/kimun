@@ -19,6 +19,12 @@ pub fn is_binary_reader<R: Read + Seek>(reader: &mut R) -> io::Result<bool> {
     Ok(header[..n].contains(&0))
 }
 
+/// A source without the byte order mark it may start with. The mark is no
+/// text of the source, and cloc drops it too.
+pub fn without_bom(bytes: &[u8]) -> &[u8] {
+    bytes.strip_prefix(b"\xef\xbb\xbf").unwrap_or(bytes)
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct FileStats {
     pub blank: usize,
@@ -48,9 +54,14 @@ pub fn count_lines(path: &Path, spec: &LanguageSpec) -> io::Result<Option<FileSt
     Ok(Some(count_reader(reader, spec)))
 }
 
-/// The lines of a reader without their line ends. Bytes that are not
-/// UTF-8 are replaced, so a source in Latin-1 or Windows-1252 is read whole.
-fn lossy_lines<R: BufRead>(reader: R) -> impl Iterator<Item = String> {
+/// The lines of a reader without their line ends, past the byte order mark
+/// it may start with. Bytes that are not UTF-8 are replaced, so a source
+/// in Latin-1 or Windows-1252 is read whole.
+fn lossy_lines<R: BufRead>(mut reader: R) -> impl Iterator<Item = String> {
+    let mark = reader
+        .fill_buf()
+        .map_or(0, |start| start.len() - without_bom(start).len());
+    reader.consume(mark);
     reader.split(b'\n').map_while(Result::ok).map(|mut line| {
         if line.last() == Some(&b'\r') {
             line.pop();

@@ -925,11 +925,14 @@ fn a_target_with_nothing_to_grade_has_no_grade() {
 fn an_empty_source_file_is_not_graded() {
     let dir = tempfile::tempdir().unwrap();
     let file = dir.path().join("empty.rs");
-    fs::write(&file, "").unwrap();
-    let filter = ExcludeFilter::default();
-    let cfg = WalkConfig::new(&file, false, &filter);
-    let score = compute_score(&cfg, 10, 6, &ScoringModel::Cognitive).unwrap();
-    assert_eq!(score.graded, None);
+    // A byte order mark is no text of the file, nor code.
+    for text in ["", "\u{feff}", "\u{feff}// only a comment\n"] {
+        fs::write(&file, text).unwrap();
+        let filter = ExcludeFilter::default();
+        let cfg = WalkConfig::new(&file, false, &filter);
+        let score = compute_score(&cfg, 10, 6, &ScoringModel::Cognitive).unwrap();
+        assert_eq!(score.graded, None, "{text:?}");
+    }
 }
 
 #[test]

@@ -168,6 +168,14 @@ fn code_only() {
 }
 
 #[test]
+fn a_byte_order_mark_is_no_text_of_the_first_line() {
+    let stats = count(&spec_c_like(), "\u{feff}// header\nint x = 1;\n");
+    assert_eq!((stats.comment, stats.code), (1, 1));
+    let stats = count(&spec_c_like(), "\u{feff}");
+    assert_eq!((stats.blank, stats.comment, stats.code), (0, 0, 0));
+}
+
+#[test]
 fn line_comment_only() {
     let stats = count(&spec_c_like(), "// this is a comment\n");
     assert_eq!(stats.comment, 1);

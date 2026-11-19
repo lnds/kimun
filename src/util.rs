@@ -10,7 +10,7 @@ use std::io::{self, BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
 use std::time::SystemTime;
 
-use crate::lang::counter::{LineKind, classify_reader, is_binary_reader};
+use crate::lang::counter::{LineKind, classify_reader, is_binary_reader, without_bom};
 use crate::lang::language::LanguageSpec;
 use crate::test_blocks::production_kinds;
 
@@ -111,9 +111,10 @@ fn is_count_sigil(bytes: &[u8], at: usize) -> bool {
 }
 
 /// The text of a file, with the bytes that are not UTF-8 replaced, so that
-/// a source in Latin-1 or Windows-1252 is read whole.
+/// a source in Latin-1 or Windows-1252 is read whole, and without the byte
+/// order mark it may start with.
 pub fn read_lossy(path: &Path) -> io::Result<String> {
-    Ok(String::from_utf8_lossy(&std::fs::read(path)?).into_owned())
+    Ok(String::from_utf8_lossy(without_bom(&std::fs::read(path)?)).into_owned())
 }
 
 /// Read a source file, check for binary content, and classify lines.
@@ -135,8 +136,8 @@ pub fn read_and_classify(
     let mut bytes = Vec::new();
     reader.read_to_end(&mut bytes)?;
     // A source in Latin-1 or Windows-1252 is read whole, its other bytes
-    // replaced.
-    let content = String::from_utf8_lossy(&bytes);
+    // replaced, and without the byte order mark it may start with.
+    let content = String::from_utf8_lossy(without_bom(&bytes));
     // Normalize CRLF → LF before splitting, so the FSM never sees trailing \r.
     let normalized = content.replace("\r\n", "\n");
     let lines: Vec<String> = normalized.lines().map(String::from).collect();

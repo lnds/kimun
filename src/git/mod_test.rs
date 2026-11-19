@@ -641,6 +641,17 @@ fn files_of_a_tree_leave_out_what_is_not_text() {
 }
 
 #[test]
+fn files_of_a_tree_come_without_a_byte_order_mark() {
+    let (dir, repo) = create_test_repo();
+    let commit = make_commit(&repo, &[("a.py", "\u{feff}import b\n")], "bom");
+    let git_repo = GitRepo::open(dir.path()).unwrap();
+    let files = git_repo
+        .files_at(&commit.to_string(), |_| false, |_| true)
+        .unwrap();
+    assert_eq!(files, [(PathBuf::from("a.py"), "import b\n".to_string())]);
+}
+
+#[test]
 fn diff_stats_tell_which_lines_a_change_touches() {
     let (dir, repo) = create_test_repo();
     let before: String = (1..=10).map(|n| format!("line {n}\n")).collect();
