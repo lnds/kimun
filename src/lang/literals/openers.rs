@@ -1,6 +1,7 @@
 //! Where a string literal opens, and what closes it.
 
 use super::is_word_byte;
+use super::marked::{marked_at, quote_opens_nothing, single_quotes_escape};
 use super::syntax::{Backticks, Syntax};
 
 /// A literal that may span lines.
@@ -21,6 +22,9 @@ pub(crate) struct Delimited {
     pub doubled: bool,
     /// It goes on past the end of a line without a `\` there.
     pub spans: bool,
+    /// The bracket that opened it and how many more are open inside it,
+    /// when brackets nest in it (Ruby's `%w(a (b))`).
+    pub nests: Option<(u8, usize)>,
 }
 
 /// What opens a literal, by the kind it opens.
@@ -44,8 +48,9 @@ pub(crate) fn opener_at(
         .into_iter()
         .filter(|(on, _)| *on)
         .find_map(|(_, read)| read(rest))
+        .or_else(|| marked_at(bytes, at, syntax))
         .or_else(|| triple(rest, syntax, escapes))
-        .or_else(|| quoted(rest, syntax, escapes))
+        .or_else(|| quoted(bytes, at, syntax, escapes))
 }
 
 /// Whether a prefix may start after `before`: not inside a name.
@@ -59,6 +64,7 @@ fn delimited(close: &[u8], escapes: bool, spans: bool) -> Literal {
         escapes,
         doubled: false,
         spans,
+        nests: None,
     })
 }
 
@@ -67,16 +73,17 @@ fn triple(rest: &[u8], syntax: &Syntax, escapes: bool) -> Option<(Literal, usize
     (syntax.triple_quotes && opens).then(|| (delimited(&rest[..3], escapes, true), 3))
 }
 
-fn quoted(rest: &[u8], syntax: &Syntax, escapes: bool) -> Option<(Literal, usize)> {
+fn quoted(bytes: &[u8], at: usize, syntax: &Syntax, escapes: bool) -> Option<(Literal, usize)> {
     let spans = syntax.quotes_span_lines;
-    let literal = match (rest.first()?, syntax.backticks) {
+    let single_escapes = escapes && single_quotes_escape(bytes, at, syntax.marks);
+    let literal = match (bytes.get(at)?, syntax.backticks) {
         (b'"', _) => delimited(b"\"", escapes, spans),
-        (b'\'', _) if syntax.single_quotes => delimited(b"'", escapes, spans),
+        (b'\'', _) if syntax.single_quotes => delimited(b"'", single_escapes, spans),
         (b'`', Backticks::Raw) => delimited(b"`", false, true),
         (b'`', Backticks::Template) => Literal::Template,
         _ => return None,
     };
-    Some((literal, 1))
+    (!quote_opens_nothing(bytes, at, syntax.marks)).then_some((literal, 1))
 }
 
 /// `r"…"`, `r#"…"#`, `br"…"`, `cr#"…"#`.
@@ -122,6 +129,7 @@ fn verbatim(rest: &[u8]) -> Option<(Literal, usize)> {
         escapes: false,
         doubled: true,
         spans: true,
+        nests: None,
     });
     Some((literal, len))
 }

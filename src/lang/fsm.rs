@@ -9,6 +9,7 @@
 use super::language::LanguageSpec;
 use super::literals::character_len;
 use super::literals::heredoc::{Heredoc, heredoc_at};
+use super::literals::regex::regex_width;
 use super::literals::syntax::Syntax;
 pub(super) use super::strings::StringKind;
 use super::strings::{literal_open, scan};
@@ -154,14 +155,15 @@ impl<'l> At<'l> {
 
 /// The step of a literal that starts at `pos`: a string (triple quotes are
 /// matched before the single-byte ones, so `"""` never reads as an empty
-/// string followed by a quote), a quote that opens none, or the marker of a
-/// heredoc.
+/// string followed by a quote), a quote that opens none, a regular
+/// expression, whose quotes open none either, or the marker of a heredoc.
 fn literal_step(at: At, spec: &LanguageSpec, syntax: &Syntax) -> Option<StepResult> {
     let (rest, full_bytes, pos) = (at.rest(), at.bytes, at.pos);
     if let Some((width, kind)) = literal_open(full_bytes, pos, spec, syntax) {
         return Some(open_literal(width, kind, spec));
     }
-    if let Some(width) = quote_as_code(rest, syntax, full_bytes, pos) {
+    let regex = || regex_width(full_bytes, pos, &full_bytes[..pos], syntax.regex?);
+    if let Some(width) = quote_as_code(rest, syntax, full_bytes, pos).or_else(regex) {
         return Some(StepResult::code(width, None));
     }
     let (heredoc, width) = heredoc_at(full_bytes, pos, syntax.heredocs)?;

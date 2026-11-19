@@ -14,7 +14,7 @@ use crate::lang::language::LanguageSpec;
 use crate::lang::literals::character_len;
 use crate::lang::literals::heredoc::{self, Heredoc, terminator_end};
 use crate::lang::literals::openers::{Delimited, Literal, opener_at};
-use crate::lang::literals::regex::{regex_end, value_may_start};
+use crate::lang::literals::regex::regex_width;
 use crate::lang::literals::syntax::Syntax;
 use cursor::Cursor;
 
@@ -170,14 +170,14 @@ impl<'s> Lexer<'s> {
         self.state = State::Comment(comment);
     }
 
-    fn delimited_step(&mut self, cur: &mut Cursor, d: Delimited) {
+    fn delimited_step(&mut self, cur: &mut Cursor, mut d: Delimited) {
         let rest = cur.rest();
         let len = d.close.len();
         if d.escapes && rest[0] == b'\\' {
             cur.blank_n(2);
         } else if d.doubled && rest.starts_with(&d.close) && rest[len..].starts_with(&d.close) {
             cur.blank_n(2 * len);
-        } else if rest.starts_with(&d.close) {
+        } else if d.step_closes(rest) {
             cur.close(len);
             return;
         } else {
@@ -238,13 +238,13 @@ impl<'s> Lexer<'s> {
     }
 
     fn regex(&self, cur: &mut Cursor) -> bool {
-        let opens =
-            self.syntax.regex && cur.bytes[cur.i] == b'/' && value_may_start(&cur.out[..cur.i]);
-        let Some(end) = opens.then(|| regex_end(cur.bytes, cur.i + 1)).flatten() else {
+        let rule = self.syntax.regex;
+        let Some(width) = rule.and_then(|r| regex_width(cur.bytes, cur.i, &cur.out[..cur.i], r))
+        else {
             return false;
         };
         cur.keep();
-        cur.blank_n(end - cur.i);
+        cur.blank_n(width - 2);
         cur.keep();
         true
     }

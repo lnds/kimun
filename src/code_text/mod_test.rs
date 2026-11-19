@@ -219,3 +219,33 @@ fn kotlin_and_swift_raw_strings_span_lines() {
 fn a_python_string_ends_with_its_line() {
     assert_eq!(code("Python", "s = \"open\nif x:"), ["s = \"\"", "if x:"]);
 }
+
+#[test]
+fn the_code_after_a_quote_in_a_ruby_regex_is_read() {
+    let src = "PATTERN = /\"/\nif ok then x end";
+    let read = code("Ruby", src);
+    assert_eq!(read[1], "if ok then x end");
+    assert_eq!(read[0], "PATTERN = / /");
+    assert_eq!(has_code("Ruby", src), [true, true]);
+}
+
+#[test]
+fn the_code_after_an_elixir_sigil_with_a_quote_is_read() {
+    let src = "@re ~r/\"/\ndef f(x), do: x";
+    let read = code("Elixir", src);
+    assert_eq!(read[1], "def f(x), do: x");
+    assert_eq!(read[0], "@re \"   \"");
+}
+
+#[test]
+fn a_nested_bracket_does_not_close_a_percent_literal() {
+    assert_eq!(code("Ruby", "%w(a (b) c) + d"), ["\"         \" + d"]);
+}
+
+#[test]
+fn a_shell_quote_escaped_outside_a_string_is_code() {
+    let src = "x=it\\'s\nif [ \"$x\" = a ]; then";
+    let read = code("Bourne Shell", src);
+    assert_eq!(read[0], "x=it\\'s");
+    assert_eq!(read[1], "if [ \"  \" = a ]; then");
+}

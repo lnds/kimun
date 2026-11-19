@@ -1084,3 +1084,175 @@ fn a_shell_count_is_no_comment() {
     let src = "echo $# \"/*\"\necho ${#x}\n";
     assert_eq!(counted("Bourne Shell", src), (0, 0, 2));
 }
+
+// --- Quotes that open no string ---
+
+fn spec_of(path: &str) -> &'static LanguageSpec {
+    super::super::language::detect(std::path::Path::new(path)).unwrap()
+}
+
+/// The comment and code lines of a file of the language `path` names.
+fn comment_and_code(path: &str, text: &str) -> (usize, usize) {
+    let stats = count(spec_of(path), text);
+    (stats.comment, stats.code)
+}
+
+/// The same, for each of `firsts` followed by `tail`.
+fn comment_and_code_after(path: &str, firsts: &[&str], tail: &str) -> Vec<(usize, usize)> {
+    let counted = |first: &&str| comment_and_code(path, &format!("{first}\n{tail}"));
+    firsts.iter().map(counted).collect()
+}
+
+const COMMENT_THEN_CODE: &str = "# counts the items\nx = 1\n";
+
+#[test]
+fn a_quote_inside_a_ruby_regex_opens_no_string() {
+    let firsts = ["PATTERN = /\"/", "PATTERN = /it's/"];
+    assert_eq!(
+        comment_and_code_after("a.rb", &firsts, COMMENT_THEN_CODE),
+        [(1, 2), (1, 2)]
+    );
+    let step = "Then(/^I see \"([^\"]*)\"$/) do |t|";
+    let text = format!("{step}\n{COMMENT_THEN_CODE}end\n");
+    assert_eq!(comment_and_code("a.rb", &text), (1, 3));
+}
+
+#[test]
+fn a_ruby_percent_literal_holds_its_quotes() {
+    let firsts = ["WORDS = %w(it's (a) b)", "url.sub %r{^a/\"}, \"b\""];
+    assert_eq!(
+        comment_and_code_after("a.rb", &firsts, COMMENT_THEN_CODE),
+        [(1, 2), (1, 2)]
+    );
+}
+
+#[test]
+fn the_lines_of_a_percent_literal_that_start_with_an_interpolation_are_code() {
+    let text = "config.paths = %W(\n  #{root}/app\n  #{root}/lib\n)\n";
+    assert_eq!(comment_and_code("a.rb", text), (0, 4));
+}
+
+#[test]
+fn a_percent_sign_between_values_is_an_operator() {
+    // `%-` after a space: a percent literal there takes a bracket or `!|/^`
+    let firsts = ["x = a % b # rest", "x %= 3", "x = a %-b # it's"];
+    assert_eq!(
+        comment_and_code_after("a.rb", &firsts, COMMENT_THEN_CODE),
+        [(1, 2), (1, 2), (1, 2)]
+    );
+}
+
+#[test]
+fn ruby_and_perl_quote_variables_open_no_string() {
+    assert_eq!(
+        comment_and_code("a.rb", &format!("after = $'\n{COMMENT_THEN_CODE}")),
+        (1, 2)
+    );
+    let perl = "local $\" = \",\";\n# counts the items\nmy $x = 1;\n";
+    assert_eq!(comment_and_code("a.pl", perl), (1, 2));
+}
+
+#[test]
+fn an_elixir_sigil_holds_its_quotes() {
+    let firsts = [
+        "@re ~r/\"/",
+        r#"@specials ~c|()<>@,;:\\"/[]?={}|"#,
+        "@upper ~S|\"|",
+    ];
+    assert_eq!(
+        comment_and_code_after("lib/a.ex", &firsts, "# doubles it\nx = 1\n"),
+        [(1, 2), (1, 2), (1, 2)]
+    );
+}
+
+#[test]
+fn a_shell_quote_escaped_outside_a_string_opens_none() {
+    let firsts = ["x=it\\'s", "x=a\\\\'b'"];
+    assert_eq!(
+        comment_and_code_after("a.sh", &firsts, "# says yes\necho $x\n"),
+        [(1, 2), (1, 2)]
+    );
+}
+
+#[test]
+fn a_javascript_regex_holds_its_backticks_and_comment_markers() {
+    assert_eq!(
+        comment_and_code("a.js", "const re = /`/;\n// note\nconst x = 1;\n"),
+        (1, 2)
+    );
+    assert_eq!(
+        comment_and_code("a.js", "const re = /[/*]/;\nconst x = 1;\n// note\n"),
+        (1, 2)
+    );
+}
+
+#[test]
+fn a_ruby_symbol_or_character_takes_the_mark_after_it() {
+    // `:%` and `:/` are Symbols, `?%` and `?/` characters: no literal opens
+    let firsts = [
+        "ops = [:+, :-, :%, :*]",
+        "a.public_send(:%, b)",
+        "SEPS = [?%, ?&]",
+        "x = [1, 2].inject(:/) + \"a/b\"",
+        "sep = s[-1] == ?/ ? \"\" : \"a/b\"",
+    ];
+    assert_eq!(
+        comment_and_code_after("a.rb", &firsts, COMMENT_THEN_CODE),
+        [(1, 2); 5]
+    );
+}
+
+#[test]
+fn a_ruby_regex_as_the_argument_of_a_call_without_parentheses_opens_no_string() {
+    let firsts = [
+        "parts = line.split /'/",
+        "puts /it's/.match?(x)",
+        "x = a / b # it's",
+    ];
+    assert_eq!(
+        comment_and_code_after("a.rb", &firsts, COMMENT_THEN_CODE),
+        [(1, 2); 3]
+    );
+}
+
+#[test]
+fn a_closing_tag_opens_no_regex() {
+    let tag = "const A = () => <p>a</p>{`x/${y}`}<b>z</b>;";
+    let text = format!("{tag}\n// note\nconst x = 1;\n");
+    assert_eq!(comment_and_code("a.jsx", &text), (1, 2));
+}
+
+#[test]
+fn nothing_escapes_inside_the_single_quotes_of_a_shell() {
+    // but a backslash does inside ANSI-C quotes
+    let firsts = ["echo 'C:\\' \"it's\"", "x=$'it\\'s'"];
+    assert_eq!(
+        comment_and_code_after("a.sh", &firsts, "# says yes\necho $x\n"),
+        [(1, 2); 2]
+    );
+}
+
+#[test]
+fn a_literal_that_interpolates_before_its_close_is_read_as_before() {
+    // what `#{…}` holds may close it: `/` in `"b/c"`, `|` in `"|"`; a
+    // bracket nests there as anywhere, so `%Q(…)` is still read whole
+    let ruby = [
+        "re = /#{File.join(\"a\", \"b/c\")}x/",
+        "x = %Q|#{f(\"|\")} it's|",
+        "x = %Q(#{f(x)} it's)",
+    ];
+    assert_eq!(
+        comment_and_code_after("a.rb", &ruby, COMMENT_THEN_CODE),
+        [(1, 2); 3]
+    );
+    let elixir = "x = ~s(#{f(x)} say \"hi)\n# doubles it\nx = 1\n";
+    assert_eq!(comment_and_code("a.ex", elixir), (1, 2));
+}
+
+#[test]
+fn a_javascript_division_and_comment_are_not_a_regex() {
+    assert_eq!(
+        comment_and_code("a.js", "x = a / b / c;\n// it's a note\n"),
+        (1, 1)
+    );
+}
