@@ -398,6 +398,17 @@ fn elixir_doc_heredocs_are_comment() {
 }
 
 #[test]
+fn a_quote_in_the_text_of_an_elixir_doc_opens_nothing() {
+    // An apostrophe or a lone quote is prose: the doc still ends at its `"""`.
+    for text in ["It won't run twice.", "Say \"hi."] {
+        let source =
+            format!("defmodule A do\n  @doc \"\"\"\n  {text}\n  \"\"\"\n  def run, do: :ok\nend\n");
+        let stats = count(spec_elixir(), &source);
+        assert_eq!((stats.comment, stats.code), (3, 3), "{text}");
+    }
+}
+
+#[test]
 fn elixir_single_line_doc_is_code() {
     // cloc counts it as code too: only heredocs are documentation
     let stats = count(spec_elixir(), "@doc \"Runs it.\"\ndef run, do: :ok\n");
