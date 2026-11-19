@@ -365,7 +365,8 @@ pub(crate) fn measure(cfg: &WalkConfig<'_>, min_lines: usize, model: &ScoringMod
 pub(crate) fn snapshot_of(measured: &Measured, bottom: usize, model: &ScoringModel) -> Snapshot {
     let file_metrics = &measured.file_metrics;
     let total_loc: usize = file_metrics.iter().map(|f| f.code_lines).sum();
-    let dimensions = if file_metrics.is_empty() {
+    // Files without a code line leave nothing to grade, as no files do.
+    let dimensions = if total_loc == 0 {
         build_empty_dimensions(model)
     } else {
         build_dimensions(file_metrics, total_loc, measured.dup_percent, model)
