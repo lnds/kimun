@@ -907,6 +907,9 @@ fn a_target_with_nothing_to_grade_has_no_grade() {
     fs::write(dir.path().join("data.json"), "{\"key\": 1}\n").unwrap();
     fs::write(dir.path().join("empty.rs"), "").unwrap();
     fs::write(dir.path().join("comment.rs"), "// only a comment\n").unwrap();
+    fs::create_dir(dir.path().join("pkg")).unwrap();
+    fs::write(dir.path().join("pkg/__init__.py"), "").unwrap();
+    fs::write(dir.path().join("notes.py"), "# only a comment\n").unwrap();
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     for (model, dimensions) in [(ScoringModel::Cognitive, 5), (ScoringModel::Legacy, 6)] {
@@ -918,6 +921,38 @@ fn a_target_with_nothing_to_grade_has_no_grade() {
         assert!(score.dimensions.iter().all(|d| d.graded.is_none()));
         let weights: f64 = score.dimensions.iter().map(|d| d.weight).sum();
         assert!((weights - 1.0).abs() < 1e-9, "weights stay: {weights}");
+    }
+}
+
+#[test]
+fn files_without_code_lines_leave_nothing_to_grade() {
+    let no_code = |path: &str| FileMetrics {
+        path: path.into(),
+        code_lines: 0,
+        max_cognitive: Some(0),
+        mi_score: Some(100.0),
+        mi_vs: Some(100.0),
+        max_complexity: Some(1),
+        indent_stddev: Some(0.0),
+        halstead_effort: Some(0.0),
+    };
+    let measured = Measured {
+        file_metrics: vec![no_code("pkg/__init__.py"), no_code("notes.py")],
+        dup_percent: 0.0,
+        duplicated_lines: 0,
+        unreadable: 0,
+    };
+    for model in [
+        ScoringModel::Cognitive,
+        ScoringModel::ExperimentalMi,
+        ScoringModel::Legacy,
+    ] {
+        let score = snapshot_of(&measured, 10, &model).score;
+        assert_eq!(score.graded, None, "{model:?}");
+        assert!(
+            score.dimensions.iter().all(|d| d.graded.is_none()),
+            "{model:?}"
+        );
     }
 }
 

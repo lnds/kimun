@@ -214,7 +214,7 @@ pub struct FileScore {
 
 /// Aggregated project-level score with per-dimension breakdown
 /// and the worst-scoring files that need attention. `graded` is `None`
-/// when there is nothing to grade: no code files.
+/// when there is nothing to grade: no code files, or no code line in them.
 #[derive(Debug, Clone, Serialize)]
 pub struct ProjectScore {
     pub graded: Option<Graded>,
