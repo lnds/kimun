@@ -640,6 +640,43 @@ fn files_of_a_tree_leave_out_what_is_not_text() {
     assert_eq!(files, [(PathBuf::from("notes.txt"), "text".to_string())]);
 }
 
+/// A commit of a code file and a symbolic link to it, as Git stores a
+/// link: a blob holding the path, under mode 120000.
+fn commit_with_link(repo: &Repository) -> String {
+    let code = repo.blob(b"def f():\n    return 1\n").unwrap();
+    let link = repo.blob(b"a.py").unwrap();
+    let mut tree = repo.treebuilder(None).unwrap();
+    tree.insert("a.py", code, i32::from(git2::FileMode::Blob))
+        .unwrap();
+    tree.insert("b.py", link, i32::from(git2::FileMode::Link))
+        .unwrap();
+    let tree = repo.find_tree(tree.write().unwrap()).unwrap();
+    let sig = repo.signature().unwrap();
+    let commit = repo.commit(Some("HEAD"), &sig, &sig, "link", &tree, &[]);
+    commit.unwrap().to_string()
+}
+
+#[test]
+fn a_tree_is_written_out_with_its_links_as_a_checkout_writes_them() {
+    let (dir, repo) = create_test_repo();
+    let commit = commit_with_link(&repo);
+    let link_written = |links: bool| {
+        repo.config()
+            .unwrap()
+            .set_bool("core.symlinks", links)
+            .unwrap();
+        let out = tempfile::tempdir().unwrap();
+        let git_repo = GitRepo::open(dir.path()).unwrap();
+        git_repo.extract_tree_to_dir(&commit, out.path()).unwrap();
+        assert!(out.path().join("a.py").is_file());
+        fs::read_to_string(out.path().join("b.py")).ok()
+    };
+    // A link the walk would skip is not written; a file holding the path is
+    // what a checkout without links writes, and the walk reads it.
+    assert_eq!(link_written(true), None);
+    assert_eq!(link_written(false).as_deref(), Some("a.py"));
+}
+
 #[test]
 fn files_of_a_tree_come_without_a_byte_order_mark() {
     let (dir, repo) = create_test_repo();
