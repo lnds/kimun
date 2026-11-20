@@ -1,3 +1,23 @@
+## v0.49.0 (2026-11-20)
+
+### Notes
+
+- File scores move. A dimension that no file of the target measures (Halstead for a file of imports or types alone) has no score, `-` in the table and `null` in JSON, and its weight is spread over the measured dimensions; a note under the table says which. A file's own score leaves out the metrics it lacks the same way, where it counted them as 50. A fully measured project keeps the score it had.
+- Files without a code line leave nothing to grade, and a byte order mark is no longer read as code.
+- `km loc` counts as 0.46.1 did where 0.47.0 and 0.48.0 lost code: after a quote in an Elixir doc, a regex, a sigil or a Ruby `%` literal. `km hal` reads the Python code after a triple-quoted string that spans lines again.
+- `km score --trend` reads symbolic links at the ref as the working tree has them, so an unchanged tree no longer fails the gates.
+
+### Fix
+
+- **loc**: languages and authors that tie come in the same order
+- **git**: a symbolic link at a ref is written as the checkout writes it
+- **score**: no code lines leave nothing to grade, as no code files do
+- **lang**: a byte order mark is no text of a source
+- **score**: what was not measured is left out, not counted as 0 or 50
+- **loc**: a quote in a regex, a sigil or a %-literal opens no string
+- **hal**: the code after a Python string that spans lines is read
+- **loc**: a quote in the text of an Elixir doc opens no string
+
 ## v0.48.0 (2026-11-17)
 
 ### Notes
