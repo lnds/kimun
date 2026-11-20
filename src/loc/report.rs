@@ -1,9 +1,8 @@
 /// Report formatters for lines-of-code results.
 ///
-/// Provides a cloc-style table (sorted by code lines descending),
-/// a by-author table (sorted by code lines descending), and
-/// a JSON output with per-language and total breakdowns.
-use std::cmp::Reverse;
+/// Provides a cloc-style table and a by-author table, both sorted by code
+/// lines descending and by name where they tie, so the order is the same
+/// on every run, and a JSON output with per-language and total breakdowns.
 use std::time::Duration;
 
 use serde::Serialize;
@@ -54,7 +53,7 @@ const SEP_WIDTH: usize = 1 + COL_LANG + 1 + COL_FILES + 1 + COL_NUM + 1 + COL_NU
 /// Print a cloc-style table with per-language line counts and totals.
 /// When `verbose` is provided, prints file counts and throughput first.
 pub fn print_report(mut reports: Vec<LanguageReport>, verbose: Option<VerboseStats>) {
-    reports.sort_by_key(|r| Reverse(r.code));
+    sort_languages(&mut reports);
 
     if let Some(stats) = &verbose {
         let secs = stats.elapsed.as_secs_f64();
@@ -157,7 +156,7 @@ struct JsonTotals {
 
 /// Serialize line counts as pretty-printed JSON to stdout.
 pub fn print_json(mut reports: Vec<LanguageReport>, kinds: Vec<KindReport>) {
-    reports.sort_by_key(|r| Reverse(r.code));
+    sort_languages(&mut reports);
 
     let totals = JsonTotals {
         files: reports.iter().map(|r| r.files).sum(),
@@ -190,7 +189,7 @@ pub struct AuthorReport {
 /// The author column width adapts to the longest name in the dataset,
 /// measured in terminal display columns rather than codepoints.
 pub fn print_author_report(mut reports: Vec<AuthorReport>) {
-    reports.sort_by_key(|r| Reverse(r.code));
+    sort_authors(&mut reports);
 
     let col_author = reports
         .iter()
@@ -247,7 +246,7 @@ pub fn print_author_report(mut reports: Vec<AuthorReport>) {
 
 /// Serialize by-author line counts as pretty-printed JSON to stdout.
 pub fn print_author_json(mut reports: Vec<AuthorReport>) {
-    reports.sort_by_key(|r| Reverse(r.code));
+    sort_authors(&mut reports);
 
     #[derive(Serialize)]
     struct JsonOutput {
@@ -267,6 +266,18 @@ pub fn print_author_json(mut reports: Vec<AuthorReport>) {
         totals,
     })
     .unwrap();
+}
+
+/// Most code first, and languages that tie by name, as `km report` orders
+/// them: they come out of a hash map, whose order changes from run to run.
+fn sort_languages(reports: &mut [LanguageReport]) {
+    reports.sort_by(|a, b| b.code.cmp(&a.code).then_with(|| a.name.cmp(&b.name)));
+}
+
+/// Most code first, and authors that tie by identity (the email in lower
+/// case, or the name), as `km authors` orders them.
+fn sort_authors(reports: &mut [AuthorReport]) {
+    reports.sort_by(|a, b| b.code.cmp(&a.code).then_with(|| a.email.cmp(&b.email)));
 }
 
 /// Print LOC as a single compact line.

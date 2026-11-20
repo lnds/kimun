@@ -46,7 +46,7 @@ What every command reads a source file with: the languages and the classifier of
 
 The `km loc` command, over `lang/`.
 
-- **`report.rs`** — Formats results as a table sorted by code lines descending, with totals.
+- **`report.rs`** — Formats results as a table sorted by code lines descending, with totals. Languages that tie go by name, as in `km report`, and authors by identity, as in `km authors` (`sort_languages`, `sort_authors`): the counts come out of hash maps, whose order changes from run to run.
 
 - **`mod.rs`** — Orchestrates: walks directory tree (via `ignore` crate, respects `.gitignore`), detects language, deduplicates files by content hash (streaming), counts lines, aggregates by language.
 

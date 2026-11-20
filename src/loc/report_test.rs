@@ -1,5 +1,48 @@
 use super::*;
 
+fn language(name: &str, code: usize) -> LanguageReport {
+    LanguageReport {
+        name: name.to_string(),
+        files: 1,
+        blank: 0,
+        comment: 0,
+        code,
+    }
+}
+
+#[test]
+fn languages_that_tie_come_by_name() {
+    let mut reports = vec![
+        language("Python", 14),
+        language("Ruby", 100),
+        language("Perl", 14),
+    ];
+    sort_languages(&mut reports);
+    let names: Vec<&str> = reports.iter().map(|r| r.name.as_str()).collect();
+    assert_eq!(names, ["Ruby", "Perl", "Python"]);
+}
+
+#[test]
+fn authors_that_tie_come_by_identity() {
+    let author = |name: &str, identity: &str, code| AuthorReport {
+        name: name.to_string(),
+        email: identity.to_string(),
+        files: 1,
+        blank: 0,
+        comment: 0,
+        code,
+    };
+    // By name they would come ana, bo; by identity, bo comes first.
+    let mut reports = vec![
+        author("ana", "z@x.org", 2),
+        author("bo", "a@x.org", 2),
+        author("cy", "m@x.org", 5),
+    ];
+    sort_authors(&mut reports);
+    let who: Vec<&str> = reports.iter().map(|r| r.email.as_str()).collect();
+    assert_eq!(who, ["m@x.org", "a@x.org", "z@x.org"]);
+}
+
 #[test]
 fn print_report_sorts_by_code_descending() {
     // This test just ensures print_report doesn't panic and runs to completion
