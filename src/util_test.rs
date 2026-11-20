@@ -82,6 +82,18 @@ fn read_and_classify_blanks_inline_tests_when_they_are_excluded() {
     assert_eq!(code(false), 14);
 }
 
+#[test]
+fn a_source_is_read_without_the_byte_order_mark_it_starts_with() {
+    let dir = tempfile::tempdir().unwrap();
+    let text = "# header\ndef total(items):\n    return 0\n";
+    let path = write(dir.path(), "a.py", &format!("\u{feff}{text}"));
+    let spec = crate::lang::language::detect(&path).unwrap();
+    let (lines, kinds) = read_and_classify(&path, spec, true).unwrap().unwrap();
+    assert_eq!(lines[0], "# header");
+    assert_eq!(kinds, [LineKind::Comment, LineKind::Code, LineKind::Code]);
+    assert_eq!(read_lossy(&path).unwrap(), text);
+}
+
 fn write(dir: &Path, name: &str, text: &str) -> std::path::PathBuf {
     let path = dir.join(name);
     std::fs::write(&path, text).unwrap();
