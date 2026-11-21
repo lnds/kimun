@@ -12,6 +12,8 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 
 use crate::git::FileDiffStat;
+use crate::lang::counter::{LineKind, classify_reader};
+use crate::lang::language::detect;
 
 pub use super::values::literals;
 
@@ -65,9 +67,20 @@ struct Group {
 }
 
 /// The groups of values of a text, in order. Lines are numbered from 1.
-fn groups(text: &str) -> Vec<Group> {
+/// A comment holds no values: a number or a word written in one is prose,
+/// not part of a list. A file in no language km knows is read whole.
+fn groups(path: &Path, text: &str) -> Vec<Group> {
+    let comments: Vec<bool> = detect(path).map_or_else(Vec::new, |spec| {
+        classify_reader(text.as_bytes(), spec)
+            .into_iter()
+            .map(|kind| kind == LineKind::Comment)
+            .collect()
+    });
     let mut groups: Vec<Group> = Vec::new();
     for (i, line) in text.lines().enumerate() {
+        if comments.get(i).copied().unwrap_or(false) {
+            continue;
+        }
         let values = literals(line);
         if values.is_empty() {
             continue;
@@ -121,7 +134,7 @@ pub fn edits(change: &FileDiffStat, head: &str) -> Vec<Edit> {
     }
     let touched = change.lines_in(head);
     let names = names_of(&change.path, head);
-    groups(head)
+    groups(&change.path, head)
         .into_iter()
         .filter(|g| touched.iter().any(|&l| (g.first..=g.last + 1).contains(&l)))
         .filter_map(|g| {
@@ -203,7 +216,7 @@ pub fn copies(edits: &[Edit], files: &[(PathBuf, String)]) -> Vec<Copy> {
         .iter()
         .flat_map(|(path, text)| {
             let lines: Vec<&str> = text.lines().collect();
-            groups(text)
+            groups(path, text)
                 .into_iter()
                 .flat_map(|group| {
                     edits
