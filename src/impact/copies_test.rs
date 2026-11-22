@@ -91,6 +91,37 @@ fn small_groups_and_unchanged_values_make_no_edit() {
 }
 
 #[test]
+fn a_comment_holds_no_values() {
+    let head = "# retry after 30, 60 and 120\n@codes [\"CL\", \"CO\", \"MX\", \"PE\"]\n";
+    let found = groups(Path::new("a.ex"), head);
+    assert_eq!(found.len(), 1, "the comment makes no group of its own");
+    assert_eq!(
+        found[0].first, 2,
+        "the group starts at the list, not the comment"
+    );
+    assert!(
+        !found[0].values.contains("30"),
+        "a number in a comment is no value"
+    );
+}
+
+#[test]
+fn a_moved_reference_in_a_catalog_makes_no_edit() {
+    // gettext writes where each message is used as comments: `#: file:line`.
+    let head = "#: lib/a.ex:12\n#: lib/b.ex:30\n#: lib/c.ex:439\nmsgid \"Country\"\nmsgstr \"\"\n";
+    let moved = change(
+        "priv/gettext/default.pot",
+        &[3],
+        &["#: lib/c.ex:422"],
+        &["#: lib/c.ex:439"],
+    );
+    assert!(
+        edits(&moved, head).is_empty(),
+        "a line number in a reference is no value of the catalog"
+    );
+}
+
+#[test]
 fn a_copy_left_behind_is_found_and_a_comment_ties_it() {
     let edits = edits(&geo_change(), GEO);
     let others = files(&[
