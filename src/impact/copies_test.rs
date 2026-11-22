@@ -175,3 +175,26 @@ fn the_block_names_each_copy_and_what_it_lacks() {
     );
     assert!(crate::impact::copies_report::render(&[]).is_empty());
 }
+
+#[test]
+fn a_group_with_fewer_values_than_a_copy_needs_is_none() {
+    // Ten values before the change: a copy must share six of them.
+    let values = ["AR", "BO", "BR", "CL", "CO", "EC", "MX", "PE", "PY", "UY"];
+    let edit = Edit {
+        file: PathBuf::from("geo.ex"),
+        line: 1,
+        before: values.iter().map(|v| v.to_string()).collect(),
+        added: BTreeSet::from(["US".to_string()]),
+        dropped: BTreeSet::new(),
+        names: Vec::new(),
+    };
+    // Five values, all of them in `before` and none of them "US".
+    let others = files(&[(
+        "other.ex",
+        "@codes [\"AR\", \"BO\", \"BR\", \"CL\", \"CO\"]\n",
+    )]);
+    assert!(
+        copies(&[edit], &others).is_empty(),
+        "five shared values are short of six"
+    );
+}

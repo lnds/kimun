@@ -173,8 +173,13 @@ fn mentions(lines: &[&str], group: &Group, names: &[String]) -> bool {
 /// Whether the values of `group` look like the copy of what `edit`
 /// changed, left as it was before the change.
 fn copy_of(edit: &Edit, group: &Group, file: &Path, lines: &[&str]) -> Option<Copy> {
-    let matched: Vec<String> = edit.before.intersection(&group.values).cloned().collect();
     let needed = MIN_VALUES.max((edit.before.len() as f64 * MIN_SHARE).ceil() as usize);
+    // What a group shares are values of its own: one holding fewer than
+    // `needed` cannot be a copy, and no set is built to find that out.
+    if group.values.len() < needed {
+        return None;
+    }
+    let matched: Vec<String> = edit.before.intersection(&group.values).cloned().collect();
     let missing: Vec<String> = edit.added.difference(&group.values).cloned().collect();
     let kept: Vec<String> = edit.dropped.intersection(&group.values).cloned().collect();
     let behind = !missing.is_empty() || !kept.is_empty();
