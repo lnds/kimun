@@ -6,7 +6,7 @@ use std::error::Error;
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 
-use git2::{Delta, Diff, DiffDelta, DiffFindOptions, DiffOptions, Patch, Tree};
+use git2::{Delta, Diff, DiffDelta, DiffFindOptions, DiffOptions, Patch, Repository, Tree};
 
 use super::GitRepo;
 use super::touched::Touched;
@@ -152,27 +152,26 @@ pub fn patch_stats(patch: &[u8]) -> Result<Vec<FileDiffStat>, Box<dyn Error>> {
     stats_of(&diff)
 }
 
-impl GitRepo {
-    /// Diff `tree` against the working tree, with renames detected. Untracked
-    /// files are included; their lines only when `untracked_content` is set.
-    pub(super) fn workdir_diff(
-        &self,
-        tree: &Tree,
-        untracked_content: bool,
-    ) -> Result<Diff<'_>, Box<dyn Error>> {
-        let mut opts = DiffOptions::new();
-        opts.include_untracked(true)
-            .recurse_untracked_dirs(true)
-            .show_untracked_content(untracked_content);
-        let mut diff = self
-            .repo
-            .diff_tree_to_workdir_with_index(Some(tree), Some(&mut opts))?;
-        let mut find = DiffFindOptions::new();
-        find.renames(true).for_untracked(true);
-        diff.find_similar(Some(&mut find))?;
-        Ok(diff)
-    }
+/// Diff `tree` of `repo`, or an empty tree when there is none, against the
+/// working tree, with renames detected. Untracked files are included; their
+/// lines only when `untracked_content` is set.
+pub(super) fn diff_workdir<'r>(
+    repo: &'r Repository,
+    tree: Option<&Tree>,
+    untracked_content: bool,
+) -> Result<Diff<'r>, Box<dyn Error>> {
+    let mut opts = DiffOptions::new();
+    opts.include_untracked(true)
+        .recurse_untracked_dirs(true)
+        .show_untracked_content(untracked_content);
+    let mut diff = repo.diff_tree_to_workdir_with_index(tree, Some(&mut opts))?;
+    let mut find = DiffFindOptions::new();
+    find.renames(true).for_untracked(true);
+    diff.find_similar(Some(&mut find))?;
+    Ok(diff)
+}
 
+impl GitRepo {
     fn commit_of(&self, refspec: &str) -> Result<git2::Commit<'_>, Box<dyn Error>> {
         Ok(self
             .repo
@@ -197,7 +196,7 @@ impl GitRepo {
     /// changes, and deletions. A binary file counts no lines.
     pub fn diff_stats_since(&self, refspec: &str) -> Result<Vec<FileDiffStat>, Box<dyn Error>> {
         let tree = self.merge_base(refspec, "HEAD")?.tree()?;
-        stats_of(&self.workdir_diff(&tree, true)?)
+        stats_of(&diff_workdir(&self.repo, Some(&tree), true)?)
     }
 
     /// Files that differ between the merge base of `since` and `until` and

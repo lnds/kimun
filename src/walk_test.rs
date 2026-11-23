@@ -852,3 +852,141 @@ fn source_files_read_every_kind_unless_chosen() {
         ["README.md"]
     );
 }
+
+// ── nested repositories ────────────────────────────────────────────────
+
+/// Write `files` under `root`, creating directories; `.git` entries are
+/// markers, as a repository or a submodule leaves them.
+fn write_tree(root: &Path, files: &[(&str, &str)]) {
+    for (name, content) in files {
+        let path = root.join(name);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, content).unwrap();
+    }
+}
+
+/// A repository holding a submodule, a nested clone and a file of its own.
+fn repository_with_nested_ones() -> tempfile::TempDir {
+    let dir = tempdir().unwrap();
+    write_tree(
+        dir.path(),
+        &[
+            (".git/HEAD", "ref: refs/heads/main\n"),
+            ("main.rs", "fn main() {}\n"),
+            ("vendor/lib/.git", "gitdir: ../../.git/modules/vendor/lib\n"),
+            ("vendor/lib/lib.rs", "fn lib() {}\n"),
+            ("nested/.git/HEAD", "ref: refs/heads/main\n"),
+            ("nested/n.rs", "fn n() {}\n"),
+        ],
+    );
+    dir
+}
+
+/// The files read under `root`, relative to it.
+fn files_read(root: &Path, filter: &ExcludeFilter) -> Vec<String> {
+    let mut files: Vec<String> = source_files(root, false, filter)
+        .iter()
+        .map(|(path, _)| path.strip_prefix(root).unwrap().display().to_string())
+        .collect();
+    files.sort();
+    files
+}
+
+#[test]
+fn a_repository_nested_in_the_tree_is_left_out() {
+    let dir = repository_with_nested_ones();
+    assert_eq!(
+        files_read(dir.path(), &ExcludeFilter::default()),
+        ["main.rs"]
+    );
+}
+
+#[test]
+fn submodules_are_read_when_asked_for() {
+    let dir = repository_with_nested_ones();
+    let filter = ExcludeFilter::default().with_submodules(true);
+    assert!(filter.reads_submodules());
+    assert_eq!(
+        files_read(dir.path(), &filter),
+        ["main.rs", "nested/n.rs", "vendor/lib/lib.rs"]
+    );
+}
+
+#[test]
+fn a_directory_of_repositories_reads_each_one() {
+    let dir = tempdir().unwrap();
+    write_tree(
+        dir.path(),
+        &[
+            ("a/.git/HEAD", ""),
+            ("a/x.rs", "fn x() {}\n"),
+            ("a/sub/.git", "gitdir: ../../.git/modules/sub\n"),
+            ("a/sub/y.rs", "fn y() {}\n"),
+            ("b/.git/HEAD", ""),
+            ("b/z.rs", "fn z() {}\n"),
+        ],
+    );
+    assert_eq!(
+        files_read(dir.path(), &ExcludeFilter::default()),
+        ["a/x.rs", "b/z.rs"]
+    );
+}
+
+#[test]
+fn a_submodule_given_as_the_root_is_read() {
+    let dir = repository_with_nested_ones();
+    let root = dir.path().join("vendor/lib");
+    assert_eq!(files_read(&root, &ExcludeFilter::default()), ["lib.rs"]);
+}
+
+#[test]
+fn a_tree_without_git_is_read_whole() {
+    let dir = tempdir().unwrap();
+    write_tree(
+        dir.path(),
+        &[("a.rs", "fn a() {}\n"), ("d/b.rs", "fn b() {}\n")],
+    );
+    assert_eq!(
+        files_read(dir.path(), &ExcludeFilter::default()),
+        ["a.rs", "d/b.rs"]
+    );
+}
+
+#[test]
+fn left_out_directories_are_read_by_no_side() {
+    let dir = repository_with_nested_ones();
+    let filter = ExcludeFilter::default()
+        .with_submodules(true)
+        .leaving_out([PathBuf::from("vendor/lib")]);
+    assert_eq!(files_read(dir.path(), &filter), ["main.rs", "nested/n.rs"]);
+}
+
+#[test]
+fn the_repositories_nested_in_a_tree_are_named_once() {
+    let dir = repository_with_nested_ones();
+    write_tree(
+        dir.path(),
+        &[
+            ("nested/inner/.git/HEAD", ""),
+            ("nested/inner/i.rs", "fn i() {}\n"),
+        ],
+    );
+    assert_eq!(
+        nested_repositories(dir.path()),
+        [PathBuf::from("nested"), PathBuf::from("vendor/lib")]
+    );
+}
+
+#[test]
+fn the_walk_reaches_no_path_inside_a_nested_repository() {
+    let dir = repository_with_nested_ones();
+    let filter = ExcludeFilter::default();
+    assert!(reaches(dir.path(), Path::new("main.rs"), &filter));
+    assert!(!reaches(
+        dir.path(),
+        Path::new("vendor/lib/go.mod"),
+        &filter
+    ));
+    let read = filter.with_submodules(true);
+    assert!(reaches(dir.path(), Path::new("vendor/lib/go.mod"), &read));
+}

@@ -81,3 +81,11 @@ complexity = "indent"  # default: indent
 # dirs       = ["vendor", "third_party"]  # directory names, at any depth
 # extensions = ["sql", "proto"]           # file extensions, case-insensitive
 # patterns   = ["legacy/**", "*.min.js"]  # globs from the analysis root
+
+# ── Submodules (every command) ───────────────────────────────────────────────
+
+[walk]
+# Submodules, and other repositories nested in the tree, are left out, at a
+# ref as in the working tree. true reads them, as --submodules does; no flag
+# turns it off.
+# submodules = true  # default: false

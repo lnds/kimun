@@ -293,6 +293,9 @@ Extracts the file tree at the given ref into a temporary directory,
 computes the score for both snapshots, and displays a delta table
 showing how each dimension changed.
 
+Submodules are read alike on both sides: left out unless --submodules
+reads them, at the commit the ref records.
+
 Useful for checking how uncommitted changes (vs HEAD) or recent
 commits (vs HEAD~N, a branch, or a tag) impact code quality.
 

@@ -102,7 +102,7 @@ Ejecútalo en una ruta específica:
 km loc src/
 ```
 
-Los archivos de tests quedan fuera por defecto, así que los totales son menores que los de `cloc` sobre el mismo directorio. Con `--include-tests` ambos cuentan los mismos archivos. Bajo la tabla, cuando hay más de uno, van las líneas de cada [tipo de archivo](#tipos-de-archivo): code, docs, infra y data (`kinds` en el JSON).
+Los archivos de tests quedan fuera por defecto, así que los totales son menores que los de `cloc` sobre el mismo directorio. Con `--include-tests` ambos cuentan los mismos archivos, salvo el código de los [submódulos](#submódulos) y de otros repositorios anidados en el árbol: km lo deja fuera si no se da `--submodules`, como `cloc --vcs=git`. Bajo la tabla, cuando hay más de uno, van las líneas de cada [tipo de archivo](#tipos-de-archivo): code, docs, infra y data (`kinds` en el JSON).
 
 Opciones:
 
@@ -148,7 +148,7 @@ Opciones:
 | `--include-tests` | Incluye los tests, ejemplos y benchmarks en el análisis (excluidos por defecto) |
 | `--max-duplicates N` | Termina con código 1 si los grupos de duplicados superan este límite (`--max-duplicates 0` falla con cualquier duplicado) |
 | `--max-dup-ratio PERCENT` | Termina con código 1 si la proporción de líneas duplicadas supera este porcentaje (p. ej. `--max-dup-ratio 5.0`) |
-| `--fail-on-increase REF` | Termina con código 1 si la proporción de duplicación actual es mayor que en la ref de git indicada (p. ej. `origin/main`). Evita que la deuda crezca en silencio en CI |
+| `--fail-on-increase REF` | Termina con código 1 si la proporción de duplicación actual es mayor que en la ref de git indicada (p. ej. `origin/main`). Evita que la deuda crezca en silencio en CI. Los [submódulos](#submódulos) se leen en la ref como en el árbol de trabajo |
 | `--format {table,json,short,terse}` | Formato de salida (por defecto: table) |
 
 Ejemplo de salida resumida:
@@ -244,6 +244,10 @@ Cada archivo es de un tipo:
 | `data` | JSON, TOML, XML, el resto del YAML, Properties y archivos PO |
 
 `--kind` elige los tipos que lee un comando, en todos los comandos que leen archivos: `--kind docs`, `--kind code,infra`, `--kind all`. Sin él nada cambia: cada comando lee lo que siempre ha leído, y la infraestructura escrita en un lenguaje de código (Terraform, Dockerfiles) se mide como código. Para medir solo código, usa `--kind code`, o pon `separate = true` bajo `[kinds]` en `.kimun.toml` para que sea lo habitual; `[kinds]` también puede declarar el tipo de archivos por glob. `--list-excluded` nombra los archivos que `--kind` deja fuera. Los comandos que leen el historial de git también lo aceptan: `km churn --kind docs` da los documentos que más se reescriben, `km age --kind docs` los que nadie toca hace un año, `km knowledge --kind infra` los módulos de Terraform que conoce una sola persona, y [`km tc --across`](#km-tc----análisis-de-acoplamiento-temporal) la documentación y la infraestructura que cambian con el código (Jiang & Adams, MSR 2015, sobre la infraestructura que coevoluciona con el código). Los comandos `km docs` leen los documentos y [`km infra smells`](#km-infra-smells----olores-de-seguridad-del-código-de-infraestructura) la infraestructura, diga lo que diga `--kind`.
+
+#### Submódulos
+
+El código de un submódulo no es del proyecto: el recorrido se detiene en un submódulo, y en cualquier otro repositorio anidado en el árbol (un clon, un worktree), en el árbol de trabajo y en una ref por igual. Así el puntaje de un repositorio no depende de si se corrió `git submodule update`, y un submódulo no mueve `--trend` en un árbol que no cambió. Un directorio que no es un repositorio ni está dentro de uno, como `~/src`, lee cada repositorio que contiene; bajo un directorio guardado en git, como un directorio personal, están anidados y quedan fuera. `--submodules`, o `submodules = true` bajo `[walk]` en `.kimun.toml`, los lee en ambos lados: en una ref, cada submódulo en el commit que la ref registra; un clon o un worktree guardado en el árbol no tiene con qué compararse en una ref, y se lee como un directorio sin seguimiento. Un submódulo que no se puede leer en la ref (sin checkout, o con su commit sin traer en un clon superficial) queda fuera en ambos lados, con un aviso que dice qué ejecutar; con `--gate-scope changed`, lo que cambió un submódulo cuenta como archivos modificados. `--list-excluded` nombra cada repositorio que el recorrido deja fuera. `km impact`, que lee el árbol por su cuenta, entra en los submódulos como antes; `km docs refs` revisa los documentos de un submódulo solo con `--submodules`, aunque un enlace a uno sigue encontrando su archivo.
 
 ### `km indent` -- Complejidad por indentación
 
@@ -1413,7 +1417,7 @@ Un objetivo sin nada que calificar, sin archivos de código (un README, un archi
 
 Una dimensión que ningún archivo del objetivo puede medir tampoco tiene puntaje: por ejemplo Halstead Effort, en un archivo sin nada que contar para Halstead (un archivo Ruby de líneas `require`, un archivo JavaScript de imports de efecto secundario, un archivo Go que solo tiene su cláusula `package`, un archivo TypeScript solo de tipos) o en un lenguaje sin reglas de Halstead (los que [`km hal`](#km-hal----métricas-de-complejidad-de-halstead) no lista), y con ella el Maintainability Index de los modelos legacy y experimental. La tabla muestra `-` en ella y dice por qué debajo (`Halstead Effort not measured; its weight is spread over the other dimensions.`), `--format json` da `null`, y el puntaje del proyecto es la media ponderada de las dimensiones que se midieron. El puntaje propio de un archivo, en "Files Needing Attention", `km map` y `--gate-scope changed`, deja fuera de la misma forma las métricas que le faltan. Hasta v0.48 una dimensión así contaba 0.0 en el puntaje del proyecto y 50 en el de un archivo: `km score` sobre un archivo solo de líneas `require` daba B- (79.0), y el archivo mismo 86.7 en "Files Needing Attention".
 
-Con `--trend`, un gate sin nada que comparar pasa, y lo dice en stderr (`note: nothing to grade in README.md (no code files measured); --fail-below skipped`): `--fail-below` cuando no hay nada que calificar ahora, `--fail-if-worse` cuando no hay nada que calificar ahora o en la ref. Con `--gate-scope changed`, las líneas duplicadas se comparan igual cuando la ref no tenía código, porque se cuentan, no se califican. Así un gate que revisa cada ruta modificada no falla por la documentación, y eliminar todo el código bajo una ruta no hace fallar `--fail-if-worse`.
+Con `--trend`, un gate sin nada que comparar pasa, y lo dice en stderr (`note: nothing to grade in README.md (no code files measured); --fail-below skipped`): `--fail-below` cuando no hay nada que calificar ahora, `--fail-if-worse` cuando no hay nada que calificar ahora o en la ref. Con `--gate-scope changed`, las líneas duplicadas se comparan igual cuando la ref no tenía código, porque se cuentan, no se califican. Así un gate que revisa cada ruta modificada no falla por la documentación, y eliminar todo el código bajo una ruta no hace fallar `--fail-if-worse`. Los [submódulos](#submódulos) se leen en la ref como en el árbol de trabajo.
 
 ```bash
 km score [path]
@@ -1541,7 +1545,7 @@ Un badge guardado en el repositorio está tan al día como su última ejecución
 
 #### `km score diff` -- Comparar el puntaje con una ref de git
 
-Extrae el árbol de archivos en la ref indicada, calcula el puntaje de ambas instantáneas y muestra una tabla de diferencias por dimensión. Útil para revisar cómo afectan los commits a la calidad del código.
+Extrae el árbol de archivos en la ref indicada, calcula el puntaje de ambas instantáneas y muestra una tabla de diferencias por dimensión. Los [submódulos](#submódulos) se leen igual en ambas. Útil para revisar cómo afectan los commits a la calidad del código.
 
 ```bash
 km score diff                          # compara con HEAD (cambios sin commit)
@@ -1868,11 +1872,19 @@ docs     = ["notes/**"]       # estos archivos son docs, sea cual sea su extensi
 infra    = ["deploy/**/*.yml"]
 ```
 
+`[walk]` decide en qué entra el recorrido de todos los comandos. Con `submodules = true` lee los [submódulos](#submódulos), como `--submodules`; el flag no puede desactivarlo.
+
+```toml
+[walk]
+submodules = false            # true: lee los submódulos, en una ref como en el árbol de trabajo (por defecto: false)
+```
+
 Todas las secciones y todos los campos son opcionales: omite los que no necesites. Hay una plantilla completamente documentada en [`.kimun.toml.example`](.kimun.toml.example).
 
 ## Características
 
 - Respeta automáticamente las reglas de `.gitignore`
+- Deja fuera los submódulos, en una ref como en el árbol de trabajo (`--submodules` los lee)
 - Elimina archivos repetidos por hash de contenido (los archivos idénticos se cuentan una vez)
 - Detecta los lenguajes por la extensión del archivo, por su nombre o por la línea shebang
 - Soporta comentarios de bloque anidados (Rust, Haskell, OCaml, etc.)

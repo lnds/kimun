@@ -9,11 +9,13 @@
 //! walk and git's path namespace.
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
-use std::fs;
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 
-use git2::{Delta, DiffOptions, FileMode, ObjectType, Repository, Sort, Tree};
+use git2::{Delta, DiffOptions, Repository, Sort, Tree};
+
+pub use submodules::LeftOut;
+use submodules::{Extraction, Level, Place, collect_changes};
 
 mod before;
 mod blame;
@@ -21,6 +23,10 @@ mod changeset;
 mod coupling;
 mod frequencies;
 mod history;
+mod submodules;
+
+#[cfg(test)]
+pub(crate) mod submodule_fixture;
 
 pub use changeset::{ChangeKind, CoChangeHistory, FileDiffStat, patch_stats};
 
@@ -250,22 +256,32 @@ impl GitRepo {
 
     /// Extract the file tree at a given git ref (e.g. "HEAD", "main~3") into
     /// a destination directory. Writes blobs as files and recurses into subtrees.
-    /// Skips submodules. A symbolic link is written as a checkout writes it:
-    /// not at all where it is a link, which the walk skips, else as the file
-    /// holding the path it points to.
-    pub fn extract_tree_to_dir(&self, refspec: &str, dest: &Path) -> Result<(), Box<dyn Error>> {
+    /// A symbolic link is written as a checkout writes it: not at all where
+    /// it is a link, which the walk skips, else as the file holding the path
+    /// it points to.
+    ///
+    /// A submodule is written only with `submodules`, and only when it is
+    /// under `under`, the path analyzed from the root of the repository, or
+    /// holds it (`under` empty: the whole tree): the tree of the commit the
+    /// ref records, read from its checkout, or from `.git/modules` for one
+    /// moved or removed since. One that cannot be read (not checked out, its
+    /// commit not fetched) is returned with the advice to give about it.
+    pub fn extract_tree_to_dir(
+        &self,
+        refspec: &str,
+        dest: &Path,
+        submodules: bool,
+        under: &Path,
+    ) -> Result<Vec<LeftOut>, Box<dyn Error>> {
         let tree = self.ref_tree(refspec)?;
-        self.write_tree_recursive(&tree, dest, self.checks_out_links())
-    }
-
-    /// Whether a checkout makes symbolic links links rather than files
-    /// holding the path they point to: `core.symlinks`, which is on by
-    /// default, and off by default on Windows.
-    fn checks_out_links(&self) -> bool {
-        self.repo
-            .config()
-            .and_then(|config| config.get_bool("core.symlinks"))
-            .unwrap_or(!cfg!(windows))
+        let level = Level::of(
+            &self.repo,
+            Some(self.root.clone()),
+            submodules.then_some(&tree),
+        );
+        let mut extraction = Extraction::new(submodules, under, &self.root);
+        extraction.write(&level, &tree, &Place::root(dest))?;
+        Ok(extraction.into_left_out())
     }
 
     fn ref_tree(&self, refspec: &str) -> Result<Tree<'_>, Box<dyn Error>> {
@@ -277,38 +293,6 @@ impl GitRepo {
             .peel_to_commit()
             .map_err(|e| format!("'{refspec}' is not a commit: {e}"))?;
         Ok(commit.tree()?)
-    }
-
-    /// Recursively write a git tree to a filesystem directory, leaving out
-    /// its symbolic links where a checkout makes them `links`.
-    fn write_tree_recursive(
-        &self,
-        tree: &Tree,
-        dest: &Path,
-        links: bool,
-    ) -> Result<(), Box<dyn Error>> {
-        for entry in tree.iter() {
-            let name = entry
-                .name()
-                .map_err(|_| format!("non-UTF-8 entry in tree: {:?}", entry.id()))?;
-            let path = dest.join(name);
-
-            match entry.kind() {
-                Some(ObjectType::Blob)
-                    if links && entry.filemode() == i32::from(FileMode::Link) => {}
-                Some(ObjectType::Blob) => {
-                    let blob = self.repo.find_blob(entry.id())?;
-                    fs::write(&path, blob.content())?;
-                }
-                Some(ObjectType::Tree) => {
-                    let subtree = self.repo.find_tree(entry.id())?;
-                    fs::create_dir_all(&path)?;
-                    self.write_tree_recursive(&subtree, &path, links)?;
-                }
-                _ => {} // submodules
-            }
-        }
-        Ok(())
     }
 
     /// Return the absolute paths of files added or modified between `since_ref`
@@ -339,29 +323,23 @@ impl GitRepo {
 
     /// Files added, modified or renamed between `refspec` and the working tree,
     /// including uncommitted and untracked changes. Deletions are omitted.
+    ///
+    /// With `submodules`, a changed submodule stands for the files it changed,
+    /// from the commit the ref records to its working tree, under its path.
     pub fn changes_since_in_workdir(
         &self,
         refspec: &str,
+        submodules: bool,
     ) -> Result<Vec<FileChange>, Box<dyn Error>> {
         let tree = self.ref_tree(refspec)?;
-        let diff = self.workdir_diff(&tree, false)?;
-
         let mut changes = Vec::new();
-        for delta in diff.deltas() {
-            let old_path = match delta.status() {
-                Delta::Added | Delta::Untracked | Delta::Copied => None,
-                Delta::Modified | Delta::Renamed | Delta::Typechange => {
-                    delta.old_file().path().map(Path::to_path_buf)
-                }
-                _ => continue,
-            };
-            if let Some(path) = delta.new_file().path() {
-                changes.push(FileChange {
-                    path: path.to_path_buf(),
-                    old_path,
-                });
-            }
-        }
+        collect_changes(
+            &self.repo,
+            Some(&tree),
+            Path::new(""),
+            submodules,
+            &mut changes,
+        )?;
         Ok(changes)
     }
 

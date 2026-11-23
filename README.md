@@ -102,7 +102,7 @@ Run on a specific path:
 km loc src/
 ```
 
-Test files are left out by default, so the totals are lower than those of `cloc` on the same directory. With `--include-tests` both count the same files. Below the table, when there is more than one, come the lines of each [kind of file](#file-kinds): code, docs, infra and data (`kinds` in the JSON).
+Test files are left out by default, so the totals are lower than those of `cloc` on the same directory. With `--include-tests` both count the same files, except the code of [submodules](#submodules) and other repositories nested in the tree: km leaves it out unless `--submodules` is given, as `cloc --vcs=git` does. Below the table, when there is more than one, come the lines of each [kind of file](#file-kinds): code, docs, infra and data (`kinds` in the JSON).
 
 Options:
 
@@ -148,7 +148,7 @@ Options:
 | `--include-tests` | Include tests, examples and benchmarks in analysis (excluded by default) |
 | `--max-duplicates N` | Exit with code 1 if duplicate groups exceed this limit (`--max-duplicates 0` fails on any duplicate) |
 | `--max-dup-ratio PERCENT` | Exit with code 1 if the duplicated-lines ratio exceeds this percentage (e.g. `--max-dup-ratio 5.0`) |
-| `--fail-on-increase REF` | Exit with code 1 if the current duplication ratio is higher than at the given git ref (e.g. `origin/main`). Prevents debt from growing silently in CI |
+| `--fail-on-increase REF` | Exit with code 1 if the current duplication ratio is higher than at the given git ref (e.g. `origin/main`). Prevents debt from growing silently in CI. [Submodules](#submodules) are read at the ref as in the working tree |
 | `--format {table,json,short,terse}` | Output format (default: table) |
 
 Example summary output:
@@ -244,6 +244,10 @@ Every file is of one kind:
 | `data` | JSON, TOML, XML, the rest of YAML, Properties and PO files |
 
 `--kind` chooses the kinds a command reads, on every command that reads files: `--kind docs`, `--kind code,infra`, `--kind all`. Without it nothing changes: each command reads what it always has, and infrastructure written in a language of code (Terraform, Dockerfiles) is measured as code. To measure code alone, use `--kind code`, or set `separate = true` under `[kinds]` in `.kimun.toml` to make that the default; `[kinds]` can also declare the kind of files by glob. `--list-excluded` names the files `--kind` leaves out. The commands that read git history take it too: `km churn --kind docs` gives the documents rewritten most often, `km age --kind docs` those nobody touched in a year, `km knowledge --kind infra` the Terraform modules only one person knows, and [`km tc --across`](#km-tc----temporal-coupling-analysis) the documentation and infrastructure that change with the code (Jiang & Adams, MSR 2015, on infrastructure that co-evolves with code). The `km docs` commands read the documents and [`km infra smells`](#km-infra-smells----security-smells-of-infrastructure-code) the infrastructure, whatever `--kind` says.
+
+#### Submodules
+
+The code of a submodule is not the project's: the walk stops at a submodule, and at any other repository nested in the tree (a clone, a worktree), in the working tree and at a ref alike. So the score of a repository does not depend on whether `git submodule update` ran, and a submodule does not move `--trend` on a tree that did not change. A directory that is no repository and lies in none, such as `~/src`, reads each repository it holds; under a directory kept in git, such as a home directory, they are nested and left out. `--submodules`, or `submodules = true` under `[walk]` in `.kimun.toml`, reads them on both sides: at a ref, each submodule at the commit the ref records; a clone or a worktree kept in the tree has nothing to match at a ref, and is read as an untracked directory is. A submodule that cannot be read at the ref (not checked out, or its commit not fetched in a shallow clone) is left out on both sides, with a warning that says what to run; with `--gate-scope changed`, what a submodule changed counts as changed files. `--list-excluded` names each repository the walk leaves out. `km impact`, which reads the tree on its own, goes into submodules as before; `km docs refs` checks the documents of a submodule only with `--submodules`, though a link into one still finds its file.
 
 ### `km indent` -- Indentation complexity
 
@@ -1413,7 +1417,7 @@ A target with nothing to grade, no code files (a README, a config file, an empty
 
 A dimension that no file of the target can measure has no score either: for instance Halstead Effort, for a file with nothing for Halstead to count (a Ruby file of `require` lines, a JavaScript file of side-effect imports, a Go file that holds only its package clause, a TypeScript file of types alone) or in a language without Halstead rules (those [`km hal`](#km-hal----halstead-complexity-metrics) does not list), and with it the Maintainability Index of the legacy and experimental models. The table shows `-` for it and says why under it (`Halstead Effort not measured; its weight is spread over the other dimensions.`), `--format json` gives `null`, and the project score is the weighted mean of the dimensions that were measured. A file's own score, in "Files Needing Attention", `km map` and `--gate-scope changed`, leaves out the metrics the file lacks in the same way. Up to v0.48 such a dimension counted 0.0 in the project score and 50 in a file's score: `km score` on a file of `require` lines alone gave B- (79.0), and the file itself 86.7 in "Files Needing Attention".
 
-With `--trend`, a gate with nothing to compare passes, and says so on stderr (`note: nothing to grade in README.md (no code files measured); --fail-below skipped`): `--fail-below` when there is nothing to grade now, `--fail-if-worse` when there is nothing to grade now or at the ref. With `--gate-scope changed`, duplicated lines are still compared when the ref had no code, since they are counted, not graded. So a gate that checks each changed path does not fail on documentation, and deleting all the code under a path does not fail `--fail-if-worse`.
+With `--trend`, a gate with nothing to compare passes, and says so on stderr (`note: nothing to grade in README.md (no code files measured); --fail-below skipped`): `--fail-below` when there is nothing to grade now, `--fail-if-worse` when there is nothing to grade now or at the ref. With `--gate-scope changed`, duplicated lines are still compared when the ref had no code, since they are counted, not graded. So a gate that checks each changed path does not fail on documentation, and deleting all the code under a path does not fail `--fail-if-worse`. [Submodules](#submodules) are read at the ref as in the working tree.
 
 ```bash
 km score [path]
@@ -1541,7 +1545,7 @@ A badge in the repository is as fresh as its last run, and a workflow cannot com
 
 #### `km score diff` — Compare score against a git ref
 
-Extracts the file tree at the given ref, computes the score for both snapshots, and shows a delta table per dimension. Useful for reviewing how commits impact code quality.
+Extracts the file tree at the given ref, computes the score for both snapshots, and shows a delta table per dimension. [Submodules](#submodules) are read alike in both. Useful for reviewing how commits impact code quality.
 
 ```bash
 km score diff                          # compare vs HEAD (uncommitted changes)
@@ -1868,11 +1872,19 @@ docs     = ["notes/**"]       # these files are docs, whatever their extension
 infra    = ["deploy/**/*.yml"]
 ```
 
+`[walk]` decides what the walk of every command goes into. With `submodules = true` it reads [submodules](#submodules), as `--submodules` does; the flag cannot turn it off.
+
+```toml
+[walk]
+submodules = false            # true: read submodules, at a ref as in the working tree (default: false)
+```
+
 All sections and fields are optional — omit any you don't need. A fully documented template is available at [`.kimun.toml.example`](.kimun.toml.example).
 
 ## Features
 
 - Respects `.gitignore` rules automatically
+- Leaves submodules out, at a ref as in the working tree (`--submodules` reads them)
 - Deduplicates files by content hash (identical files counted once)
 - Detects languages by file extension, filename, or shebang line
 - Supports nested block comments (Rust, Haskell, OCaml, etc.)

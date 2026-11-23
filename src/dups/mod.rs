@@ -12,6 +12,7 @@ use std::collections::HashSet;
 use std::error::Error;
 use std::path::Path;
 
+use crate::at_ref::RefTree;
 use crate::git::GitRepo;
 use crate::lang::counter::LineKind;
 use crate::lang::language::LanguageSpec;
@@ -103,6 +104,46 @@ pub struct DupsGate {
     pub fail_on_increase: Option<String>,
 }
 
+/// The share of code lines that are duplicated, as a percentage.
+fn duplication_ratio(metrics: &DuplicationMetrics) -> f64 {
+    if metrics.total_code_lines > 0 {
+        metrics.duplicated_lines as f64 / metrics.total_code_lines as f64 * 100.0
+    } else {
+        0.0
+    }
+}
+
+/// Fail when duplication is higher than at `git_ref`. The ref is read by
+/// the same rules as the working tree: a submodule it could not write is
+/// left out of the working tree as well, whose ratio is then computed again.
+fn check_no_increase(
+    git_ref: &str,
+    metrics: &DuplicationMetrics,
+    cfg: &WalkConfig<'_>,
+    min_lines: usize,
+) -> Result<(), Box<dyn Error>> {
+    let repo = GitRepo::open(cfg.path)?;
+    let at_ref = RefTree::write(&repo, cfg, git_ref)?;
+    let ref_cfg = WalkConfig::new(&at_ref.path, cfg.include_tests, &at_ref.filter);
+    let before_ratio = duplication_ratio(&compute_metrics(&ref_cfg, min_lines));
+    let after_ratio = if at_ref.left_out {
+        let cfg = WalkConfig::new(cfg.path, cfg.include_tests, &at_ref.filter);
+        duplication_ratio(&compute_metrics(&cfg, min_lines))
+    } else {
+        duplication_ratio(metrics)
+    };
+
+    // Compare at 0.01% resolution (the display precision) to avoid spurious
+    // failures from floating-point noise smaller than one display unit.
+    if (after_ratio * 100.0).round() > (before_ratio * 100.0).round() {
+        return Err(format!(
+            "quality gate failed: duplication increased from {before_ratio:.2}% to {after_ratio:.2}% vs {git_ref}"
+        )
+        .into());
+    }
+    Ok(())
+}
+
 /// Check quality gates after the report has been printed.
 /// Returns an error if any gate condition is violated.
 fn check_quality_gates(
@@ -122,11 +163,7 @@ fn check_quality_gates(
     }
 
     if let Some(max_pct) = gate.max_dup_ratio {
-        let actual_pct = if metrics.total_code_lines > 0 {
-            metrics.duplicated_lines as f64 / metrics.total_code_lines as f64 * 100.0
-        } else {
-            0.0
-        };
+        let actual_pct = duplication_ratio(metrics);
         if actual_pct > max_pct {
             return Err(format!(
                 "quality gate failed: {actual_pct:.1}% duplication ratio exceeds limit of {max_pct:.1}%"
@@ -136,40 +173,7 @@ fn check_quality_gates(
     }
 
     if let Some(git_ref) = gate.fail_on_increase.as_deref() {
-        let after_ratio = if metrics.total_code_lines > 0 {
-            metrics.duplicated_lines as f64 / metrics.total_code_lines as f64 * 100.0
-        } else {
-            0.0
-        };
-
-        let repo = GitRepo::open(cfg.path)?;
-        let tmpdir = tempfile::tempdir()?;
-        repo.extract_tree_to_dir(git_ref, tmpdir.path())?;
-
-        let (_, prefix) = repo.walk_prefix(cfg.path)?;
-        let tmp_path = if prefix.as_os_str().is_empty() {
-            tmpdir.path().to_path_buf()
-        } else {
-            tmpdir.path().join(&prefix)
-        };
-
-        let ref_cfg = WalkConfig::new(&tmp_path, cfg.include_tests, cfg.filter);
-        let ref_metrics = compute_metrics(&ref_cfg, min_lines);
-
-        let before_ratio = if ref_metrics.total_code_lines > 0 {
-            ref_metrics.duplicated_lines as f64 / ref_metrics.total_code_lines as f64 * 100.0
-        } else {
-            0.0
-        };
-
-        // Compare at 0.01% resolution (the display precision) to avoid spurious
-        // failures from floating-point noise smaller than one display unit.
-        if (after_ratio * 100.0).round() > (before_ratio * 100.0).round() {
-            return Err(format!(
-                "quality gate failed: duplication increased from {before_ratio:.2}% to {after_ratio:.2}% vs {git_ref}"
-            )
-            .into());
-        }
+        check_no_increase(git_ref, metrics, cfg, min_lines)?;
     }
 
     Ok(())

@@ -1,3 +1,9 @@
+## Unreleased
+
+### Notes
+
+- Scores move for repositories with initialized submodules. The walk stops at a submodule, and at any other repository nested in the tree, in the working tree and at a ref alike, so their code no longer counts, as in a checkout without them, and a submodule no longer moves `--trend` or `km dups --fail-on-increase` on a tree that did not change. `--submodules`, or `submodules = true` under `[walk]` in `.kimun.toml`, reads them on both sides.
+
 ## v0.50.0 (2026-11-22)
 
 ### Notes

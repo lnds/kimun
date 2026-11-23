@@ -1,7 +1,9 @@
 //! Filesystem walking with `.gitignore` support and test exclusion.
 //!
 //! Provides directory traversal that respects `.gitignore` rules, skips
-//! `.git` directories, filters test directories/files when requested,
+//! `.git` directories and the repositories nested in the tree (submodules,
+//! clones, worktrees) unless asked to read them, filters test
+//! directories/files when requested,
 //! and detects source file languages by extension or shebang line.
 //! Uses the `ignore` crate for efficient `.gitignore`-aware traversal.
 use std::collections::HashSet;
@@ -17,7 +19,12 @@ use crate::lang::language::{LanguageSpec, detect_by_shebang, detect_file};
 use crate::test_blocks::rust_test_modules;
 use crate::util::is_generated_file;
 
-/// Filter that excludes files by extension, directory name, or glob pattern.
+mod nested;
+use nested::Root;
+
+/// Filter that excludes files by extension, directory name, or glob pattern,
+/// and the directories the walk stops at: repositories nested in the tree,
+/// unless it reads submodules, and those `leaving_out` names.
 ///
 /// Built from the `--exclude-ext`, `--exclude-dir`, and `--exclude` CLI flags
 /// and passed through every analysis pipeline. An empty filter (via `Default`)
@@ -35,6 +42,10 @@ pub struct ExcludeFilter {
     globs: Option<GlobSet>,
     /// The kinds of file read, from `--kind` and `[kinds]`.
     kinds: Selection,
+    /// Whether the walk goes into a repository nested in the tree.
+    submodules: bool,
+    /// Directories, relative to the walk root, that no side reads.
+    left_out: HashSet<PathBuf>,
 }
 
 impl ExcludeFilter {
@@ -71,12 +82,34 @@ impl ExcludeFilter {
             dirs,
             globs,
             kinds: Selection::default(),
+            submodules: false,
+            left_out: HashSet::new(),
         }
     }
 
     /// This filter reading only the kinds of `kinds`.
     pub fn with_kinds(mut self, kinds: Selection) -> Self {
         self.kinds = kinds;
+        self
+    }
+
+    /// This filter going into submodules, and other repositories nested in
+    /// the tree, or stopping at them.
+    pub fn with_submodules(mut self, read: bool) -> Self {
+        self.submodules = read;
+        self
+    }
+
+    /// Whether the walk goes into submodules.
+    pub fn reads_submodules(&self) -> bool {
+        self.submodules
+    }
+
+    /// This filter leaving out these directories, relative to the walk root,
+    /// whatever else it reads: the submodules a ref could not write, so the
+    /// working tree leaves them out too.
+    pub fn leaving_out(mut self, dirs: impl IntoIterator<Item = PathBuf>) -> Self {
+        self.left_out.extend(dirs);
         self
     }
 
@@ -459,8 +492,10 @@ pub fn collect_analysis<T>(
 }
 
 /// Build a directory walker that respects `.gitignore`, skips `.git`,
-/// and optionally excludes test directories, user-specified directories,
-/// test-named files, and files matching extension/glob exclusion filters.
+/// stops at the repositories nested in the tree unless the filter reads
+/// submodules, and optionally excludes test directories, user-specified
+/// directories, test-named files, and files matching extension/glob
+/// exclusion filters.
 ///
 /// File-level filtering is done here (rather than in `source_files()`)
 /// so that excluded files are never yielded, reducing downstream work.
@@ -468,19 +503,19 @@ pub fn collect_analysis<T>(
 /// counted once among copies (duplicated lines) is the same on every system.
 pub(crate) fn walk(path: &Path, exclude_tests: bool, filter: &ExcludeFilter) -> ignore::Walk {
     let filter = filter.clone();
-    let walk_root = path.to_path_buf();
+    let root = Root::of(path);
     WalkBuilder::new(path)
         .hidden(false)
         .follow_links(false)
         .sort_by_file_name(|a, b| a.cmp(b))
-        .filter_entry(move |entry| keeps_entry(entry, &walk_root, exclude_tests, &filter))
+        .filter_entry(move |entry| keeps_entry(entry, &root, exclude_tests, &filter))
         .build()
 }
 
 /// Whether the walk goes into a directory or yields a file.
 fn keeps_entry(
     entry: &ignore::DirEntry,
-    walk_root: &Path,
+    root: &Root,
     exclude_tests: bool,
     filter: &ExcludeFilter,
 ) -> bool {
@@ -488,12 +523,13 @@ fn keeps_entry(
         return true;
     };
     if ft.is_dir() {
-        return keeps_dir(entry.file_name(), exclude_tests, filter);
+        return keeps_dir(entry.file_name(), exclude_tests, filter)
+            && !root.leaves_out(entry.path(), &filter.left_out, filter.submodules);
     }
     let file_path = entry.path();
     !ft.is_file()
         || !((exclude_tests && is_test_file(file_path))
-            || filter.excludes_file(file_path, walk_root))
+            || filter.excludes_file(file_path, &root.path))
 }
 
 /// Whether the walk goes into a directory of this name.
@@ -533,22 +569,42 @@ fn ancestor_exclusion_reason(
     None
 }
 
-/// Print files that would be excluded by the current filter configuration.
+/// Whether the walk of `root` goes as far as `path`, relative to it: no
+/// directory on the way is one the filter leaves out.
+pub(crate) fn reaches(root: &Path, path: &Path, filter: &ExcludeFilter) -> bool {
+    Root::of(root).reaches(path, &filter.left_out, filter.submodules)
+}
+
+/// The repositories nested in the tree under `path`, relative to it: the
+/// directories the walk stops at unless it reads submodules.
+pub(crate) fn nested_repositories(path: &Path) -> Vec<PathBuf> {
+    let open = ExcludeFilter::default().with_submodules(true);
+    Root::of(path).nested_repositories(walk(path, false, &open).filter_map(Result::ok))
+}
+
+/// Print each repository nested in the tree that the walk stops at, then
+/// the files that would be excluded by the current filter configuration.
 /// Used by `--list-excluded` for debugging filter rules.
 pub fn print_excluded_files(
     path: &Path,
     exclude_tests: bool,
     filter: &ExcludeFilter,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // Walk with filter applied only for dirs; check files manually to report excluded ones
-    let no_filter = ExcludeFilter::default();
+    // Walk with nothing hidden but the repositories the filter stops at;
+    // check files manually to report excluded ones
+    let open = ExcludeFilter::default().with_submodules(filter.reads_submodules());
     let test_modules = if exclude_tests {
-        rust_test_modules(&source_files(path, false, &no_filter))
+        rust_test_modules(&source_files(path, false, &open))
     } else {
         HashSet::new()
     };
+    if !filter.reads_submodules() {
+        for dir in nested_repositories(path) {
+            println!("{}/ (nested repository)", dir.display());
+        }
+    }
     let mut count = 0;
-    let files = walk(path, false, &no_filter)
+    let files = walk(path, false, &open)
         .filter_map(Result::ok)
         .filter(|entry| entry.file_type().is_some_and(|ft| ft.is_file()));
     for entry in files {

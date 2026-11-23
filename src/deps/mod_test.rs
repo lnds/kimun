@@ -703,3 +703,19 @@ fn terraform_modules_enter_the_graph_when_kind_asks() {
         .unwrap();
     assert_eq!(gone.unresolved, ["../../modules/gone"]);
 }
+
+#[test]
+fn the_go_module_of_a_submodule_left_out_is_no_module_of_the_repository() {
+    let result = analyze_files(&[
+        (".git/HEAD", "ref: refs/heads/main\n"),
+        ("go.mod", "module example.com/app\n"),
+        (
+            "main.go",
+            "package main\n\nimport \"example.com/lib/x\"\n\nfunc main() { x.X() }\n",
+        ),
+        ("lib/.git", "gitdir: ../.git/modules/lib\n"),
+        ("lib/go.mod", "module example.com/lib\n"),
+        ("lib/x/x.go", "package x\n\nfunc X() {}\n"),
+    ]);
+    assert!(entry_of(&result, "main.go").unresolved.is_empty());
+}

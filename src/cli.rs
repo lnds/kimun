@@ -656,4 +656,28 @@ mod tests {
         assert_eq!(kinds(&["--kind", "docs", "--kind", "all"]), [true; 4]);
         assert!(Cli::try_parse_from(["km", "loc", "--kind", "prose"]).is_err());
     }
+
+    #[test]
+    fn submodules_is_a_flag_of_every_walk() {
+        let loc = Cli::try_parse_from(["km", "loc", "--submodules"]).expect("valid arguments");
+        let Commands::Loc { common, .. } = loc.command else {
+            panic!("not the loc command");
+        };
+        assert!(common.exclude_args.submodules);
+        let diff =
+            Cli::try_parse_from(["km", "score", "diff", "--submodules"]).expect("valid arguments");
+        let Commands::Score {
+            subcommand: Some(ScoreCommands::Diff { exclude_args, .. }),
+            ..
+        } = diff.command
+        else {
+            panic!("not the score diff command");
+        };
+        assert!(exclude_args.submodules);
+        let plain = Cli::try_parse_from(["km", "loc"]).expect("valid arguments");
+        let Commands::Loc { common, .. } = plain.command else {
+            panic!("not the loc command");
+        };
+        assert!(!common.exclude_args.submodules);
+    }
 }
