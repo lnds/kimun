@@ -129,3 +129,9 @@ complexity = "indent"  # default: indent
 # infra = ["deploy/**/*.yml"]
 # code  = []
 # data  = []
+
+[walk]
+# What the walk of every command goes into.
+# true: read submodules, and other repositories nested in the tree, at a ref
+# as in the working tree, as --submodules does (default: false).
+# submodules = true

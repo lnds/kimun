@@ -37,6 +37,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
+use crate::at_ref::RefTree;
 use crate::dups;
 use crate::git::GitRepo;
 use crate::walk::WalkConfig;
@@ -160,36 +161,27 @@ pub fn run_diff(
 ) -> Result<(), Box<dyn Error>> {
     let scoring_model = ScoringModel::from_arg(model);
 
-    // Score the current working tree.
-    let after = compute_snapshot(cfg, bottom, min_lines, &scoring_model)?;
-
-    // Open the git repo and extract the ref tree into a temp directory.
+    // Write the ref first: what it could not write, neither side reads.
+    // A subdirectory of the repo is analyzed as the same one in the ref.
     let repo = GitRepo::open(cfg.path)?;
-    let tmpdir = tempfile::tempdir()?;
-    repo.extract_tree_to_dir(git_ref, tmpdir.path())?;
+    let at_ref = RefTree::write(&repo, cfg, git_ref)?;
+    let (prefix, tmp_path) = (&at_ref.prefix, &at_ref.path);
 
-    // Handle subdirectory case: if the user pointed at a subdir of the repo,
-    // analyze the corresponding subdir inside the extracted tree.
-    let (_, prefix) = repo.walk_prefix(cfg.path)?;
-    let tmp_path = if prefix.as_os_str().is_empty() {
-        tmpdir.path().to_path_buf()
-    } else {
-        tmpdir.path().join(&prefix)
-    };
-
-    // Score the ref tree.
-    let ref_cfg = WalkConfig::new(&tmp_path, cfg.include_tests, cfg.filter);
+    // Score the current working tree, then the ref tree.
+    let walked = WalkConfig::new(cfg.path, cfg.include_tests, &at_ref.filter);
+    let after = compute_snapshot(&walked, bottom, min_lines, &scoring_model)?;
+    let ref_cfg = WalkConfig::new(tmp_path, walked.include_tests, &at_ref.filter);
     let before = compute_snapshot(&ref_cfg, bottom, min_lines, &scoring_model)?;
 
     let mut score_diff = diff::compute_diff(git_ref, &before.score, &after.score);
     if gate.scope == GateScope::Changed {
-        let changes = repo.changes_since_in_workdir(git_ref)?;
+        let changes = repo.changes_since_in_workdir(git_ref, walked.filter.reads_submodules())?;
         score_diff.changed = Some(changed::ChangedScope {
             files: changed::changed_files(
                 &changes,
-                &prefix,
-                &before.scores_by_path(&tmp_path),
-                &after.scores_by_path(cfg.path),
+                prefix,
+                &before.scores_by_path(tmp_path),
+                &after.scores_by_path(walked.path),
             ),
             duplicated_lines_before: before.duplicated_lines,
             duplicated_lines_after: after.duplicated_lines,

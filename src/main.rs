@@ -13,6 +13,8 @@
 mod age;
 /// AI-powered analysis via external LLM providers.
 mod ai;
+/// A git ref written to a directory, its submodules read as in the working tree.
+mod at_ref;
 /// Author summary: per-author ownership, lines, languages, last active date.
 mod authors;
 /// What reads as a branch in a line, for cyclomatic and cognitive complexity.

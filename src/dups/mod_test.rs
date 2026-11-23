@@ -1,4 +1,5 @@
 use super::*;
+use crate::git::submodule_fixture::{add_submodule, superproject};
 use crate::lang::language::detect;
 use crate::options::OutputMode;
 use crate::walk::{self, ExcludeFilter, WalkConfig};
@@ -676,4 +677,21 @@ fn run_terse_format() {
     let filter = ExcludeFilter::default();
     let cfg = WalkConfig::new(dir.path(), false, &filter);
     run(&cfg, 6, false, false, OutputMode::Terse, gate()).unwrap();
+}
+
+#[test]
+fn an_unchanged_tree_with_copies_in_a_submodule_passes_fail_on_increase() {
+    let (dir, outer) = superproject(&[("main.rs", "fn main() {}\n")]);
+    add_submodule(&outer, "lib", &[("a.rs", DUP_CODE), ("b.rs", DUP_CODE)]);
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run(
+        &cfg,
+        6,
+        false,
+        false,
+        OutputMode::Table,
+        gate_fail_on_increase("HEAD"),
+    );
+    assert!(result.is_ok(), "nothing changed: {result:?}");
 }

@@ -41,6 +41,9 @@
 /// dirs       = ["vendor", "third_party"]  # directory names, at any depth (as --exclude-dir)
 /// extensions = ["sql", "proto"]          # file extensions (as --exclude-ext)
 /// patterns   = ["legacy/**", "*.min.js"] # globs from the analysis root (as --exclude)
+///
+/// [walk]
+/// submodules = true  # read submodules, at a ref as in the working tree (default: false)
 /// ```
 use serde::Deserialize;
 
@@ -68,6 +71,24 @@ pub struct KimunConfig {
     pub kinds: KindsConfig,
     #[serde(default)]
     pub docs: DocsConfig,
+    #[serde(default)]
+    pub walk: WalkSettings,
+}
+
+/// What the walk of every command goes into: submodules, and other
+/// repositories nested in the tree, only when `submodules` is true.
+#[derive(Debug, Default, Deserialize)]
+pub struct WalkSettings {
+    /// Read submodules, at a ref as in the working tree, as `--submodules` does.
+    #[serde(default)]
+    pub submodules: bool,
+}
+
+impl WalkSettings {
+    /// Whether submodules are read: when `--submodules` is given or the key is true.
+    pub fn reads_submodules(&self, flag: bool) -> bool {
+        flag || self.submodules
+    }
 }
 
 /// Which documents describe which code, for the documentation block of
@@ -559,5 +580,16 @@ mod tests {
             cfg.smells.resolve_max_lines(None),
             SmellsConfig::DEFAULT_MAX_LINES
         );
+    }
+
+    #[test]
+    fn the_walk_section_reads_submodules() {
+        let cfg = parse("[walk]\nsubmodules = true\n");
+        assert!(cfg.walk.submodules);
+        assert!(cfg.walk.reads_submodules(false));
+        let default = KimunConfig::default();
+        assert!(!default.walk.submodules);
+        assert!(!default.walk.reads_submodules(false));
+        assert!(default.walk.reads_submodules(true));
     }
 }

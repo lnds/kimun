@@ -147,7 +147,12 @@ pub(super) fn analyze(cfg: &WalkConfig<'_>) -> DepResult {
     // `go.mod` has no language, so the walk above does not find it.
     if all_files.iter().any(|(_, language)| language == "Go") {
         let go_mod = |path: &Path| path.file_name().is_some_and(|name| name == "go.mod");
-        manifests.extend(crate::projects::files_on_disk(cfg.path, go_mod));
+        let walked = |(path, _): &(PathBuf, String)| walk::reaches(cfg.path, path, cfg.filter);
+        manifests.extend(
+            crate::projects::files_on_disk(cfg.path, go_mod)
+                .into_iter()
+                .filter(walked),
+        );
     }
     let layout = Layout {
         known: file_set,

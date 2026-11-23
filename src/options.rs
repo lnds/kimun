@@ -87,6 +87,12 @@ pub struct ExcludeArgs {
     #[arg(long, value_enum, value_delimiter = ',', value_name = "KIND")]
     pub kind: Vec<KindArg>,
 
+    /// Read submodules too, and other repositories nested in the tree, at
+    /// a ref as in the working tree. Left out by default.
+    /// Also `submodules = true` under [walk] in .kimun.toml
+    #[arg(long)]
+    pub submodules: bool,
+
     /// Print files that would be excluded by the current filter and exit.
     /// Useful for debugging filter rules before running an analysis.
     #[arg(long)]
@@ -95,11 +101,12 @@ pub struct ExcludeArgs {
 
 impl ExcludeArgs {
     /// Build an `ExcludeFilter` from the parsed CLI flags and the
-    /// `[exclude]` and `[kinds]` sections of `.kimun.toml`.
+    /// `[exclude]`, `[kinds]` and `[walk]` sections of `.kimun.toml`.
     pub fn exclude_filter(&self) -> ExcludeFilter {
         let config = crate::config::KimunConfig::load();
         self.exclude_filter_with(&config.exclude)
             .with_kinds(self.kinds(&config.kinds))
+            .with_submodules(config.walk.reads_submodules(self.submodules))
     }
 
     /// The filter of the flags plus what `config` excludes: both apply.

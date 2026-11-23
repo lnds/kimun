@@ -1,3 +1,6 @@
+use super::submodule_fixture::{
+    absent_commit, add_submodule, bump_submodule, commit_gitlink, superproject,
+};
 use super::*;
 use std::fs;
 
@@ -249,7 +252,7 @@ fn changes_since_in_workdir_classifies_changes() {
     fs::write(root.join("new.rs"), "fn new() {}\n").unwrap();
 
     let git_repo = GitRepo::open(root).unwrap();
-    let changes = git_repo.changes_since_in_workdir("HEAD").unwrap();
+    let changes = git_repo.changes_since_in_workdir("HEAD", false).unwrap();
 
     assert!(change_for(&changes, "kept.rs").is_none());
     assert!(change_for(&changes, "gone.rs").is_none());
@@ -275,7 +278,11 @@ fn changes_since_in_workdir_rejects_unknown_ref() {
     let (dir, repo) = create_test_repo();
     make_commit(&repo, &[("a.rs", "fn a() {}\n")], "base");
     let git_repo = GitRepo::open(dir.path()).unwrap();
-    assert!(git_repo.changes_since_in_workdir("no-such-ref").is_err());
+    assert!(
+        git_repo
+            .changes_since_in_workdir("no-such-ref", false)
+            .is_err()
+    );
 }
 
 #[test]
@@ -667,7 +674,9 @@ fn a_tree_is_written_out_with_its_links_as_a_checkout_writes_them() {
             .unwrap();
         let out = tempfile::tempdir().unwrap();
         let git_repo = GitRepo::open(dir.path()).unwrap();
-        git_repo.extract_tree_to_dir(&commit, out.path()).unwrap();
+        git_repo
+            .extract_tree_to_dir(&commit, out.path(), false, Path::new(""))
+            .unwrap();
         assert!(out.path().join("a.py").is_file());
         fs::read_to_string(out.path().join("b.py")).ok()
     };
@@ -1090,4 +1099,188 @@ fn commits_by_file_number_the_commits_and_keep_their_times() {
     );
     let first_of_a = commits[Path::new("a.rs")][1].0;
     assert_eq!(commits[Path::new("b.rs")], [(first_of_a, 1_700_000_000)]);
+}
+
+// ── submodules ──────────────────────────────────────────────────────────
+
+#[test]
+fn a_submodule_at_a_ref_is_written_only_when_submodules_are_read() {
+    let (dir, outer) = superproject(&[("main.rs", "fn main() {}\n")]);
+    add_submodule(&outer, "vendor/lib", &[("src/a.rs", "fn a() {}\n")]);
+    let git_repo = GitRepo::open(dir.path()).unwrap();
+    let written = |submodules: bool| {
+        let out = tempfile::tempdir().unwrap();
+        let left_out = git_repo
+            .extract_tree_to_dir("HEAD", out.path(), submodules, Path::new(""))
+            .unwrap();
+        assert!(left_out.is_empty());
+        assert!(out.path().join("main.rs").is_file());
+        fs::read_to_string(out.path().join("vendor/lib/src/a.rs")).ok()
+    };
+    assert_eq!(written(false), None);
+    assert_eq!(written(true).as_deref(), Some("fn a() {}\n"));
+}
+
+#[test]
+fn a_submodule_is_written_at_the_commit_the_ref_records() {
+    let (dir, outer) = superproject(&[("main.rs", "fn main() {}\n")]);
+    add_submodule(&outer, "lib", &[("a.rs", "fn old() {}\n")]);
+    bump_submodule(&outer, "lib", &[("a.rs", "fn new() {}\n")]);
+    let git_repo = GitRepo::open(dir.path()).unwrap();
+    let out = tempfile::tempdir().unwrap();
+    git_repo
+        .extract_tree_to_dir("HEAD~1", out.path(), true, Path::new(""))
+        .unwrap();
+    assert_eq!(
+        fs::read_to_string(out.path().join("lib/a.rs")).unwrap(),
+        "fn old() {}\n"
+    );
+}
+
+#[test]
+fn a_submodule_whose_commit_is_missing_is_left_out() {
+    let (dir, outer) = superproject(&[("main.rs", "fn main() {}\n")]);
+    add_submodule(&outer, "lib", &[("a.rs", "fn a() {}\n")]);
+    commit_gitlink(
+        &outer,
+        "lib",
+        absent_commit(),
+        "bump to a commit not fetched",
+    );
+    let git_repo = GitRepo::open(dir.path()).unwrap();
+    let out = tempfile::tempdir().unwrap();
+    let left_out = git_repo
+        .extract_tree_to_dir("HEAD", out.path(), true, Path::new(""))
+        .unwrap();
+    assert_eq!(left_out.len(), 1);
+    assert_eq!(left_out[0].path, Path::new("lib"));
+    assert!(!out.path().join("lib").exists());
+    assert!(out.path().join("main.rs").is_file());
+}
+
+#[test]
+fn a_submodule_removed_since_the_ref_is_read_from_its_kept_repository() {
+    let (dir, outer) = superproject(&[("main.rs", "fn main() {}\n")]);
+    add_submodule(&outer, "lib", &[("a.rs", "fn a() {}\n")]);
+    let mut index = outer.index().unwrap();
+    index.remove_path(Path::new("lib")).unwrap();
+    index.write().unwrap();
+    fs::remove_dir_all(dir.path().join("lib")).unwrap();
+    let git_repo = GitRepo::open(dir.path()).unwrap();
+    let out = tempfile::tempdir().unwrap();
+    let left_out = git_repo
+        .extract_tree_to_dir("HEAD", out.path(), true, Path::new(""))
+        .unwrap();
+    assert!(left_out.is_empty());
+    assert!(out.path().join("lib/a.rs").is_file());
+}
+
+#[test]
+fn a_changed_submodule_lists_its_own_files() {
+    let (dir, outer) = superproject(&[("main.rs", "fn main() {}\n")]);
+    add_submodule(
+        &outer,
+        "vendor/lib",
+        &[("src/a.rs", "fn a() {}\n"), ("src/b.rs", "fn b() {}\n")],
+    );
+    bump_submodule(&outer, "vendor/lib", &[("src/a.rs", "fn a() { 1; }\n")]);
+    let git_repo = GitRepo::open(dir.path()).unwrap();
+    let changes = git_repo.changes_since_in_workdir("HEAD~1", true).unwrap();
+    let paths: Vec<&Path> = changes.iter().map(|c| c.path.as_path()).collect();
+    assert_eq!(paths, [Path::new("vendor/lib/src/a.rs")]);
+    let plain = git_repo.changes_since_in_workdir("HEAD~1", false).unwrap();
+    let plain: Vec<&Path> = plain.iter().map(|c| c.path.as_path()).collect();
+    assert_eq!(plain, [Path::new("vendor/lib")]);
+}
+
+/// Run `git` with `args` in `dir`; whether it ran and succeeded.
+fn git_ran(dir: &Path, args: &[&str]) -> bool {
+    std::process::Command::new("git")
+        .args(["-c", "user.name=Test", "-c", "user.email=test@test.com"])
+        .args(args)
+        .current_dir(dir)
+        .status()
+        .is_ok_and(|status| status.success())
+}
+
+#[test]
+fn a_moved_submodule_is_read_with_the_submodules_it_holds() {
+    let (dir, outer) = superproject(&[("main.rs", "fn main() {}\n")]);
+    add_submodule(&outer, "lib", &[("lib.rs", "fn lib() {}\n")]);
+    let lib = outer.find_submodule("lib").unwrap().open().unwrap();
+    add_submodule(&lib, "inner", &[("inner.rs", "fn inner() {}\n")]);
+    bump_submodule(&outer, "lib", &[]);
+    // libgit2 alone cannot move a submodule as `git mv` does.
+    if !git_ran(dir.path(), &["mv", "lib", "lib2"])
+        || !git_ran(dir.path(), &["commit", "-qm", "move"])
+    {
+        return;
+    }
+    let git_repo = GitRepo::open(dir.path()).unwrap();
+    let out = tempfile::tempdir().unwrap();
+    let left_out = git_repo
+        .extract_tree_to_dir("HEAD~1", out.path(), true, Path::new(""))
+        .unwrap();
+    assert!(
+        left_out.is_empty(),
+        "{:?}",
+        left_out.first().map(|l| &l.advice)
+    );
+    assert!(out.path().join("lib/lib.rs").is_file());
+    assert!(out.path().join("lib/inner/inner.rs").is_file());
+}
+
+#[test]
+fn only_the_submodules_under_the_path_analyzed_are_read() {
+    let (dir, outer) = superproject(&[("main.rs", "fn main() {}\n")]);
+    add_submodule(&outer, "src/lib", &[("a.rs", "fn a() {}\n")]);
+    add_submodule(&outer, "vendor/dep", &[("b.rs", "fn b() {}\n")]);
+    let git_repo = GitRepo::open(dir.path()).unwrap();
+    let written = |under: &str| {
+        let out = tempfile::tempdir().unwrap();
+        git_repo
+            .extract_tree_to_dir("HEAD", out.path(), true, Path::new(under))
+            .unwrap();
+        (
+            out.path().join("src/lib/a.rs").is_file(),
+            out.path().join("vendor/dep/b.rs").is_file(),
+        )
+    };
+    assert_eq!(written(""), (true, true));
+    assert_eq!(written("src"), (true, false));
+    assert_eq!(written("src/lib/deeper"), (true, false));
+}
+
+#[test]
+fn a_tree_entry_that_names_a_place_outside_its_directory_is_not_written() {
+    let (dir, repo) = superproject(&[("main.rs", "fn main() {}\n")]);
+    let blob = repo.blob(b"x").unwrap();
+    // A tree git would refuse to build: its entries are written raw.
+    let mut raw = Vec::new();
+    for name in [".GIT", "..", r"a\b", "ok.rs"] {
+        raw.extend_from_slice(format!("100644 {name}\0").as_bytes());
+        raw.extend_from_slice(blob.as_bytes());
+    }
+    let tree = repo
+        .odb()
+        .unwrap()
+        .write(git2::ObjectType::Tree, &raw)
+        .unwrap();
+    let tree = repo.find_tree(tree).unwrap();
+    let sig =
+        git2::Signature::new("Test", "test@test.com", &git2::Time::new(1_700_000_000, 0)).unwrap();
+    let head = repo.head().unwrap().peel_to_commit().unwrap();
+    repo.commit(Some("HEAD"), &sig, &sig, "raw", &tree, &[&head])
+        .unwrap();
+    let git_repo = GitRepo::open(dir.path()).unwrap();
+    let out = tempfile::tempdir().unwrap();
+    git_repo
+        .extract_tree_to_dir("HEAD", out.path(), false, Path::new(""))
+        .unwrap();
+    let mut names: Vec<String> = fs::read_dir(out.path())
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    assert_eq!(names, ["ok.rs"]);
 }

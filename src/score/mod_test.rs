@@ -1,4 +1,5 @@
 use super::*;
+use crate::git::submodule_fixture::{absent_commit, add_submodule, commit_gitlink, superproject};
 use crate::options::OutputMode;
 use crate::walk::{ExcludeFilter, WalkConfig};
 use git2::Repository;
@@ -1286,4 +1287,84 @@ fn code_added_to_a_file_of_imports_is_held_to_its_full_score() {
         .expect_err("app.py ends below the 100 it had")
         .to_string();
     assert!(err.contains("app.py dropped 100.00 →"), "{err}");
+}
+
+// ── submodules ──────────────────────────────────────────────────────────
+
+/// Code that scores far below `fn main() {}`: deep nesting, many branches.
+const TANGLED: &str = "fn tangled(a: i32, b: i32, c: i32) -> i32 {\n    let mut t = 0;\n    for i in 0..a {\n        if i > b {\n            while t < c {\n                if t % 2 == 0 && i % 3 == 0 || b > 7 {\n                    match t {\n                        0 => t += 1,\n                        1 => t += 2,\n                        _ => t += i * b - c,\n                    }\n                } else if t > 100 {\n                    break;\n                }\n            }\n        }\n    }\n    t\n}\n";
+
+fn drop_gate() -> ScoreGate {
+    ScoreGate {
+        max_drop: Some(0.01),
+        fail_below: None,
+        ..ScoreGate::default()
+    }
+}
+
+#[test]
+fn an_unchanged_tree_with_a_submodule_passes_fail_if_worse() {
+    let (dir, outer) = superproject(&[("main.rs", "fn main() {}\n")]);
+    add_submodule(&outer, "vendor/lib", &[("tangled.rs", TANGLED)]);
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run_diff(
+        &cfg,
+        "HEAD",
+        OutputMode::Table,
+        10,
+        6,
+        "cogcom",
+        drop_gate(),
+    );
+    assert!(result.is_ok(), "nothing changed: {result:?}");
+}
+
+#[test]
+fn a_submodule_the_ref_cannot_read_is_left_out_on_both_sides() {
+    let (dir, outer) = superproject(&[("main.rs", "fn main() {}\n")]);
+    let head = add_submodule(&outer, "lib", &[("tangled.rs", TANGLED)]);
+    commit_gitlink(
+        &outer,
+        "lib",
+        absent_commit(),
+        "record a commit not fetched",
+    );
+    commit_gitlink(&outer, "lib", head, "record the real one");
+    let filter = ExcludeFilter::default().with_submodules(true);
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    // HEAD~1 records the absent commit: reading the submodule on one side
+    // only would move the score by its whole code.
+    let result = run_diff(
+        &cfg,
+        "HEAD~1",
+        OutputMode::Table,
+        10,
+        6,
+        "cogcom",
+        drop_gate(),
+    );
+    assert!(result.is_ok(), "both sides leave it out: {result:?}");
+}
+
+#[test]
+fn a_tracked_directory_that_holds_git_is_left_out_on_both_sides() {
+    let tools = "pub fn tool(v: u32) -> u32 {\n    v + 1\n}\n";
+    let (dir, _) = superproject(&[("main.rs", TANGLED), ("tools/a.rs", tools)]);
+    // A repository made in a directory the superproject tracks: the walk
+    // stops at it, so the ref must not read it either.
+    fs::create_dir_all(dir.path().join("tools/.git")).unwrap();
+    fs::write(dir.path().join("tools/.git/HEAD"), "ref: refs/heads/main\n").unwrap();
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run_diff(
+        &cfg,
+        "HEAD",
+        OutputMode::Table,
+        10,
+        6,
+        "cogcom",
+        drop_gate(),
+    );
+    assert!(result.is_ok(), "nothing changed: {result:?}");
 }
