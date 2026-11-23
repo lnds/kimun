@@ -89,6 +89,18 @@ pub fn is_literal(value: &Value<'_>, format: Format) -> bool {
     !(read_elsewhere || starts_aside || plain || number)
 }
 
+/// Whether an assignment is the permission of a GitHub workflow to ask for
+/// an OIDC token: `id-token: write`, or `read`, which GitHub refuses. It
+/// holds no token. A kubeconfig keeps the token itself under the same key,
+/// and a token is never a level of access.
+pub fn is_permission(key: &str, value: &Value<'_>) -> bool {
+    key.eq_ignore_ascii_case("id-token")
+        && matches!(
+            value.text.trim().to_ascii_lowercase().as_str(),
+            "write" | "read"
+        )
+}
+
 /// Prefixes of keys issued by known services, with the characters and the
 /// least length of what follows.
 const SHAPES: [(&str, &str, usize); 12] = [

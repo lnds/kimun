@@ -135,6 +135,39 @@ fn a_terraform_image_is_no_container() {
 }
 
 #[test]
+fn the_permission_to_ask_for_a_token_holds_none() {
+    let workflow = "permissions:\n  contents: read\n  id-token: write\n\
+                    jobs:\n  deploy:\n    permissions:\n      \
+                    id-token: 'write' # OIDC\n";
+    assert!(found(workflow, Format::Yaml).is_empty());
+}
+
+#[test]
+fn a_token_kept_under_the_same_key_is_a_secret() {
+    let kubeconfig = "config:\n  id-token: eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.c2ln\n";
+    assert_eq!(
+        found(kubeconfig, Format::Yaml),
+        [(Smell::HardCodedSecret, 2)]
+    );
+}
+
+#[test]
+fn a_level_of_access_under_another_key_is_a_secret() {
+    let compose = "POSTGRES_PASSWORD: write\napi_token: read\n";
+    assert_eq!(
+        found(compose, Format::Yaml),
+        [(Smell::HardCodedSecret, 1), (Smell::HardCodedSecret, 2)]
+    );
+    let dockerfile = "ENV DB_PASSWORD=write\nARG NPM_TOKEN=read\n";
+    assert_eq!(
+        found(dockerfile, Format::Dockerfile),
+        [(Smell::HardCodedSecret, 1), (Smell::HardCodedSecret, 2)]
+    );
+    let terraform = "password = \"write\"\n";
+    assert_eq!(found(terraform, Format::Hcl), [(Smell::HardCodedSecret, 1)]);
+}
+
+#[test]
 fn ansible_becomes_root_without_smell() {
     let text = "- hosts: all\n  become_user: root\n  remote_user: root\n";
     assert_eq!(found(text, Format::Yaml), [(Smell::AdminByDefault, 3)]);

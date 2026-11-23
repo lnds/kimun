@@ -11,7 +11,8 @@ Smells:
                         (password, token, secret, api_key...), or a value
                         shaped like a known key (AWS, GitHub, GitLab, Slack,
                         Stripe, Google, private keys). Variables, templates
-                        and references are not literals
+                        and references are not literals, nor is the
+                        permission id-token: write
   empty-password        a password set to \"\"
   admin-by-default      user: root, runAsUser: 0, privileged: true,
                         runAsNonRoot: false, USER root left as the last

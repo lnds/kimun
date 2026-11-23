@@ -50,6 +50,23 @@ fn literals_and_values_read_elsewhere() {
 }
 
 #[test]
+fn only_the_level_of_access_of_id_token_is_a_permission() {
+    let value = |text, quoted| Value { text, quoted };
+    assert!(is_permission("id-token", &value("write", false)));
+    assert!(is_permission("id-token", &value("write", true)));
+    assert!(is_permission("id-token", &value("read", false)));
+    for (key, text) in [
+        ("id-token", "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.c2ln"),
+        ("id-token", "writer"),
+        ("password", "write"),
+        ("api_token", "read"),
+        ("id_token", "write"),
+    ] {
+        assert!(!is_permission(key, &value(text, false)), "{key}: {text}");
+    }
+}
+
+#[test]
 fn values_shaped_like_keys() {
     assert_eq!(
         shaped("aws_access_key_id = AKIAIOSFODNN7EXAMPLE"),

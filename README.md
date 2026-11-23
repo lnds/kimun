@@ -1744,7 +1744,7 @@ km infra smells --format github                                                 
 
 | Smell | Found |
 |-------|-------|
-| `hard-coded-secret` | a literal assigned to a key named as a secret (`password`, `db_password`, `clientSecret`, `api_key`, `AWS_SECRET_ACCESS_KEY`), or a value shaped like a known key: AWS, GitHub, GitLab, Slack, Stripe, Google, private keys. Variables, interpolations and references (`var.x`, `${{ secrets.X }}`, `{{ vault_x }}`, `!Ref`) are no literal |
+| `hard-coded-secret` | a literal assigned to a key named as a secret (`password`, `db_password`, `clientSecret`, `api_key`, `AWS_SECRET_ACCESS_KEY`), or a value shaped like a known key: AWS, GitHub, GitLab, Slack, Stripe, Google, private keys. Variables, interpolations and references (`var.x`, `${{ secrets.X }}`, `{{ vault_x }}`, `!Ref`) are no literal, nor is `id-token: write`, the permission of a workflow to ask for an OIDC token |
 | `empty-password` | a password set to `""` |
 | `admin-by-default` | `user: root`, `runAsUser: 0`, `privileged: true`, `runAsNonRoot: false`, `USER root` left as the last user of a Dockerfile |
 | `unrestricted-address` | `0.0.0.0/0` or `::/0` |
