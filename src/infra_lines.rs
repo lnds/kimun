@@ -202,8 +202,9 @@ fn assignment(code: &str) -> Option<(&str, Value<'_>)> {
     let before = code[..at].trim_end();
     let unquoted = before.trim_end_matches(['"', '\'']);
     let start = unquoted
-        .rfind(|c: char| !(c.is_alphanumeric() || matches!(c, '_' | '-' | '.')))
-        .map_or(0, |i| i + 1);
+        .char_indices()
+        .rfind(|&(_, c)| !(c.is_alphanumeric() || matches!(c, '_' | '-' | '.')))
+        .map_or(0, |(i, c)| i + c.len_utf8());
     let key = &unquoted[start..];
     match key.is_empty() {
         true => None,

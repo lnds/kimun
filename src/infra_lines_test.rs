@@ -79,3 +79,12 @@ fn assignments_of_each_form() {
     assert!(pairs("if a == b").is_empty());
     assert!(pairs("RUN make").is_empty());
 }
+
+#[test]
+fn a_key_starts_where_a_multibyte_character_ends() {
+    let keys = |code| -> Vec<&str> { assignments(code).into_iter().map(|(k, _)| k).collect() };
+    assert_eq!(keys("\u{feff}name: CI"), ["name"]);
+    assert_eq!(keys("echo \"📦version=1\""), ["version"]);
+    assert_eq!(keys("echo “TOKEN=x”"), ["TOKEN"]);
+    assert!(keys("○_○: &versions \"3.12 3.13\"").is_empty());
+}

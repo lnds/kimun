@@ -106,6 +106,18 @@ fn secrets_are_never_in_the_detail() {
 }
 
 #[test]
+fn a_key_after_a_multibyte_character_is_read() {
+    let text = "env:\n  ○_○: &versions \"3.12 3.13\"\n\
+                steps:\n  - run: |\n      echo \"📦version=1\"\n      echo “TOKEN=hunter2”\n";
+    assert_eq!(found(text, Format::Yaml), [(Smell::HardCodedSecret, 6)]);
+    let byte_order_mark = "\u{feff}password: hunter2\n";
+    assert_eq!(
+        found(byte_order_mark, Format::Yaml),
+        [(Smell::HardCodedSecret, 1)]
+    );
+}
+
+#[test]
 fn comments_name_no_smell_but_a_suspicious_one() {
     let text = "# password: hunter2 and http://evil.com with md5\n";
     assert!(found(text, Format::Yaml).is_empty());
