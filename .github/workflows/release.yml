@@ -37,23 +37,25 @@ jobs:
 
     runs-on: ${{ matrix.os }}
 
+    # Actions are pinned to commits: a tag or a branch can be moved to other code.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master
         with:
+          toolchain: stable
           targets: ${{ matrix.target }}
 
       - name: Install zig
         if: matrix.glibc
-        uses: mlugg/setup-zig@v2
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
         with:
           version: 0.14.1
 
       - name: Install cargo-zigbuild
         if: matrix.glibc
-        run: cargo install --locked cargo-zigbuild
+        run: cargo install --locked cargo-zigbuild --version 0.24.1
 
       - name: Build
         if: ${{ !matrix.glibc }}
@@ -84,7 +86,7 @@ jobs:
           Compress-Archive -Path target/${{ matrix.target }}/release/km.exe -DestinationPath km-${{ matrix.target }}.zip
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: km-${{ matrix.target }}
           path: km-${{ matrix.target }}.${{ matrix.archive }}
@@ -94,7 +96,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           merge-multiple: true
 
@@ -102,7 +104,7 @@ jobs:
         run: sha256sum km-* > checksums-sha256.txt
 
       - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           files: |
             km-*
