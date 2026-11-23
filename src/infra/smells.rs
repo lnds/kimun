@@ -164,7 +164,10 @@ fn assigned(key: &str, value: &Value<'_>, format: Format) -> Vec<Told> {
 fn secret(key: &str, value: &Value<'_>, format: Format) -> Option<Told> {
     if secrets::names_password(key) && value.quoted && value.text.is_empty() {
         Some((Smell::EmptyPassword, format!("`{key}` is empty")))
-    } else if secrets::names_secret(key) && secrets::is_literal(value, format) {
+    } else if secrets::names_secret(key)
+        && secrets::is_literal(value, format)
+        && !secrets::is_permission(key, value)
+    {
         Some((Smell::HardCodedSecret, format!("`{key}` holds a literal")))
     } else {
         None
