@@ -3,7 +3,6 @@
 ### Notes
 
 - `km impact` reads no values from comments when it looks for copies of a changed value, so a comment that mentions the old values is no longer reported as a copy.
-- Every release publishes the crate to crates.io, as it builds the binaries and updates the Homebrew tap.
 
 ### Fix
 
