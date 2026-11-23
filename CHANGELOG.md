@@ -1,3 +1,18 @@
+## v0.50.0 (2026-11-22)
+
+### Notes
+
+- `km impact` reads no values from comments when it looks for copies of a changed value, so a comment that mentions the old values is no longer reported as a copy.
+- Every release publishes the crate to crates.io, as it builds the binaries and updates the Homebrew tap.
+
+### Fix
+
+- **impact**: a comment holds no values for the copies of a change
+
+### Perf
+
+- **impact**: a group too small to hold a copy is passed over
+
 ## v0.49.0 (2026-11-20)
 
 ### Notes
