@@ -138,6 +138,14 @@ fn operator_symbols_sorted_longest_first() {
         "Perl",
         "Scala",
         "Zig",
+        "Clojure",
+        "Erlang",
+        "F#",
+        "Haskell",
+        "Julia",
+        "Nim",
+        "OCaml",
+        "R",
     ];
     for lang in &languages {
         let rules = rules_for(lang).unwrap();
@@ -339,4 +347,137 @@ fn zig_error_handling_and_wrapping_arithmetic() {
         "@",
     ];
     assert_tokens("Zig", &code, &["//"], &ops, &["pub", "fn", "const", "u32"]);
+}
+
+#[test]
+fn clojure_forms_in_call_position_and_names_with_dashes() {
+    let code = [
+        "(defn total-price [items]",
+        "  (if-not (empty? items)",
+        "    (->> items (map :price) (reduce + 0))",
+        "    @default-price))",
+    ];
+    let ops = ["if-not", "->>", "+", "@"];
+    assert_tokens("Clojure", &code, &[";"], &ops, &["defn", "(", ")"]);
+    let counts = count_tokens(&code, rules_for("Clojure").unwrap(), &[";"]);
+    for name in ["total-price", "empty?", "default-price"] {
+        assert!(counts.distinct_operands.contains(name), "{name}");
+    }
+    let quoted = count_tokens(&["(f '(a b) c)"], rules_for("Clojure").unwrap(), &[";"]);
+    assert!(quoted.distinct_operators.contains("'"));
+    assert!(
+        quoted.distinct_operands.contains("c"),
+        "a quote opens no string"
+    );
+}
+
+#[test]
+fn erlang_receive_send_and_word_operators() {
+    let code = [
+        "-module(counter).",
+        "loop(N) ->",
+        "    receive {From, X} when X =:= 1 -> From ! N rem 2, loop(N + 1)",
+        "    end.",
+    ];
+    let ops = ["receive", "when", "=:=", "->", "!", "rem", "end"];
+    assert_tokens("Erlang", &code, &["%"], &ops, &["module"]);
+}
+
+#[test]
+fn fsharp_pipes_matches_and_type_tests() {
+    let code = [
+        "let rec sum xs' =",
+        "    match xs' with",
+        "    | x :: rest when (x :? int) -> x + sum rest",
+        "    | [] -> 0 |> id",
+    ];
+    let ops = ["match", "with", "::", ":?", "->", "|>", "when"];
+    assert_tokens("F#", &code, &["//"], &ops, &["let", "rec"]);
+    let counts = count_tokens(&code, rules_for("F#").unwrap(), &["//"]);
+    assert!(
+        counts.distinct_operands.contains("xs'"),
+        "a prime is part of a name"
+    );
+}
+
+#[test]
+fn haskell_monads_backticks_and_primes() {
+    let code = [
+        "main = do",
+        "  x' <- readLn",
+        "  let y = x' `div` 2",
+        "  print =<< (f <$> pure y) >>= g",
+        "  case y of _ -> return ()",
+    ];
+    let ops = ["do", "<-", "`div`", "=<<", "<$>", ">>=", "case", "of", "->"];
+    assert_tokens("Haskell", &code, &["--"], &ops, &["let"]);
+    let counts = count_tokens(&code, rules_for("Haskell").unwrap(), &["--"]);
+    assert!(
+        counts.distinct_operands.contains("x'"),
+        "a prime is part of a name"
+    );
+    assert!(!counts.distinct_operands.contains("div"));
+}
+
+#[test]
+fn julia_broadcasting_unicode_operators_and_adjoint() {
+    let code = [
+        "function scale!(v::Vector, k)",
+        "    v .*= k ÷ 2",
+        "    w = v' |> sum",
+        "    k ≤ 0 && push!(v, 1)",
+        "end",
+    ];
+    let ops = [".*=", "÷", "'", "|>", "≤", "&&", "end", "::"];
+    assert_tokens("Julia", &code, &["#"], &ops, &["function", "Vector"]);
+    let counts = count_tokens(&code, rules_for("Julia").unwrap(), &["#"]);
+    assert!(
+        counts.distinct_operands.contains("push!"),
+        "a name may end in !"
+    );
+    let neq = count_tokens(&["a!=b"], rules_for("Julia").unwrap(), &["#"]);
+    assert!(
+        neq.distinct_operators.contains("!="),
+        "!= is no part of a name"
+    );
+}
+
+#[test]
+fn nim_cases_and_word_operators() {
+    let code = [
+        "proc half(n: int): int =",
+        "  case n mod 2",
+        "  of 0: result = n div 2",
+        "  else: discard",
+    ];
+    let ops = ["case", "mod", "of", "div", "else", "discard"];
+    assert_tokens("Nim", &code, &["#"], &ops, &["proc", "int"]);
+}
+
+#[test]
+fn ocaml_references_lists_and_float_operators() {
+    let code = [
+        "let rec go acc = function",
+        "  | x :: xs -> acc := !acc +. x; go acc xs",
+        "  | [] -> !acc |> print_float",
+    ];
+    let ops = ["function", "::", ":=", "!", "+.", "|>", "->"];
+    assert_tokens("OCaml", &code, &[], &ops, &["let", "rec"]);
+}
+
+#[test]
+fn r_assignment_and_percent_operators() {
+    let code = [
+        "clean <- function(df) {",
+        "  df %>% filter(is.na(x) | x %in% keep) -> out",
+        "  out$y <<- n %% 2",
+        "}",
+    ];
+    let ops = ["<-", "%>%", "%in%", "%%", "->", "$", "<<-", "|"];
+    assert_tokens("R", &code, &["#"], &ops, &["function"]);
+    let counts = count_tokens(&code, rules_for("R").unwrap(), &["#"]);
+    assert!(
+        counts.distinct_operands.contains("is.na"),
+        "a name goes on through ."
+    );
 }

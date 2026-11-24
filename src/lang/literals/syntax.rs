@@ -1,6 +1,7 @@
 //! How each language writes its literals and comments, beyond what
 //! `LanguageSpec` declares for counting lines.
 
+use super::apostrophe::Apostrophe;
 use super::marked::Marks;
 use super::regex;
 use crate::lang::language::LanguageSpec;
@@ -59,6 +60,8 @@ pub(crate) struct Syntax {
     pub hash_at_word_start: bool,
     /// `$#` is code (Perl).
     pub dollar_hash: bool,
+    /// What a `'` that opens no string is besides a character literal.
+    pub apostrophe: Apostrophe,
 }
 
 impl Syntax {
@@ -98,6 +101,7 @@ impl Syntax {
             char_codes: matches!(name, "Ruby" | "Elixir" | "Elixir Script"),
             hash_at_word_start: shell,
             dollar_hash: name == "Perl",
+            apostrophe: Apostrophe::of(name),
         }
     }
 }

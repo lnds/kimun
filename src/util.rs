@@ -70,6 +70,23 @@ fn advance_through_string(bytes: &[u8], result: &mut [u8], start: usize, quote: 
 /// (outside a string) to end-of-line is masked. This prevents unmatched quotes
 /// in comments (e.g. `x = 5; // don't`) from confusing the string masking.
 pub fn mask_strings(line: &str, line_comments: &[&str]) -> String {
+    mask_literals(line, line_comments, Apostrophe::Quote)
+}
+
+/// What a `'` is in a language, for `mask_literals`.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Apostrophe {
+    /// It opens a literal, as in C or Python.
+    Quote,
+    /// It opens a literal unless it follows a name, which it is part of
+    /// (Haskell's `x'`) or an operator on (Julia's adjoint `A'`).
+    Prime,
+    /// It opens no literal: Clojure quotes a form with it.
+    Plain,
+}
+
+/// `mask_strings`, with `'` read as `apostrophe` says.
+pub fn mask_literals(line: &str, line_comments: &[&str], apostrophe: Apostrophe) -> String {
     let bytes = line.as_bytes();
     let len = bytes.len();
     let mut result = bytes.to_vec();
@@ -93,7 +110,12 @@ pub fn mask_strings(line: &str, line_comments: &[&str]) -> String {
         }
 
         let ch = bytes[i];
-        if ch == b'"' || ch == b'\'' {
+        let quote = match (ch, apostrophe) {
+            (b'"', _) | (b'\'', Apostrophe::Quote) => true,
+            (b'\'', Apostrophe::Prime) => i == 0 || !ends_operand(bytes[i - 1]),
+            _ => false,
+        };
+        if quote {
             i = advance_through_string(bytes, &mut result, i + 1, ch);
         } else {
             i += 1;
@@ -102,6 +124,11 @@ pub fn mask_strings(line: &str, line_comments: &[&str]) -> String {
 
     // SAFETY: we only replaced ASCII bytes with ASCII spaces
     String::from_utf8(result).unwrap_or_else(|_| line.to_string())
+}
+
+/// Whether a byte may end an operand: a name, a prime, a closing bracket.
+fn ends_operand(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || matches!(b, b'_' | b'\'' | b')' | b']')
 }
 
 /// Whether the `#` at `at` is a shell's or Perl's count (`$#`, `${#x}`),

@@ -2,6 +2,7 @@
 //! and regular expressions. `km loc` and the analyzers of code
 //! (`code_text`) read them alike.
 
+pub(crate) mod apostrophe;
 pub(crate) mod heredoc;
 pub(crate) mod marked;
 pub(crate) mod openers;

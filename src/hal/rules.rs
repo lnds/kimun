@@ -19,6 +19,23 @@
 /// declaration). Each language's doc comment explains such distinctions.
 use super::tokenizer::TokenRules;
 use crate::lang::language::is_fortran;
+use crate::util::Apostrophe;
+
+/// Integer types written by their size (Go, Nim).
+const SIZED_INTEGERS: &[&str] = &[
+    "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64",
+];
+
+/// What OCaml and F# share: names that may end in primes (`x'`) and the
+/// basic types.
+const ML: TokenRules = TokenRules {
+    name_bytes: b"'",
+    apostrophe: Apostrophe::Prime,
+    type_names: &[
+        "int", "float", "string", "bool", "unit", "char", "list", "option", "array",
+    ],
+    ..TokenRules::PLAIN
+};
 
 // ── Language rules ──────────────────────────────────────────────────────
 
@@ -45,6 +62,7 @@ pub static RUST: TokenRules = TokenRules {
         "u64", "u128", "usize", "f32", "f64", "bool", "char", "str", "String", "Vec", "Option",
         "Result", "Box",
     ],
+    ..TokenRules::PLAIN
 };
 
 /// Python tokenization rules.
@@ -68,6 +86,7 @@ pub static PYTHON: TokenRules = TokenRules {
         "def", "class", "import", "from", "as", "lambda", "global", "nonlocal", "async", "await",
         "pass", "int", "float", "str", "bool", "list", "dict", "tuple", "set", "type",
     ],
+    ..TokenRules::PLAIN
 };
 
 /// JavaScript/TypeScript tokenization rules.
@@ -121,6 +140,7 @@ pub static JAVASCRIPT: TokenRules = TokenRules {
         "undefined",
         "void",
     ],
+    ..TokenRules::PLAIN
 };
 
 /// Go tokenization rules.
@@ -151,16 +171,6 @@ pub static GO: TokenRules = TokenRules {
         "package",
         "map",
         "chan",
-        "int",
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "uint",
-        "uint8",
-        "uint16",
-        "uint32",
-        "uint64",
         "float32",
         "float64",
         "bool",
@@ -169,6 +179,8 @@ pub static GO: TokenRules = TokenRules {
         "rune",
         "error",
     ],
+    type_names: SIZED_INTEGERS,
+    ..TokenRules::PLAIN
 };
 
 /// C-family tokenization rules (C, C++, Java, C#, Objective-C, PHP, Dart).
@@ -221,6 +233,7 @@ pub static C_FAMILY: TokenRules = TokenRules {
         "private",
         "protected",
     ],
+    ..TokenRules::PLAIN
 };
 
 /// Ruby tokenization rules.
@@ -252,6 +265,7 @@ pub static RUBY: TokenRules = TokenRules {
         "attr_writer",
         "attr_accessor",
     ],
+    ..TokenRules::PLAIN
 };
 
 /// Kotlin tokenization rules.
@@ -303,6 +317,7 @@ pub static KOTLIN: TokenRules = TokenRules {
         "Any",
         "Nothing",
     ],
+    ..TokenRules::PLAIN
 };
 
 /// Swift tokenization rules.
@@ -351,6 +366,7 @@ pub static SWIFT: TokenRules = TokenRules {
         "Any",
         "Self",
     ],
+    ..TokenRules::PLAIN
 };
 
 /// Shell (Bash/Zsh/sh) tokenization rules.
@@ -372,6 +388,7 @@ pub static SHELL: TokenRules = TokenRules {
     ignored_keywords: &[
         "function", "local", "export", "readonly", "declare", "eval", "exec", "source",
     ],
+    ..TokenRules::PLAIN
 };
 
 /// Kaikai tokenization rules.
@@ -400,6 +417,7 @@ pub static KAIKAI: TokenRules = TokenRules {
         "assert", "theory", "for", "lazy", "unit", "true", "false", "Int", "Real", "Bool",
         "String", "Char", "Unit",
     ],
+    ..TokenRules::PLAIN
 };
 
 /// Elixir tokenization rules.
@@ -454,6 +472,7 @@ pub static ELIXIR: TokenRules = TokenRules {
         "impl",
         "behaviour",
     ],
+    ..TokenRules::PLAIN
 };
 
 /// Fortran tokenization rules, on code read in lower case.
@@ -552,6 +571,7 @@ pub static FORTRAN: TokenRules = TokenRules {
         "equivalence",
         "include",
     ],
+    ..TokenRules::PLAIN
 };
 
 /// Pascal tokenization rules, on code read in lower case.
@@ -665,6 +685,7 @@ pub static PASCAL: TokenRules = TokenRules {
         "cdecl",
         "stdcall",
     ],
+    ..TokenRules::PLAIN
 };
 
 /// Lua tokenization rules.
@@ -682,6 +703,7 @@ pub static LUA: TokenRules = TokenRules {
         "#", "&", "~", "|", "<", ">", "=", ";", ",", ".", ":", "(", ")", "[", "]", "{", "}",
     ],
     ignored_keywords: &["function", "local"],
+    ..TokenRules::PLAIN
 };
 
 /// Perl tokenization rules.
@@ -706,6 +728,7 @@ pub static PERL: TokenRules = TokenRules {
     ignored_keywords: &[
         "sub", "my", "our", "local", "use", "no", "package", "require", "BEGIN", "END",
     ],
+    ..TokenRules::PLAIN
 };
 
 /// Scala tokenization rules (Scala 2 and 3).
@@ -765,6 +788,7 @@ pub static SCALA: TokenRules = TokenRules {
         "String",
         "Unit",
     ],
+    ..TokenRules::PLAIN
 };
 
 /// Zig tokenization rules.
@@ -844,6 +868,414 @@ pub static ZIG: TokenRules = TokenRules {
         "f64",
         "f128",
     ],
+    ..TokenRules::PLAIN
+};
+
+/// Clojure tokenization rules.
+///
+/// A Lisp: every expression has parentheses, so they are no operator. The
+/// operators are the special forms and core macros in call position, the
+/// arithmetic and comparison functions, and the reader's `'`, `@`, `#`, `^`
+/// and `` ` ``. A name goes on through `-`, `?`, `!` and the like, so
+/// `if-not` and `some->` are one word. Definitions and the namespace form
+/// declare and are ignored.
+pub static CLOJURE: TokenRules = TokenRules {
+    operator_keywords: &[
+        "if",
+        "if-not",
+        "if-let",
+        "if-some",
+        "when",
+        "when-not",
+        "when-let",
+        "when-some",
+        "when-first",
+        "cond",
+        "condp",
+        "cond->",
+        "cond->>",
+        "case",
+        "do",
+        "let",
+        "letfn",
+        "loop",
+        "recur",
+        "fn",
+        "try",
+        "catch",
+        "finally",
+        "throw",
+        "and",
+        "or",
+        "not",
+        "not=",
+        "doseq",
+        "dotimes",
+        "for",
+        "while",
+        "some->",
+        "some->>",
+        "as->",
+        "new",
+        "set!",
+    ],
+    operator_symbols: &[
+        "->>", "->", "~@", "<=", ">=", "+", "-", "*", "/", "<", ">", "=", "'", "@", "#", "^", "~",
+        "`",
+    ],
+    ignored_keywords: &[
+        "def",
+        "defn",
+        "defn-",
+        "defmacro",
+        "defonce",
+        "defprotocol",
+        "defrecord",
+        "deftype",
+        "defmulti",
+        "defmethod",
+        "definterface",
+        "declare",
+        "ns",
+        "require",
+        "import",
+        "use",
+        "refer",
+        "as",
+    ],
+    name_bytes: b"-?!*+<>=/.'#",
+    apostrophe: Apostrophe::Plain,
+    ..TokenRules::PLAIN
+};
+
+/// Erlang tokenization rules.
+///
+/// `case`, `if`, `receive` and `try` branch, closed by `end`; `fun` makes a
+/// closure and `!` sends a message. The word operators (`andalso`, `div`,
+/// `band`, ...) compute. The names of attributes (`-module`, `-export`,
+/// `-spec`) declare and are ignored.
+pub static ERLANG: TokenRules = TokenRules {
+    operator_keywords: &[
+        "case", "of", "if", "receive", "after", "try", "catch", "end", "begin", "fun", "when",
+        "andalso", "orelse", "and", "or", "not", "xor", "div", "rem", "band", "bor", "bxor",
+        "bnot", "bsl", "bsr",
+    ],
+    operator_symbols: &[
+        "=:=", "=/=", "...", "->", "<-", "<=", "=<", ">=", "==", "/=", "||", "++", "--", "::",
+        ":=", "=>", "<<", ">>", "!", "+", "-", "*", "/", "<", ">", "=", ";", ",", ".", ":", "(",
+        ")", "[", "]", "{", "}", "|", "#", "?",
+    ],
+    ignored_keywords: &[
+        "module",
+        "export",
+        "export_type",
+        "import",
+        "spec",
+        "type",
+        "opaque",
+        "record",
+        "define",
+        "include",
+        "include_lib",
+        "behaviour",
+        "behavior",
+        "callback",
+        "compile",
+        "ifdef",
+        "ifndef",
+        "endif",
+    ],
+    ..TokenRules::PLAIN
+};
+
+/// F# tokenization rules.
+///
+/// `match`, `function` and `with` match patterns, `|>` and `>>` pipe and
+/// compose, `:?` tests a type and `:>` casts to one. `new` builds an
+/// object. `let`, `fun`, `type`, `module`, `open`, `member` and the rest
+/// declare and are ignored, as `and` is: it joins definitions. A name may
+/// end in primes (`x'`).
+pub static FSHARP: TokenRules = TokenRules {
+    operator_keywords: &[
+        "if", "then", "elif", "else", "match", "with", "function", "for", "while", "do", "done",
+        "to", "downto", "in", "yield", "return", "try", "finally", "raise", "when", "not", "new",
+        "upcast", "downcast",
+    ],
+    operator_symbols: &[
+        "<<<", ">>>", "|||", "&&&", "^^^", "||>", "<||", ":?>", "...", "|>", "<|", ">>", "<<",
+        "::", ":?", ":>", "<-", "->", ":=", "<>", "<=", ">=", "&&", "||", "**", "..", "@", "+",
+        "-", "*", "/", "%", "^", "!", "<", ">", "=", ";", ",", ".", ":", "(", ")", "[", "]", "{",
+        "}", "|", "?",
+    ],
+    ignored_keywords: &[
+        "let",
+        "rec",
+        "mutable",
+        "fun",
+        "use",
+        "and",
+        "of",
+        "type",
+        "module",
+        "namespace",
+        "open",
+        "member",
+        "static",
+        "abstract",
+        "override",
+        "default",
+        "val",
+        "inherit",
+        "interface",
+        "class",
+        "struct",
+        "end",
+        "private",
+        "internal",
+        "public",
+        "inline",
+        "byte",
+        "int64",
+        "decimal",
+        "seq",
+    ],
+    ..ML
+};
+
+/// Haskell tokenization rules.
+///
+/// `case`/`of`, `if`/`then`/`else` and `do` direct the flow; the operators
+/// of monads and functors (`>>=`, `<$>`, `<*>`), composition (`.`) and
+/// application (`$`) compute, as does a function between backticks
+/// (`` `div` ``). `let`, `where` and `in` bind, and `data`, `newtype`,
+/// `class`, `instance` and `import` declare: all ignored. Type signatures
+/// are left out of the lines read. A name may end in primes (`x'`).
+pub static HASKELL: TokenRules = TokenRules {
+    operator_keywords: &["case", "of", "if", "then", "else", "do"],
+    operator_symbols: &[
+        ">>=", "=<<", "<$>", "<*>", "<|>", "<&>", ">=>", "<=<", "<>", ">>", "<-", "->", "=>", "::",
+        "++", "!!", "==", "/=", "<=", ">=", "&&", "||", "<$", "$!", "..", "**", "^^", ".", "$",
+        "+", "-", "*", "/", "^", "<", ">", "=", ",", ";", "(", ")", "[", "]", "{", "}", "|", "\\",
+        "@", "!", "~", "&",
+    ],
+    ignored_keywords: &[
+        "data",
+        "newtype",
+        "type",
+        "class",
+        "instance",
+        "deriving",
+        "import",
+        "qualified",
+        "as",
+        "hiding",
+        "module",
+        "where",
+        "let",
+        "in",
+        "infixl",
+        "infixr",
+        "infix",
+        "forall",
+        "Int",
+        "Integer",
+        "Bool",
+        "String",
+        "Char",
+        "Double",
+        "Float",
+        "Maybe",
+        "Either",
+        "IO",
+    ],
+    name_bytes: b"'",
+    infix: Some(b'`'),
+    apostrophe: Apostrophe::Prime,
+    ..TokenRules::PLAIN
+};
+
+/// Julia tokenization rules.
+///
+/// `end` closes blocks, as in Ruby and Lua, and `do` and `begin` open
+/// them. The broadcast operators (`.+`, `.*`, ...), `|>`, `=>`, `::` as a
+/// type assertion and the operators written in Unicode (`÷`, `≤`, `∈`) are
+/// operators, and so is `'`, the adjoint, after an operand. A name may end
+/// in `!` (`push!`). Definitions and type names are ignored.
+pub static JULIA: TokenRules = TokenRules {
+    operator_keywords: &[
+        "if", "elseif", "else", "for", "while", "return", "break", "continue", "try", "catch",
+        "finally", "do", "begin", "end", "in", "isa",
+    ],
+    operator_symbols: &[
+        ".+=", ".-=", ".*=", "./=", ".==", ">>>", "===", "!==", "...", "|>", "<|", "=>", "->",
+        "::", "==", "!=", "<=", ">=", "&&", "||", "+=", "-=", "*=", "/=", "^=", ".+", ".-", ".*",
+        "./", ".^", ".<", ".>", "<<", ">>", "<:", ">:", "÷", "≤", "≥", "≠", "∈", "∉", "∘", "+",
+        "-", "*", "/", "\\", "%", "^", "&", "|", "~", "!", "<", ">", "=", ";", ",", ".", ":", "(",
+        ")", "[", "]", "{", "}", "?", "$", "@", "'",
+    ],
+    ignored_keywords: &[
+        "function",
+        "struct",
+        "mutable",
+        "module",
+        "baremodule",
+        "using",
+        "import",
+        "export",
+        "const",
+        "global",
+        "local",
+        "let",
+        "abstract",
+        "primitive",
+        "type",
+        "macro",
+        "quote",
+        "where",
+        "Int",
+        "Int32",
+        "Int64",
+        "Float32",
+        "Float64",
+        "String",
+        "Bool",
+        "Char",
+        "Any",
+        "Nothing",
+        "Vector",
+        "Array",
+        "Dict",
+    ],
+    name_bytes: b"!",
+    apostrophe: Apostrophe::Prime,
+    ..TokenRules::PLAIN
+};
+
+/// Nim tokenization rules.
+///
+/// Blocks go by indentation, as in Python. `case`/`of`, `when` and
+/// `try`/`except` branch; `discard` and `defer` act. The word operators
+/// (`div`, `mod`, `shl`, `and`, `in`, `is`) compute. Routines, variables,
+/// types and imports declare and are ignored.
+pub static NIM: TokenRules = TokenRules {
+    operator_keywords: &[
+        "if", "elif", "else", "case", "of", "when", "for", "while", "return", "break", "continue",
+        "try", "except", "finally", "raise", "yield", "discard", "defer", "block", "and", "or",
+        "not", "xor", "div", "mod", "shl", "shr", "in", "notin", "is", "isnot", "cast", "addr",
+    ],
+    operator_symbols: &[
+        "..<", "...", "..", "==", "!=", "<=", ">=", "+=", "-=", "*=", "/=", "&=", "->", "=>", "@",
+        "$", "&", "+", "-", "*", "/", "%", "<", ">", "=", ";", ",", ".", ":", "(", ")", "[", "]",
+        "{", "}", "^", "~", "!", "|", "?",
+    ],
+    ignored_keywords: &[
+        "proc",
+        "func",
+        "method",
+        "iterator",
+        "converter",
+        "macro",
+        "template",
+        "let",
+        "var",
+        "const",
+        "type",
+        "object",
+        "enum",
+        "tuple",
+        "ref",
+        "ptr",
+        "distinct",
+        "import",
+        "include",
+        "from",
+        "export",
+        "using",
+        "static",
+        "concept",
+        "float",
+        "float32",
+        "float64",
+        "string",
+        "bool",
+        "char",
+        "seq",
+        "void",
+    ],
+    type_names: SIZED_INTEGERS,
+    ..TokenRules::PLAIN
+};
+
+/// OCaml tokenization rules.
+///
+/// `match`, `function` and `with` match patterns; `|>` and `@@` apply,
+/// `::` and `@` build lists, `^` joins strings, `:=` and `!` write and read
+/// a reference, and the float operators (`+.`, `*.`) and word operators
+/// (`mod`, `land`, `lsl`) compute. `let`, `in`, `type`, `module`, `open`
+/// and the rest declare and are ignored, with `begin` and `end`. A name may
+/// end in primes (`x'`).
+pub static OCAML: TokenRules = TokenRules {
+    operator_keywords: &[
+        "if", "then", "else", "match", "with", "function", "for", "while", "do", "done", "to",
+        "downto", "try", "raise", "when", "assert", "lazy", "not", "new", "mod", "land", "lor",
+        "lxor", "lsl", "lsr", "asr", "or",
+    ],
+    operator_symbols: &[
+        "|>", "@@", "::", ":=", "+.", "-.", "*.", "/.", "**", "->", "<-", "<>", "==", "!=", "<=",
+        ">=", "&&", "||", ";;", ":>", "@", "^", "!", "+", "-", "*", "/", "<", ">", "=", ";", ",",
+        ".", ":", "(", ")", "[", "]", "{", "}", "|", "~", "?", "#", "&",
+    ],
+    ignored_keywords: &[
+        "let",
+        "rec",
+        "in",
+        "and",
+        "fun",
+        "type",
+        "module",
+        "open",
+        "include",
+        "struct",
+        "sig",
+        "begin",
+        "end",
+        "val",
+        "external",
+        "functor",
+        "of",
+        "mutable",
+        "private",
+        "virtual",
+        "method",
+        "object",
+        "class",
+        "inherit",
+        "initializer",
+        "constraint",
+        "exception",
+    ],
+    ..ML
+};
+
+/// R tokenization rules.
+///
+/// `<-`, `<<-`, `->` and `->>` assign, `|>` pipes, `$` and `@` take a
+/// member, `::` a name of a package, and every `%op%` (`%>%`, `%in%`,
+/// `%%`) is one operator. A name goes on through `.` (`is.na`).
+/// `function`, `library` and `require` declare and are ignored.
+pub static R: TokenRules = TokenRules {
+    operator_keywords: &[
+        "if", "else", "for", "while", "repeat", "break", "next", "return", "in", "switch", "stop",
+    ],
+    operator_symbols: &[
+        "<<-", "->>", ":::", "|>", "<-", "->", "==", "!=", "<=", ">=", "&&", "||", "::", "+", "-",
+        "*", "/", "^", "!", "&", "|", "<", ">", "=", "~", "$", "@", ":", ";", ",", "(", ")", "[",
+        "]", "{", "}", "?", "\\",
+    ],
+    ignored_keywords: &["function", "library", "require"],
+    name_bytes: b".",
+    infix: Some(b'%'),
+    ..TokenRules::PLAIN
 };
 
 /// Look up the tokenization rules for a language by name.
@@ -867,6 +1299,14 @@ pub fn rules_for(language: &str) -> Option<&'static TokenRules> {
         "Perl" => Some(&PERL),
         "Scala" => Some(&SCALA),
         "Zig" => Some(&ZIG),
+        "Clojure" => Some(&CLOJURE),
+        "Erlang" => Some(&ERLANG),
+        "F#" => Some(&FSHARP),
+        "Haskell" => Some(&HASKELL),
+        "Julia" => Some(&JULIA),
+        "Nim" => Some(&NIM),
+        "OCaml" => Some(&OCAML),
+        "R" => Some(&R),
         _ => None,
     }
 }
