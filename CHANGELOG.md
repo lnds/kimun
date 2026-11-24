@@ -1,3 +1,18 @@
+## v0.52.0 (2026-11-24)
+
+### Notes
+
+- Scores move for Clojure, Erlang, F#, Haskell, Julia, Nim, OCaml and R. They now have Halstead rules, so `km hal` and `km miv` measure them and the Halstead dimension of `km score` has data for them. Haskell type signatures are left out, as TypeScript's type declarations are.
+- `km loc` reads a `'` after a name or a closing bracket as code in Haskell, OCaml, F# and Julia (`x'`, the adjoint `A'`), and every `'` as code in Clojure, where it quotes a form. It no longer opens a character literal there, so a few lines of these languages may count differently.
+
+### Feat
+
+- **hal**: Halstead rules for Clojure, Erlang, F#, Haskell, Julia, Nim, OCaml and R
+
+### Refactor
+
+- **hal**: one step per token, and type names shared between languages
+
 ## v0.51.0 (2026-11-24)
 
 ### Notes
