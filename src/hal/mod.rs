@@ -7,6 +7,7 @@
 mod analyzer;
 pub(crate) mod report;
 mod rules;
+mod signatures;
 mod tokenizer;
 mod type_decls;
 
@@ -40,8 +41,9 @@ pub(crate) fn analyze_content(
 }
 
 /// The lines Halstead reads: the code lines of `code_view`, which holds no
-/// line from inside a string that spans lines, and in TypeScript outside
-/// type-level declarations, which run nothing.
+/// line from inside a string that spans lines, and outside the type-level
+/// declarations of TypeScript and the type signatures of Haskell, which run
+/// nothing.
 fn measured_lines<'a>(
     lines: &'a [String],
     kinds: &[LineKind],
@@ -52,10 +54,11 @@ fn measured_lines<'a>(
         .zip(kinds)
         .filter_map(|(line, kind)| (*kind == LineKind::Code).then_some(line.as_str()))
         .collect();
-    if spec.name != "TypeScript" {
-        return code;
-    }
-    let types = type_decls::type_declaration_mask(&code);
+    let types = match spec.name {
+        "TypeScript" => type_decls::type_declaration_mask(&code),
+        "Haskell" => signatures::signature_mask(&code),
+        _ => return code,
+    };
     code.into_iter()
         .zip(types)
         .filter(|(_, is_type)| !is_type)

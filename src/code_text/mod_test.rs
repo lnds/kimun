@@ -249,3 +249,14 @@ fn a_shell_quote_escaped_outside_a_string_is_code() {
     assert_eq!(read[0], "x=it\\'s");
     assert_eq!(read[1], "if [ \"  \" = a ]; then");
 }
+
+#[test]
+fn a_prime_after_a_name_opens_no_character_literal() {
+    assert_eq!(code("Haskell", "go x' = x' + 'a'"), ["go x' = x' + ' '"]);
+    assert_eq!(code("Julia", "w = (v + u)' * c"), ["w = (v + u)' * c"]);
+}
+
+#[test]
+fn a_clojure_quote_opens_nothing() {
+    assert_eq!(code("Clojure", "'(a b) 'c"), ["'(a b) 'c"]);
+}

@@ -59,6 +59,20 @@ pub(crate) struct Syntax {
     pub hash_at_word_start: bool,
     /// `$#` is code (Perl).
     pub dollar_hash: bool,
+    /// What a `'` that opens no string is besides a character literal.
+    pub apostrophe: Apostrophe,
+}
+
+/// What a `'` is where it opens no string.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub(crate) enum Apostrophe {
+    /// A character literal, or the quote of a lifetime or a label (Rust).
+    Character,
+    /// After an operand, part of a name (Haskell's `x'`) or an operator on
+    /// it (Julia's adjoint `A'`); a character literal elsewhere.
+    Prime,
+    /// Code: Clojure quotes a form with it, and writes characters as `\a`.
+    Code,
 }
 
 impl Syntax {
@@ -98,6 +112,11 @@ impl Syntax {
             char_codes: matches!(name, "Ruby" | "Elixir" | "Elixir Script"),
             hash_at_word_start: shell,
             dollar_hash: name == "Perl",
+            apostrophe: match name {
+                "Haskell" | "OCaml" | "F#" | "Julia" => Apostrophe::Prime,
+                "Clojure" => Apostrophe::Code,
+                _ => Apostrophe::Character,
+            },
         }
     }
 }
@@ -109,6 +128,18 @@ impl Syntax {
         let before = at.checked_sub(1).map(|b| bytes[b]);
         let in_word = self.hash_at_word_start && before.is_some_and(|b| !b" \t;&|()".contains(&b));
         in_word || (self.dollar_hash && before == Some(b'$'))
+    }
+
+    /// Whether the `'` at `at`, where it opens no string, is code.
+    pub(crate) fn apostrophe_is_code(&self, bytes: &[u8], at: usize) -> bool {
+        let after_value = at
+            .checked_sub(1)
+            .is_some_and(|b| super::is_word_byte(bytes[b]) || b")]'".contains(&bytes[b]));
+        match self.apostrophe {
+            Apostrophe::Character => false,
+            Apostrophe::Prime => after_value,
+            Apostrophe::Code => true,
+        }
     }
 
     /// The length of the code of a quote character at `at` (`?"`, `?\'`),

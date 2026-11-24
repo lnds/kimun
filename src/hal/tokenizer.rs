@@ -4,7 +4,7 @@
 /// as operator, operand, or ignored, and counts distinct/total for each.
 use std::collections::HashSet;
 
-use crate::util::mask_strings;
+use crate::util::{Apostrophe, mask_literals};
 
 /// Per-language rules for classifying tokens as operators or operands.
 ///
@@ -32,6 +32,47 @@ pub struct TokenRules {
     pub operator_symbols: &'static [&'static str],
     /// Keywords to ignore (declarations, modifiers, type names).
     pub ignored_keywords: &'static [&'static str],
+    /// Bytes besides letters, digits and `_` that go on a name once it has
+    /// started (Clojure's `-` and `?`, Haskell's `'`). A `!` followed by `=`
+    /// is the operator, not part of the name.
+    pub name_bytes: &'static [u8],
+    /// Delimiters of a name used as an infix operator (Haskell's `` `div` ``,
+    /// R's `%in%`): the whole is one operator.
+    pub infix: Option<u8>,
+    /// What a `'` is.
+    pub apostrophe: Apostrophe,
+}
+
+impl TokenRules {
+    /// The rules of a language whose names are letters, digits and `_`.
+    pub const PLAIN: TokenRules = TokenRules {
+        operator_keywords: &[],
+        operator_symbols: &[],
+        ignored_keywords: &[],
+        name_bytes: &[],
+        infix: None,
+        apostrophe: Apostrophe::Quote,
+    };
+
+    /// Whether `byte`, before `next`, goes on a name.
+    fn continues_name(&self, byte: u8, next: Option<u8>) -> bool {
+        byte.is_ascii_alphanumeric()
+            || byte == b'_'
+            || (self.name_bytes.contains(&byte) && !(byte == b'!' && next == Some(b'=')))
+    }
+
+    /// The length of the infix operator at the start of `rest`, if one is.
+    fn infix_len(&self, rest: &[u8]) -> Option<usize> {
+        let delimiter = self.infix?;
+        if rest.first() != Some(&delimiter) {
+            return None;
+        }
+        let inner = rest[1..]
+            .iter()
+            .take_while(|b| **b != delimiter && b.is_ascii_graphic())
+            .count();
+        (rest.get(1 + inner) == Some(&delimiter)).then_some(inner + 2)
+    }
 }
 
 /// Raw token counts extracted from source code.
@@ -68,7 +109,7 @@ fn classify_alphanumeric_token(token: &str, rules: &TokenRules, counts: &mut Tok
 ///
 /// Each line is first passed through `mask_strings` to replace string literal
 /// contents with spaces, preventing keywords inside strings from being counted.
-/// Non-ASCII bytes are skipped (may appear in trailing comments on code lines).
+/// Non-ASCII bytes are skipped unless they open a symbol of the language.
 /// Tokens are classified into three categories:
 /// - **Operator keywords** (if, for, return, ...) → counted as operators
 /// - **Ignored keywords** (fn, let, struct, ...) → skipped entirely
@@ -88,7 +129,7 @@ pub fn count_tokens(
     };
 
     for line in code_lines {
-        let masked = mask_strings(line, line_comments);
+        let masked = mask_literals(line, line_comments, rules.apostrophe);
         let bytes = masked.as_bytes();
         let len = bytes.len();
         let mut i = 0;
@@ -102,9 +143,12 @@ pub fn count_tokens(
                 continue;
             }
 
-            // Skip non-ASCII bytes (comments on code lines may contain UTF-8)
-            if !ch.is_ascii() {
-                i += 1;
+            if let Some(n) = rules.infix_len(&bytes[i..]) {
+                counts
+                    .distinct_operators
+                    .insert(masked[i..i + n].to_string());
+                counts.total_operators += 1;
+                i += n;
                 continue;
             }
 
@@ -116,10 +160,16 @@ pub fn count_tokens(
                 continue;
             }
 
+            // Other non-ASCII bytes are skipped (Julia's `÷` is a symbol)
+            if !ch.is_ascii() {
+                i += 1;
+                continue;
+            }
+
             // Alphanumeric token (identifier, keyword, or number)
             if ch.is_ascii_alphanumeric() || ch == b'_' {
                 let start = i;
-                while i < len && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
+                while i < len && rules.continues_name(bytes[i], bytes.get(i + 1).copied()) {
                     i += 1;
                 }
                 // Safe: start..i spans only ASCII bytes
