@@ -32,6 +32,8 @@ pub struct TokenRules {
     pub operator_symbols: &'static [&'static str],
     /// Keywords to ignore (declarations, modifiers, type names).
     pub ignored_keywords: &'static [&'static str],
+    /// Type names, ignored as declarations are; languages may share a list.
+    pub type_names: &'static [&'static str],
     /// Bytes besides letters, digits and `_` that go on a name once it has
     /// started (Clojure's `-` and `?`, Haskell's `'`). A `!` followed by `=`
     /// is the operator, not part of the name.
@@ -49,6 +51,7 @@ impl TokenRules {
         operator_keywords: &[],
         operator_symbols: &[],
         ignored_keywords: &[],
+        type_names: &[],
         name_bytes: &[],
         infix: None,
         apostrophe: Apostrophe::Quote,
@@ -90,7 +93,7 @@ fn classify_alphanumeric_token(token: &str, rules: &TokenRules, counts: &mut Tok
     if rules.operator_keywords.contains(&token) {
         counts.distinct_operators.insert(token.to_string());
         counts.total_operators += 1;
-    } else if rules.ignored_keywords.contains(&token) {
+    } else if rules.ignored_keywords.contains(&token) || rules.type_names.contains(&token) {
         // Skip ignored tokens
     } else if is_numeric(token) {
         // Numeric literal → operand
@@ -131,59 +134,54 @@ pub fn count_tokens(
     for line in code_lines {
         let masked = mask_literals(line, line_comments, rules.apostrophe);
         let bytes = masked.as_bytes();
-        let len = bytes.len();
         let mut i = 0;
-
-        while i < len {
-            let ch = bytes[i];
-
-            // Skip whitespace
-            if ch.is_ascii_whitespace() {
-                i += 1;
-                continue;
-            }
-
-            if let Some(n) = rules.infix_len(&bytes[i..]) {
-                counts
-                    .distinct_operators
-                    .insert(masked[i..i + n].to_string());
-                counts.total_operators += 1;
-                i += n;
-                continue;
-            }
-
-            // Try multi-char symbols (longest match first — rules are pre-sorted)
-            if let Some(sym) = try_match_symbol(&bytes[i..], rules.operator_symbols) {
-                counts.distinct_operators.insert(sym.to_string());
-                counts.total_operators += 1;
-                i += sym.len();
-                continue;
-            }
-
-            // Other non-ASCII bytes are skipped (Julia's `÷` is a symbol)
-            if !ch.is_ascii() {
-                i += 1;
-                continue;
-            }
-
-            // Alphanumeric token (identifier, keyword, or number)
-            if ch.is_ascii_alphanumeric() || ch == b'_' {
-                let start = i;
-                while i < len && rules.continues_name(bytes[i], bytes.get(i + 1).copied()) {
-                    i += 1;
+        while i < bytes.len() {
+            match token_at(&bytes[i..], rules) {
+                Token::Operator(n) => {
+                    counts
+                        .distinct_operators
+                        .insert(masked[i..i + n].to_string());
+                    counts.total_operators += 1;
+                    i += n;
                 }
-                // Safe: start..i spans only ASCII bytes
-                let token = &masked[start..i];
-                classify_alphanumeric_token(token, rules, &mut counts);
-                continue;
+                Token::Name(n) => {
+                    classify_alphanumeric_token(&masked[i..i + n], rules, &mut counts);
+                    i += n;
+                }
+                Token::Skip => i += 1,
             }
-
-            // Unrecognized char — skip
-            i += 1;
         }
     }
 
     counts
+}
+
+/// What starts a slice of a masked line, by its length in bytes.
+enum Token {
+    /// A symbol or an infix name.
+    Operator(usize),
+    /// A keyword, an identifier or a number.
+    Name(usize),
+    /// Whitespace, or a byte that starts no token (outside ASCII unless it
+    /// opens a symbol, as Julia's `÷` does).
+    Skip,
+}
+
+/// The token at the start of `rest`. Symbols are tried longest first.
+fn token_at(rest: &[u8], rules: &TokenRules) -> Token {
+    if let Some(n) = rules.infix_len(rest) {
+        return Token::Operator(n);
+    }
+    if let Some(sym) = try_match_symbol(rest, rules.operator_symbols) {
+        return Token::Operator(sym.len());
+    }
+    if !(rest[0].is_ascii_alphanumeric() || rest[0] == b'_') {
+        return Token::Skip;
+    }
+    let len = (1..rest.len())
+        .find(|&i| !rules.continues_name(rest[i], rest.get(i + 1).copied()))
+        .unwrap_or(rest.len());
+    Token::Name(len)
 }
 
 /// Find the first (longest) symbol that matches at the start of `rest`.

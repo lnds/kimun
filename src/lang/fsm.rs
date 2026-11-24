@@ -227,7 +227,7 @@ fn opens_line_comment(rest: &[u8], marker: &str, spec: &LanguageSpec, hash_is_co
 /// code of a quote character (`?"`).
 fn quote_as_code(rest: &[u8], syntax: &Syntax, full_bytes: &[u8], pos: usize) -> Option<usize> {
     if rest[0] == b'\'' && !syntax.single_quotes {
-        if syntax.apostrophe_is_code(full_bytes, pos) {
+        if syntax.apostrophe.is_code(full_bytes, pos) {
             return Some(1);
         }
         return Some(1 + character_len(&rest[1..]));

@@ -226,7 +226,7 @@ impl<'s> Lexer<'s> {
     /// lifetime or a label, or the code of a quote character (`?"`).
     fn quote_mark(&self, cur: &mut Cursor) -> bool {
         if cur.bytes[cur.i] == b'\'' && !self.syntax.single_quotes {
-            if self.syntax.apostrophe_is_code(cur.bytes, cur.i) {
+            if self.syntax.apostrophe.is_code(cur.bytes, cur.i) {
                 cur.keep();
             } else {
                 cur.char_literal(character_len(&cur.rest()[1..]));

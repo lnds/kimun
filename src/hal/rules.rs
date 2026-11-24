@@ -21,6 +21,22 @@ use super::tokenizer::TokenRules;
 use crate::lang::language::is_fortran;
 use crate::util::Apostrophe;
 
+/// Integer types written by their size (Go, Nim).
+const SIZED_INTEGERS: &[&str] = &[
+    "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64",
+];
+
+/// What OCaml and F# share: names that may end in primes (`x'`) and the
+/// basic types.
+const ML: TokenRules = TokenRules {
+    name_bytes: b"'",
+    apostrophe: Apostrophe::Prime,
+    type_names: &[
+        "int", "float", "string", "bool", "unit", "char", "list", "option", "array",
+    ],
+    ..TokenRules::PLAIN
+};
+
 // ── Language rules ──────────────────────────────────────────────────────
 
 /// Rust tokenization rules.
@@ -155,16 +171,6 @@ pub static GO: TokenRules = TokenRules {
         "package",
         "map",
         "chan",
-        "int",
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "uint",
-        "uint8",
-        "uint16",
-        "uint32",
-        "uint64",
         "float32",
         "float64",
         "bool",
@@ -173,6 +179,7 @@ pub static GO: TokenRules = TokenRules {
         "rune",
         "error",
     ],
+    type_names: SIZED_INTEGERS,
     ..TokenRules::PLAIN
 };
 
@@ -1027,23 +1034,12 @@ pub static FSHARP: TokenRules = TokenRules {
         "internal",
         "public",
         "inline",
-        "int",
-        "float",
-        "string",
-        "bool",
-        "unit",
-        "char",
         "byte",
         "int64",
         "decimal",
-        "list",
-        "option",
         "seq",
-        "array",
     ],
-    name_bytes: b"'",
-    apostrophe: Apostrophe::Prime,
-    ..TokenRules::PLAIN
+    ..ML
 };
 
 /// Haskell tokenization rules.
@@ -1095,6 +1091,7 @@ pub static HASKELL: TokenRules = TokenRules {
     name_bytes: b"'",
     infix: Some(b'`'),
     apostrophe: Apostrophe::Prime,
+    ..TokenRules::PLAIN
 };
 
 /// Julia tokenization rules.
@@ -1196,13 +1193,6 @@ pub static NIM: TokenRules = TokenRules {
         "using",
         "static",
         "concept",
-        "int",
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "uint",
-        "uint8",
         "float",
         "float32",
         "float64",
@@ -1212,6 +1202,7 @@ pub static NIM: TokenRules = TokenRules {
         "seq",
         "void",
     ],
+    type_names: SIZED_INTEGERS,
     ..TokenRules::PLAIN
 };
 
@@ -1262,19 +1253,8 @@ pub static OCAML: TokenRules = TokenRules {
         "initializer",
         "constraint",
         "exception",
-        "int",
-        "float",
-        "string",
-        "bool",
-        "unit",
-        "char",
-        "list",
-        "option",
-        "array",
     ],
-    name_bytes: b"'",
-    apostrophe: Apostrophe::Prime,
-    ..TokenRules::PLAIN
+    ..ML
 };
 
 /// R tokenization rules.
