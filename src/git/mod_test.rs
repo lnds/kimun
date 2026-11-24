@@ -1282,5 +1282,24 @@ fn a_tree_entry_that_names_a_place_outside_its_directory_is_not_written() {
         .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
         .collect();
     names.sort();
-    assert_eq!(names, ["ok.rs"]);
+    // The `.git` is the mark of the directory, not the tree's `.GIT`.
+    assert_eq!(names, [".git", "ok.rs"]);
+    assert_eq!(fs::read_dir(out.path().join(".git")).unwrap().count(), 1);
+}
+
+#[cfg(unix)]
+#[test]
+fn an_exclude_file_that_cannot_be_read_does_not_stop_the_extraction() {
+    use std::os::unix::fs::PermissionsExt;
+    let (dir, _) = superproject(&[("a.rs", "fn a() {}\n")]);
+    let exclude = dir.path().join(".git/info/exclude");
+    fs::create_dir_all(exclude.parent().unwrap()).unwrap();
+    fs::write(&exclude, "a.rs\n").unwrap();
+    fs::set_permissions(&exclude, fs::Permissions::from_mode(0o000)).unwrap();
+    let repo = GitRepo::open(dir.path()).unwrap();
+    let out = tempfile::tempdir().unwrap();
+    let written = repo.extract_tree_to_dir("HEAD", out.path(), false, Path::new(""));
+    fs::set_permissions(&exclude, fs::Permissions::from_mode(0o644)).unwrap();
+    assert!(written.is_ok(), "{:?}", written.err());
+    assert!(out.path().join("a.rs").is_file());
 }

@@ -170,7 +170,7 @@ pub fn run_diff(
     // Score the current working tree, then the ref tree.
     let walked = WalkConfig::new(cfg.path, cfg.include_tests, &at_ref.filter);
     let after = compute_snapshot(&walked, bottom, min_lines, &scoring_model)?;
-    let ref_cfg = WalkConfig::new(tmp_path, walked.include_tests, &at_ref.filter);
+    let ref_cfg = WalkConfig::new(tmp_path, walked.include_tests, &at_ref.ref_filter);
     let before = compute_snapshot(&ref_cfg, bottom, min_lines, &scoring_model)?;
 
     let mut score_diff = diff::compute_diff(git_ref, &before.score, &after.score);

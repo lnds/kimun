@@ -44,6 +44,7 @@
 ///
 /// [walk]
 /// submodules = true  # read submodules, at a ref as in the working tree (default: false)
+/// gitignore = true  # false: read what .gitignore leaves out, at a ref as in the working tree (default: true)
 /// ```
 use serde::Deserialize;
 
@@ -77,14 +78,37 @@ pub struct KimunConfig {
 
 /// What the walk of every command goes into: submodules, and other
 /// repositories nested in the tree, only when `submodules` is true.
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct WalkSettings {
     /// Read submodules, at a ref as in the working tree, as `--submodules` does.
     #[serde(default)]
     pub submodules: bool,
+    /// Honor `.gitignore`, `.git/info/exclude` and the global excludes file,
+    /// at a ref as in the working tree; false reads what they match, as
+    /// `--no-gitignore` does.
+    #[serde(default = "WalkSettings::default_gitignore")]
+    pub gitignore: bool,
+}
+
+impl Default for WalkSettings {
+    fn default() -> Self {
+        Self {
+            submodules: false,
+            gitignore: true,
+        }
+    }
 }
 
 impl WalkSettings {
+    fn default_gitignore() -> bool {
+        true
+    }
+
+    /// Whether `.gitignore` is honored: unless `--no-gitignore` is given or the key is false.
+    pub fn honors_gitignore(&self, no_flag: bool) -> bool {
+        self.gitignore && !no_flag
+    }
+
     /// Whether submodules are read: when `--submodules` is given or the key is true.
     pub fn reads_submodules(&self, flag: bool) -> bool {
         flag || self.submodules
@@ -591,5 +615,17 @@ mod tests {
         assert!(!default.walk.submodules);
         assert!(!default.walk.reads_submodules(false));
         assert!(default.walk.reads_submodules(true));
+    }
+
+    #[test]
+    fn the_walk_section_turns_gitignore_off() {
+        let cfg = parse("[walk]\ngitignore = false\n");
+        assert!(!cfg.walk.gitignore);
+        assert!(!cfg.walk.honors_gitignore(false));
+        let default = parse("");
+        assert!(default.walk.gitignore);
+        assert!(default.walk.honors_gitignore(false));
+        assert!(!default.walk.honors_gitignore(true));
+        assert!(parse("[walk]\nsubmodules = true\n").walk.gitignore);
     }
 }

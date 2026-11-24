@@ -15,6 +15,16 @@ fn holds_git(dir: &Path) -> bool {
     dir.join(".git").symlink_metadata().is_ok()
 }
 
+/// The nearest directory at or above `path`, written as `path` is, that
+/// holds `.git`: where a walk of it anchors the patterns of the global
+/// excludes file, as git anchors them at the root of the repository. None
+/// leaves them at the current directory, as the ignore crate does.
+pub(crate) fn global_anchor(path: &Path) -> Option<PathBuf> {
+    path.ancestors()
+        .find(|dir| holds_git(dir))
+        .map(Path::to_path_buf)
+}
+
 impl Root {
     /// The root of a walk of `path`. It lies in a repository when it or one
     /// of its ancestors holds `.git`.

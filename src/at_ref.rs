@@ -1,5 +1,6 @@
-//! A git ref written to a temporary directory, its submodules read as in the
-//! working tree.
+//! A git ref written to a temporary directory, read as the working tree is:
+//! its submodules, and the ignore rules of the repository and of each
+//! submodule, which the directory is marked as one for.
 
 use std::error::Error;
 use std::path::{Path, PathBuf};
@@ -19,6 +20,9 @@ pub struct RefTree {
     /// out the repositories the working tree stops at and the submodules
     /// the ref could not read.
     pub filter: ExcludeFilter,
+    /// The filter the ref is walked with: `filter`, the patterns of the
+    /// global excludes file anchored where the working tree anchors them.
+    pub ref_filter: ExcludeFilter,
     /// Whether a submodule is left out on both sides.
     pub left_out: bool,
 }
@@ -41,14 +45,34 @@ impl RefTree {
         let mut stops = stops_of(cfg, dir.path());
         stops.extend(both.iter().cloned());
         let path = dir.path().join(&prefix);
+        let filter = cfg.filter.clone().leaving_out(stops);
+        let base = dir.path().join(global_anchor_of(repo, cfg, &prefix));
         Ok(Self {
+            ref_filter: filter.clone().anchoring_global_at(base),
             _dir: dir,
             path,
             prefix,
             left_out: !both.is_empty(),
-            filter: cfg.filter.clone().leaving_out(stops),
+            filter,
         })
     }
+}
+
+/// Where the walk of `cfg` anchors the patterns of the global excludes file,
+/// from the root of the repository: the root, when the path analyzed is
+/// written through it ([`walk::global_anchor`]); else the current
+/// directory, when the path analyzed (`prefix`) lies under it. Never above
+/// the root, so that no pattern meets the directories that hold the ref.
+fn global_anchor_of(repo: &GitRepo, cfg: &WalkConfig<'_>, prefix: &Path) -> PathBuf {
+    if walk::global_anchor(cfg.path).is_some() {
+        return PathBuf::new();
+    }
+    std::env::current_dir()
+        .ok()
+        .and_then(|cwd| repo.walk_prefix(&cwd).ok())
+        .map(|(_, rel)| rel)
+        .filter(|rel| prefix.starts_with(rel))
+        .unwrap_or_default()
 }
 
 /// The directories, relative to the walk of `cfg`, that no side reads apart
@@ -59,7 +83,7 @@ fn stops_of(cfg: &WalkConfig<'_>, tmp: &Path) -> Vec<PathBuf> {
     let mut stops = if cfg.filter.reads_submodules() {
         Vec::new()
     } else {
-        walk::nested_repositories(cfg.path)
+        walk::nested_repositories(cfg.path, cfg.filter.honors_gitignore())
     };
     let inside = |dir: &Path| dir.canonicalize().ok();
     if let (Some(root), Some(tmp)) = (inside(cfg.path), inside(tmp))

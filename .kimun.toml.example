@@ -135,3 +135,7 @@ complexity = "indent"  # default: indent
 # true: read submodules, and other repositories nested in the tree, at a ref
 # as in the working tree, as --submodules does (default: false).
 # submodules = true
+# false: read what .gitignore, .git/info/exclude and the global excludes file
+# leave out, at a ref as in the working tree, as --no-gitignore does
+# (default: true).
+# gitignore = false

@@ -20,7 +20,12 @@ pub fn run(
         .exclude_args
         .exclude_filter_with(&config.exclude)
         .with_kinds(Selection::new(&[kind], &config.kinds))
-        .with_submodules(config.walk.reads_submodules(common.exclude_args.submodules));
+        .with_submodules(config.walk.reads_submodules(common.exclude_args.submodules))
+        .with_gitignore(
+            config
+                .walk
+                .honors_gitignore(common.exclude_args.no_gitignore),
+        );
     let include_tests = common.include_tests;
     crate::run::maybe_list_excluded(&common.path, include_tests, &filter, common.list_excluded());
     crate::run::run_command(common.path, |t| {
