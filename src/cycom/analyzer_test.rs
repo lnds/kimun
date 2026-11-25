@@ -471,3 +471,28 @@ fn a_keyword_naming_a_key_a_symbol_or_a_method_is_no_branch() {
     let js = "function f(p) {\n  return p.then(g).catch(h);\n}\n";
     assert_eq!(complexity_of("JavaScript", js), [1]);
 }
+
+#[test]
+fn a_rust_closure_without_parameters_is_no_decision() {
+    let complexity = |code: &str| {
+        let (lines, kinds) = make_lines(code);
+        analyze(&lines, &kinds, rust_markers()).unwrap().functions[0].complexity
+    };
+    assert_eq!(
+        complexity("fn f(x: Option<u8>) -> u8 {\n    x.unwrap_or_else(|| 0)\n}\n"),
+        1
+    );
+    assert_eq!(complexity("fn f() {\n    spawn(move || a || b);\n}\n"), 2);
+    assert_eq!(
+        complexity("fn f(a: bool, b: bool) -> bool {\n    a\n        || b\n}\n"),
+        2
+    );
+    assert_eq!(complexity("fn f() {\n    g(\n        || 0,\n    )\n}\n"), 1);
+}
+
+#[test]
+fn a_bar_pair_is_an_operator_where_bars_head_no_closure() {
+    let (lines, kinds) = make_lines("int f(int a, int b) {\n    return g(|| a);\n}\n");
+    let result = analyze(&lines, &kinds, c_markers()).unwrap();
+    assert_eq!(result.functions[0].complexity, 2);
+}

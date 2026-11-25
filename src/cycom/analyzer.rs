@@ -12,6 +12,7 @@
 use serde::Serialize;
 
 use crate::branches::{count_ternaries, names_something};
+use crate::detection::closures;
 use crate::lang::counter::LineKind;
 use crate::util::mask_strings;
 
@@ -123,10 +124,12 @@ pub fn count_complexity_for_lines(
     markers: &ComplexityMarkers,
 ) -> usize {
     let mut complexity: usize = 1; // baseline
+    let mut after_operand = false;
 
     for &(_, line) in func_lines {
-        let trimmed = line.trim();
-        complexity += count_line_complexity(trimmed, markers);
+        let stripped = mask_strings(line.trim(), markers.line_comments);
+        complexity += count_line_complexity(&stripped, markers, after_operand);
+        after_operand = closures::ends_with_operand(stripped.trim_end().as_bytes());
     }
 
     complexity
@@ -157,27 +160,31 @@ fn count_singleword_keywords(masked_line: &str, markers: &ComplexityMarkers) -> 
     count
 }
 
-/// Count operator occurrences (substring match on the original stripped line).
-fn count_operators_in_line(stripped: &str, markers: &ComplexityMarkers) -> usize {
+/// Count operator occurrences (substring match on the original stripped
+/// line), less the `||` that head closures.
+fn count_operators_in_line(
+    stripped: &str,
+    markers: &ComplexityMarkers,
+    after_operand: bool,
+) -> usize {
     let mut count = 0;
     for op in markers.operators {
         count += count_operator(stripped, op);
     }
-    count
+    count - closures::count(markers.function_syntax, stripped, after_operand)
 }
 
 /// Count decision points in a single line of code.
 ///
-/// First masks string literals, then counts multi-word keywords (e.g. `else if`)
-/// before single-word keywords to avoid double-counting. Finally counts
-/// boolean operators (`&&`, `||`).
-fn count_line_complexity(line: &str, markers: &ComplexityMarkers) -> usize {
-    let stripped = mask_strings(line, markers.line_comments);
-    let stripped = crate::detection::without_impl_for(&stripped);
+/// The line comes with its string literals masked. Counts multi-word
+/// keywords (e.g. `else if`) before single-word keywords to avoid
+/// double-counting, then boolean operators (`&&`, `||`).
+fn count_line_complexity(masked: &str, markers: &ComplexityMarkers, after_operand: bool) -> usize {
+    let stripped = crate::detection::without_impl_for(masked);
     let (mw_count, masked) = count_multiword_keywords(&stripped, markers);
     mw_count
         + count_singleword_keywords(&masked, markers)
-        + count_operators_in_line(&stripped, markers)
+        + count_operators_in_line(&stripped, markers, after_operand)
         + count_clause(&stripped, markers)
         + if markers.ternary {
             count_ternaries(&stripped)

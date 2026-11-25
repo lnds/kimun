@@ -617,3 +617,23 @@ fn python_continuations_and_try_blocks_do_not_nest() {
     let tried = "def f(a):\n    try:\n        if a:\n            return 1\n    except ValueError:\n        return 2\n";
     assert_eq!(scores("Python", tried), [2]);
 }
+
+#[test]
+fn a_rust_closure_without_parameters_is_no_boolean_operator() {
+    let call = "fn f(x: Option<u8>) -> u8 {\n    x.unwrap_or_else(|| 0)\n}\n";
+    assert_eq!(scores("Rust", call), [0]);
+    let moved = "fn f() {\n    let g = move || 1;\n    spawn(move || g());\n}\n";
+    assert_eq!(scores("Rust", moved), [0]);
+    let own_line = "fn f(x: Option<u8>) -> u8 {\n    x.unwrap_or_else(\n        || 0,\n    )\n}\n";
+    assert_eq!(scores("Rust", own_line), [0]);
+    let body = "fn f(a: bool, b: bool) -> bool {\n    check(|| a || b)\n}\n";
+    assert_eq!(scores("Rust", body), [1]);
+}
+
+#[test]
+fn a_rust_or_at_the_start_of_a_line_is_still_an_operator() {
+    let rust = "fn f(a: bool, b: Option<u8>) -> bool {\n    a\n        || b.is_some()\n        || b == Some(1)\n}\n";
+    assert_eq!(scores("Rust", rust), [1]);
+    let call = "fn f(a: bool) -> bool {\n    a.then(g)\n        || h()\n}\n";
+    assert_eq!(scores("Rust", call), [1]);
+}

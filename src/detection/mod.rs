@@ -6,6 +6,7 @@
 //! of duplication between `cycom/detection.rs` and `cogcom/detection.rs`.
 
 mod body;
+pub(crate) mod closures;
 mod declarations;
 mod indented;
 mod names;
@@ -67,7 +68,7 @@ pub enum FunctionSyntax {
     /// Always with one of the markers.
     Keyword,
     /// As `Keyword`, in a language where `'a` names a lifetime instead of
-    /// opening a character literal.
+    /// opening a character literal and `|` heads a closure (Rust).
     KeywordWithLifetimes,
     /// As `Loose`, plus what JavaScript and TypeScript write: functions
     /// assigned to a name (`f = function`, `f = (x) => {`) and regular
@@ -85,6 +86,12 @@ impl FunctionSyntax {
     /// marker.
     fn by_shape(self) -> bool {
         matches!(self, Self::Loose | Self::Script)
+    }
+
+    /// Whether `|` heads a closure, so that `||` may be one without
+    /// parameters (`detection::closures`).
+    pub(crate) fn closure_bars(self) -> bool {
+        self == Self::KeywordWithLifetimes
     }
 }
 

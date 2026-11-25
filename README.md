@@ -333,7 +333,7 @@ What counts, the same in every language that has it:
 - each `catch`, `except` and `rescue`;
 - each `&&`, `||`, `and`, `or`, `??` and ternary operator (`a ? b : c`).
 
-A keyword that names something is no branch: a method (`p.catch(f)`) and, in Ruby, Elixir, JavaScript and Swift, a symbol or a key (`:if`, `if: true`). A Kotlin `when` and a C# `switch` expression count once whatever their arms, since `->` and `=>` there are also lambdas.
+A keyword that names something is no branch: a method (`p.catch(f)`) and, in Ruby, Elixir, JavaScript and Swift, a symbol or a key (`:if`, `if: true`). Nor is a Rust closure without parameters: a `||` where an operand would start (`x.unwrap_or_else(|| 0)`, `move || f()`), which `km cogcom` does not count either. A Kotlin `when` and a C# `switch` expression count once whatever their arms, since `->` and `=>` there are also lambdas.
 
 ```bash
 km cycom [path]

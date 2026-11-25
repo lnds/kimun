@@ -333,7 +333,7 @@ Qué cuenta, igual en todo lenguaje que lo tenga:
 - cada `catch`, `except` y `rescue`;
 - cada `&&`, `||`, `and`, `or`, `??` y operador ternario (`a ? b : c`).
 
-Una palabra clave que nombra algo no es una rama: un método (`p.catch(f)`) y, en Ruby, Elixir, JavaScript y Swift, un símbolo o una clave (`:if`, `if: true`). Un `when` de Kotlin y una expresión `switch` de C# cuentan una vez sean cuantos sean sus brazos, porque ahí `->` y `=>` también son lambdas.
+Una palabra clave que nombra algo no es una rama: un método (`p.catch(f)`) y, en Ruby, Elixir, JavaScript y Swift, un símbolo o una clave (`:if`, `if: true`). Tampoco lo es una clausura de Rust sin parámetros: un `||` donde empezaría un operando (`x.unwrap_or_else(|| 0)`, `move || f()`), que `km cogcom` tampoco cuenta. Un `when` de Kotlin y una expresión `switch` de C# cuentan una vez sean cuantos sean sus brazos, porque ahí `->` y `=>` también son lambdas.
 
 ```bash
 km cycom [path]

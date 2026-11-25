@@ -2,8 +2,10 @@
 //! sequence, +1 each time the operator changes. A sequence goes on through
 //! parentheses and onto the next line when one of the two lines has an
 //! operator at the edge they share; a comma, a `;` or a brace ends it.
+//! A `||` that heads a closure (`closures`) is no operator.
 
 use super::markers::CognitiveMarkers;
+use crate::detection::closures::{ends_with_operand, opens_closure};
 
 /// The boolean sequence being read, from one line to the next.
 #[derive(Default)]
@@ -11,12 +13,16 @@ pub(super) struct Booleans {
     last: Option<&'static str>,
     /// The line read last ended with an operator.
     goes_on: bool,
+    /// The line read last ended with an operand.
+    ended_operand: bool,
 }
 
 impl Booleans {
     /// The increments of a line.
     pub(super) fn line(&mut self, stripped: &str, markers: &CognitiveMarkers) -> usize {
         let bytes = stripped.trim().as_bytes();
+        let after_operand = self.ended_operand;
+        self.ended_operand = ends_with_operand(bytes);
         if !(self.goes_on
             || bytes
                 .first()
@@ -28,7 +34,10 @@ impl Booleans {
         let mut i = 0;
         let mut ends_with_operator = false;
         while i < bytes.len() {
-            let Some(op) = operator_at(bytes, i, markers) else {
+            let syntax = markers.function_syntax;
+            let op = operator_at(bytes, i, markers)
+                .filter(|_| !opens_closure(syntax, bytes, i, after_operand));
+            let Some(op) = op else {
                 if b"{};,".contains(&bytes[i]) {
                     self.last = None;
                 }
