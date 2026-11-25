@@ -34,6 +34,10 @@ fn rows_are_numbered_and_directories_end_in_a_slash() {
     assert_eq!(json["rows"][1]["path"], "core/");
     assert_eq!(json["groups"], serde_json::json!([]));
     assert_eq!(json["above_diagonal"], serde_json::json!([]));
+    assert_eq!(
+        json["inside"],
+        serde_json::json!([{"row": 2, "path": "core/", "uses": 2}])
+    );
 }
 
 #[test]

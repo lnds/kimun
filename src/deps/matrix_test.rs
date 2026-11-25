@@ -123,3 +123,25 @@ fn edges_to_files_left_out_are_dropped() {
     assert!(m.cells.is_empty());
     assert!(m.edges.is_empty());
 }
+
+#[test]
+fn uses_inside_collapsed_directories_are_counted_apart_most_first() {
+    let files = paths(&["main.rs", "a/x.rs", "a/y.rs", "b/x.rs", "b/y.rs", "b/z.rs"]);
+    let edges = vec![
+        edge("a/x.rs", "a/y.rs", EdgeKind::Load),
+        edge("b/x.rs", "b/y.rs", EdgeKind::Load),
+        edge("b/y.rs", "b/z.rs", EdgeKind::Type),
+        edge("main.rs", "main.rs", EdgeKind::Load),
+    ];
+    let m = Matrix::build(&files, &edges, &[], &Expand::Depth(1)).unwrap();
+    let inside: Vec<(String, usize)> = m
+        .inside
+        .iter()
+        .map(|&(row, n)| (m.node(row).name.clone(), n))
+        .collect();
+    assert_eq!(inside, vec![("b/".to_string(), 2), ("a/".to_string(), 1)]);
+    assert!(m.cells.is_empty());
+
+    let expanded = Matrix::build(&files, &edges, &[], &Expand::Depth(2)).unwrap();
+    assert!(expanded.inside.is_empty());
+}

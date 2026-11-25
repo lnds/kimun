@@ -15,6 +15,9 @@ pub struct JsonMatrix {
     pub cells: Vec<JsonCell>,
     /// The cells above the diagonal, as `[row, column]`.
     pub above_diagonal: Vec<(usize, usize)>,
+    /// The rows that are collapsed directories with uses between their own
+    /// files, which no cell shows, most first: `--focus` on one opens it.
+    pub inside: Vec<JsonInside>,
     pub unsupported: Vec<UnsupportedLanguage>,
 }
 
@@ -25,6 +28,13 @@ pub struct JsonRow {
     /// A directory ends in `/` and counts for every file under it.
     pub path: String,
     pub level: usize,
+}
+
+#[derive(Serialize)]
+pub struct JsonInside {
+    pub row: usize,
+    pub path: String,
+    pub uses: usize,
 }
 
 #[derive(Serialize)]
@@ -70,6 +80,7 @@ pub fn of(m: Option<&Matrix>, unsupported: &[UnsupportedLanguage]) -> JsonMatrix
         rows: vec![],
         cells: vec![],
         above_diagonal: vec![],
+        inside: vec![],
         unsupported: unsupported.to_vec(),
     };
     let Some(m) = m else { return json };
@@ -99,6 +110,15 @@ pub fn of(m: Option<&Matrix>, unsupported: &[UnsupportedLanguage]) -> JsonMatrix
         });
     }
     json.above_diagonal = m.above().map(|(row, col, _)| (row + 1, col + 1)).collect();
+    json.inside = m
+        .inside
+        .iter()
+        .map(|&(row, uses)| JsonInside {
+            row: row + 1,
+            path: shown_path(m, m.rows[row]),
+            uses,
+        })
+        .collect();
     json
 }
 
