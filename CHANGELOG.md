@@ -1,3 +1,18 @@
+## v0.53.0 (2026-11-25)
+
+### Notes
+
+- Scores of Rust code go up a little where it uses closures without parameters (`x.unwrap_or_else(|| 0)`, `move || f()`). `km cogcom` no longer counts such a `||` as a boolean sequence nor `km cycom` as a decision, so cognitive and cyclomatic complexity go down.
+- `km deps --matrix --format json` has a new field, `inside`: the collapsed directories whose files use each other.
+
+### Feat
+
+- **deps**: say where the uses are when the matrix shows none
+
+### Fix
+
+- **cogcom,cycom**: a Rust closure without parameters is no boolean operator
+
 ## v0.52.0 (2026-11-24)
 
 ### Notes
