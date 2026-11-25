@@ -36,6 +36,7 @@ pub mod layout;
 mod markdown;
 mod matrix;
 mod matrix_html;
+mod matrix_inside;
 mod matrix_json;
 mod matrix_output;
 mod matrix_text;

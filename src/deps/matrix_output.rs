@@ -81,7 +81,7 @@ fn print_matrix(m: &matrix::Matrix) -> Result<(), Box<dyn Error>> {
         let wide = matrix_text::width(m);
         if terminal && wide > usize::from(columns) {
             return Err(format!(
-                "the matrix takes {wide} columns and the terminal {columns}: try a lower --depth or --focus <DIR>"
+                "the matrix takes {wide} columns and the terminal {columns}: try a lower --depth, --focus <DIR> or --html <FILE>"
             )
             .into());
         }

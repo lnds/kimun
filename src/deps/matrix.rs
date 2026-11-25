@@ -72,6 +72,9 @@ pub struct Matrix {
     pub uses: Vec<(usize, usize)>,
     /// Whether each edge is part of a cycle between files.
     pub cyclic: Vec<bool>,
+    /// The rows that are collapsed directories with uses between their own
+    /// files, which no cell shows: row and uses, most first.
+    pub inside: Vec<(usize, usize)>,
 }
 
 impl Expand {
@@ -131,6 +134,7 @@ impl Matrix {
         let between: Vec<(usize, usize)> =
             ends.iter().map(|&(f, t)| (row_of[f], row_of[t])).collect();
         let cells = cells(&edges, &between, &cyclic);
+        let inside = super::matrix_inside::of(&tree, &rows, &between);
         Ok(Matrix {
             tree,
             lines,
@@ -140,6 +144,7 @@ impl Matrix {
             files: files.to_vec(),
             uses: ends,
             cyclic,
+            inside,
         })
     }
 

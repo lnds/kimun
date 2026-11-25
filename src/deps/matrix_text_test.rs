@@ -72,6 +72,21 @@ fn expanded_matrix_lists_what_is_above_the_diagonal() {
 }
 
 #[test]
+fn an_empty_matrix_says_which_directories_hold_the_uses() {
+    let files: Vec<PathBuf> = ["build.rs", "src/a.rs", "src/b.rs", "src/c/d.rs"]
+        .iter()
+        .map(PathBuf::from)
+        .collect();
+    let edges = vec![edge("src/a.rs", "src/b.rs"), edge("src/a.rs", "src/c/d.rs")];
+    let m = Matrix::build(&files, &edges, &[], &Expand::Depth(1)).unwrap();
+    let text = render(&m, false);
+    assert!(!text.contains("Nothing above the diagonal."));
+    assert!(text.ends_with(
+        "No dependencies between these rows; 2 uses inside them.\n  src/  2 uses  --focus src\n"
+    ));
+}
+
+#[test]
 fn colour_marks_cycles_in_red() {
     let text = render(&matrix(Expand::Depth(2)), true);
     assert!(text.contains("\x1b[31m1!\x1b[0m"));

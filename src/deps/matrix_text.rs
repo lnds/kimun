@@ -116,12 +116,12 @@ pub fn render(m: &Matrix, color: bool) -> String {
         row += 1;
     }
     out.push(String::new());
-    out.extend(above_lines(m));
+    out.extend(super::matrix_inside::below(m, above_lines));
     out.join("\n") + "\n"
 }
 
 /// The name of a row as a path, so it reads without the tree.
-fn row_path(m: &Matrix, row: usize) -> String {
+pub(super) fn row_path(m: &Matrix, row: usize) -> String {
     let node = m.node(row);
     let slash = if node.is_dir() { "/" } else { "" };
     format!("{}{slash}", node.path.display())
