@@ -148,7 +148,7 @@ Options:
 | `--include-tests` | Include tests, examples and benchmarks in analysis (excluded by default) |
 | `--max-duplicates N` | Exit with code 1 if duplicate groups exceed this limit (`--max-duplicates 0` fails on any duplicate) |
 | `--max-dup-ratio PERCENT` | Exit with code 1 if the duplicated-lines ratio exceeds this percentage (e.g. `--max-dup-ratio 5.0`) |
-| `--fail-on-increase REF` | Exit with code 1 if the current duplication ratio is higher than at the given git ref (e.g. `origin/main`). Prevents debt from growing silently in CI. [Submodules](#submodules) are read at the ref as in the working tree |
+| `--fail-on-increase REF` | Exit with code 1 if the current duplication ratio is higher than at the given git ref (e.g. `origin/main`). Prevents debt from growing silently in CI. The ref is read by the same rules as the working tree: [submodules](#submodules) and [`.gitignore`](#gitignore) |
 | `--format {table,json,short,terse}` | Output format (default: table) |
 
 Example summary output:
@@ -248,6 +248,10 @@ Every file is of one kind:
 #### Submodules
 
 The code of a submodule is not the project's: the walk stops at a submodule, and at any other repository nested in the tree (a clone, a worktree), in the working tree and at a ref alike. So the score of a repository does not depend on whether `git submodule update` ran, and a submodule does not move `--trend` on a tree that did not change. A directory that is no repository and lies in none, such as `~/src`, reads each repository it holds; under a directory kept in git, such as a home directory, they are nested and left out. `--submodules`, or `submodules = true` under `[walk]` in `.kimun.toml`, reads them on both sides: at a ref, each submodule at the commit the ref records; a clone or a worktree kept in the tree has nothing to match at a ref, and is read as an untracked directory is. A submodule that cannot be read at the ref (not checked out, or its commit not fetched in a shallow clone) is left out on both sides, with a warning that says what to run; with `--gate-scope changed`, what a submodule changed counts as changed files. `--list-excluded` names each repository the walk leaves out. `km impact`, which reads the tree on its own, goes into submodules as before; `km docs refs` checks the documents of a submodule only with `--submodules`, though a link into one still finds its file.
+
+#### .gitignore
+
+The walk leaves out what `.gitignore`, `.git/info/exclude` and the global excludes file (`core.excludesFile` of the global git configuration) match, in the working tree and at a ref alike: a file tracked under an ignored path is read by neither side, so it does not move `--trend` on a tree that did not change. At a ref, the `.gitignore` files of the ref apply, so a change to them changes what is read, as a change to any file does; a submodule read with `--submodules` follows its own, as in the working tree. `--no-gitignore`, or `gitignore = false` under `[walk]` in `.kimun.toml`, reads what they match, on both sides: for projects where `.gitignore` hides code that should count. Untracked files they match, such as build output (`target/`) or dependencies (`node_modules/`), exist only in the working tree, so with it `--trend` and the gates count them as part of the change: leave them out with `--exclude-dir` or `[exclude]`, or run on a clean checkout.
 
 ### `km indent` -- Indentation complexity
 
@@ -1417,7 +1421,7 @@ A target with nothing to grade, no code files (a README, a config file, an empty
 
 A dimension that no file of the target can measure has no score either: for instance Halstead Effort, for a file with nothing for Halstead to count (a Ruby file of `require` lines, a JavaScript file of side-effect imports, a Go file that holds only its package clause, a TypeScript file of types alone) or in a language without Halstead rules (those [`km hal`](#km-hal----halstead-complexity-metrics) does not list), and with it the Maintainability Index of the legacy and experimental models. The table shows `-` for it and says why under it (`Halstead Effort not measured; its weight is spread over the other dimensions.`), `--format json` gives `null`, and the project score is the weighted mean of the dimensions that were measured. A file's own score, in "Files Needing Attention", `km map` and `--gate-scope changed`, leaves out the metrics the file lacks in the same way. Up to v0.48 such a dimension counted 0.0 in the project score and 50 in a file's score: `km score` on a file of `require` lines alone gave B- (79.0), and the file itself 86.7 in "Files Needing Attention".
 
-With `--trend`, a gate with nothing to compare passes, and says so on stderr (`note: nothing to grade in README.md (no code files measured); --fail-below skipped`): `--fail-below` when there is nothing to grade now, `--fail-if-worse` when there is nothing to grade now or at the ref. With `--gate-scope changed`, duplicated lines are still compared when the ref had no code, since they are counted, not graded. So a gate that checks each changed path does not fail on documentation, and deleting all the code under a path does not fail `--fail-if-worse`. [Submodules](#submodules) are read at the ref as in the working tree.
+With `--trend`, a gate with nothing to compare passes, and says so on stderr (`note: nothing to grade in README.md (no code files measured); --fail-below skipped`): `--fail-below` when there is nothing to grade now, `--fail-if-worse` when there is nothing to grade now or at the ref. With `--gate-scope changed`, duplicated lines are still compared when the ref had no code, since they are counted, not graded. So a gate that checks each changed path does not fail on documentation, and deleting all the code under a path does not fail `--fail-if-worse`. The ref is read by the same rules as the working tree: [submodules](#submodules) and [`.gitignore`](#gitignore).
 
 ```bash
 km score [path]
@@ -1545,7 +1549,7 @@ A badge in the repository is as fresh as its last run, and a workflow cannot com
 
 #### `km score diff` — Compare score against a git ref
 
-Extracts the file tree at the given ref, computes the score for both snapshots, and shows a delta table per dimension. [Submodules](#submodules) are read alike in both. Useful for reviewing how commits impact code quality.
+Extracts the file tree at the given ref, computes the score for both snapshots, and shows a delta table per dimension. Both are read by the same rules: [submodules](#submodules) and [`.gitignore`](#gitignore). Useful for reviewing how commits impact code quality.
 
 ```bash
 km score diff                          # compare vs HEAD (uncommitted changes)
@@ -1872,18 +1876,19 @@ docs     = ["notes/**"]       # these files are docs, whatever their extension
 infra    = ["deploy/**/*.yml"]
 ```
 
-`[walk]` decides what the walk of every command goes into. With `submodules = true` it reads [submodules](#submodules), as `--submodules` does; the flag cannot turn it off.
+`[walk]` decides what the walk of every command goes into. With `submodules = true` it reads [submodules](#submodules), as `--submodules` does, and with `gitignore = false` what [`.gitignore`](#gitignore) leaves out, as `--no-gitignore` does; a flag cannot undo the key.
 
 ```toml
 [walk]
 submodules = false            # true: read submodules, at a ref as in the working tree (default: false)
+gitignore  = true             # false: read what .gitignore leaves out, at a ref as in the working tree (default: true)
 ```
 
 All sections and fields are optional — omit any you don't need. A fully documented template is available at [`.kimun.toml.example`](.kimun.toml.example).
 
 ## Features
 
-- Respects `.gitignore` rules automatically
+- Respects `.gitignore` rules automatically, at a ref as in the working tree (`--no-gitignore` turns them off)
 - Leaves submodules out, at a ref as in the working tree (`--submodules` reads them)
 - Deduplicates files by content hash (identical files counted once)
 - Detects languages by file extension, filename, or shebang line

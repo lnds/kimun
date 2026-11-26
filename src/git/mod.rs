@@ -260,6 +260,11 @@ impl GitRepo {
     /// it is a link, which the walk skips, else as the file holding the path
     /// it points to.
     ///
+    /// The directory is marked as a repository, as is each submodule written
+    /// into it (an empty `.git` holding the `info/exclude` of that
+    /// repository), so the walk applies there the ignore rules it applies in
+    /// the working tree. Nothing opens it as a repository.
+    ///
     /// A submodule is written only with `submodules`, and only when it is
     /// under `under`, the path analyzed from the root of the repository, or
     /// holds it (`under` empty: the whole tree): the tree of the commit the
@@ -281,6 +286,7 @@ impl GitRepo {
         );
         let mut extraction = Extraction::new(submodules, under, &self.root);
         extraction.write(&level, &tree, &Place::root(dest))?;
+        submodules::mark_as_repository(Some(&self.root), dest)?;
         Ok(extraction.into_left_out())
     }
 

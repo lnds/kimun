@@ -695,3 +695,28 @@ fn an_unchanged_tree_with_copies_in_a_submodule_passes_fail_on_increase() {
     );
     assert!(result.is_ok(), "nothing changed: {result:?}");
 }
+
+/// A file with no copies, tracked under a path `.gitignore` matches: read at
+/// the ref alone it would lower the ratio there.
+const UNCOPIED: &str = "fn other(a: u32) -> u32 {\n    let b = a + 1;\n    let c = b * 2;\n    let d = c - 3;\n    d / 4\n}\n";
+
+#[test]
+fn an_unchanged_tree_with_an_ignored_file_passes_fail_on_increase() {
+    let (dir, _) = superproject(&[
+        (".gitignore", "gen/\n"),
+        ("a.rs", DUP_CODE),
+        ("b.rs", DUP_CODE),
+        ("gen/c.rs", UNCOPIED),
+    ]);
+    let filter = ExcludeFilter::default();
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let result = run(
+        &cfg,
+        6,
+        false,
+        false,
+        OutputMode::Table,
+        gate_fail_on_increase("HEAD"),
+    );
+    assert!(result.is_ok(), "nothing changed: {result:?}");
+}

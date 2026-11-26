@@ -93,6 +93,11 @@ pub struct ExcludeArgs {
     #[arg(long)]
     pub submodules: bool,
 
+    /// Read what .gitignore leaves out too, at a ref as in the working tree.
+    /// Also `gitignore = false` under [walk] in .kimun.toml
+    #[arg(long)]
+    pub no_gitignore: bool,
+
     /// Print files that would be excluded by the current filter and exit.
     /// Useful for debugging filter rules before running an analysis.
     #[arg(long)]
@@ -107,6 +112,7 @@ impl ExcludeArgs {
         self.exclude_filter_with(&config.exclude)
             .with_kinds(self.kinds(&config.kinds))
             .with_submodules(config.walk.reads_submodules(self.submodules))
+            .with_gitignore(config.walk.honors_gitignore(self.no_gitignore))
     }
 
     /// The filter of the flags plus what `config` excludes: both apply.

@@ -1368,3 +1368,88 @@ fn a_tracked_directory_that_holds_git_is_left_out_on_both_sides() {
     );
     assert!(result.is_ok(), "nothing changed: {result:?}");
 }
+
+// ── .gitignore ──────────────────────────────────────────────────────────
+
+/// A repository that tracks `gen/out.rs`, which `pattern` ignores, besides
+/// the tangled `main.rs`, committed.
+fn tracked_but_ignored(files: &[(&str, &str)]) -> (tempfile::TempDir, Repository) {
+    let mut all = vec![("main.rs", TANGLED), ("gen/out.rs", "fn main() {}\n")];
+    all.extend_from_slice(files);
+    superproject(&all)
+}
+
+/// `run_diff` against HEAD under the drop gate, reading files by `filter`.
+fn diff_head(dir: &Path, filter: &ExcludeFilter) -> Result<(), Box<dyn std::error::Error>> {
+    let cfg = WalkConfig::new(dir, false, filter);
+    run_diff(
+        &cfg,
+        "HEAD",
+        OutputMode::Table,
+        10,
+        6,
+        "cogcom",
+        drop_gate(),
+    )
+}
+
+#[test]
+fn a_tracked_file_that_gitignore_matches_is_read_on_neither_side() {
+    let (dir, _) = tracked_but_ignored(&[(".gitignore", "gen/\n")]);
+    let result = diff_head(dir.path(), &ExcludeFilter::default());
+    assert!(result.is_ok(), "nothing changed: {result:?}");
+}
+
+#[test]
+fn a_tracked_file_that_info_exclude_matches_is_read_on_neither_side() {
+    let (dir, _) = tracked_but_ignored(&[]);
+    let info = dir.path().join(".git/info");
+    fs::create_dir_all(&info).unwrap();
+    fs::write(info.join("exclude"), "gen/\n").unwrap();
+    let result = diff_head(dir.path(), &ExcludeFilter::default());
+    assert!(result.is_ok(), "nothing changed: {result:?}");
+}
+
+#[test]
+fn no_gitignore_reads_the_ignored_file_on_both_sides() {
+    let (dir, _) = tracked_but_ignored(&[(".gitignore", "gen/\n")]);
+    let filter = ExcludeFilter::default().with_gitignore(false);
+    assert!(diff_head(dir.path(), &filter).is_ok());
+    let cfg = WalkConfig::new(dir.path(), false, &filter);
+    let snapshot = compute_snapshot(&cfg, 10, 6, &ScoringModel::Cognitive).unwrap();
+    assert_eq!(snapshot.files().len(), 2);
+}
+
+#[test]
+fn a_submodule_at_a_ref_is_walked_as_a_repository_of_its_own() {
+    let (dir, outer) = superproject(&[(".gitignore", "*.gen.rs\n"), ("main.rs", "fn main() {}\n")]);
+    add_submodule(
+        &outer,
+        "lib",
+        &[("x.gen.rs", TANGLED), ("y.rs", "fn y() {}\n")],
+    );
+    let filter = ExcludeFilter::default().with_submodules(true);
+    let result = diff_head(dir.path(), &filter);
+    assert!(result.is_ok(), "nothing changed: {result:?}");
+}
+
+#[test]
+fn a_submodule_exclude_file_the_walk_does_not_read_is_read_on_neither_side() {
+    let (dir, outer) = superproject(&[("main.rs", "fn main() {}\n")]);
+    add_submodule(&outer, "lib", &[("x.rs", TANGLED), ("y.rs", "fn y() {}\n")]);
+    let info = dir.path().join(".git/modules/lib/info");
+    fs::create_dir_all(&info).unwrap();
+    fs::write(info.join("exclude"), "x.rs\n").unwrap();
+    let filter = ExcludeFilter::default().with_submodules(true);
+    let result = diff_head(dir.path(), &filter);
+    assert!(result.is_ok(), "nothing changed: {result:?}");
+}
+
+#[test]
+fn without_gitignore_a_repository_under_an_ignored_path_is_left_out_on_both_sides() {
+    let (dir, _) = tracked_but_ignored(&[(".gitignore", "gen/\n")]);
+    fs::create_dir_all(dir.path().join("gen/.git")).unwrap();
+    let filter = ExcludeFilter::default().with_gitignore(false);
+    let result = diff_head(dir.path(), &filter);
+    assert!(result.is_ok(), "nothing changed: {result:?}");
+}

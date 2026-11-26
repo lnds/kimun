@@ -86,6 +86,8 @@ complexity = "indent"  # default: indent
 
 [walk]
 # Submodules, and other repositories nested in the tree, are left out, at a
-# ref as in the working tree. true reads them, as --submodules does; no flag
-# turns it off.
+# ref as in the working tree. true reads them, as --submodules does;
+# gitignore = false reads what .gitignore leaves out, as --no-gitignore does;
+# no flag undoes a key.
 # submodules = true  # default: false
+# gitignore = false # read what .gitignore leaves out too (default: true)

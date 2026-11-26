@@ -1,3 +1,9 @@
+## Unreleased
+
+### Notes
+
+- `--trend`, `km score diff` and `km dups --fail-on-increase` read the ref with its `.gitignore`, as the working tree is read: a file tracked under an ignored path no longer moves them on a tree that did not change. `--no-gitignore`, or `gitignore = false` under `[walk]` in `.kimun.toml`, reads what `.gitignore` leaves out, on both sides, though untracked files it matches, such as build output, only the working tree has.
+
 ## v0.53.0 (2026-11-25)
 
 ### Notes

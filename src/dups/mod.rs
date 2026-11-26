@@ -124,7 +124,7 @@ fn check_no_increase(
 ) -> Result<(), Box<dyn Error>> {
     let repo = GitRepo::open(cfg.path)?;
     let at_ref = RefTree::write(&repo, cfg, git_ref)?;
-    let ref_cfg = WalkConfig::new(&at_ref.path, cfg.include_tests, &at_ref.filter);
+    let ref_cfg = WalkConfig::new(&at_ref.path, cfg.include_tests, &at_ref.ref_filter);
     let before_ratio = duplication_ratio(&compute_metrics(&ref_cfg, min_lines));
     let after_ratio = if at_ref.left_out {
         let cfg = WalkConfig::new(cfg.path, cfg.include_tests, &at_ref.filter);

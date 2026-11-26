@@ -262,6 +262,47 @@ impl<'r> Level<'r> {
     }
 }
 
+/// Mark `dir`, where a tree is written, as a repository: an empty `.git`
+/// holding the `info/exclude` the walk applies at `checkout`, where the
+/// working tree has that repository, when it applies one there
+/// ([`walked_exclude`]). Writes only inside `dir`; an exclude file that
+/// cannot be read is left out, as the walk leaves it out.
+pub(super) fn mark_as_repository(
+    checkout: Option<&Path>,
+    dir: &Path,
+) -> Result<(), Box<dyn Error>> {
+    let info = dir.join(".git").join("info");
+    fs::create_dir_all(&info)?;
+    if let Some(exclude) = checkout.and_then(walked_exclude) {
+        let _ = fs::copy(exclude, info.join("exclude"));
+    }
+    Ok(())
+}
+
+/// The `info/exclude` the walk applies to the checkout at `checkout`, found
+/// as the ignore crate finds it: in `.git` when that is a directory, and
+/// through a `.git` file only when the directory it names (from the current
+/// directory, when relative) holds a `commondir` file, as that of a linked
+/// worktree does. The `.git` file of a submodule, or of a clone with
+/// `--separate-git-dir`, leads to none.
+fn walked_exclude(checkout: &Path) -> Option<PathBuf> {
+    let dot_git = checkout.join(".git");
+    let git_dir = if dot_git.is_dir() {
+        dot_git
+    } else {
+        let text = fs::read_to_string(&dot_git).ok()?;
+        let named = PathBuf::from(text.lines().next()?.strip_prefix("gitdir: ")?);
+        let common = fs::read_to_string(named.join("commondir")).ok()?;
+        let common = common.lines().next()?;
+        if common.starts_with('.') {
+            named.join(common)
+        } else {
+            PathBuf::from(common)
+        }
+    };
+    Some(git_dir.join("info").join("exclude")).filter(|path| path.is_file())
+}
+
 /// Whether a checkout of `repo` makes symbolic links links rather than
 /// files holding the path they point to: `core.symlinks`, which is on by
 /// default, and off by default on Windows.
@@ -420,7 +461,8 @@ impl Extraction {
         let before = self.left_out.len();
         let written = fs::create_dir_all(&at.dest)
             .map_err(Box::from)
-            .and_then(|()| self.write(&inner, &tree, &at.inside()));
+            .and_then(|()| self.write(&inner, &tree, &at.inside()))
+            .and_then(|()| mark_as_repository(opened.checkout.as_deref(), &at.dest));
         written.map_err(|e| {
             self.left_out.truncate(before);
             let _ = fs::remove_dir_all(&at.dest);

@@ -865,6 +865,26 @@ fn write_tree(root: &Path, files: &[(&str, &str)]) {
     }
 }
 
+#[test]
+fn what_gitignore_matches_is_read_only_when_asked() {
+    let dir = tempdir().unwrap();
+    write_tree(
+        dir.path(),
+        &[
+            (".git/HEAD", "ref: refs/heads/main\n"),
+            (".gitignore", "gen/\n"),
+            ("gen/x.rs", "fn x() {}\n"),
+            ("main.rs", "fn main() {}\n"),
+        ],
+    );
+    assert_eq!(
+        files_read(dir.path(), &ExcludeFilter::default()),
+        ["main.rs"]
+    );
+    let open = ExcludeFilter::default().with_gitignore(false);
+    assert_eq!(files_read(dir.path(), &open), ["gen/x.rs", "main.rs"]);
+}
+
 /// A repository holding a submodule, a nested clone and a file of its own.
 fn repository_with_nested_ones() -> tempfile::TempDir {
     let dir = tempdir().unwrap();
@@ -972,7 +992,7 @@ fn the_repositories_nested_in_a_tree_are_named_once() {
         ],
     );
     assert_eq!(
-        nested_repositories(dir.path()),
+        nested_repositories(dir.path(), true),
         [PathBuf::from("nested"), PathBuf::from("vendor/lib")]
     );
 }
