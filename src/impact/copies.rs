@@ -15,6 +15,7 @@ use crate::git::FileDiffStat;
 use crate::lang::counter::{LineKind, classify_reader};
 use crate::lang::language::detect;
 
+use super::copies_index::Index;
 pub use super::values::literals;
 
 /// Fewest values a changed group must hold before a copy of it is looked
@@ -194,7 +195,7 @@ fn mentions(lines: &[&str], group: &Group, names: &[String]) -> bool {
 /// Whether the values of `group` look like the copy of what `edit`
 /// changed, left as it was before the change.
 fn copy_of(edit: &Edit, group: &Group, file: &Path, lines: &[&str]) -> Option<Copy> {
-    let needed = MIN_VALUES.max((edit.before.len() as f64 * MIN_SHARE).ceil() as usize);
+    let needed = edit.needed();
     // What a group shares are values of its own: one holding fewer than
     // `needed` cannot be a copy, and no set is built to find that out.
     if group.values.len() < needed {
@@ -218,6 +219,14 @@ fn copy_of(edit: &Edit, group: &Group, file: &Path, lines: &[&str]) -> Option<Co
     })
 }
 
+impl Edit {
+    /// How many of the values before the change a group must hold to be
+    /// taken for a copy.
+    pub(super) fn needed(&self) -> usize {
+        MIN_VALUES.max((self.before.len() as f64 * MIN_SHARE).ceil() as usize)
+    }
+}
+
 /// The copies of what `edits` changed among `files`, the files after the
 /// change that it does not touch. Those a comment ties to the changed file
 /// come first, then those that share more values.
@@ -225,15 +234,18 @@ pub fn copies(edits: &[Edit], files: &[(PathBuf, String)]) -> Vec<Copy> {
     if edits.is_empty() {
         return Vec::new();
     }
+    let index = Index::new(edits);
     let mut found: Vec<Copy> = files
         .iter()
+        .filter(|(_, text)| index.may_hold_copy(text))
         .flat_map(|(path, text)| {
             let lines: Vec<&str> = text.lines().collect();
             groups(path, text)
                 .into_iter()
                 .flat_map(|group| {
-                    edits
-                        .iter()
+                    index
+                        .candidates(&group.values)
+                        .into_iter()
                         .filter_map(|edit| copy_of(edit, &group, path, &lines))
                         .collect::<Vec<_>>()
                 })
