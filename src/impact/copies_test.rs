@@ -229,3 +229,83 @@ fn a_group_with_fewer_values_than_a_copy_needs_is_none() {
         "five shared values are short of six"
     );
 }
+
+fn edit_of(file: &str, before: &[&str], added: &[&str]) -> Edit {
+    Edit {
+        file: PathBuf::from(file),
+        line: 1,
+        before: before.iter().map(|v| v.to_string()).collect(),
+        added: added.iter().map(|v| v.to_string()).collect(),
+        dropped: BTreeSet::new(),
+        names: Vec::new(),
+    }
+}
+
+#[test]
+fn a_file_is_read_for_groups_only_when_it_holds_enough_values_of_an_edit() {
+    let edits = [
+        edit_of("geo.ex", &["AR", "BO", "CL", "CO", "PE"], &["US"]),
+        edit_of("states.ex", &["pending", "paid", "void"], &["refunded"]),
+    ];
+    let index = Index::new(&edits);
+    assert!(
+        index.may_hold_copy("@a [\"AR\", \"BO\"]\n\n@b [\"CL\"]\n"),
+        "three of five, over two groups: a group may hold them all"
+    );
+    assert!(
+        !index.may_hold_copy("@a [\"AR\", \"AR\", \"BO\", \"paid\", \"void\"]\n"),
+        "a value written twice is one value, and two of each edit are too few"
+    );
+    assert!(!index.may_hold_copy("def run, do: :ok\n"));
+}
+
+#[test]
+fn a_group_is_compared_with_the_edits_it_holds_enough_values_of() {
+    let edits = [
+        edit_of("geo.ex", &["AR", "BO", "CL", "CO", "PE"], &["US"]),
+        edit_of("states.ex", &["pending", "paid", "void"], &["refunded"]),
+        edit_of("andes.ex", &["BO", "CL", "PE"], &["EC"]),
+    ];
+    let index = Index::new(&edits);
+    let values =
+        |list: &[&str]| -> BTreeSet<String> { list.iter().map(|v| v.to_string()).collect() };
+    let of = |list: &[&str]| -> Vec<PathBuf> {
+        let candidates = index.candidates(&values(list));
+        candidates.into_iter().map(|e| e.file.clone()).collect()
+    };
+    assert_eq!(
+        of(&["PE", "CL", "BO", "XX"]),
+        [PathBuf::from("geo.ex"), PathBuf::from("andes.ex")],
+        "in the order of the edits"
+    );
+    assert_eq!(
+        of(&["pending", "paid", "void", "AR"]),
+        [PathBuf::from("states.ex")]
+    );
+    assert!(of(&["AR", "BO", "paid"]).is_empty());
+}
+
+#[test]
+fn copies_of_several_edits_come_from_the_files_that_hold_them() {
+    let edits = [
+        edit_of("geo.ex", &["AR", "BO", "CL", "CO", "PE"], &["US"]),
+        edit_of("states.ex", &["pending", "paid", "void"], &["refunded"]),
+    ];
+    let others = files(&[
+        ("a.ex", "@codes [\"AR\", \"BO\", \"CL\", \"CO\"]\n"),
+        ("b.ex", "@none [\"AR\", \"paid\"]\n"),
+        ("c.ex", "@states [:pending, :paid, :void]\n"),
+    ]);
+    let found = copies(&edits, &others);
+    let pairs: Vec<(&Path, &Path)> = found
+        .iter()
+        .map(|c| (c.file.as_path(), c.of.as_path()))
+        .collect();
+    assert_eq!(
+        pairs,
+        [
+            (Path::new("a.ex"), Path::new("geo.ex")),
+            (Path::new("c.ex"), Path::new("states.ex")),
+        ]
+    );
+}
