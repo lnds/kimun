@@ -8,6 +8,7 @@
 mod analyzer;
 mod args;
 mod copies;
+mod copies_index;
 mod copies_report;
 mod documentation;
 mod documentation_report;

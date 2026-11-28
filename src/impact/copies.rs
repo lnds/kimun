@@ -6,7 +6,7 @@
 //! changes and the other does not, neither the history nor the imports tell.
 //! The values themselves do. Matching is lexical, so it stays a hint.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
@@ -15,6 +15,7 @@ use crate::git::FileDiffStat;
 use crate::lang::counter::{LineKind, classify_reader};
 use crate::lang::language::detect;
 
+use super::copies_index::Index;
 pub use super::values::literals;
 
 /// Fewest values a changed group must hold before a copy of it is looked
@@ -221,67 +222,8 @@ fn copy_of(edit: &Edit, group: &Group, file: &Path, lines: &[&str]) -> Option<Co
 impl Edit {
     /// How many of the values before the change a group must hold to be
     /// taken for a copy.
-    fn needed(&self) -> usize {
+    pub(super) fn needed(&self) -> usize {
         MIN_VALUES.max((self.before.len() as f64 * MIN_SHARE).ceil() as usize)
-    }
-}
-
-/// The edits by the values they held before the change, so that a group is
-/// compared only with the edits it holds enough values of, and a file that
-/// holds too few for any of them is not read for groups at all.
-struct Index<'e> {
-    edits: &'e [Edit],
-    /// The edits, by position, whose `before` holds each value.
-    holders: HashMap<&'e str, Vec<usize>>,
-}
-
-impl<'e> Index<'e> {
-    fn new(edits: &'e [Edit]) -> Self {
-        let mut holders: HashMap<&str, Vec<usize>> = HashMap::new();
-        for (at, edit) in edits.iter().enumerate() {
-            for value in &edit.before {
-                holders.entry(value).or_default().push(at);
-            }
-        }
-        Self { edits, holders }
-    }
-
-    /// Whether `text` holds enough values of some edit for one of its
-    /// groups to be a copy: a group holds no more than its file does.
-    fn may_hold_copy(&self, text: &str) -> bool {
-        let mut seen: HashSet<&str> = HashSet::new();
-        let mut shared: HashMap<usize, usize> = HashMap::new();
-        text.lines().flat_map(literals).any(|value| {
-            let Some((&value, holders)) = self.holders.get_key_value(value.as_str()) else {
-                return false;
-            };
-            seen.insert(value)
-                && holders
-                    .iter()
-                    .any(|&at| self.shares_enough(&mut shared, at))
-        })
-    }
-
-    /// Count one more value shared with the edit at `at`, and tell whether
-    /// that makes enough of them.
-    fn shares_enough(&self, shared: &mut HashMap<usize, usize>, at: usize) -> bool {
-        let count = shared.entry(at).or_default();
-        *count += 1;
-        *count >= self.edits[at].needed()
-    }
-
-    /// The edits `values` hold enough values of, in the order of the edits.
-    fn candidates(&self, values: &BTreeSet<String>) -> Vec<&'e Edit> {
-        let mut shared: BTreeMap<usize, usize> = BTreeMap::new();
-        let holders = values.iter().filter_map(|v| self.holders.get(v.as_str()));
-        for &at in holders.flatten() {
-            *shared.entry(at).or_default() += 1;
-        }
-        shared
-            .into_iter()
-            .filter(|&(at, count)| count >= self.edits[at].needed())
-            .map(|(at, _)| &self.edits[at])
-            .collect()
     }
 }
 
